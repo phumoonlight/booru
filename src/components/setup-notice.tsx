@@ -4,9 +4,9 @@ export function SetupNotice() {
     <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-6 text-center text-sm text-yellow-400">
       <p className="font-medium">Supabase is not configured</p>
       <p className="mt-1 text-yellow-400/80">
-        Add the project URL and keys to <code>.env.local</code>, then follow{" "}
+        Add the project URL and keys to <code>.env.local</code>, then follow{' '}
         <code>docs/supabase-setup.md</code>.
       </p>
     </div>
-  );
+  )
 }

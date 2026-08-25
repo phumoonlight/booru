@@ -88,14 +88,15 @@ mobile — creating the admin user and checking the redirects are
 
 **Goal:** the defining booru feature — multi-tag search with negation and autocomplete.
 
-- [ ] Migration: `search_posts()` function per [database-schema.md](./database-schema.md)
-- [ ] `lib/data/search.ts` calling the RPC; parse `?tags=` (space-separated, `-` prefix = exclude)
-- [ ] Search bar (sticky top on mobile): tokenizes tags as chips, `-tag` supported
-- [ ] Autocomplete: `searchTags(prefix)` ordered by post_count, debounced, keyboard + touch friendly
-- [ ] Tag sidebar (desktop) / bottom drawer (mobile): tags of currently displayed posts with counts, tap to add to search
-- [ ] Related-tags on post page → "search this tag" affordances
-- [ ] `/tags` page: browse all tags by category, sorted by post_count
-- [ ] Verify: `tag_a tag_b -tag_c` returns correct set; autocomplete usable with thumb on phone
+- [x] Migration: `search_posts()` function — `20260826120000_search_posts.sql`
+- [x] `lib/data/search.ts` calling the RPC; `lib/search.ts` parses `?tags=` (space-separated, `-` prefix = exclude)
+- [x] Search bar (sticky top on mobile): tokenizes tags as chips, `-tag` supported
+- [x] Autocomplete: `searchTags(prefix)` ordered by post_count, debounced 200ms, arrow-key + touch friendly
+- [x] Tag sidebar (desktop) / bottom drawer (mobile): tags of the posts on screen with counts, tap to add to search, − to exclude
+- [x] Related-tags on post page → tag rows link into search, with an exclude affordance
+- [x] `/tags` page: browse all tags by category, sorted by post_count
+- [x] Verify: 19 assertions on the query parser pass (`tag_a tag_b -tag_c` parses correctly, dedup, case folding, href building); all routes 200 in dev; build + lint clean
+- [ ] Verify: `tag_a tag_b -tag_c` returns the correct post set from the database; autocomplete usable with thumb on phone — needs real data, see [supabase-setup.md](./supabase-setup.md) step 8
 
 **Done when:** multi-tag AND + negation search works from the URL bar and the UI.
 

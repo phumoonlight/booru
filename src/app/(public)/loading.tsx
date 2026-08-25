@@ -1,4 +1,4 @@
-import { PostGridSkeleton } from "@/components/post-grid";
+import { PostGridSkeleton } from '@/components/post-grid'
 
 export default function Loading() {
   return (
@@ -6,5 +6,5 @@ export default function Loading() {
       <div className="h-6 w-32 animate-pulse rounded bg-surface" />
       <PostGridSkeleton />
     </div>
-  );
+  )
 }

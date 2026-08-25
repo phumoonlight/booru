@@ -1,5 +1,5 @@
-import type { Post } from "@/lib/data/posts";
-import { PostCard } from "@/components/post-card";
+import type { Post } from '@/lib/data/posts'
+import { PostCard } from '@/components/post-card'
 
 export function PostGrid({ posts }: { posts: Post[] }) {
   return (
@@ -10,7 +10,7 @@ export function PostGrid({ posts }: { posts: Post[] }) {
         </li>
       ))}
     </ul>
-  );
+  )
 }
 
 export function PostGridSkeleton({ count = 12 }: { count?: number }) {
@@ -23,5 +23,5 @@ export function PostGridSkeleton({ count = 12 }: { count?: number }) {
         />
       ))}
     </ul>
-  );
+  )
 }

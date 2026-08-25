@@ -1,14 +1,12 @@
-import { redirect } from "next/navigation";
-import { getCurrentProfile } from "@/lib/data/profiles";
-import { logout } from "@/lib/actions/auth";
+import { redirect } from 'next/navigation'
+import { getCurrentProfile } from '@/lib/data/profiles'
+import { logout } from '@/lib/actions/auth'
 
 // Server-side admin gate for every /admin page — the proxy guard is only the first line.
-export default async function AdminLayout({
-  children,
-}: LayoutProps<"/admin">) {
-  const profile = await getCurrentProfile();
-  if (!profile) redirect("/login");
-  if (profile.role !== "admin") redirect("/");
+export default async function AdminLayout({ children }: LayoutProps<'/admin'>) {
+  const profile = await getCurrentProfile()
+  if (!profile) redirect('/login')
+  if (profile.role !== 'admin') redirect('/')
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
@@ -25,5 +23,5 @@ export default async function AdminLayout({
       </header>
       {children}
     </div>
-  );
+  )
 }

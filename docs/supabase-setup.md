@@ -51,9 +51,10 @@ npx supabase db push
 | `20260826100200_rls_policies.sql` | RLS enabled + all policies |
 | `20260826100300_storage_buckets.sql` | `originals` / `thumbnails` buckets + policies |
 | `20260826110000_post_rpcs.sql` | `create_post_with_tags`, `update_post_with_tags` |
+| `20260826120000_search_posts.sql` | `search_posts` (multi-tag AND + negation) |
 
 **Verify:** dashboard → **Table Editor** shows the four tables; **Storage** shows both
-buckets; **Database → Functions** lists the five functions.
+buckets; **Database → Functions** lists the six functions.
 
 Never edit schema in the dashboard — write a new timestamped migration instead, so the
 schema stays reproducible.
@@ -121,9 +122,40 @@ Log out (or use a private window) so you are testing as an anonymous visitor, at
 - With more than 24 posts, the pagination row appears and page 2 loads a different set.
 - Lighthouse mobile run on the home page passes.
 
-## Step 8 — Mark the phases done
+## Step 8 — Verify tag search (finishes Phase 4)
 
-Tick the remaining `[ ]` items in [phases.md](./phases.md) for Phases 0–3 and flip
+This is the one step with SQL that has never run against a real Postgres — the
+`search_posts` function was written offline, so check it deliberately.
+
+Upload (or tag) posts so that at least one carries `tag_a` and `tag_b`, one carries
+`tag_a` only, and one carries all of `tag_a`, `tag_b`, `tag_c`. Then in the SQL editor:
+
+```sql
+-- Expect: only posts with BOTH tag_a and tag_b, and NOT tag_c
+select id from public.search_posts(
+  array['tag_a','tag_b'], array['tag_c'], null, 24, 0
+);
+
+-- Expect: every active post, and total_count equal to that number
+select id, total_count from public.search_posts();
+```
+
+Then in the UI, at ~375px:
+
+- Type into the search bar: suggestions appear after a short pause, ordered by post
+  count, and are tappable with a thumb; arrow keys and Enter also select.
+- Typing `-` before a tag still autocompletes and produces an exclusion chip.
+- Searching `tag_a tag_b -tag_c` narrows the grid to the same set the SQL returned,
+  and the URL reads `/?tags=tag_a+tag_b+-tag_c`.
+- Tapping a chip's ✕ removes that tag and re-runs the search.
+- The **Tags** button opens the bottom sheet listing the tags of the posts on screen;
+  tapping one adds it to the search, the − excludes it. At `lg` width the same list is
+  a left sidebar instead.
+- `/tags` lists every tag by category, sorted by post count, each linking to a search.
+
+## Step 9 — Mark the phases done
+
+Tick the remaining `[ ]` items in [phases.md](./phases.md) for Phases 0–4 and flip
 their rows to ✅ in [PLAN.md](./PLAN.md).
 
 ## Deferred to Phase 6

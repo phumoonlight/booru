@@ -1,9 +1,9 @@
-"use client";
+'use client'
 
-import { useActionState } from "react";
-import { updatePost, type EditPostState } from "@/lib/actions/posts";
+import { useActionState } from 'react'
+import { updatePost, type EditPostState } from '@/lib/actions/posts'
 
-const RATINGS = ["general", "sensitive", "questionable", "explicit"] as const;
+const RATINGS = ['general', 'sensitive', 'questionable', 'explicit'] as const
 
 export function EditPostForm({
   postId,
@@ -11,15 +11,12 @@ export function EditPostForm({
   initialRating,
   initialSourceUrl,
 }: {
-  postId: number;
-  initialTags: string;
-  initialRating: string;
-  initialSourceUrl: string;
+  postId: number
+  initialTags: string
+  initialRating: string
+  initialSourceUrl: string
 }) {
-  const [state, formAction, pending] = useActionState<EditPostState, FormData>(
-    updatePost,
-    null
-  );
+  const [state, formAction, pending] = useActionState<EditPostState, FormData>(updatePost, null)
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -73,8 +70,8 @@ export function EditPostForm({
         disabled={pending}
         className="min-h-11 rounded-lg bg-accent font-medium text-background disabled:opacity-50"
       >
-        {pending ? "Saving…" : "Save"}
+        {pending ? 'Saving…' : 'Save'}
       </button>
     </form>
-  );
+  )
 }

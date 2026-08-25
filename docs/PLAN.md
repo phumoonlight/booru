@@ -47,7 +47,7 @@ Documented in [future.md](./future.md) so current decisions don't block them lat
 | 1 | Database schema + migrations + admin auth | 🟡 in progress |
 | 2 | Upload pipeline (admin): file → dedup → thumbnail → tags | 🟡 in progress |
 | 3 | Browse: post grid, post detail page, pagination | 🟡 in progress |
-| 4 | Tag search: multi-tag query, autocomplete, tag drawer | 🔲 not started |
+| 4 | Tag search: multi-tag query, autocomplete, tag drawer | 🟡 in progress |
 | 5 | Accounts: public signup, favorites | 🔲 not started |
 | 6 | Polish: rating filter, infinite scroll, SEO, PWA basics | 🔲 not started |
 
@@ -55,13 +55,14 @@ Status legend: 🔲 not started · 🟡 in progress · ✅ done
 
 ## Current status
 
-**Phases 0–3 code-complete.** 5 migrations written (schema, functions/triggers, RLS,
-storage, post RPCs). Full upload pipeline coded: `/admin/upload` (file → MD5 dedup →
-sharp WebP thumb → storage → `create_post_with_tags` RPC with rollback), `/admin/posts`
-list with delete + edit (tags/rating/source via `update_post_with_tags` RPC).
-Public browse coded: home grid with pagination and single-tag filter, `/posts/[id]`
-detail with category-coloured tags, metadata and prev/next.
-Build + lint pass; every route returns 200 in dev and `/admin` redirects anonymous.
+**Phases 0–4 code-complete.** 6 migrations written (schema, functions/triggers, RLS,
+storage, post RPCs, `search_posts`). Upload pipeline: `/admin/upload` (file → MD5 dedup
+→ sharp WebP thumb → storage → `create_post_with_tags` RPC with rollback),
+`/admin/posts` with delete + edit. Public site: home grid backed by the multi-tag
+search RPC, sticky search bar with debounced autocomplete and `-tag` exclusion, tag
+sidebar/bottom-drawer facets, `/posts/[id]` detail, `/tags` index.
+Build + lint clean; every route returns 200 in dev; `/admin` redirects anonymous;
+the query parser has 19 passing assertions.
 
 No Supabase cloud project exists yet, so nothing has run against a real database and
 every phase stays 🟡 until it does. That is expected and not a blocker for writing more
@@ -89,6 +90,19 @@ and the `/admin` guard live in `src/proxy.ts`.
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
 
+- **2026-08-26 (7)** — Phase 4 code: `search_posts` RPC (AND over includes via
+  group/having, NOT EXISTS over excludes, `count(*) over()` for pagination),
+  `lib/search.ts` pure query parsing/URL helpers, `lib/data/search.ts`
+  (`searchPosts`, `searchTags`, `getTagsForPosts`), sticky `SearchHeader` +
+  client `SearchBar` (chips, debounced autocomplete via a server action, arrow-key
+  and touch selection), `TagDrawer` (bottom sheet under `lg`, sidebar above),
+  reworked `TagList`/`GroupedTagList` with include/exclude affordances, `/tags` page.
+  Home now always goes through the RPC — `getPosts` deleted. Decisions: autocomplete
+  is a server action, not a route handler, since the public API is deferred;
+  `SearchBar` is keyed on the query so navigation resets it instead of a sync effect
+  (React Compiler forbids setState-in-effect). The RPC SQL is the one piece never run
+  against a real Postgres — [supabase-setup.md](./supabase-setup.md) step 8 checks it
+  explicitly. Next: Phase 5 (accounts & favorites).
 - **2026-08-26 (6)** — Phase 3 code: `lib/data/tags.ts` + expanded `lib/data/posts.ts`
   (paged `getPosts`, `getPostTags`, `getPostNeighbours`), home grid at
   `app/(public)/page.tsx` (2→4→6 cols, `next/image` sizes, pagination, single-tag

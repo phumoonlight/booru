@@ -1,12 +1,12 @@
-import Link from "next/link";
-import { getRecentPosts } from "@/lib/data/posts";
-import { deletePost } from "@/lib/actions/posts";
-import { thumbnailUrl } from "@/lib/storage";
+import Link from 'next/link'
+import { getRecentPosts } from '@/lib/data/posts'
+import { deletePost } from '@/lib/actions/posts'
+import { thumbnailUrl } from '@/lib/storage'
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic'
 
 export default async function AdminPostsPage() {
-  const posts = await getRecentPosts();
+  const posts = await getRecentPosts()
 
   return (
     <div className="flex flex-col gap-4">
@@ -42,7 +42,7 @@ export default async function AdminPostsPage() {
             <div className="min-w-0 flex-1 text-sm">
               <p className="font-medium">#{post.id}</p>
               <p className="truncate text-xs text-muted">
-                {post.width}×{post.height} · {post.rating} · {post.status} ·{" "}
+                {post.width}×{post.height} · {post.rating} · {post.status} ·{' '}
                 {(post.file_size / 1024).toFixed(0)}KB
               </p>
             </div>
@@ -65,5 +65,5 @@ export default async function AdminPostsPage() {
         ))}
       </ul>
     </div>
-  );
+  )
 }

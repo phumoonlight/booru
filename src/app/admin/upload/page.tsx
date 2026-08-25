@@ -1,22 +1,19 @@
-"use client";
+'use client'
 
-import { useActionState, useState } from "react";
-import Link from "next/link";
-import { uploadPost, type UploadState } from "@/lib/actions/upload";
+import { useActionState, useState } from 'react'
+import Link from 'next/link'
+import { uploadPost, type UploadState } from '@/lib/actions/upload'
 
-const RATINGS = ["general", "sensitive", "questionable", "explicit"] as const;
+const RATINGS = ['general', 'sensitive', 'questionable', 'explicit'] as const
 
 export default function UploadPage() {
-  const [state, formAction, pending] = useActionState<UploadState, FormData>(
-    uploadPost,
-    null
-  );
-  const [preview, setPreview] = useState<string | null>(null);
+  const [state, formAction, pending] = useActionState<UploadState, FormData>(uploadPost, null)
+  const [preview, setPreview] = useState<string | null>(null)
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (preview) URL.revokeObjectURL(preview);
-    setPreview(file ? URL.createObjectURL(file) : null);
+    const file = e.target.files?.[0]
+    if (preview) URL.revokeObjectURL(preview)
+    setPreview(file ? URL.createObjectURL(file) : null)
   }
 
   return (
@@ -25,10 +22,10 @@ export default function UploadPage() {
 
       {state?.ok && (
         <p className="rounded-lg border border-green-500/30 bg-green-500/15 px-3 py-2 text-sm text-green-400">
-          Uploaded — post #{state.postId}.{" "}
+          Uploaded — post #{state.postId}.{' '}
           <Link href={`/posts/${state.postId}`} className="underline">
             View
-          </Link>{" "}
+          </Link>{' '}
           (page arrives in Phase 3)
         </p>
       )}
@@ -37,11 +34,8 @@ export default function UploadPage() {
           {state.error}
           {state.existingPostId !== undefined && (
             <>
-              {" — "}
-              <Link
-                href={`/posts/${state.existingPostId}`}
-                className="underline"
-              >
+              {' — '}
+              <Link href={`/posts/${state.existingPostId}`} className="underline">
                 see post #{state.existingPostId}
               </Link>
             </>
@@ -112,9 +106,9 @@ export default function UploadPage() {
           disabled={pending}
           className="min-h-11 rounded-lg bg-accent font-medium text-background disabled:opacity-50"
         >
-          {pending ? "Uploading…" : "Upload"}
+          {pending ? 'Uploading…' : 'Upload'}
         </button>
       </form>
     </div>
-  );
+  )
 }

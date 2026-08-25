@@ -1,13 +1,10 @@
-"use client";
+'use client'
 
-import { useActionState } from "react";
-import { login, type AuthFormState } from "@/lib/actions/auth";
+import { useActionState } from 'react'
+import { login, type AuthFormState } from '@/lib/actions/auth'
 
 export default function LoginPage() {
-  const [state, formAction, pending] = useActionState<AuthFormState, FormData>(
-    login,
-    null
-  );
+  const [state, formAction, pending] = useActionState<AuthFormState, FormData>(login, null)
 
   return (
     <div className="mx-auto flex min-h-[80vh] w-full max-w-sm flex-col justify-center gap-6 px-4">
@@ -43,12 +40,12 @@ export default function LoginPage() {
           disabled={pending}
           className="min-h-11 rounded-lg bg-accent font-medium text-background disabled:opacity-50"
         >
-          {pending ? "Logging in…" : "Log in"}
+          {pending ? 'Logging in…' : 'Log in'}
         </button>
       </form>
       <p className="text-center text-xs text-muted">
         Public signup arrives in Phase 5 — admin login only for now.
       </p>
     </div>
-  );
+  )
 }
