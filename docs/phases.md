@@ -9,14 +9,14 @@ status in [PLAN.md](./PLAN.md). Each phase ends with something verifiable.
 
 **Goal:** running Next.js app connected to Supabase, deployable.
 
-- [ ] `npx create-next-app@latest` (TypeScript, App Router, Tailwind, `src/` dir, ESLint)
-- [ ] Create Supabase project (cloud); note URL + anon key + service-role key in `.env.local`
-- [ ] Install deps: `@supabase/supabase-js`, `@supabase/ssr`, `sharp`, `zod`
-- [ ] Supabase CLI init (`supabase init`) so `supabase/migrations/` exists; link to project
-- [ ] Client factories in `src/lib/supabase/`: `server.ts` (cookies), `client.ts` (browser), `admin.ts` (service role, server-only)
-- [ ] `middleware.ts` with Supabase session refresh
-- [ ] Base layout: dark theme, mobile viewport meta, placeholder bottom nav
-- [ ] Verify: app runs locally and a test query reaches Supabase
+- [x] `npx create-next-app@latest` (TypeScript, App Router, Tailwind, `src/` dir, ESLint) — Next.js 16.3.3
+- [ ] Create Supabase project (cloud); note URL + anon key + service-role key in `.env.local` — **USER STEP**, placeholders written to `.env.local`/`.env.example`
+- [x] Install deps: `@supabase/supabase-js`, `@supabase/ssr`, `sharp`, `zod` (+ `server-only`, `supabase` CLI as dev dep)
+- [x] Supabase CLI init (`supabase init`) so `supabase/migrations/` exists — link to project pending (needs cloud project)
+- [x] Client factories in `src/lib/supabase/`: `server.ts` (cookies), `client.ts` (browser), `admin.ts` (service role, server-only)
+- [x] Session refresh in `src/proxy.ts` (Next 16 renamed `middleware.ts` → `proxy.ts`)
+- [x] Base layout: dark theme, mobile viewport meta, placeholder bottom nav
+- [ ] Verify: app runs locally ✅ (home page shows a Supabase connection-status badge) — test query pending real keys
 
 **Done when:** `npm run dev` shows a styled empty shell that successfully talks to Supabase.
 

@@ -42,7 +42,7 @@ Documented in [future.md](./future.md) so current decisions don't block them lat
 
 | # | Phase | Status |
 |---|---|---|
-| 0 | Project scaffold (Next.js + Tailwind + Supabase client) | 🔲 not started |
+| 0 | Project scaffold (Next.js + Tailwind + Supabase client) | 🟡 in progress |
 | 1 | Database schema + migrations + admin auth | 🔲 not started |
 | 2 | Upload pipeline (admin): file → dedup → thumbnail → tags | 🔲 not started |
 | 3 | Browse: post grid, post detail page, pagination | 🔲 not started |
@@ -54,10 +54,18 @@ Status legend: 🔲 not started · 🟡 in progress · ✅ done
 
 ## Current status
 
-**Nothing implemented yet.** Repo contains only docs. Next step: Phase 0 in
-[phases.md](./phases.md).
+**Phase 0 nearly done.** Next.js 16 app scaffolded, all deps installed, Supabase
+client factories + session-refresh proxy + dark mobile-first shell built; `npm run build`,
+lint, and dev server all pass. Home page shows a live Supabase connection-status badge
+(currently "unconfigured").
 
-Blockers / decisions needed from user: none currently.
+Blockers / decisions needed from user: **create the Supabase cloud project** and paste
+URL + anon key + service-role key into `.env.local` (template in `.env.example`), then
+run `npx supabase link --project-ref <ref>`. After that the badge should turn green and
+Phase 0 is done.
+
+Note: Next 16 renamed the `middleware.ts` convention to `proxy.ts` — session refresh
+lives in `src/proxy.ts`.
 
 ## Working conventions (for every session)
 
@@ -74,4 +82,11 @@ Blockers / decisions needed from user: none currently.
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
 
+- **2026-08-26 (2)** — Phase 0 scaffold: create-next-app (Next 16.3.3, TS, Tailwind v4,
+  App Router, src/), installed `@supabase/supabase-js @supabase/ssr sharp zod server-only`
+  + `supabase` CLI (dev dep), `supabase init`, client factories in `src/lib/supabase/`,
+  session refresh in `src/proxy.ts` (Next 16 convention, not `middleware.ts`), dark
+  mobile-first layout with placeholder bottom nav, home page with Supabase health badge.
+  Build/lint/dev verified. Next: user creates Supabase project + fills `.env.local`,
+  then Phase 1.
 - **2026-08-26** — Wrote the implementation plan (this document set). Next: Phase 0 scaffold.
