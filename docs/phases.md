@@ -3,6 +3,12 @@
 Work top to bottom. Check items off (`[x]`) as they're completed and mirror phase
 status in [PLAN.md](./PLAN.md). Each phase ends with something verifiable.
 
+**Setup steps live elsewhere.** Anything needing the real Supabase project — creating
+it, `db push`, the admin account, dashboard checks — is collected in
+[supabase-setup.md](./supabase-setup.md) and run in one pass after the code is written.
+Phases below list only work done in the repo; each phase's "Done when" is confirmed
+during that runbook.
+
 ---
 
 ## Phase 0 — Project scaffold
@@ -10,15 +16,18 @@ status in [PLAN.md](./PLAN.md). Each phase ends with something verifiable.
 **Goal:** running Next.js app connected to Supabase, deployable.
 
 - [x] `npx create-next-app@latest` (TypeScript, App Router, Tailwind, `src/` dir, ESLint) — Next.js 16.3.3
-- [ ] Create Supabase project (cloud); note URL + anon key + service-role key in `.env.local` — **USER STEP**, placeholders written to `.env.local`/`.env.example`
 - [x] Install deps: `@supabase/supabase-js`, `@supabase/ssr`, `sharp`, `zod` (+ `server-only`, `supabase` CLI as dev dep)
-- [x] Supabase CLI init (`supabase init`) so `supabase/migrations/` exists — link to project pending (needs cloud project)
+- [x] Supabase CLI init (`supabase init`) so `supabase/migrations/` exists
+- [x] `.env.example` template for the three Supabase keys
 - [x] Client factories in `src/lib/supabase/`: `server.ts` (cookies), `client.ts` (browser), `admin.ts` (service role, server-only)
 - [x] Session refresh in `src/proxy.ts` (Next 16 renamed `middleware.ts` → `proxy.ts`)
 - [x] Base layout: dark theme, mobile viewport meta, placeholder bottom nav
-- [ ] Verify: app runs locally ✅ (home page shows a Supabase connection-status badge) — test query pending real keys
+- [x] Home page renders a live Supabase connection-status badge
+- [x] Verify: `npm run build`, `npm run lint`, and `npm run dev` all pass
 
-**Done when:** `npm run dev` shows a styled empty shell that successfully talks to Supabase.
+**Done when:** `npm run dev` shows a styled empty shell that successfully talks to
+Supabase — the badge turning green is confirmed in
+[supabase-setup.md](./supabase-setup.md) steps 1–2.
 
 ---
 
@@ -30,12 +39,13 @@ status in [PLAN.md](./PLAN.md). Each phase ends with something verifiable.
 - [x] Migration 2: `handle_new_user` trigger, `tag_post_count` trigger, `is_admin()` helper — `20260826100100_functions_triggers.sql`
 - [x] Migration 3: enable RLS + all policies — `20260826100200_rls_policies.sql`
 - [x] Migration 4: storage buckets `originals`, `thumbnails` + storage policies — `20260826100300_storage_buckets.sql`
-- [ ] Create the admin user (signup), promote via SQL (`role='admin'`) — **blocked on Supabase project**
 - [x] `/login` page (email/password) + logout action (`src/app/(auth)/login/`, `src/lib/actions/auth.ts`)
 - [x] Guard `/admin/*` in proxy + `requireAdmin()` helper (`src/lib/auth.ts`) for admin server actions; admin layout re-checks role server-side
-- [ ] Verify: non-admin/anonymous gets redirected from `/admin`; RLS spot-checked — **blocked on Supabase project**
+- [x] Verify: build + lint pass
 
-**Done when:** schema is live via migrations only, and admin login → `/admin` works on mobile.
+**Done when:** schema is live via migrations only, and admin login → `/admin` works on
+mobile — creating the admin user and checking the redirects are
+[supabase-setup.md](./supabase-setup.md) steps 3–5.
 
 ---
 
@@ -48,9 +58,10 @@ status in [PLAN.md](./PLAN.md). Each phase ends with something verifiable.
 - [x] `/admin/upload` form: file picker (`accept="image/*"`), client-side preview, tag input, rating select, source URL
 - [x] Handle duplicate-MD5 with a friendly "already exists → link to post" error
 - [x] `/admin/posts`: list of recent posts with delete (row + storage files) and edit page (tags/rating/source via RPC)
-- [ ] Verify: upload a real image from a phone-sized viewport; confirm files in both buckets, rows in `posts`/`tags`/`post_tags`, `post_count` incremented — **blocked on Supabase project**
+- [x] Verify: build + lint pass
 
-**Done when:** end-to-end upload works and dedup rejects a re-upload.
+**Done when:** end-to-end upload works and dedup rejects a re-upload — exercised in
+[supabase-setup.md](./supabase-setup.md) step 6.
 
 ---
 

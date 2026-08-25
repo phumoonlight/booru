@@ -36,6 +36,7 @@ Documented in [future.md](./future.md) so current decisions don't block them lat
 | [architecture.md](./architecture.md) | Tech stack, folder structure, key patterns |
 | [database-schema.md](./database-schema.md) | Full Postgres schema, RLS, indexes, search function |
 | [phases.md](./phases.md) | Phase-by-phase checklists (the actual to-do list) |
+| [supabase-setup.md](./supabase-setup.md) | **Runbook** — every step needing the real Supabase project; run once implementation is done |
 | [future.md](./future.md) | Deferred features + how the current design accommodates them |
 
 ## Phase overview
@@ -54,26 +55,16 @@ Status legend: 🔲 not started · 🟡 in progress · ✅ done
 
 ## Current status
 
-**Phases 0–2 code-complete; all blocked on the Supabase cloud project.**
-5 migrations written (schema, functions/triggers, RLS, storage, post RPCs).
-Full upload pipeline coded: `/admin/upload` (file → MD5 dedup → sharp WebP thumb →
-storage → `create_post_with_tags` RPC with rollback), `/admin/posts` list with
-delete + edit (tags/rating/source via `update_post_with_tags` RPC).
-Build + lint pass. Nothing has been applied to a real database yet.
+**Phases 0–2 code-complete.** 5 migrations written (schema, functions/triggers, RLS,
+storage, post RPCs). Full upload pipeline coded: `/admin/upload` (file → MD5 dedup →
+sharp WebP thumb → storage → `create_post_with_tags` RPC with rollback), `/admin/posts`
+list with delete + edit (tags/rating/source via `update_post_with_tags` RPC).
+Build + lint pass.
 
-**Runbook once the Supabase project exists (user creates it, then either of us):**
-1. Fill `.env.local` (URL, anon key, service-role key — template in `.env.example`).
-2. `npx supabase link --project-ref <ref>`
-3. `npx supabase db push` (applies all 4 migrations)
-4. Sign up the admin account (Supabase dashboard → Auth → Add user, or via `/login`
-   after Phase 5 signup exists — dashboard is easiest now).
-5. SQL editor: `update public.profiles set role='admin' where username='<name>';`
-6. Verify: home badge green; `/admin` redirects anon → `/login`, member → `/`;
-   admin login → dashboard. RLS spot-check: anon select active posts ok, insert fails.
-7. Phase 2 verify: upload a real image from a phone-sized viewport; confirm files in
-   both buckets, rows in `posts`/`tags`/`post_tags`, `post_count` incremented,
-   duplicate re-upload rejected with link.
-8. Mark Phases 0–2 ✅ here and in phases.md.
+No Supabase cloud project exists yet, so nothing has run against a real database and
+every phase stays 🟡 until it does. That is expected and not a blocker for writing more
+code — the plan is to implement first, then run [supabase-setup.md](./supabase-setup.md)
+end to end and verify Phases 0–2 together.
 
 Note: Next 16 renamed the `middleware.ts` convention to `proxy.ts` — session refresh
 and the `/admin` guard live in `src/proxy.ts`.
@@ -81,6 +72,9 @@ and the `/admin` guard live in `src/proxy.ts`.
 ## Working conventions (for every session)
 
 - Work through phases in order; within a phase, check off items in phases.md as you go.
+- Anything requiring the real Supabase project (dashboard clicks, `db push`, live
+  verification) goes in [supabase-setup.md](./supabase-setup.md), not here and not in
+  phases.md — those steps are batched for one session after the code is written.
 - Database changes are **always** SQL migration files in `supabase/migrations/`
   (timestamped), never ad-hoc dashboard edits — the schema must be reproducible.
 - Mutations = Server Actions. Reads = React Server Components calling `src/lib/data/`.
@@ -93,6 +87,11 @@ and the `/admin` guard live in `src/proxy.ts`.
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
 
+- **2026-08-26 (5)** — Extracted every Supabase-project setup/verification step out of
+  PLAN.md and phases.md into [supabase-setup.md](./supabase-setup.md) (7 steps: create
+  project → env → link/push → admin user → auth verify → upload verify → mark phases
+  done, plus troubleshooting). Decision: implement all code first, run the runbook once
+  at the end.
 - **2026-08-26 (4)** — Phase 2 code: `create_post_with_tags` + `update_post_with_tags`
   RPCs (admin-checked, security definer), upload action (zod → MD5 dedup → sharp
   thumbnail → storage via service role → RPC on user session, storage rollback on
