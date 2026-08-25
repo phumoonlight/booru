@@ -46,7 +46,7 @@ Documented in [future.md](./future.md) so current decisions don't block them lat
 | 0 | Project scaffold (Next.js + Tailwind + Supabase client) | 🟡 in progress |
 | 1 | Database schema + migrations + admin auth | 🟡 in progress |
 | 2 | Upload pipeline (admin): file → dedup → thumbnail → tags | 🟡 in progress |
-| 3 | Browse: post grid, post detail page, pagination | 🔲 not started |
+| 3 | Browse: post grid, post detail page, pagination | 🟡 in progress |
 | 4 | Tag search: multi-tag query, autocomplete, tag drawer | 🔲 not started |
 | 5 | Accounts: public signup, favorites | 🔲 not started |
 | 6 | Polish: rating filter, infinite scroll, SEO, PWA basics | 🔲 not started |
@@ -55,11 +55,13 @@ Status legend: 🔲 not started · 🟡 in progress · ✅ done
 
 ## Current status
 
-**Phases 0–2 code-complete.** 5 migrations written (schema, functions/triggers, RLS,
+**Phases 0–3 code-complete.** 5 migrations written (schema, functions/triggers, RLS,
 storage, post RPCs). Full upload pipeline coded: `/admin/upload` (file → MD5 dedup →
 sharp WebP thumb → storage → `create_post_with_tags` RPC with rollback), `/admin/posts`
 list with delete + edit (tags/rating/source via `update_post_with_tags` RPC).
-Build + lint pass.
+Public browse coded: home grid with pagination and single-tag filter, `/posts/[id]`
+detail with category-coloured tags, metadata and prev/next.
+Build + lint pass; every route returns 200 in dev and `/admin` redirects anonymous.
 
 No Supabase cloud project exists yet, so nothing has run against a real database and
 every phase stays 🟡 until it does. That is expected and not a blocker for writing more
@@ -87,6 +89,16 @@ and the `/admin` guard live in `src/proxy.ts`.
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
 
+- **2026-08-26 (6)** — Phase 3 code: `lib/data/tags.ts` + expanded `lib/data/posts.ts`
+  (paged `getPosts`, `getPostTags`, `getPostNeighbours`), home grid at
+  `app/(public)/page.tsx` (2→4→6 cols, `next/image` sizes, pagination, single-tag
+  filter via `?tags=`), `/posts/[id]` detail (fit-to-width image linking the original,
+  Danbooru-coloured tags by category, metadata, prev/next), loading skeletons, empty
+  states, `next.config.ts` remote image patterns derived from the Supabase env var,
+  bottom nav wired to real routes. Pages fall back to a setup notice when Supabase
+  env vars are absent, so the app is browsable pre-runbook. Decision: single-tag
+  filtering only until the Phase 4 `search_posts` RPC replaces it.
+  Next: Phase 4 (tag search).
 - **2026-08-26 (5)** — Extracted every Supabase-project setup/verification step out of
   PLAN.md and phases.md into [supabase-setup.md](./supabase-setup.md) (7 steps: create
   project → env → link/push → admin user → auth verify → upload verify → mark phases

@@ -4,9 +4,9 @@
 > Supabase cloud project lives here — nothing else in the docs asks you to touch a
 > dashboard. Work top to bottom; each step says how to tell it worked.
 >
-> Until this runbook is run, the app builds and lints but talks to nothing: the home
-> page shows a yellow "unconfigured" badge and every page that reads the database is
-> unverified.
+> Until this runbook is run, the app builds and lints but talks to nothing: every page
+> that reads the database shows a yellow "Supabase is not configured" notice instead
+> of content.
 
 ## Step 1 — Create the project
 
@@ -29,9 +29,9 @@ SUPABASE_SERVICE_ROLE_KEY=<service_role / secret key>
 The service-role key bypasses RLS. It must never reach the browser — only
 `src/lib/supabase/admin.ts` reads it, and that file is `server-only`.
 
-**Verify:** `npm run dev`, open the home page. The status badge should turn green
-("Connected to Supabase"). If it stays yellow the URL/key didn't load; restart the
-dev server after editing `.env.local`.
+**Verify:** `npm run dev`, open the home page. The yellow "Supabase is not configured"
+notice should be gone, replaced by the (still empty) post grid. If the notice persists
+the URL/key didn't load — restart the dev server after editing `.env.local`.
 
 ## Step 3 — Link the CLI and push migrations
 
@@ -107,9 +107,23 @@ Confirm all of the following:
 - `/admin/posts` lists the post with its thumbnail; **Edit** changes tags/rating and
   the removed tag's `post_count` drops; **Delete** removes the row and both files.
 
-## Step 7 — Mark the phases done
+Upload a handful more images before the next step — the browse UI needs real content.
 
-Tick the remaining `[ ]` items in [phases.md](./phases.md) for Phases 0–2 and flip
+## Step 7 — Verify browsing (finishes Phase 3)
+
+Log out (or use a private window) so you are testing as an anonymous visitor, at ~375px:
+
+- Home page shows the thumbnail grid, two columns, with a post count.
+- Tapping a thumbnail opens `/posts/[id]`: image fits the width, tags are grouped and
+  colour-coded by category, metadata is right, **Newer**/**Older** move between posts.
+- Tapping a tag goes to `/?tags=<name>` and the grid narrows to that tag; **Clear
+  filter** returns to everything.
+- With more than 24 posts, the pagination row appears and page 2 loads a different set.
+- Lighthouse mobile run on the home page passes.
+
+## Step 8 — Mark the phases done
+
+Tick the remaining `[ ]` items in [phases.md](./phases.md) for Phases 0–3 and flip
 their rows to ✅ in [PLAN.md](./PLAN.md).
 
 ## Deferred to Phase 6
@@ -121,7 +135,8 @@ custom domain — is deliberately not here. It belongs to the Phase 6 deploy che
 
 | Symptom | Cause |
 |---|---|
-| Badge stays yellow | `.env.local` not loaded — restart `npm run dev` |
+| Setup notice persists | `.env.local` not loaded — restart `npm run dev` |
+| Images 404 or `next/image` errors on host | `.env.local` was added after the server started — `next.config.ts` reads the Supabase host at boot, so restart |
 | `db push` says "no project linked" | Re-run `npx supabase link --project-ref <ref>` |
 | Login fails with correct password | User not confirmed — tick Auto Confirm, or confirm from the dashboard |
 | `/admin` bounces an admin to `/` | `profiles.role` is still `member`, or the session predates the promotion — log out and back in |

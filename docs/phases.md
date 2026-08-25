@@ -69,13 +69,16 @@ mobile — creating the admin user and checking the redirects are
 
 **Goal:** visitors can browse the gallery and view posts. This makes the site *feel* like a booru.
 
-- [ ] `lib/data/posts.ts`: `getPosts({page})`, `getPost(id)`, `getPostTags(id)`
-- [ ] Home page: responsive thumbnail grid (2 cols @ 375px → 6 @ desktop), `next/image` with proper `sizes`
-- [ ] Pagination (page numbers in URL, prev/next; keep it simple)
-- [ ] Post detail `/posts/[id]`: full image (fit-to-width, tap to open original), tag list grouped by category with Danbooru-style category colors, metadata (size, dimensions, rating, source link, date)
-- [ ] Tags on the detail page link to search: `/?tags=<name>` (works before Phase 4 as single-tag filter)
-- [ ] Empty states + loading skeletons
-- [ ] Verify: lighthouse mobile pass on home page; grid comfortable at 375px
+- [x] `lib/data/posts.ts`: `getPosts({page, tag})`, `getPost(id)`, `getPostTags(id)`, `getPostNeighbours(id)`; `lib/data/tags.ts`: `getTagByName`, `getTags`, `groupByCategory`
+- [x] Home page: responsive thumbnail grid (2 cols @ 375px → 4 @ sm → 6 @ lg), `next/image` with per-breakpoint `sizes`
+- [x] Pagination (page numbers in URL, prev/next)
+- [x] Post detail `/posts/[id]`: full image (fit-to-width, tap to open original), tag list grouped by category with Danbooru-style category colors, metadata (size, dimensions, rating, type, source link, date), prev/next post links
+- [x] Tags on the detail page link to search: `/?tags=<name>` (single-tag filter until Phase 4)
+- [x] Empty states + loading skeletons (`loading.tsx` for grid and detail)
+- [x] `next.config.ts` image `remotePatterns` for the Supabase storage host (derived from env)
+- [x] Bottom nav wired to real routes; admin sees Upload/Admin entries
+- [x] Verify: build + lint pass; all public routes render 200 in dev, `/admin` redirects anon
+- [ ] Verify: lighthouse mobile pass on home page; grid comfortable at 375px — needs real posts, see [supabase-setup.md](./supabase-setup.md) step 6
 
 **Done when:** anonymous visitor can browse grid → open post → tap a tag → see filtered grid.
 
