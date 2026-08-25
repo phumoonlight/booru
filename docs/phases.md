@@ -43,12 +43,12 @@ status in [PLAN.md](./PLAN.md). Each phase ends with something verifiable.
 
 **Goal:** admin uploads an image with tags from a phone; post + thumbnail + tags appear in DB/storage.
 
-- [ ] Migration: `create_post_with_tags` RPC
-- [ ] Upload action: zod validation → admin check → MD5 dedup → sharp (dimensions + WebP thumb ≤400px) → storage upload → RPC insert
-- [ ] `/admin/upload` form: file picker (`accept="image/*"` — mobile camera/gallery), client-side preview, tag input (free text, space-separated for now), rating select, source URL
-- [ ] Handle duplicate-MD5 with a friendly "already exists → link to post" error
-- [ ] `/admin/posts`: simple list of recent posts with delete (removes row + storage files) and edit-tags/rating
-- [ ] Verify: upload a real image from a phone-sized viewport; confirm files in both buckets, rows in `posts`/`tags`/`post_tags`, `post_count` incremented
+- [x] Migration: `create_post_with_tags` RPC (+ `update_post_with_tags` for edits) — `20260826110000_post_rpcs.sql`
+- [x] Upload action: zod validation → admin check → MD5 dedup → sharp (dimensions + WebP thumb ≤400px) → storage upload → RPC insert, with storage rollback on DB failure (`src/lib/actions/upload.ts`)
+- [x] `/admin/upload` form: file picker (`accept="image/*"`), client-side preview, tag input, rating select, source URL
+- [x] Handle duplicate-MD5 with a friendly "already exists → link to post" error
+- [x] `/admin/posts`: list of recent posts with delete (row + storage files) and edit page (tags/rating/source via RPC)
+- [ ] Verify: upload a real image from a phone-sized viewport; confirm files in both buckets, rows in `posts`/`tags`/`post_tags`, `post_count` incremented — **blocked on Supabase project**
 
 **Done when:** end-to-end upload works and dedup rejects a re-upload.
 

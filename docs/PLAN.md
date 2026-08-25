@@ -44,7 +44,7 @@ Documented in [future.md](./future.md) so current decisions don't block them lat
 |---|---|---|
 | 0 | Project scaffold (Next.js + Tailwind + Supabase client) | 🟡 in progress |
 | 1 | Database schema + migrations + admin auth | 🟡 in progress |
-| 2 | Upload pipeline (admin): file → dedup → thumbnail → tags | 🔲 not started |
+| 2 | Upload pipeline (admin): file → dedup → thumbnail → tags | 🟡 in progress |
 | 3 | Browse: post grid, post detail page, pagination | 🔲 not started |
 | 4 | Tag search: multi-tag query, autocomplete, tag drawer | 🔲 not started |
 | 5 | Accounts: public signup, favorites | 🔲 not started |
@@ -54,9 +54,11 @@ Status legend: 🔲 not started · 🟡 in progress · ✅ done
 
 ## Current status
 
-**Phases 0 and 1 code-complete; both blocked on the Supabase cloud project.**
-All 4 Phase 1 migrations are written in `supabase/migrations/`, login/logout works
-in code, `/admin` is guarded (proxy + admin layout + `requireAdmin()` helper).
+**Phases 0–2 code-complete; all blocked on the Supabase cloud project.**
+5 migrations written (schema, functions/triggers, RLS, storage, post RPCs).
+Full upload pipeline coded: `/admin/upload` (file → MD5 dedup → sharp WebP thumb →
+storage → `create_post_with_tags` RPC with rollback), `/admin/posts` list with
+delete + edit (tags/rating/source via `update_post_with_tags` RPC).
 Build + lint pass. Nothing has been applied to a real database yet.
 
 **Runbook once the Supabase project exists (user creates it, then either of us):**
@@ -68,7 +70,10 @@ Build + lint pass. Nothing has been applied to a real database yet.
 5. SQL editor: `update public.profiles set role='admin' where username='<name>';`
 6. Verify: home badge green; `/admin` redirects anon → `/login`, member → `/`;
    admin login → dashboard. RLS spot-check: anon select active posts ok, insert fails.
-7. Mark Phases 0 & 1 ✅ here and in phases.md.
+7. Phase 2 verify: upload a real image from a phone-sized viewport; confirm files in
+   both buckets, rows in `posts`/`tags`/`post_tags`, `post_count` incremented,
+   duplicate re-upload rejected with link.
+8. Mark Phases 0–2 ✅ here and in phases.md.
 
 Note: Next 16 renamed the `middleware.ts` convention to `proxy.ts` — session refresh
 and the `/admin` guard live in `src/proxy.ts`.
@@ -88,6 +93,13 @@ and the `/admin` guard live in `src/proxy.ts`.
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
 
+- **2026-08-26 (4)** — Phase 2 code: `create_post_with_tags` + `update_post_with_tags`
+  RPCs (admin-checked, security definer), upload action (zod → MD5 dedup → sharp
+  thumbnail → storage via service role → RPC on user session, storage rollback on
+  failure), `/admin/upload` with preview + duplicate link, `/admin/posts` list with
+  delete/edit. Tag parsing in `lib/tags.ts`, storage URL helpers in `lib/storage.ts`.
+  Build/lint pass. Verification blocked on Supabase project (runbook above).
+  Next: run runbook, or code Phase 3 (browse) which is also DB-blocked for verify only.
 - **2026-08-26 (3)** — Phase 1 code: 4 migrations (tables, functions/triggers, RLS,
   storage buckets), `/login` + logout (server actions, zod), `/admin` guard in proxy +
   admin layout re-check + `requireAdmin()` for future admin actions, `lib/data/profiles.ts`.
