@@ -25,8 +25,29 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  // Refresh the session if expired. /admin guard is added in Phase 1.
-  await supabase.auth.getUser();
+  // Refresh the session if expired
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // /admin guard — first line only; pages and actions re-check the admin role
+  if (request.nextUrl.pathname.startsWith("/admin")) {
+    if (!user) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      return NextResponse.redirect(url);
+    }
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    if (profile?.role !== "admin") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      return NextResponse.redirect(url);
+    }
+  }
 
   return supabaseResponse;
 }

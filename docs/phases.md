@@ -26,14 +26,14 @@ status in [PLAN.md](./PLAN.md). Each phase ends with something verifiable.
 
 **Goal:** full schema migrated; the admin can log in; `/admin` is guarded.
 
-- [ ] Migration 1: tables `profiles`, `posts`, `tags`, `post_tags` (+ indexes) per [database-schema.md](./database-schema.md)
-- [ ] Migration 2: `handle_new_user` trigger, `tag_post_count` trigger, `is_admin()` helper
-- [ ] Migration 3: enable RLS + all policies
-- [ ] Migration 4: storage buckets `originals`, `thumbnails` + storage policies
-- [ ] Create the admin user (signup), promote via SQL (`role='admin'`)
-- [ ] `/login` page (email/password) + logout action
-- [ ] Guard `/admin/*` in middleware + re-check admin role in every admin server action
-- [ ] Verify: non-admin/anonymous gets redirected from `/admin`; RLS spot-checked (anon can select active posts, cannot insert)
+- [x] Migration 1: tables `profiles`, `posts`, `tags`, `post_tags` (+ indexes) — `20260826100000_initial_tables.sql`
+- [x] Migration 2: `handle_new_user` trigger, `tag_post_count` trigger, `is_admin()` helper — `20260826100100_functions_triggers.sql`
+- [x] Migration 3: enable RLS + all policies — `20260826100200_rls_policies.sql`
+- [x] Migration 4: storage buckets `originals`, `thumbnails` + storage policies — `20260826100300_storage_buckets.sql`
+- [ ] Create the admin user (signup), promote via SQL (`role='admin'`) — **blocked on Supabase project**
+- [x] `/login` page (email/password) + logout action (`src/app/(auth)/login/`, `src/lib/actions/auth.ts`)
+- [x] Guard `/admin/*` in proxy + `requireAdmin()` helper (`src/lib/auth.ts`) for admin server actions; admin layout re-checks role server-side
+- [ ] Verify: non-admin/anonymous gets redirected from `/admin`; RLS spot-checked — **blocked on Supabase project**
 
 **Done when:** schema is live via migrations only, and admin login → `/admin` works on mobile.
 

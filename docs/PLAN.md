@@ -43,7 +43,7 @@ Documented in [future.md](./future.md) so current decisions don't block them lat
 | # | Phase | Status |
 |---|---|---|
 | 0 | Project scaffold (Next.js + Tailwind + Supabase client) | 🟡 in progress |
-| 1 | Database schema + migrations + admin auth | 🔲 not started |
+| 1 | Database schema + migrations + admin auth | 🟡 in progress |
 | 2 | Upload pipeline (admin): file → dedup → thumbnail → tags | 🔲 not started |
 | 3 | Browse: post grid, post detail page, pagination | 🔲 not started |
 | 4 | Tag search: multi-tag query, autocomplete, tag drawer | 🔲 not started |
@@ -54,18 +54,24 @@ Status legend: 🔲 not started · 🟡 in progress · ✅ done
 
 ## Current status
 
-**Phase 0 nearly done.** Next.js 16 app scaffolded, all deps installed, Supabase
-client factories + session-refresh proxy + dark mobile-first shell built; `npm run build`,
-lint, and dev server all pass. Home page shows a live Supabase connection-status badge
-(currently "unconfigured").
+**Phases 0 and 1 code-complete; both blocked on the Supabase cloud project.**
+All 4 Phase 1 migrations are written in `supabase/migrations/`, login/logout works
+in code, `/admin` is guarded (proxy + admin layout + `requireAdmin()` helper).
+Build + lint pass. Nothing has been applied to a real database yet.
 
-Blockers / decisions needed from user: **create the Supabase cloud project** and paste
-URL + anon key + service-role key into `.env.local` (template in `.env.example`), then
-run `npx supabase link --project-ref <ref>`. After that the badge should turn green and
-Phase 0 is done.
+**Runbook once the Supabase project exists (user creates it, then either of us):**
+1. Fill `.env.local` (URL, anon key, service-role key — template in `.env.example`).
+2. `npx supabase link --project-ref <ref>`
+3. `npx supabase db push` (applies all 4 migrations)
+4. Sign up the admin account (Supabase dashboard → Auth → Add user, or via `/login`
+   after Phase 5 signup exists — dashboard is easiest now).
+5. SQL editor: `update public.profiles set role='admin' where username='<name>';`
+6. Verify: home badge green; `/admin` redirects anon → `/login`, member → `/`;
+   admin login → dashboard. RLS spot-check: anon select active posts ok, insert fails.
+7. Mark Phases 0 & 1 ✅ here and in phases.md.
 
 Note: Next 16 renamed the `middleware.ts` convention to `proxy.ts` — session refresh
-lives in `src/proxy.ts`.
+and the `/admin` guard live in `src/proxy.ts`.
 
 ## Working conventions (for every session)
 
@@ -82,6 +88,11 @@ lives in `src/proxy.ts`.
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
 
+- **2026-08-26 (3)** — Phase 1 code: 4 migrations (tables, functions/triggers, RLS,
+  storage buckets), `/login` + logout (server actions, zod), `/admin` guard in proxy +
+  admin layout re-check + `requireAdmin()` for future admin actions, `lib/data/profiles.ts`.
+  Build/lint pass. Blocked on Supabase project for: db push, admin user, RLS verification
+  (runbook in Current status). Next: user creates project → run runbook → Phase 2.
 - **2026-08-26 (2)** — Phase 0 scaffold: create-next-app (Next 16.3.3, TS, Tailwind v4,
   App Router, src/), installed `@supabase/supabase-js @supabase/ssr sharp zod server-only`
   + `supabase` CLI (dev dep), `supabase init`, client factories in `src/lib/supabase/`,
