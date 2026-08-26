@@ -28,7 +28,7 @@ booru/
 │   │   │   ├── page.tsx          # home = post grid
 │   │   │   ├── posts/[id]/       # post detail
 │   │   │   └── tags/             # tag listing
-│   │   ├── (auth)/login/         # login (admin for now, users in phase 5)
+│   │   ├── (auth)/login/         # login (admin only — public signup deferred)
 │   │   ├── admin/
 │   │   │   ├── upload/           # upload form
 │   │   │   └── posts/            # manage/edit/delete posts
@@ -84,7 +84,7 @@ The Danbooru reference is desktop-shaped; translate it like this:
 | Fixed left sidebar (search + tag list) | Sticky top search bar; tag list in a slide-up drawer ("Tags" button) | Left sidebar returns, ~240px |
 | Dense thumbnail grid | 2–3 column grid, larger tap targets | 5–6 columns |
 | Top nav bar with many links | Bottom tab bar: Posts · Search · Upload(admin) · Account | Top nav |
-| Pagination row | Same, plus infinite scroll later (Phase 6) | Same |
+| Pagination row | Same, plus infinite scroll later (Phase 5) | Same |
 | Post page: image + sidebar metadata | Image full-width, tags/metadata below | Two-column |
 
 - Use `next/image` with `sizes` set per breakpoint; thumbnails from the `thumbnails` bucket.

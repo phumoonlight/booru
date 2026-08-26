@@ -61,7 +61,8 @@ schema stays reproducible.
 
 ## Step 4 — Create and promote the admin account
 
-Public signup doesn't exist until Phase 5, so create the account from the dashboard:
+Public signup is deferred ([future.md](./future.md) §3), so create the account from
+the dashboard:
 
 1. **Authentication → Users → Add user** → email + password, and tick
    *Auto Confirm User* (otherwise the login will fail on an unconfirmed email).
@@ -158,10 +159,10 @@ Then in the UI, at ~375px:
 Tick the remaining `[ ]` items in [phases.md](./phases.md) for Phases 0–4 and flip
 their rows to ✅ in [PLAN.md](./PLAN.md).
 
-## Deferred to Phase 6
+## Deferred to Phase 5
 
 Production hardening — auth rate limits, storage size caps, PITR or scheduled dumps,
-custom domain — is deliberately not here. It belongs to the Phase 6 deploy checklist.
+custom domain — is deliberately not here. It belongs to the Phase 5 deploy checklist.
 
 ## Troubleshooting
 

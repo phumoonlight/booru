@@ -7,15 +7,14 @@ Phase 1 starts. Update this doc if migrations diverge.
 ## Entity overview
 
 ```
-profiles ─┐
-          ├─< posts >─── post_tags ───< tags
-          └─< favorites >─┘
+profiles ───< posts >─── post_tags ───< tags
 ```
 
 ## Tables
 
 ### `profiles`
-Mirrors `auth.users` (created by trigger on signup).
+Mirrors `auth.users` (created by trigger when a user is added). Accounts are
+created from the Supabase dashboard — public signup is deferred ([future.md](./future.md) §3).
 
 | column | type | notes |
 |---|---|---|
@@ -62,15 +61,6 @@ Storage paths are derived, not stored: `originals/{md5}.{file_ext}`, `thumbnails
 
 Index both directions: PK covers `(post_id, tag_id)`; add index on `(tag_id, post_id)` for tag→posts lookups.
 
-### `favorites` (Phase 5)
-
-| column | type | notes |
-|---|---|---|
-| user_id | uuid → profiles.id | |
-| post_id | bigint → posts.id on delete cascade | |
-| created_at | timestamptz default now() | |
-| PK | (user_id, post_id) | |
-
 ## Functions & triggers
 
 ### `handle_new_user()` trigger
@@ -109,13 +99,13 @@ RLS **enabled on every table**. Policies for the current (admin-only moderation)
 | posts | public where `status='active'`; admin sees all | admin | admin | admin |
 | tags | public | admin (via RPC) | admin | admin |
 | post_tags | public | admin (via RPC) | — | admin |
-| favorites | own rows | own rows (auth'd) | — | own rows |
 
 Helper: `is_admin()` — `exists(select 1 from profiles where id = auth.uid() and role = 'admin')`,
 security definer, used inside policies.
 
 When community moderation arrives ([future.md](./future.md)), only the posts/tags
-policies change — no schema migration needed.
+policies change — no schema migration needed. Public accounts and `favorites` are
+deferred too; see [future.md](./future.md) §3.
 
 ## Storage buckets
 

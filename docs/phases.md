@@ -102,22 +102,7 @@ mobile — creating the admin user and checking the redirects are
 
 ---
 
-## Phase 5 — Accounts & favorites
-
-**Goal:** visitors can register and favorite posts.
-
-- [ ] Public signup on `/login` (Supabase email/password; confirm-email setting decided then)
-- [ ] Migration: `favorites` table + RLS
-- [ ] Favorite button on post page (optimistic toggle via server action)
-- [ ] `/account` page: username edit, list of favorites (reuses post grid)
-- [ ] `fav:me` style filter or just the favorites page — decide then (page is simpler)
-- [ ] Verify: two accounts, favorites isolated by RLS
-
-**Done when:** a fresh user can sign up, favorite a post, and see it in their favorites.
-
----
-
-## Phase 6 — Polish
+## Phase 5 — Polish
 
 **Goal:** production-quality daily-driver.
 

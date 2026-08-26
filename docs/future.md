@@ -38,7 +38,33 @@ so API route handlers can call the exact same functions.
 - Rate limiting (Vercel/Upstash) before announcing it.
 - API keys only if write endpoints are ever exposed; read-only can stay anonymous.
 
-## 3. Other classic booru features (rough priority order)
+## 3. Public accounts & favorites (currently: admin login only)
+
+**Now:** there is no public signup. `/login` exists so the admin can sign in; accounts
+are created by hand from the Supabase dashboard ([supabase-setup.md](./supabase-setup.md)
+step 4). Nothing in the site is personalised, so every page is anonymous-cacheable.
+
+**Hooks already in place:**
+- Supabase Auth is already wired (email/password, session refresh in `src/proxy.ts`).
+- `profiles` mirrors `auth.users` via the `handle_new_user` trigger, so any account
+  created later — dashboard or signup — gets a profile row automatically.
+- `profiles.role` defaults to `'member'`, so new signups are non-admin by default and
+  every admin check (`is_admin()`, `requireAdmin()`) already excludes them.
+
+**When enabling:**
+- Turn on signups in Supabase Auth settings and decide the confirm-email policy; add a
+  signup form on `/login`.
+- Migration: `favorites(user_id uuid → profiles.id, post_id bigint → posts.id on delete
+  cascade, created_at timestamptz default now(), PK (user_id, post_id))`, RLS = own rows
+  for select/insert/delete, no update.
+- Favorite button on the post page (optimistic toggle via a server action).
+- `/account`: username edit + the user's favorites (reuses the post grid).
+- Decide `fav:me` search syntax vs. a plain favorites page — the page is simpler.
+- Verify with two accounts that RLS isolates favorites.
+- Knock-on: per-user rating preferences and tag blacklists (§4) only make sense once
+  accounts exist.
+
+## 4. Other classic booru features (rough priority order)
 
 | Feature | Notes / schema impact |
 |---|---|

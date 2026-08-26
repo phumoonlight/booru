@@ -27,6 +27,10 @@ Documented in [future.md](./future.md) so current decisions don't block them lat
 - **Public API** — for now all data access goes through Server Actions / RSC.
   Keep data-access logic in `src/lib/data/` (not inline in actions) so route
   handlers can reuse it when the public API arrives.
+- **Public accounts** — no public signup and no per-user features (favorites).
+  Auth exists only so the admin can log in; accounts are created from the Supabase
+  dashboard. `profiles` + `profiles.role` already exist, so opening signup later is
+  a settings change plus a `favorites` migration, not a rework.
 
 ## Document map
 
@@ -48,8 +52,7 @@ Documented in [future.md](./future.md) so current decisions don't block them lat
 | 2 | Upload pipeline (admin): file → dedup → thumbnail → tags | 🟡 in progress |
 | 3 | Browse: post grid, post detail page, pagination | 🟡 in progress |
 | 4 | Tag search: multi-tag query, autocomplete, tag drawer | 🟡 in progress |
-| 5 | Accounts: public signup, favorites | 🔲 not started |
-| 6 | Polish: rating filter, infinite scroll, SEO, PWA basics | 🔲 not started |
+| 5 | Polish: rating filter, infinite scroll, SEO, PWA basics | 🔲 not started |
 
 Status legend: 🔲 not started · 🟡 in progress · ✅ done
 
@@ -90,6 +93,12 @@ and the `/admin` guard live in `src/proxy.ts`.
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
 
+- **2026-08-26 (8)** — Dropped public accounts from the plan: the old Phase 5
+  (public signup + favorites) moved to [future.md](./future.md) §3, and the old
+  Phase 6 (polish) is now Phase 5. Rationale: auth exists only for the admin login,
+  so signup and per-user features are a separate product decision. The `favorites`
+  table is no longer part of the schema to build — it is documented in future.md with
+  its RLS shape so adding it later is one migration.
 - **2026-08-26 (7)** — Phase 4 code: `search_posts` RPC (AND over includes via
   group/having, NOT EXISTS over excludes, `count(*) over()` for pagination),
   `lib/search.ts` pure query parsing/URL helpers, `lib/data/search.ts`
