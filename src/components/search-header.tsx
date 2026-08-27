@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import type { ReactNode } from 'react'
 import { SearchBar } from '@/components/search-bar'
 import { logout } from '@/lib/actions/auth'
 import { getCurrentProfile } from '@/lib/data/profiles'
@@ -10,15 +9,9 @@ import { isSupabaseConfigured } from '@/lib/env'
  * since the bottom tab bar was dropped, the site's only navigation. Rendered per page
  * rather than in the layout because only pages can read searchParams, and the bar has
  * to reflect the active query.
- * `actions` is the slot for page-level controls (the admin upload button).
+ * Admins also get the link to /upload here, so it is reachable from every page.
  */
-export async function SearchHeader({
-  query = '',
-  actions,
-}: {
-  query?: string
-  actions?: ReactNode
-}) {
+export async function SearchHeader({ query = '' }: { query?: string }) {
   const profile = isSupabaseConfigured() ? await getCurrentProfile() : null
 
   return (
@@ -42,7 +35,14 @@ export async function SearchHeader({
               Log in
             </Link>
           )}
-          {actions}
+          {profile?.role === 'admin' && (
+            <Link
+              href="/upload"
+              className="flex min-h-9 items-center rounded-lg bg-accent px-3 text-sm font-medium text-background"
+            >
+              Upload
+            </Link>
+          )}
         </nav>
       </div>
       {/* Keyed so navigation (back/forward, tag links) resets the input to the URL */}

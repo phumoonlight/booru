@@ -12,7 +12,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: ['/login', '/?tags=', '/*?tags='],
+      disallow: ['/login', '/upload', '/?tags=', '/*?tags='],
     },
     sitemap: `${base}/sitemap.xml`,
   }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { uploadPost, type UploadResult } from '@/lib/actions/upload'
@@ -14,9 +14,9 @@ type Item = {
 }
 
 /**
- * Admin-only uploader: the whole page is the drop target, and the button covers
- * the case where dragging isn't an option (phones, file pickers). No form —
- * everything lands tagged `tagme` and is edited afterwards.
+ * Admin-only uploader for /upload: a bounded drop area plus a file picker for
+ * the cases where dragging isn't an option (phones). No form — everything lands
+ * tagged `tagme` and is edited afterwards.
  */
 export function UploadZone() {
   const router = useRouter()
@@ -63,82 +63,52 @@ export function UploadZone() {
     [router]
   )
 
-  // Window-level so the drop target is the page, not a boxed-in element
-  useEffect(() => {
-    let depth = 0
-    const hasFiles = (event: DragEvent) =>
-      Array.from(event.dataTransfer?.types ?? []).includes('Files')
-
-    const onEnter = (event: DragEvent) => {
-      if (!hasFiles(event)) return
-      depth++
-      setDragging(true)
-    }
-    const onOver = (event: DragEvent) => {
-      if (hasFiles(event)) event.preventDefault()
-    }
-    const onLeave = (event: DragEvent) => {
-      if (!hasFiles(event)) return
-      depth = Math.max(0, depth - 1)
-      if (depth === 0) setDragging(false)
-    }
-    const onDrop = (event: DragEvent) => {
-      if (!hasFiles(event)) return
-      event.preventDefault()
-      depth = 0
-      setDragging(false)
-      void upload(Array.from(event.dataTransfer?.files ?? []))
-    }
-
-    window.addEventListener('dragenter', onEnter)
-    window.addEventListener('dragover', onOver)
-    window.addEventListener('dragleave', onLeave)
-    window.addEventListener('drop', onDrop)
-    return () => {
-      window.removeEventListener('dragenter', onEnter)
-      window.removeEventListener('dragover', onOver)
-      window.removeEventListener('dragleave', onLeave)
-      window.removeEventListener('drop', onDrop)
-    }
-  }, [upload])
-
   const done = items.length > 0 && items.every((item) => item.status !== 'pending')
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        disabled={busy}
-        className="flex min-h-9 items-center rounded-lg bg-accent px-3 text-sm font-medium text-background disabled:opacity-50"
-      >
-        {busy ? 'Uploading…' : 'Upload'}
-      </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        hidden
-        onChange={(event) => {
-          void upload(Array.from(event.target.files ?? []))
-          event.target.value = ''
+    <div className="flex flex-col gap-4">
+      <div
+        onDragOver={(event) => {
+          event.preventDefault()
+          setDragging(true)
         }}
-      />
-
-      {dragging && (
-        <div className="pointer-events-none fixed inset-0 z-[60] flex items-center justify-center bg-background/85 p-6">
-          <div className="flex w-full max-w-md flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-accent px-6 py-12 text-center">
-            <p className="text-base font-semibold">Drop images to upload</p>
-            <p className="text-sm text-muted">
-              Each one is tagged <span className="font-mono">{INITIAL_TAG}</span> — edit tags later
-            </p>
-          </div>
-        </div>
-      )}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault()
+          setDragging(false)
+          void upload(Array.from(event.dataTransfer.files))
+        }}
+        className={`flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed px-6 py-12 text-center ${
+          dragging ? 'border-accent bg-accent/10' : 'border-border bg-surface'
+        }`}
+      >
+        <p className="text-base font-semibold">Drop images to upload</p>
+        <p className="text-sm text-muted">
+          Each one is tagged <span className="font-mono">{INITIAL_TAG}</span> — edit tags later
+        </p>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={busy}
+          className="mt-1 flex min-h-11 items-center rounded-lg bg-accent px-4 text-sm font-medium text-background disabled:opacity-50"
+        >
+          {busy ? 'Uploading…' : 'Choose images'}
+        </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(event) => {
+            void upload(Array.from(event.target.files ?? []))
+            event.target.value = ''
+          }}
+        />
+      </div>
 
       {items.length > 0 && (
-        <div className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-sm rounded-lg border border-border bg-surface p-3 text-left shadow-lg sm:inset-x-auto sm:right-3">
+        <div className="rounded-lg border border-border bg-surface p-3">
           <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-sm font-medium">
               {busy
@@ -151,11 +121,11 @@ export function UploadZone() {
                 onClick={() => setItems([])}
                 className="text-sm text-muted hover:text-foreground"
               >
-                Dismiss
+                Clear
               </button>
             )}
           </div>
-          <ul className="flex max-h-48 flex-col gap-1 overflow-y-auto text-xs">
+          <ul className="flex flex-col gap-1 text-xs">
             {items.map((item, i) => (
               <li key={`${item.name}-${i}`} className="flex flex-col">
                 <span className="truncate text-muted">{item.name}</span>
@@ -183,6 +153,6 @@ export function UploadZone() {
           </ul>
         </div>
       )}
-    </>
+    </div>
   )
 }

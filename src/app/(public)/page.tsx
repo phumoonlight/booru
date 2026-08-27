@@ -7,7 +7,6 @@ import { TagDrawer } from '@/components/tag-drawer'
 import { TagList } from '@/components/tag-list'
 import { RatingList } from '@/components/rating-list'
 import { SetupNotice } from '@/components/setup-notice'
-import { UploadZone } from '@/components/upload-zone'
 import { getCurrentProfile } from '@/lib/data/profiles'
 import { isSupabaseConfigured } from '@/lib/env'
 import { isRestricted, parseSearchQuery, searchHref, splitRatings } from '@/lib/search'
@@ -70,7 +69,7 @@ export default async function HomePage({ searchParams }: PageProps<'/'>) {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">
-      <SearchHeader query={query} actions={canUpload ? <UploadZone /> : undefined} />
+      <SearchHeader query={query} />
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         <TagDrawer label={`Tags (${tagEntries.length})`}>
@@ -111,7 +110,7 @@ export default async function HomePage({ searchParams }: PageProps<'/'>) {
               {query
                 ? 'No posts match that search.'
                 : canUpload
-                  ? 'No posts yet — drop images anywhere on this page to upload.'
+                  ? 'No posts yet — use Upload to add the first one.'
                   : 'No posts yet — the first upload will show up here.'}
             </p>
           ) : (
