@@ -20,7 +20,6 @@ created from the Supabase dashboard — public signup is deferred ([future.md](.
 |---|---|---|
 | id | uuid PK | = `auth.users.id` |
 | username | text unique not null | |
-| role | text not null default 'member' | `'admin'` \| `'member'` |
 | created_at | timestamptz default now() | |
 
 ### `posts`
@@ -28,7 +27,7 @@ created from the Supabase dashboard — public signup is deferred ([future.md](.
 | column | type | notes |
 |---|---|---|
 | id | bigint PK generated always as identity | booru-style numeric ids |
-| uploader_id | uuid not null → profiles.id | admin for now; kept for future community uploads |
+| uploader_id | uuid not null → profiles.id | whoever uploaded the post |
 | md5 | text unique not null | dedup key; also the storage filename |
 | file_ext | text not null | `jpg`/`png`/`gif`/`webp` |
 | file_size | int not null | bytes |
@@ -64,8 +63,8 @@ Index both directions: PK covers `(post_id, tag_id)`; add index on `(tag_id, pos
 ## Functions & triggers
 
 ### `handle_new_user()` trigger
-On insert into `auth.users`, create a `profiles` row (username from email prefix,
-role `'member'`). Promote the admin account manually once: `update profiles set role='admin' where id=...`.
+On insert into `auth.users`, create a `profiles` row (username from email prefix).
+There is no role column — every signed-in user may upload and manage posts.
 
 ### `tag_post_count` trigger
 On insert/delete of `post_tags`, increment/decrement `tags.post_count`.
@@ -73,8 +72,8 @@ On insert/delete of `post_tags`, increment/decrement `tags.post_count`.
 ### `create_post_with_tags(...)` RPC
 Transactional insert used by the upload action: inserts the post, upserts each tag
 name (default category `general`), inserts `post_tags`. Security definer, but
-**checks the caller is admin** internally (`profiles.role = 'admin'`) — do not rely
-on the client only calling it from admin UI.
+**checks the caller is signed in** internally (`auth.uid() is not null`) — do not
+rely on the client only calling it from the upload UI.
 
 ### `search_posts(include_tags text[], exclude_tags text[], p_rating text[], p_limit int, p_offset int)`
 The core query. Returns posts (id, md5, file_ext, width, height, rating) where:
@@ -91,28 +90,27 @@ This function is fine to ~100k posts; revisit (materialized tag arrays + GIN) on
 
 ## Row Level Security
 
-RLS **enabled on every table**. Policies for the current (admin-only moderation) era:
+RLS **enabled on every table**. Any signed-in user is a moderator:
 
 | table | select | insert | update | delete |
 |---|---|---|---|---|
 | profiles | public | trigger only | own row (username only) | — |
-| posts | public where `status='active'`; admin sees all | admin | admin | admin |
-| tags | public | admin (via RPC) | admin | admin |
-| post_tags | public | admin (via RPC) | — | admin |
+| posts | public where `status='active'`; signed-in sees all | signed-in | signed-in | signed-in |
+| tags | public | signed-in (via RPC) | signed-in | signed-in |
+| post_tags | public | signed-in (via RPC) | — | signed-in |
 
-Helper: `is_admin()` — `exists(select 1 from profiles where id = auth.uid() and role = 'admin')`,
-security definer, used inside policies.
+The write test is `(select auth.uid()) is not null` inline in each policy; the old
+`is_admin()` helper and `profiles.role` were dropped in
+`20260828110000_drop_role_any_user_manages.sql`.
 
-When community moderation arrives ([future.md](./future.md)), only the posts/tags
-policies change — no schema migration needed. Public accounts and `favorites` are
-deferred too; see [future.md](./future.md) §3.
+Public accounts and `favorites` are still deferred; see [future.md](./future.md) §3.
 
 ## Storage buckets
 
 | bucket | public | policy |
 |---|---|---|
-| `originals` | yes (read) | write: admin only (or service role from the upload action) |
-| `thumbnails` | yes (read) | write: admin only / service role |
+| `originals` | yes (read) | write: signed-in only (or service role from the upload action) |
+| `thumbnails` | yes (read) | write: signed-in only / service role |
 
 ## Deliberately NOT in v1 (see future.md)
 

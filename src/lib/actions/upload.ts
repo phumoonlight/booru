@@ -2,7 +2,7 @@
 
 import { createHash } from 'node:crypto'
 import sharp from 'sharp'
-import { requireAdmin } from '@/lib/auth'
+import { requireUser } from '@/lib/auth'
 import { INITIAL_TAG } from '@/lib/tags'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -35,10 +35,10 @@ export type UploadResult =
 
 /**
  * Drop-to-upload: no form, no metadata. Every upload lands as `general` with the
- * single `tagme` tag; the admin fixes tags/rating/source later from the edit page.
+ * single `tagme` tag; the uploader fixes tags/rating/source later from the edit page.
  */
 export async function uploadPost(formData: FormData): Promise<UploadResult> {
-  await requireAdmin()
+  await requireUser()
 
   const file = formData.get('file')
   if (!(file instanceof File) || file.size === 0) {
@@ -85,7 +85,7 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
     .webp({ quality: 80 })
     .toBuffer()
 
-  // Storage writes need the service-role client (RLS floor is admin-only anyway)
+  // Storage writes need the service-role client (RLS floor is signed-in-only anyway)
   const storage = createAdminClient().storage
   const origUpload = await storage.from('originals').upload(originalPath(md5, ext), buffer, {
     contentType: CONTENT_TYPES[ext],
@@ -103,7 +103,7 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
     return { ok: false, error: `Thumbnail upload failed: ${thumbUpload.error.message}` }
   }
 
-  // RPC runs on the user's session — auth.uid() must be the admin, not service role
+  // RPC runs on the user's session — auth.uid() must be the uploader, not service role
   const supabase = await createClient()
   const { data: postId, error: rpcError } = await supabase.rpc('create_post_with_tags', {
     p_md5: md5,

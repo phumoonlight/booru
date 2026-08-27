@@ -23,9 +23,9 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  // Refresh the session if expired. There are no admin-only routes to guard — admin
-  // affordances are sections of public pages, and every mutation re-checks the role
-  // server-side via requireAdmin() plus the RPCs' own is_admin() test.
+  // Refresh the session if expired. There are no routes to guard — the manage
+  // affordances are sections of public pages, and every mutation re-checks the
+  // session server-side via requireUser() plus the RPCs' own auth.uid() test.
   await supabase.auth.getUser()
 
   return supabaseResponse

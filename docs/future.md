@@ -3,22 +3,23 @@
 Features intentionally **not** built now, plus the hooks already in the current design
 that make them cheap to add later. Don't build anything here until the user asks.
 
-## 1. Community moderation (currently: admin-only)
+## 1. Moderation queue (currently: every signed-in user moderates)
 
-**Now:** only the admin uploads and moderates. Enforced by RLS (`is_admin()`) and
-admin checks inside server actions.
+**Now:** any signed-in user may upload, edit and delete posts, and uploads go straight
+to `active`. Enforced by RLS (`auth.uid() is not null`) and `requireUser()` inside
+server actions. There is no role column — a privilege tier is a new migration, not a
+config flip.
 
 **Hooks already in place:**
-- `posts.status` includes `'pending'` (unused today) — community uploads land as
+- `posts.status` includes `'pending'` (unused today) — uploads could land as
   `pending` instead of `active`.
 - `posts.uploader_id` already records who uploaded.
-- `profiles.role` is extensible (`'moderator'` later).
 
 **When enabling:**
-- Change RLS: authenticated users may insert posts with `status='pending'`; public
-  select stays `status='active'`.
-- Relax `create_post_with_tags` admin check to any authenticated user (forcing pending status).
-- Add `/admin/queue`: approve (→ active) / reject (→ deleted) with reason.
+- Re-add a privilege column (`profiles.role`) and a helper like the old `is_admin()`.
+- Change RLS: ordinary users insert posts with `status='pending'`; public select stays
+  `status='active'`.
+- Add a queue page: approve (→ active) / reject (→ deleted) with reason.
 - Add `moderation_log` table (who, action, post, reason, timestamp).
 - Consider per-user upload limits and tag-edit permissions (Danbooru lets any user edit
   tags — that's a separate decision from upload rights).
@@ -38,9 +39,9 @@ so API route handlers can call the exact same functions.
 - Rate limiting (Vercel/Upstash) before announcing it.
 - API keys only if write endpoints are ever exposed; read-only can stay anonymous.
 
-## 3. Public accounts & favorites (currently: admin login only)
+## 3. Public accounts & favorites (currently: hand-made accounts only)
 
-**Now:** there is no public signup. `/login` exists so the admin can sign in; accounts
+**Now:** there is no public signup. `/login` signs in an existing account; accounts
 are created by hand from the Supabase dashboard ([supabase-setup.md](./supabase-setup.md)
 step 4). Nothing in the site is personalised, so every page is anonymous-cacheable.
 
@@ -48,8 +49,8 @@ step 4). Nothing in the site is personalised, so every page is anonymous-cacheab
 - Supabase Auth is already wired (email/password, session refresh in `src/proxy.ts`).
 - `profiles` mirrors `auth.users` via the `handle_new_user` trigger, so any account
   created later — dashboard or signup — gets a profile row automatically.
-- `profiles.role` defaults to `'member'`, so new signups are non-admin by default and
-  every admin check (`is_admin()`, `requireAdmin()`) already excludes them.
+- Note the flip side: with no role column, any account that can sign in can upload,
+  edit and delete posts — opening signup means adding a privilege tier first (§1).
 
 **When enabling:**
 - Turn on signups in Supabase Auth settings and decide the confirm-email policy; add a

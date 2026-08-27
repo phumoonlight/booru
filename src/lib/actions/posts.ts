@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
-import { requireAdmin } from '@/lib/auth'
+import { requireUser } from '@/lib/auth'
 import { parseTagInput } from '@/lib/tags'
 import { RATINGS } from '@/lib/search'
 import { createClient } from '@/lib/supabase/server'
@@ -12,7 +12,7 @@ import { getPost } from '@/lib/data/posts'
 import { originalPath, thumbnailPath } from '@/lib/storage'
 
 export async function deletePost(formData: FormData) {
-  await requireAdmin()
+  await requireUser()
 
   const id = Number(formData.get('id'))
   if (!Number.isInteger(id)) throw new Error('Invalid post id')
@@ -46,7 +46,7 @@ export async function updatePost(
   _prevState: EditPostState,
   formData: FormData
 ): Promise<EditPostState> {
-  await requireAdmin()
+  await requireUser()
 
   const parsed = editSchema.safeParse({
     id: formData.get('id'),

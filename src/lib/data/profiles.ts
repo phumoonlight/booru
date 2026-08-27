@@ -4,7 +4,6 @@ import { createClient } from '@/lib/supabase/server'
 export type Profile = {
   id: string
   username: string
-  role: 'admin' | 'member'
   created_at: string
 }
 
@@ -19,7 +18,7 @@ export const getCurrentProfile = cache(async (): Promise<Profile | null> => {
 
   const { data } = await supabase
     .from('profiles')
-    .select('id, username, role, created_at')
+    .select('id, username, created_at')
     .eq('id', user.id)
     .single()
   return data

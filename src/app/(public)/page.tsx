@@ -58,7 +58,7 @@ export default async function HomePage({ searchParams }: PageProps<'/'>) {
   // Signed-in viewers see every rating; anonymous ones get the safe default unless
   // the query names a restricted rating itself.
   const profile = await getCurrentProfile()
-  const canUpload = profile?.role === 'admin'
+  const canUpload = profile !== null
   const allowRestricted = profile !== null
 
   const { posts, total, pageCount } = await searchPosts({ query, page, allowRestricted })

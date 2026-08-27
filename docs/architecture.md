@@ -10,7 +10,7 @@
 | UI primitives | shadcn/ui (selective) | Dialog/Drawer/Command are the useful ones (drawer nav, tag autocomplete) |
 | Database | Supabase Postgres | Schema in `supabase/migrations/`, RLS enabled on all tables |
 | File storage | Supabase Storage | Two buckets: `originals`, `thumbnails` (both public-read) |
-| Auth | Supabase Auth | Email/password to start; `profiles.role` distinguishes admin |
+| Auth | Supabase Auth | Email/password to start; any signed-in user can upload and manage posts |
 | Image processing | `sharp` (server-side) | Thumbnail + dimension extraction in the upload Server Action (Node runtime) |
 | Deployment | Vercel + Supabase cloud | |
 
@@ -28,7 +28,7 @@ booru/
 │   │   │   ├── page.tsx          # home = post grid
 │   │   │   ├── posts/[id]/       # post detail
 │   │   │   └── tags/             # tag listing
-│   │   ├── (auth)/login/         # login (admin only — public signup deferred)
+│   │   ├── (auth)/login/         # login (public signup deferred)
 │   │   ├── admin/
 │   │   │   ├── upload/           # upload form
 │   │   │   └── posts/            # manage/edit/delete posts
@@ -52,14 +52,14 @@ booru/
 - **Reads:** RSC → functions in `src/lib/data/` → Supabase server client (anon key,
   RLS enforced). Never query Supabase directly inside page components.
 - **Writes:** `"use server"` actions in `src/lib/actions/` → validate with `zod` →
-  call `lib/data` or Supabase. Admin-only actions check `profiles.role === 'admin'`
+  call `lib/data` or Supabase. Mutating actions check the session via `requireUser()`
   server-side (never trust the client).
 - The service-role client (`lib/supabase/admin.ts`) is used **only** where RLS must be
   bypassed (e.g. storage writes during upload), never exposed to the browser.
 
 ### Upload pipeline (Phase 2 detail)
 1. Client posts `FormData` (file + tags + rating + source) to the upload action.
-2. Action: verify admin → compute MD5 → reject if a post with that hash exists (dedup)
+2. Action: verify session → compute MD5 → reject if a post with that hash exists (dedup)
    → read dimensions with sharp → generate WebP thumbnail (fit within 400×400)
    → upload original to `originals/{md5}.{ext}` and thumb to `thumbnails/{md5}.webp`
    → insert `posts` row + upsert tags + `post_tags` rows in one RPC (see database-schema.md)
@@ -101,7 +101,7 @@ The Danbooru reference is desktop-shaped; translate it like this:
 |---|---|---|
 | Fixed left sidebar (search + tag list) | Sticky top search bar; tag list in a slide-up drawer ("Tags" button) | Left sidebar returns, ~240px |
 | Dense thumbnail grid | 2–3 column grid, larger tap targets | 5–6 columns |
-| Top nav bar with many links | Everything in the sticky top bar: Booru · Tags · Log in/out · Upload(admin) | Same bar, more room |
+| Top nav bar with many links | Everything in the sticky top bar: Booru · Tags · Log in/out · Upload(signed-in) | Same bar, more room |
 | Pagination row | Same — plain pagination, no infinite scroll | Same |
 | Post page: image + sidebar metadata | Image full-width, tags/metadata below | Two-column |
 

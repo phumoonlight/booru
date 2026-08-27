@@ -9,7 +9,7 @@ import { isSupabaseConfigured } from '@/lib/env'
  * since the bottom tab bar was dropped, the site's only navigation. Rendered per page
  * rather than in the layout because only pages can read searchParams, and the bar has
  * to reflect the active query.
- * Admins also get the link to /upload here, so it is reachable from every page.
+ * Signed-in users also get the link to /upload here, so it is reachable from every page.
  */
 export async function SearchHeader({ query = '' }: { query?: string }) {
   const profile = isSupabaseConfigured() ? await getCurrentProfile() : null
@@ -35,7 +35,7 @@ export async function SearchHeader({ query = '' }: { query?: string }) {
               Log in
             </Link>
           )}
-          {profile?.role === 'admin' && (
+          {profile && (
             <Link
               href="/upload"
               className="flex min-h-9 items-center rounded-lg bg-accent px-3 text-sm font-medium text-background"

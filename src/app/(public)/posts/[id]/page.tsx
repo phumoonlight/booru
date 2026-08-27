@@ -87,7 +87,7 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
     getCurrentProfile(),
   ])
 
-  const canManage = profile?.role === 'admin'
+  const canManage = profile !== null
   // The gallery never surfaces restricted posts to anonymous visitors, so a direct
   // link is the only way here — blur it behind one tap rather than 404.
   const gated = isRestricted(post.rating) && profile === null
