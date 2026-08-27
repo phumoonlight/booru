@@ -33,18 +33,18 @@ Supabase — the badge turning green is confirmed in
 
 ## Phase 1 — Schema + admin auth
 
-**Goal:** full schema migrated; the admin can log in; `/admin` is guarded.
+**Goal:** full schema migrated; the admin can log in; admin mutations are role-checked.
 
 - [x] Migration 1: tables `profiles`, `posts`, `tags`, `post_tags` (+ indexes) — `20260826100000_initial_tables.sql`
 - [x] Migration 2: `handle_new_user` trigger, `tag_post_count` trigger, `is_admin()` helper — `20260826100100_functions_triggers.sql`
 - [x] Migration 3: enable RLS + all policies — `20260826100200_rls_policies.sql`
 - [x] Migration 4: storage buckets `originals`, `thumbnails` + storage policies — `20260826100300_storage_buckets.sql`
 - [x] `/login` page (email/password) + logout action (`src/app/(auth)/login/`, `src/lib/actions/auth.ts`)
-- [x] Guard `/admin/*` in proxy + `requireAdmin()` helper (`src/lib/auth.ts`) for admin server actions; admin layout re-checks role server-side
+- [x] `requireAdmin()` helper (`src/lib/auth.ts`) at the top of every admin server action, backed by the RPCs' own `is_admin()` test — there is no admin-only route to guard (Phase 5 removed `/admin`)
 - [x] Verify: build + lint pass
 
-**Done when:** schema is live via migrations only, and admin login → `/admin` works on
-mobile — creating the admin user and checking the redirects are
+**Done when:** schema is live via migrations only, and admin login works on mobile —
+creating the admin user and checking the session are
 [supabase-setup.md](./supabase-setup.md) steps 3–5.
 
 ---
@@ -76,8 +76,8 @@ mobile — creating the admin user and checking the redirects are
 - [x] Tags on the detail page link to search: `/?tags=<name>` (single-tag filter until Phase 4)
 - [x] Empty states + loading skeletons (`loading.tsx` for grid and detail)
 - [x] `next.config.ts` image `remotePatterns` for the Supabase storage host (derived from env)
-- [x] Bottom nav wired to real routes; admin sees the Admin entry
-- [x] Verify: build + lint pass; all public routes render 200 in dev, `/admin` redirects anon
+- [x] Bottom nav wired to real routes
+- [x] Verify: build + lint pass; all public routes render 200 in dev
 - [ ] Verify: lighthouse mobile pass on home page; grid comfortable at 375px — needs real posts, see [supabase-setup.md](./supabase-setup.md) step 6
 
 **Done when:** anonymous visitor can browse grid → open post → tap a tag → see filtered grid.
@@ -108,12 +108,12 @@ mobile — creating the admin user and checking the redirects are
 
 - [x] Rating filter: `rating:x` / `-rating:x` metatags in the same `?tags=` string (`lib/search.ts` `splitRatings` + `resolveRatings` → the RPC's existing `p_rating`), clickable rating facet in the sidebar/drawer, anonymous visitors get `explicit` hidden by default with a "Show them" opt-in
 - [x] Explicit posts reached by direct link are blurred behind a tap for anonymous viewers (`components/explicit-gate.tsx`); admins/signed-in see everything
-- [x] SEO: `metadataBase` + title template + OG/Twitter defaults in the root layout, per-post `generateMetadata` (tags in title/description, thumbnail as OG image, `noindex` on explicit), query-aware home metadata (only the plain first page is indexable), canonicals everywhere, `noindex` on `/admin` and `/login`
+- [x] SEO: `metadataBase` + title template + OG/Twitter defaults in the root layout, per-post `generateMetadata` (tags in title/description, thumbnail as OG image, `noindex` on explicit), query-aware home metadata (only the plain first page is indexable), canonicals everywhere, `noindex` on `/login`
 - [x] `app/robots.ts` and `app/sitemap.ts` (static routes + non-explicit active posts, hourly revalidate via the cookie-less `lib/supabase/anon.ts` client)
 - [x] Error pages: root `not-found.tsx`, `/posts/[id]/not-found.tsx`, `error.tsx` (Next 16 `retry` prop) and `global-error.tsx`
 - [x] Blur placeholders on every remote image (`lib/blur.ts`)
 - [x] `getPost` / `getPostTags` / `getCurrentProfile` wrapped in React `cache` so `generateMetadata` and the page share one query
-- [x] Verify: build + lint clean; 34 assertions on the query parser and rating resolution pass; all public routes 200 in dev, `/nope` 404s, `/admin` redirects anon
+- [x] Verify: build + lint clean; 34 assertions on the query parser and rating resolution pass; all public routes 200 in dev, `/nope` 404s
 - [ ] Verify: rating filter behaves against real data — [supabase-setup.md](./supabase-setup.md) step 10
 - [ ] Deploy to Vercel + custom domain — [supabase-setup.md](./supabase-setup.md) step 11
 - [ ] Supabase prod hardening (signup off, auth rate limits, storage size/MIME caps) — [supabase-setup.md](./supabase-setup.md) step 12

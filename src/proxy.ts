@@ -23,29 +23,10 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  // Refresh the session if expired
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  // /admin guard — first line only; pages and actions re-check the admin role
-  if (request.nextUrl.pathname.startsWith('/admin')) {
-    if (!user) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/login'
-      return NextResponse.redirect(url)
-    }
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-    if (profile?.role !== 'admin') {
-      const url = request.nextUrl.clone()
-      url.pathname = '/'
-      return NextResponse.redirect(url)
-    }
-  }
+  // Refresh the session if expired. There are no admin-only routes to guard — admin
+  // affordances are sections of public pages, and every mutation re-checks the role
+  // server-side via requireAdmin() plus the RPCs' own is_admin() test.
+  await supabase.auth.getUser()
 
   return supabaseResponse
 }

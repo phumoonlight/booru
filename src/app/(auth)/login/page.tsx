@@ -44,7 +44,7 @@ export default function LoginPage() {
         </button>
       </form>
       <p className="text-center text-xs text-muted">
-        Public signup arrives in Phase 5 — admin login only for now.
+        There is no public signup — this login exists for the site owner.
       </p>
     </div>
   )

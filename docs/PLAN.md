@@ -72,8 +72,8 @@ SEO is `metadataBase` + title template + OG/Twitter defaults in the root layout,
 per-post metadata with the thumbnail as OG image, `robots.ts` and `sitemap.ts`.
 Error pages: root 404, post 404, `error.tsx` and `global-error.tsx`.
 
-Build + lint clean; every route returns 200 in dev (`/nope` 404s, `/admin` redirects
-anonymous); the query parser and rating resolution have 34 passing assertions.
+Build + lint clean; every route returns 200 in dev (`/nope` 404s); the query parser and
+rating resolution have 34 passing assertions.
 
 Every phase stays 🟡 until [supabase-setup.md](./supabase-setup.md) has been run end to
 end against the real project. Phase 5's remaining work is entirely in that runbook:
@@ -81,7 +81,8 @@ step 10 verifies the rating filter against real data, step 11 deploys to Vercel 
 custom domain, step 12 is Supabase production hardening, step 13 is the backup story.
 
 Note: Next 16 renamed the `middleware.ts` convention to `proxy.ts` — session refresh
-and the `/admin` guard live in `src/proxy.ts`.
+lives in `src/proxy.ts`. There are no admin-only routes: admin affordances are sections
+of public pages, and `requireAdmin()` plus the RPCs' `is_admin()` are the real gate.
 
 ## Working conventions (for every session)
 

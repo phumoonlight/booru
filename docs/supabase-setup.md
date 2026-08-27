@@ -77,16 +77,15 @@ the dashboard:
 **Verify:** `select id, username, role from public.profiles;` returns one row with
 `role = 'admin'`.
 
-## Step 5 — Verify auth and the admin guard (finishes Phase 1)
+## Step 5 — Verify auth and the admin role (finishes Phase 1)
 
 With `npm run dev` running:
 
-- Visit `/admin` while logged out → redirected to `/login`.
-- Log in at `/login` with the admin account → redirected home; `/admin` now loads and
-  shows "Log out (username)".
-- Log out → `/admin` redirects to `/login` again.
+- Log in at `/login` with the admin account → redirected home; the bottom nav now
+  reads **Log out** and the posts page shows the **Upload** button.
+- **Log out** → back to `/login`, and the Upload button is gone.
 - Optional non-admin check: create a second dashboard user, leave it `member`, log in
-  as them, visit `/admin` → redirected to `/`.
+  as them → no Upload button, and no Manage section on a post page.
 
 RLS spot-check in the SQL editor (or via the dashboard's anon-role query runner):
 anonymous `select` on `posts where status='active'` succeeds; anonymous `insert` into
@@ -216,13 +215,13 @@ build `next build`, install `npm install`, no root-directory override.
 **Verify** on the deployed origin:
 
 - `https://<domain>/robots.txt` lists your domain in `Sitemap:`, and disallows
-  `/admin`, `/login` and `?tags=` URLs.
+  `/login` and `?tags=` URLs.
 - `https://<domain>/sitemap.xml` lists `/`, `/tags` and one entry per non-explicit
   active post.
 - A post page's source contains `og:image` pointing at the Supabase thumbnail URL and
   a `<link rel="canonical">` on your domain — paste the URL into a link-preview
   debugger and the thumbnail renders.
-- Log in on the deployed site and confirm `/admin` opens and an upload succeeds.
+- Log in on the deployed site and confirm an upload succeeds.
 - Lighthouse mobile run on the home page passes.
 
 ## Step 12 — Production hardening (Phase 5)
@@ -271,6 +270,6 @@ tables and their row counts come back.
 | Images 404 or `next/image` errors on host | `.env.local` was added after the server started — `next.config.ts` reads the Supabase host at boot, so restart |
 | `db push` says "no project linked" | Re-run `npx supabase link --project-ref <ref>` |
 | Login fails with correct password | User not confirmed — tick Auto Confirm, or confirm from the dashboard |
-| `/admin` bounces an admin to `/` | `profiles.role` is still `member`, or the session predates the promotion — log out and back in |
+| No Upload button after logging in | `profiles.role` is still `member`, or the session predates the promotion — log out and back in |
 | Upload fails "admin only" | The RPC's internal `is_admin()` check failed — same cause as above |
 | Upload fails at storage | Buckets missing — migration 4 didn't apply |

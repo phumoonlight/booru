@@ -24,8 +24,3 @@ export const getCurrentProfile = cache(async (): Promise<Profile | null> => {
     .single()
   return data
 })
-
-export async function isAdmin(): Promise<boolean> {
-  const profile = await getCurrentProfile()
-  return profile?.role === 'admin'
-}

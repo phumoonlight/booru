@@ -42,7 +42,7 @@ booru/
 │   │   ├── data/                 # ALL queries live here (posts.ts, tags.ts, ...)
 │   │   │                         #   → reused by future public API route handlers
 │   │   └── actions/              # Server Actions (upload.ts, post.ts, auth.ts, ...)
-│   └── middleware.ts             # Supabase session refresh + /admin guard
+│   └── proxy.ts                  # Supabase session refresh (Next 16 name for middleware.ts)
 └── .env.local                    # NEXT_PUBLIC_SUPABASE_URL / ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
 ```
 
