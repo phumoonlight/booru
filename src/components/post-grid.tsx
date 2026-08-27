@@ -3,7 +3,7 @@ import { PostCard } from '@/components/post-card'
 
 // Every item is the same height; ratios survive because the width flexes
 const ROW = 'flex flex-wrap gap-2'
-const ITEM_HEIGHT = 'h-36 sm:h-44 lg:h-56'
+const ITEM_HEIGHT = 'h-60 sm:h-70 lg:h-80'
 
 export function PostGrid({ posts }: { posts: Post[] }) {
   return (
