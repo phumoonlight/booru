@@ -57,7 +57,7 @@ creating the admin user and checking the session are
 - [x] Upload action: admin check → MD5 dedup → sharp (dimensions + WebP thumb ≤400px) → storage upload → RPC insert, with storage rollback on DB failure (`src/lib/actions/upload.ts`)
 - [x] No upload page/form: the posts page is a page-wide drop zone with an Upload button in the header (`src/components/upload-zone.tsx`); every upload lands `general` + `tagme` and is retagged from the edit page
 - [x] Handle duplicate-MD5 with a friendly "already exists → link to post" error
-- [x] No manage-posts page: the post page shows a Manage section to admins — edit tags/rating/source via RPC, plus delete (row + storage files)
+- [x] No manage-posts page: the post page shows a Manage section to admins — edit tags/rating/source via RPC, plus delete (row + storage files) behind a two-tap confirmation
 - [x] Verify: build + lint pass
 
 **Done when:** end-to-end upload works and dedup rejects a re-upload — exercised in

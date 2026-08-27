@@ -106,8 +106,9 @@ Confirm all of the following:
 - Re-upload the same file → rejected with "This image already exists" plus a link to
   the existing post, and no duplicate storage objects.
 - `/posts/[id]` shows the post; while signed in as admin its **Manage** section
-  changes tags/rating (the removed tag's `post_count` drops) and **Delete post**
-  removes the row and both files.
+  changes tags/rating (the removed tag's `post_count` drops); the trash icon arms a
+  confirmation strip whose **Cancel** backs out and whose **Delete** removes the row
+  and both files.
 
 Upload a handful more images before the next step — the browse UI needs real content.
 
