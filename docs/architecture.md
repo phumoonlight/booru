@@ -107,4 +107,8 @@ The Danbooru reference is desktop-shaped; translate it like this:
 | Post page: image + sidebar metadata | Image full-width, tags/metadata below | Two-column |
 
 - Use `next/image` with `sizes` set per breakpoint; thumbnails from the `thumbnails` bucket.
+- Compression happens **once, at upload, to the thumbnail only**. The grid renders the
+  already-compressed thumb through the Next optimizer; the post page renders the
+  original with `unoptimized` so the stored file is served byte-for-byte (no quality-75
+  re-encode, animation intact). Cost: the detail view downloads the full original.
 - Tap target minimum 44px; test at 375px width throughout.

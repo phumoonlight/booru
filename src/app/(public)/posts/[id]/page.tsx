@@ -90,6 +90,9 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
 
   const fullSize = originalUrl(post.md5, post.file_ext)
 
+  // `unoptimized` on purpose: the detail view shows the stored file byte-for-byte.
+  // Running it through the Next optimizer would re-encode it at quality 75 and strip
+  // animation — compression belongs to the thumbnail, which the grid uses instead.
   const image = (
     <a href={fullSize} target="_blank" rel="noreferrer" className="block">
       <Image
@@ -97,10 +100,10 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
         alt={`Post ${post.id}`}
         width={post.width}
         height={post.height}
-        sizes="(min-width: 1024px) 60vw, 100vw"
         placeholder="blur"
         blurDataURL={BLUR_DATA_URL}
         priority
+        unoptimized
         className="h-auto w-full"
       />
     </a>
@@ -114,10 +117,6 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
         {/* Image first on mobile, right column on desktop */}
         <div className="flex flex-col gap-3 lg:flex-1">
           {image}
-          <p className="text-center text-xs text-muted">
-            Tap the image to open the original ({post.width}×{post.height},{' '}
-            {formatBytes(post.file_size)})
-          </p>
 
           <nav className="flex items-center justify-between gap-2">
             {prevId ? (
