@@ -107,11 +107,9 @@ mobile — creating the admin user and checking the redirects are
 **Goal:** production-quality daily-driver.
 
 - [ ] Rating filter (default hide `explicit` for anonymous; user preference later)
-- [ ] Infinite scroll on the grid (keep pagination as fallback/SEO)
 - [ ] SEO: metadata per post/tag page, OpenGraph images (thumbnail)
-- [ ] PWA basics: manifest + icons ("install to home screen")
 - [ ] 404/error pages, image loading blur placeholders
 - [ ] Deploy to Vercel, custom domain, Supabase prod hardening (auth rate limits, storage size caps)
 - [ ] Backup story: enable Supabase PITR or scheduled dumps
 
-**Done when:** deployed, installable on a phone home screen, and pleasant to browse daily.
+**Done when:** deployed and pleasant to browse daily.

@@ -52,7 +52,7 @@ Documented in [future.md](./future.md) so current decisions don't block them lat
 | 2 | Upload pipeline (admin): file → dedup → thumbnail → tags | 🟡 in progress |
 | 3 | Browse: post grid, post detail page, pagination | 🟡 in progress |
 | 4 | Tag search: multi-tag query, autocomplete, tag drawer | 🟡 in progress |
-| 5 | Polish: rating filter, infinite scroll, SEO, PWA basics | 🔲 not started |
+| 5 | Polish: rating filter, SEO, error pages, deploy | 🔲 not started |
 
 Status legend: 🔲 not started · 🟡 in progress · ✅ done
 
