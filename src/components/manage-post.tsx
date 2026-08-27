@@ -48,8 +48,8 @@ export function ManagePost({
           Tags (space-separated)
           <textarea
             name="tags"
-            required
             rows={3}
+            placeholder="blue_hair solo"
             defaultValue={initialTags}
             className="rounded-lg border border-border bg-surface px-3 py-2 font-mono text-sm outline-none focus:border-accent"
           />
@@ -114,8 +114,7 @@ export function ManagePost({
         >
           <input type="hidden" name="id" value={postId} />
           <p className="text-sm">
-            Delete post #{postId}? Its tags and both image files go too. This
-            can&apos;t be undone.
+            Delete post #{postId}? Its tags and both image files go too. This can&apos;t be undone.
           </p>
           <div className="flex gap-2">
             <button

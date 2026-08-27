@@ -4,7 +4,6 @@ import { useCallback, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { uploadPost, type UploadResult } from '@/lib/actions/upload'
-import { INITIAL_TAG } from '@/lib/tags'
 
 type Item = {
   name: string
@@ -14,9 +13,9 @@ type Item = {
 }
 
 /**
- * Admin-only uploader for /upload: a bounded drop area plus a file picker for
- * the cases where dragging isn't an option (phones). No form — everything lands
- * tagged `tagme` and is edited afterwards.
+ * Uploader for /upload: a bounded drop area plus a file picker for the cases where
+ * dragging isn't an option (phones). No form — everything lands untagged and is
+ * edited afterwards.
  */
 export function UploadZone() {
   const router = useRouter()
@@ -83,9 +82,7 @@ export function UploadZone() {
         }`}
       >
         <p className="text-base font-semibold">Drop images to upload</p>
-        <p className="text-sm text-muted">
-          Each one is tagged <span className="font-mono">{INITIAL_TAG}</span> — edit tags later
-        </p>
+        <p className="text-sm text-muted">Each one lands untagged — add tags later</p>
         <button
           type="button"
           onClick={() => inputRef.current?.click()}

@@ -98,7 +98,7 @@ with the header's **Upload** button (or by dropping it on the page).
 
 Confirm all of the following:
 
-- Status panel shows the new post id, and the post is tagged `tagme`.
+- Status panel shows the new post id, and the post has no tags yet.
 - **Storage → originals** contains `{md5}.{ext}`; **thumbnails** contains `{md5}.webp`
   and it is ≤400px on its longest side.
 - `posts` has the row with correct `width`/`height`/`file_size`/`rating`.

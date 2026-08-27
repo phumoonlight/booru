@@ -3,7 +3,6 @@
 import { createHash } from 'node:crypto'
 import sharp from 'sharp'
 import { requireUser } from '@/lib/auth'
-import { INITIAL_TAG } from '@/lib/tags'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPostByMd5 } from '@/lib/data/posts'
@@ -34,8 +33,8 @@ export type UploadResult =
   | { ok: false; error: string; existingPostId?: number }
 
 /**
- * Drop-to-upload: no form, no metadata. Every upload lands as `general` with the
- * single `tagme` tag; the uploader fixes tags/rating/source later from the edit page.
+ * Drop-to-upload: no form, no metadata. Every upload lands as `general` with no
+ * tags at all; the uploader adds tags/rating/source later from the edit page.
  */
 export async function uploadPost(formData: FormData): Promise<UploadResult> {
   await requireUser()
@@ -113,7 +112,7 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
     p_height: height,
     p_rating: 'general',
     p_source_url: '',
-    p_tags: [INITIAL_TAG],
+    p_tags: [],
   })
   if (rpcError) {
     // Roll back storage so a retry starts clean

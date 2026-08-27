@@ -61,7 +61,7 @@ Status legend: 🔲 not started · 🟡 in progress · ✅ done
 **Phases 0–5 code-complete.** 6 migrations written (schema, functions/triggers, RLS,
 storage, post RPCs, `search_posts`). Upload pipeline: page-wide drop zone on the posts
 page (file → MD5 dedup → sharp WebP thumb → storage → `create_post_with_tags` RPC with
-rollback, tagged `tagme`), admin Manage section on `/posts/[id]` for edit + delete. Public site: home grid backed by the multi-tag
+rollback, untagged), Manage section on `/posts/[id]` for edit + delete. Public site: home grid backed by the multi-tag
 search RPC, sticky search bar with debounced autocomplete and `-tag` exclusion, tag
 sidebar/bottom-drawer facets, `/posts/[id]` detail, `/tags` index.
 Phase 5 polish: `rating:x` / `-rating:x` metatags ride in the same `?tags=` string and
@@ -101,6 +101,13 @@ of public pages, and `requireAdmin()` plus the RPCs' `is_admin()` are the real g
 ## Session log
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
+
+- **2026-08-28** — Uploads no longer get the `tagme` placeholder: `INITIAL_TAG` is gone
+  and `create_post_with_tags` is called with an empty array, so a fresh post has no
+  tags. The Manage form's tags box lost its `required` attribute and `updatePost`'s
+  "at least one tag" check, so clearing the box now clears the post's tags (the RPC
+  already deletes every row not named in `p_tags`). `GroupedTagList` already rendered
+  "No tags on this post." for the empty case.
 
 - **2026-08-28** — Dropped `profiles.role`: any signed-in user can upload and manage
   posts. Migration `20260828110000_drop_role_any_user_manages.sql` rewrites every

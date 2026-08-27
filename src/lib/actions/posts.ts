@@ -35,7 +35,7 @@ export async function deletePost(formData: FormData) {
 
 const editSchema = z.object({
   id: z.coerce.number().int(),
-  tags: z.string().min(1, 'At least one tag is required'),
+  tags: z.string(),
   rating: z.enum(RATINGS),
   source_url: z.union([z.literal(''), z.url('Source must be a valid URL')]).optional(),
 })
@@ -58,14 +58,12 @@ export async function updatePost(
     return { error: parsed.error.issues[0].message }
   }
 
+  // An empty box is allowed — it clears the post's tags.
   const { tags, invalid } = parseTagInput(parsed.data.tags)
   if (invalid.length > 0) {
     return {
       error: `Invalid tags (lowercase a-z 0-9 _ ( ) . - only): ${invalid.join(', ')}`,
     }
-  }
-  if (tags.length === 0) {
-    return { error: 'At least one tag is required' }
   }
 
   const supabase = await createClient()
