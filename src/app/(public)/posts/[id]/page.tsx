@@ -7,6 +7,7 @@ import { getCurrentProfile } from '@/lib/data/profiles'
 import { ManagePost } from '@/components/manage-post'
 import { ExplicitGate } from '@/components/explicit-gate'
 import { RATING_COLOR } from '@/components/rating-list'
+import { isRestricted, RATING_LABEL } from '@/lib/search'
 import { originalUrl, thumbnailUrl } from '@/lib/storage'
 import { GroupedTagList } from '@/components/tag-list'
 import { SearchHeader } from '@/components/search-header'
@@ -37,15 +38,15 @@ export async function generateMetadata({ params }: PageProps<'/posts/[id]'>): Pr
     tagNames.length > 0 ? `${tagNames.slice(0, 6).join(' ')} — #${post.id}` : `Post #${post.id}`
   const description =
     tagNames.length > 0
-      ? `${post.width}×${post.height} · rated ${post.rating} · tagged ${tagNames.join(', ')}`
-      : `${post.width}×${post.height} · rated ${post.rating}`
+      ? `${post.width}×${post.height} · rated ${RATING_LABEL[post.rating]} · tagged ${tagNames.join(', ')}`
+      : `${post.width}×${post.height} · rated ${RATING_LABEL[post.rating]}`
 
   return {
     title,
     description,
     alternates: { canonical: `/posts/${post.id}` },
-    // Explicit posts stay out of search results, matching the anonymous default
-    robots: post.rating === 'explicit' ? { index: false, follow: true } : undefined,
+    // Restricted posts stay out of search results, matching the anonymous default
+    robots: isRestricted(post.rating) ? { index: false, follow: true } : undefined,
     openGraph: {
       type: 'article',
       url: `/posts/${post.id}`,
@@ -87,9 +88,9 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
   ])
 
   const canManage = profile?.role === 'admin'
-  // The gallery never surfaces explicit posts to anonymous visitors, so a direct
+  // The gallery never surfaces restricted posts to anonymous visitors, so a direct
   // link is the only way here — blur it behind one tap rather than 404.
-  const gated = post.rating === 'explicit' && profile === null
+  const gated = isRestricted(post.rating) && profile === null
 
   const fullSize = originalUrl(post.md5, post.file_ext)
 
@@ -163,7 +164,7 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-muted">Rating</dt>
-                <dd className={`capitalize ${RATING_COLOR[post.rating]}`}>{post.rating}</dd>
+                <dd className={RATING_COLOR[post.rating]}>{RATING_LABEL[post.rating]}</dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-muted">Size</dt>

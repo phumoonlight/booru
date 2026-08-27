@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { requireAdmin } from '@/lib/auth'
 import { parseTagInput } from '@/lib/tags'
+import { RATINGS } from '@/lib/search'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPost } from '@/lib/data/posts'
@@ -35,7 +36,7 @@ export async function deletePost(formData: FormData) {
 const editSchema = z.object({
   id: z.coerce.number().int(),
   tags: z.string().min(1, 'At least one tag is required'),
-  rating: z.enum(['general', 'sensitive', 'questionable', 'explicit']),
+  rating: z.enum(RATINGS),
   source_url: z.union([z.literal(''), z.url('Source must be a valid URL')]).optional(),
 })
 

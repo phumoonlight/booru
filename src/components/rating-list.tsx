@@ -1,13 +1,22 @@
 import Link from 'next/link'
 import type { Post } from '@/lib/data/posts'
-import { RATINGS, ratingToken, searchHref, withTag, withoutTag, type Rating } from '@/lib/search'
+import {
+  RATING_LABEL,
+  RATINGS,
+  ratingToken,
+  searchHref,
+  withTag,
+  withoutTag,
+  type Rating,
+} from '@/lib/search'
 
 // Danbooru's traffic-light convention, tuned for the dark theme
 export const RATING_COLOR: Record<Rating, string> = {
   general: 'text-[#35c64a]',
-  sensitive: 'text-[#4fa3e3]',
-  questionable: 'text-[#ead084]',
-  explicit: 'text-[#ff8a8b]',
+  e1: 'text-[#4fa3e3]',
+  e2: 'text-[#ead084]',
+  e3: 'text-[#ff8a8b]',
+  e4: 'text-[#ff5d5f]',
 }
 
 /**
@@ -21,13 +30,13 @@ export function RatingList({
   currentQuery = '',
   activeRatings = [],
   excludedRatings = [],
-  explicitHidden = false,
+  restrictedHidden = false,
 }: {
   posts: Post[]
   currentQuery?: string
   activeRatings?: Rating[]
   excludedRatings?: Rating[]
-  explicitHidden?: boolean
+  restrictedHidden?: boolean
 }) {
   const rows = RATINGS.map((rating) => ({
     rating,
@@ -36,7 +45,7 @@ export function RatingList({
     excluded: excludedRatings.includes(rating),
   })).filter((row) => row.count > 0 || row.active || row.excluded)
 
-  if (rows.length === 0 && !explicitHidden) {
+  if (rows.length === 0 && !restrictedHidden) {
     return <p className="text-sm text-muted">No posts here.</p>
   }
 
@@ -51,7 +60,11 @@ export function RatingList({
                 href={searchHref(
                   excluded ? withoutTag(currentQuery, token) : withTag(currentQuery, token, 'exclude')
                 )}
-                aria-label={excluded ? `Stop excluding ${rating}` : `Exclude ${rating}`}
+                aria-label={
+                  excluded
+                    ? `Stop excluding ${RATING_LABEL[rating]}`
+                    : `Exclude ${RATING_LABEL[rating]}`
+                }
                 className={`flex min-h-9 w-6 items-center justify-center text-sm hover:text-red-400 ${
                   excluded ? 'text-red-400' : 'text-muted'
                 }`}
@@ -62,12 +75,16 @@ export function RatingList({
                 href={searchHref(
                   active ? withoutTag(currentQuery, token) : withTag(currentQuery, token)
                 )}
-                aria-label={active ? `Clear the ${rating} filter` : `Only ${rating} posts`}
-                className={`min-h-9 flex-1 py-1 text-sm capitalize hover:underline ${
+                aria-label={
+                  active
+                    ? `Clear the ${RATING_LABEL[rating]} filter`
+                    : `Only ${RATING_LABEL[rating]} posts`
+                }
+                className={`min-h-9 flex-1 py-1 text-sm hover:underline ${
                   RATING_COLOR[rating]
                 } ${active ? 'font-semibold underline' : ''}`}
               >
-                {rating}
+                {RATING_LABEL[rating]}
               </Link>
               <span className="text-xs tabular-nums text-muted">{count}</span>
             </li>
@@ -75,14 +92,14 @@ export function RatingList({
         })}
       </ul>
 
-      {explicitHidden && (
+      {restrictedHidden && (
         <p className="text-xs text-muted">
-          Explicit posts are hidden.{' '}
+          E3 and E4 posts are hidden.{' '}
           <Link
-            href={searchHref(withTag(currentQuery, ratingToken('explicit')))}
+            href={searchHref(withTag(currentQuery, ratingToken('e4')))}
             className="text-accent hover:underline"
           >
-            Show them
+            Show E4
           </Link>
         </p>
       )}

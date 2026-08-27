@@ -4,8 +4,7 @@ import { useActionState, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { deletePost, updatePost, type EditPostState } from '@/lib/actions/posts'
 import { SaveIcon, TrashIcon } from '@/components/icons'
-
-const RATINGS = ['general', 'sensitive', 'questionable', 'explicit'] as const
+import { RATING_LABEL, RATINGS } from '@/lib/search'
 
 /**
  * Admin controls inlined on the post page — editing happens where the post is,
@@ -65,7 +64,7 @@ export function ManagePost({
           >
             {RATINGS.map((r) => (
               <option key={r} value={r}>
-                {r}
+                {RATING_LABEL[r]}
               </option>
             ))}
           </select>

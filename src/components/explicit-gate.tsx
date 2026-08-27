@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react'
 
 /**
- * Anonymous visitors reach an explicit post only by direct link — the gallery and
+ * Anonymous visitors reach a restricted post only by direct link — the gallery and
  * sitemap already filter it out — so the detail page blurs the image behind one tap
  * instead of hiding it. Signed-in viewers never see this wrapper.
  */
@@ -20,7 +20,7 @@ export function ExplicitGate({ children }: { children: ReactNode }) {
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/60 p-4 text-center">
         <p className="text-sm font-semibold">Explicit content</p>
         <p className="max-w-xs text-xs text-muted">
-          This post is rated explicit and is hidden by default.
+          This post is rated E3 or higher and is hidden by default.
         </p>
         <button
           type="button"

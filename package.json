@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:list": "supabase migration list",
+    "db:push": "supabase db push",
+    "db:push:dry": "supabase db push --dry-run",
+    "db:reset": "supabase db reset"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.5",

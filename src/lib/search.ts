@@ -66,14 +66,30 @@ export function searchHref(query: string, page = 1): string {
 }
 
 // ── Rating metatags ────────────────────────────────────────────────────────────
-// `rating:explicit` narrows the search to that rating; `-rating:explicit` drops it.
+// `rating:e4` narrows the search to that rating; `-rating:e4` drops it.
 // They travel in the same `?tags=` string as ordinary tags (Danbooru convention),
 // so the search bar, chips and tag links need no special cases — only the data
 // layer splits them back out.
 
-export const RATINGS = ['general', 'sensitive', 'questionable', 'explicit'] as const
+export const RATINGS = ['general', 'e1', 'e2', 'e3', 'e4'] as const
 
 export type Rating = (typeof RATINGS)[number]
+
+/** Display form — the stored value is lowercase, the label is not. */
+export const RATING_LABEL: Record<Rating, string> = {
+  general: 'General',
+  e1: 'E1',
+  e2: 'E2',
+  e3: 'E3',
+  e4: 'E4',
+}
+
+/** The tiers anonymous visitors don't get by default. */
+export const RESTRICTED_RATINGS: readonly Rating[] = ['e3', 'e4']
+
+export function isRestricted(rating: Rating): boolean {
+  return RESTRICTED_RATINGS.includes(rating)
+}
 
 export const RATING_PREFIX = 'rating:'
 
@@ -120,22 +136,22 @@ export function splitRatings(parsed: ParsedQuery): SplitQuery {
 /**
  * The rating whitelist to hand the search RPC, or `null` for "no filter".
  *
- * `allowExplicit` is the viewer's baseline: anonymous visitors don't see explicit
- * posts unless the query asks for that rating by name. (A signed-in preference
+ * `allowRestricted` is the viewer's baseline: anonymous visitors don't see the
+ * restricted tiers unless the query asks for one by name. (A signed-in preference
  * replaces the opt-in later — see docs/future.md.)
  */
 export function resolveRatings(
   { ratings, excludeRatings }: Pick<SplitQuery, 'ratings' | 'excludeRatings'>,
-  { allowExplicit }: { allowExplicit: boolean }
+  { allowRestricted }: { allowRestricted: boolean }
 ): Rating[] | null {
   let allowed: Rating[] = ratings.length > 0 ? [...ratings] : [...RATINGS]
 
   if (excludeRatings.length > 0) {
     allowed = allowed.filter((r) => !excludeRatings.includes(r))
   }
-  // Hiding explicit is the default, not a ceiling: naming the rating opts in.
-  if (!allowExplicit && !ratings.includes('explicit')) {
-    allowed = allowed.filter((r) => r !== 'explicit')
+  // Hiding the restricted tiers is the default, not a ceiling: naming one opts in.
+  if (!allowRestricted) {
+    allowed = allowed.filter((r) => !isRestricted(r) || ratings.includes(r))
   }
 
   return allowed.length === RATINGS.length ? null : allowed

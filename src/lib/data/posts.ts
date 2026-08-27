@@ -2,6 +2,7 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { createAnonClient } from '@/lib/supabase/anon'
 import type { Tag } from '@/lib/data/tags'
+import { RESTRICTED_RATINGS, type Rating } from '@/lib/search'
 
 export type Post = {
   id: number
@@ -10,7 +11,7 @@ export type Post = {
   file_size: number
   width: number
   height: number
-  rating: 'general' | 'sensitive' | 'questionable' | 'explicit'
+  rating: Rating
   source_url: string | null
   status: 'active' | 'pending' | 'deleted'
   score: number
@@ -83,8 +84,8 @@ export async function getPostNeighbours(
 
 /**
  * Ids + dates of indexable posts, newest first — the sitemap's source.
- * Uses the cookie-less client so the route stays cacheable, and drops `explicit`
- * to match what an anonymous visitor is shown.
+ * Uses the cookie-less client so the route stays cacheable, and drops the
+ * restricted tiers to match what an anonymous visitor is shown.
  */
 export async function getSitemapPosts(
   limit: number
@@ -94,7 +95,7 @@ export async function getSitemapPosts(
     .from('posts')
     .select('id, created_at')
     .eq('status', 'active')
-    .neq('rating', 'explicit')
+    .not('rating', 'in', `(${RESTRICTED_RATINGS.join(',')})`)
     .order('id', { ascending: false })
     .limit(limit)
   return data ?? []

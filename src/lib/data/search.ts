@@ -11,24 +11,24 @@ type SearchRow = Post & { total_count: number }
  * Multi-tag search via the search_posts RPC (AND over includes, NOT over excludes).
  * An empty query returns the whole active gallery, so this backs plain browsing too.
  *
- * `allowExplicit` is the viewer's rating baseline — anonymous visitors get the
+ * `allowRestricted` is the viewer's rating baseline — anonymous visitors get the
  * safe default (see resolveRatings), so callers pass whether someone is signed in.
  */
 export async function searchPosts({
   query = '',
   page = 1,
   perPage = POSTS_PER_PAGE,
-  allowExplicit = false,
+  allowRestricted = false,
 }: {
   query?: string
   page?: number
   perPage?: number
-  allowExplicit?: boolean
+  allowRestricted?: boolean
 } = {}): Promise<PostPage> {
   const { include, exclude, ratings, excludeRatings } = splitRatings(parseSearchQuery(query))
   const allowedRatings: Rating[] | null = resolveRatings(
     { ratings, excludeRatings },
-    { allowExplicit }
+    { allowRestricted }
   )
   const supabase = await createClient()
 
