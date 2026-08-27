@@ -75,6 +75,24 @@ booru/
   syntax, easy in SQL.
 - Tag autocomplete: prefix search on `tags.name` ordered by `post_count desc`, debounced.
 
+### Ratings and SEO (Phase 5 detail)
+- Ratings are **metatags inside the same query string**: `rating:general`,
+  `-rating:explicit`. `lib/search.ts` parses the string once, `splitRatings()` peels the
+  metatags off the tag names and `resolveRatings()` turns them into the whitelist for
+  `search_posts`'s existing `p_rating` argument. Nothing else — chips, tag links,
+  autocomplete, pagination hrefs — needs to know they exist.
+- Hiding `explicit` from anonymous visitors is a **default, not a boundary**: naming the
+  rating in the query opts in, and RLS is unchanged. When accounts arrive (future.md §3)
+  the per-user preference replaces the `allowExplicit` argument, nothing else.
+- Absolute URLs (canonicals, OpenGraph, `robots.txt`, `sitemap.xml`) all come from
+  `lib/site.ts` → `NEXT_PUBLIC_SITE_URL`, so the origin is configured in one place.
+- Search-result URLs are `noindex, follow` and disallowed in `robots.txt` — the
+  tag-combination space is unbounded. Post pages and `/tags` carry the indexable content.
+- `sitemap.ts` must stay cacheable, so it reads through `lib/supabase/anon.ts`
+  (cookie-less) instead of the request-scoped server client.
+- Reads that both `generateMetadata` and the page need (`getPost`, `getPostTags`,
+  `getCurrentProfile`) are wrapped in React `cache` so each runs once per request.
+
 ## Mobile-first layout
 
 The Danbooru reference is desktop-shaped; translate it like this:

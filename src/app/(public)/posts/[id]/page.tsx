@@ -3,13 +3,17 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getPost, getPostNeighbours, getPostTags } from '@/lib/data/posts'
-import { isAdmin } from '@/lib/data/profiles'
+import { getCurrentProfile } from '@/lib/data/profiles'
 import { ManagePost } from '@/components/manage-post'
-import { originalUrl } from '@/lib/storage'
+import { ExplicitGate } from '@/components/explicit-gate'
+import { RATING_COLOR } from '@/components/rating-list'
+import { originalUrl, thumbnailUrl } from '@/lib/storage'
 import { GroupedTagList } from '@/components/tag-list'
 import { SearchHeader } from '@/components/search-header'
 import { isSupabaseConfigured } from '@/lib/env'
 import { SetupNotice } from '@/components/setup-notice'
+import { BLUR_DATA_URL } from '@/lib/blur'
+import { SITE_NAME } from '@/lib/site'
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
@@ -19,7 +23,45 @@ function formatBytes(bytes: number) {
 
 export async function generateMetadata({ params }: PageProps<'/posts/[id]'>): Promise<Metadata> {
   const { id } = await params
-  return { title: `Post ${id} — Booru` }
+  const postId = Number(id)
+  if (!Number.isInteger(postId) || postId < 1) return { title: 'Post not found' }
+  // Pre-runbook the page renders the setup notice, so don't try to read the DB
+  if (!isSupabaseConfigured()) return { title: `Post #${postId}` }
+
+  const post = await getPost(postId)
+  if (!post) return { title: 'Post not found', robots: { index: false, follow: false } }
+
+  const tags = await getPostTags(postId)
+  const tagNames = tags.map((tag) => tag.name)
+  const title =
+    tagNames.length > 0 ? `${tagNames.slice(0, 6).join(' ')} — #${post.id}` : `Post #${post.id}`
+  const description =
+    tagNames.length > 0
+      ? `${post.width}×${post.height} · rated ${post.rating} · tagged ${tagNames.join(', ')}`
+      : `${post.width}×${post.height} · rated ${post.rating}`
+
+  return {
+    title,
+    description,
+    alternates: { canonical: `/posts/${post.id}` },
+    // Explicit posts stay out of search results, matching the anonymous default
+    robots: post.rating === 'explicit' ? { index: false, follow: true } : undefined,
+    openGraph: {
+      type: 'article',
+      url: `/posts/${post.id}`,
+      title,
+      description,
+      siteName: SITE_NAME,
+      // The thumbnail is the only derived image the schema guarantees exists
+      images: [{ url: thumbnailUrl(post.md5), alt: title }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [thumbnailUrl(post.md5)],
+    },
+  }
 }
 
 export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
@@ -38,13 +80,34 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
   const post = await getPost(postId)
   if (!post) notFound()
 
-  const [tags, { prevId, nextId }, canManage] = await Promise.all([
+  const [tags, { prevId, nextId }, profile] = await Promise.all([
     getPostTags(postId),
     getPostNeighbours(postId),
-    isAdmin(),
+    getCurrentProfile(),
   ])
 
+  const canManage = profile?.role === 'admin'
+  // The gallery never surfaces explicit posts to anonymous visitors, so a direct
+  // link is the only way here — blur it behind one tap rather than 404.
+  const gated = post.rating === 'explicit' && profile === null
+
   const fullSize = originalUrl(post.md5, post.file_ext)
+
+  const image = (
+    <a href={fullSize} target="_blank" rel="noreferrer" className="block">
+      <Image
+        src={fullSize}
+        alt={`Post ${post.id}`}
+        width={post.width}
+        height={post.height}
+        sizes="(min-width: 1024px) 60vw, 100vw"
+        placeholder="blur"
+        blurDataURL={BLUR_DATA_URL}
+        priority
+        className="h-auto w-full"
+      />
+    </a>
+  )
 
   return (
     <div className="mx-auto w-full max-w-5xl px-3 py-4">
@@ -53,17 +116,7 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
       <div className="flex flex-col gap-5 pt-4 lg:flex-row-reverse lg:items-start">
         {/* Image first on mobile, right column on desktop */}
         <div className="flex flex-col gap-3 lg:flex-1">
-          <a href={fullSize} target="_blank" rel="noreferrer" className="block">
-            <Image
-              src={fullSize}
-              alt={`Post ${post.id}`}
-              width={post.width}
-              height={post.height}
-              sizes="(min-width: 1024px) 60vw, 100vw"
-              priority
-              className="h-auto w-full"
-            />
-          </a>
+          {gated ? <ExplicitGate>{image}</ExplicitGate> : image}
           <p className="text-center text-xs text-muted">
             Tap the image to open the original ({post.width}×{post.height},{' '}
             {formatBytes(post.file_size)})
@@ -110,7 +163,7 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-muted">Rating</dt>
-                <dd className="capitalize">{post.rating}</dd>
+                <dd className={`capitalize ${RATING_COLOR[post.rating]}`}>{post.rating}</dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-muted">Size</dt>

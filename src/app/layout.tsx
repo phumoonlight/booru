@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { BottomNav } from '@/components/bottom-nav'
+import { SITE_DESCRIPTION, SITE_NAME, siteUrl } from '@/lib/site'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -14,8 +15,25 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Booru',
-  description: 'Tag-centric image board',
+  // Absolute base for every relative canonical / OG image below this layout
+  metadataBase: new URL(siteUrl()),
+  title: {
+    default: SITE_NAME,
+    template: `%s — ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  openGraph: {
+    type: 'website',
+    siteName: SITE_NAME,
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+  },
 }
 
 export const viewport: Viewport = {

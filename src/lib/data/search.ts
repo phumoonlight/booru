@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import type { Post, PostPage } from '@/lib/data/posts'
 import type { Tag } from '@/lib/data/tags'
-import { parseSearchQuery } from '@/lib/search'
+import { parseSearchQuery, resolveRatings, splitRatings, type Rating } from '@/lib/search'
 
 export const POSTS_PER_PAGE = 24
 
@@ -10,19 +10,32 @@ type SearchRow = Post & { total_count: number }
 /**
  * Multi-tag search via the search_posts RPC (AND over includes, NOT over excludes).
  * An empty query returns the whole active gallery, so this backs plain browsing too.
+ *
+ * `allowExplicit` is the viewer's rating baseline — anonymous visitors get the
+ * safe default (see resolveRatings), so callers pass whether someone is signed in.
  */
 export async function searchPosts({
   query = '',
   page = 1,
   perPage = POSTS_PER_PAGE,
-}: { query?: string; page?: number; perPage?: number } = {}): Promise<PostPage> {
-  const { include, exclude } = parseSearchQuery(query)
+  allowExplicit = false,
+}: {
+  query?: string
+  page?: number
+  perPage?: number
+  allowExplicit?: boolean
+} = {}): Promise<PostPage> {
+  const { include, exclude, ratings, excludeRatings } = splitRatings(parseSearchQuery(query))
+  const allowedRatings: Rating[] | null = resolveRatings(
+    { ratings, excludeRatings },
+    { allowExplicit }
+  )
   const supabase = await createClient()
 
   const { data, error } = await supabase.rpc('search_posts', {
     include_tags: include,
     exclude_tags: exclude,
-    p_rating: null,
+    p_rating: allowedRatings,
     p_limit: perPage,
     p_offset: (page - 1) * perPage,
   })

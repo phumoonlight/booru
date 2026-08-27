@@ -64,3 +64,79 @@ export function searchHref(query: string, page = 1): string {
   const qs = params.toString()
   return qs ? `/?${qs}` : '/'
 }
+
+// ── Rating metatags ────────────────────────────────────────────────────────────
+// `rating:explicit` narrows the search to that rating; `-rating:explicit` drops it.
+// They travel in the same `?tags=` string as ordinary tags (Danbooru convention),
+// so the search bar, chips and tag links need no special cases — only the data
+// layer splits them back out.
+
+export const RATINGS = ['general', 'sensitive', 'questionable', 'explicit'] as const
+
+export type Rating = (typeof RATINGS)[number]
+
+export const RATING_PREFIX = 'rating:'
+
+export function ratingToken(rating: Rating): string {
+  return `${RATING_PREFIX}${rating}`
+}
+
+function asRating(token: string): Rating | null {
+  if (!token.startsWith(RATING_PREFIX)) return null
+  const value = token.slice(RATING_PREFIX.length)
+  return (RATINGS as readonly string[]).includes(value) ? (value as Rating) : null
+}
+
+export type SplitQuery = ParsedQuery & {
+  ratings: Rating[]
+  excludeRatings: Rating[]
+}
+
+/**
+ * Pulls `rating:*` metatags out of a parsed query, leaving `include`/`exclude`
+ * holding tag names only. An unknown value (`rating:nope`) is left in place as a
+ * tag name so the search honestly returns nothing rather than silently widening.
+ */
+export function splitRatings(parsed: ParsedQuery): SplitQuery {
+  const ratings: Rating[] = []
+  const excludeRatings: Rating[] = []
+
+  const keep = (list: string[], into: Rating[]) =>
+    list.filter((token) => {
+      const rating = asRating(token)
+      if (!rating) return true
+      if (!into.includes(rating)) into.push(rating)
+      return false
+    })
+
+  return {
+    include: keep(parsed.include, ratings),
+    exclude: keep(parsed.exclude, excludeRatings),
+    ratings,
+    excludeRatings,
+  }
+}
+
+/**
+ * The rating whitelist to hand the search RPC, or `null` for "no filter".
+ *
+ * `allowExplicit` is the viewer's baseline: anonymous visitors don't see explicit
+ * posts unless the query asks for that rating by name. (A signed-in preference
+ * replaces the opt-in later — see docs/future.md.)
+ */
+export function resolveRatings(
+  { ratings, excludeRatings }: Pick<SplitQuery, 'ratings' | 'excludeRatings'>,
+  { allowExplicit }: { allowExplicit: boolean }
+): Rating[] | null {
+  let allowed: Rating[] = ratings.length > 0 ? [...ratings] : [...RATINGS]
+
+  if (excludeRatings.length > 0) {
+    allowed = allowed.filter((r) => !excludeRatings.includes(r))
+  }
+  // Hiding explicit is the default, not a ceiling: naming the rating opts in.
+  if (!allowExplicit && !ratings.includes('explicit')) {
+    allowed = allowed.filter((r) => r !== 'explicit')
+  }
+
+  return allowed.length === RATINGS.length ? null : allowed
+}

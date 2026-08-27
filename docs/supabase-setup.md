@@ -158,12 +158,110 @@ Then in the UI, at ~375px:
 ## Step 9 — Mark the phases done
 
 Tick the remaining `[ ]` items in [phases.md](./phases.md) for Phases 0–4 and flip
-their rows to ✅ in [PLAN.md](./PLAN.md).
+their rows to ✅ in [PLAN.md](./PLAN.md). Phase 5 finishes at step 13.
 
-## Deferred to Phase 5
+## Step 10 — Verify the rating filter (Phase 5)
 
-Production hardening — auth rate limits, storage size caps, PITR or scheduled dumps,
-custom domain — is deliberately not here. It belongs to the Phase 5 deploy checklist.
+Set at least one post to each rating from its **Manage** section, including one
+`explicit`. Then, signed out (private window):
+
+- The home grid never shows the explicit post, and the total count excludes it.
+- The **Rating** facet (bottom sheet under `lg`, sidebar above) lists the ratings on
+  screen; tapping one narrows the search to `/?tags=rating:<name>`, the − gives
+  `-rating:<name>`, and tapping an active row clears it again.
+- The facet ends with "Explicit posts are hidden. **Show them**" — following that link
+  puts `rating:explicit` in the query and the post appears.
+- Opening the explicit post directly by URL shows the image blurred behind an
+  **Explicit content → Show image** button.
+- Its `<head>` carries `<meta name="robots" content="noindex, follow">`, and
+  `/sitemap.xml` does not list it.
+
+Signed in as admin, none of the above hiding applies — every rating shows by default.
+
+Direct SQL check of the RPC's rating argument:
+
+```sql
+-- Expect: no explicit posts in the result
+select id, rating from public.search_posts(
+  '{}', '{}', array['general','sensitive','questionable'], 24, 0
+);
+```
+
+## Step 11 — Deploy to Vercel (Phase 5)
+
+The app is a stock Next.js project, so the defaults are right: framework Next.js,
+build `next build`, install `npm install`, no root-directory override.
+
+1. Push the repo to GitHub, then **vercel.com → Add New → Project → Import**.
+2. Add the environment variables (**Project Settings → Environment Variables**),
+   for Production *and* Preview:
+
+   | Variable | Value |
+   |---|---|
+   | `NEXT_PUBLIC_SUPABASE_URL` | same as `.env.local` |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | same as `.env.local` |
+   | `SUPABASE_SERVICE_ROLE_KEY` | same as `.env.local` — **not** prefixed `NEXT_PUBLIC_` |
+   | `NEXT_PUBLIC_SITE_URL` | the final origin, e.g. `https://booru.example.com` |
+
+   `NEXT_PUBLIC_SITE_URL` is what `src/lib/site.ts` turns into `metadataBase`,
+   canonical links, `robots.txt` and `sitemap.xml`. Leave it unset on previews and
+   Vercel's own deployment URL is used instead.
+3. Deploy, then add the custom domain under **Project Settings → Domains** and point
+   the DNS record Vercel shows you at it. Set `NEXT_PUBLIC_SITE_URL` to that domain
+   and redeploy so the absolute URLs pick it up.
+4. In Supabase: **Authentication → URL Configuration** → set **Site URL** to the same
+   origin and add it (plus `https://*.vercel.app` for previews) to **Redirect URLs**,
+   otherwise login bounces back to localhost.
+
+**Verify** on the deployed origin:
+
+- `https://<domain>/robots.txt` lists your domain in `Sitemap:`, and disallows
+  `/admin`, `/login` and `?tags=` URLs.
+- `https://<domain>/sitemap.xml` lists `/`, `/tags` and one entry per non-explicit
+  active post.
+- A post page's source contains `og:image` pointing at the Supabase thumbnail URL and
+  a `<link rel="canonical">` on your domain — paste the URL into a link-preview
+  debugger and the thumbnail renders.
+- Log in on the deployed site and confirm `/admin` opens and an upload succeeds.
+- Lighthouse mobile run on the home page passes.
+
+## Step 12 — Production hardening (Phase 5)
+
+In the Supabase dashboard:
+
+- **Authentication → Providers → Email**: turn **Enable signup** *off*. There is no
+  public signup by design (docs/future.md §3) — accounts are created by you.
+- **Authentication → Rate limits**: lower the sign-in and token-refresh limits; the
+  only human logging in is you.
+- **Authentication → Sessions**: set a session timeout / refresh-token rotation.
+- **Storage → Buckets → originals / thumbnails**: set a **file size limit** (e.g.
+  20 MB) and restrict **allowed MIME types** to `image/jpeg, image/png, image/webp,
+  image/gif`. The upload action validates the same things, but the bucket is the
+  boundary that also covers the service-role path.
+- **Settings → Database → Network restrictions**: leave Postgres closed to direct
+  connections unless you need `psql` from a fixed IP.
+- Rotate the service-role key if it was ever pasted anywhere shared, and confirm it
+  exists only in `.env.local` and Vercel's env — never in git.
+
+**Verify:** signup is refused from the dashboard's own "Invite" flow being the only
+path in; uploading a file over the bucket limit fails at storage with a clear error
+and no orphan row (the upload action rolls back).
+
+## Step 13 — Backups (Phase 5)
+
+Pick one:
+
+- **Paid projects:** **Settings → Database → Point-in-time recovery** — enable it.
+  This covers the database only.
+- **Free projects:** schedule a dump. `npx supabase db dump --db-url "<connection
+  string>" -f backup.sql` run from a cron job or a GitHub Action, committed nowhere
+  public. Keep at least a week of dailies.
+
+Storage objects are **not** in either backup. Mirror the buckets separately — e.g.
+`npx supabase storage cp -r ss://originals ./backup/originals` on the same schedule.
+
+**Verify:** restore one dump into a scratch Supabase project and confirm the four
+tables and their row counts come back.
 
 ## Troubleshooting
 

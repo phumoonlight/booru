@@ -1,6 +1,12 @@
+import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/data/profiles'
 import { logout } from '@/lib/actions/auth'
+
+export const metadata: Metadata = {
+  title: 'Admin',
+  robots: { index: false, follow: false },
+}
 
 // Server-side admin gate for every /admin page — the proxy guard is only the first line.
 export default async function AdminLayout({ children }: LayoutProps<'/admin'>) {

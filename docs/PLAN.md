@@ -52,25 +52,33 @@ Documented in [future.md](./future.md) so current decisions don't block them lat
 | 2 | Upload pipeline (admin): file → dedup → thumbnail → tags | 🟡 in progress |
 | 3 | Browse: post grid, post detail page, pagination | 🟡 in progress |
 | 4 | Tag search: multi-tag query, autocomplete, tag drawer | 🟡 in progress |
-| 5 | Polish: rating filter, SEO, error pages, deploy | 🔲 not started |
+| 5 | Polish: rating filter, SEO, error pages, deploy | 🟡 in progress |
 
 Status legend: 🔲 not started · 🟡 in progress · ✅ done
 
 ## Current status
 
-**Phases 0–4 code-complete.** 6 migrations written (schema, functions/triggers, RLS,
+**Phases 0–5 code-complete.** 6 migrations written (schema, functions/triggers, RLS,
 storage, post RPCs, `search_posts`). Upload pipeline: page-wide drop zone on the posts
 page (file → MD5 dedup → sharp WebP thumb → storage → `create_post_with_tags` RPC with
 rollback, tagged `tagme`), admin Manage section on `/posts/[id]` for edit + delete. Public site: home grid backed by the multi-tag
 search RPC, sticky search bar with debounced autocomplete and `-tag` exclusion, tag
 sidebar/bottom-drawer facets, `/posts/[id]` detail, `/tags` index.
-Build + lint clean; every route returns 200 in dev; `/admin` redirects anonymous;
-the query parser has 19 passing assertions.
+Phase 5 polish: `rating:x` / `-rating:x` metatags ride in the same `?tags=` string and
+resolve to the search RPC's existing `p_rating` argument, so anonymous visitors get
+`explicit` hidden by default (with a "Show them" opt-in) and a clickable rating facet
+in the sidebar/drawer; explicit posts opened by direct link are blurred behind a tap.
+SEO is `metadataBase` + title template + OG/Twitter defaults in the root layout, real
+per-post metadata with the thumbnail as OG image, `robots.ts` and `sitemap.ts`.
+Error pages: root 404, post 404, `error.tsx` and `global-error.tsx`.
 
-No Supabase cloud project exists yet, so nothing has run against a real database and
-every phase stays 🟡 until it does. That is expected and not a blocker for writing more
-code — the plan is to implement first, then run [supabase-setup.md](./supabase-setup.md)
-end to end and verify Phases 0–2 together.
+Build + lint clean; every route returns 200 in dev (`/nope` 404s, `/admin` redirects
+anonymous); the query parser and rating resolution have 34 passing assertions.
+
+Every phase stays 🟡 until [supabase-setup.md](./supabase-setup.md) has been run end to
+end against the real project. Phase 5's remaining work is entirely in that runbook:
+step 10 verifies the rating filter against real data, step 11 deploys to Vercel with a
+custom domain, step 12 is Supabase production hardening, step 13 is the backup story.
 
 Note: Next 16 renamed the `middleware.ts` convention to `proxy.ts` — session refresh
 and the `/admin` guard live in `src/proxy.ts`.
@@ -93,6 +101,20 @@ and the `/admin` guard live in `src/proxy.ts`.
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
 
+- **2026-08-27** — Phase 5 code: rating filter as `rating:x` metatags parsed out of the
+  existing query string (`splitRatings` + `resolveRatings` in `lib/search.ts`) and fed
+  to `search_posts`'s `p_rating`; clickable `RatingList` facet; `ExplicitGate` blur on
+  direct links to explicit posts. SEO: root-layout `metadataBase`/title template/OG
+  defaults, per-post `generateMetadata` with the thumbnail as OG image, query-aware home
+  metadata, `robots.ts`, `sitemap.ts`. `not-found.tsx` (root + post), `error.tsx`,
+  `global-error.tsx`, blur placeholders, and React `cache` on the reads that
+  `generateMetadata` duplicates. Decisions: ratings travel in `?tags=` rather than a
+  separate param, so chips, tag links and the search bar needed no special cases and no
+  migration was required — `search_posts` already took `p_rating`. Hiding explicit is a
+  default, not a ceiling: naming `rating:explicit` opts in, since the site has no
+  accounts to hang a preference on yet. Deploy, Supabase hardening and backups are
+  dashboard work, so they became steps 11–13 of the runbook rather than code.
+  Next: run [supabase-setup.md](./supabase-setup.md) end to end.
 - **2026-08-26 (8)** — Dropped public accounts from the plan: the old Phase 5
   (public signup + favorites) moved to [future.md](./future.md) §3, and the old
   Phase 6 (polish) is now Phase 5. Rationale: auth exists only for the admin login,

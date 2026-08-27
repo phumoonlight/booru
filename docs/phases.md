@@ -106,10 +106,17 @@ mobile — creating the admin user and checking the redirects are
 
 **Goal:** production-quality daily-driver.
 
-- [ ] Rating filter (default hide `explicit` for anonymous; user preference later)
-- [ ] SEO: metadata per post/tag page, OpenGraph images (thumbnail)
-- [ ] 404/error pages, image loading blur placeholders
-- [ ] Deploy to Vercel, custom domain, Supabase prod hardening (auth rate limits, storage size caps)
-- [ ] Backup story: enable Supabase PITR or scheduled dumps
+- [x] Rating filter: `rating:x` / `-rating:x` metatags in the same `?tags=` string (`lib/search.ts` `splitRatings` + `resolveRatings` → the RPC's existing `p_rating`), clickable rating facet in the sidebar/drawer, anonymous visitors get `explicit` hidden by default with a "Show them" opt-in
+- [x] Explicit posts reached by direct link are blurred behind a tap for anonymous viewers (`components/explicit-gate.tsx`); admins/signed-in see everything
+- [x] SEO: `metadataBase` + title template + OG/Twitter defaults in the root layout, per-post `generateMetadata` (tags in title/description, thumbnail as OG image, `noindex` on explicit), query-aware home metadata (only the plain first page is indexable), canonicals everywhere, `noindex` on `/admin` and `/login`
+- [x] `app/robots.ts` and `app/sitemap.ts` (static routes + non-explicit active posts, hourly revalidate via the cookie-less `lib/supabase/anon.ts` client)
+- [x] Error pages: root `not-found.tsx`, `/posts/[id]/not-found.tsx`, `error.tsx` (Next 16 `retry` prop) and `global-error.tsx`
+- [x] Blur placeholders on every remote image (`lib/blur.ts`)
+- [x] `getPost` / `getPostTags` / `getCurrentProfile` wrapped in React `cache` so `generateMetadata` and the page share one query
+- [x] Verify: build + lint clean; 34 assertions on the query parser and rating resolution pass; all public routes 200 in dev, `/nope` 404s, `/admin` redirects anon
+- [ ] Verify: rating filter behaves against real data — [supabase-setup.md](./supabase-setup.md) step 10
+- [ ] Deploy to Vercel + custom domain — [supabase-setup.md](./supabase-setup.md) step 11
+- [ ] Supabase prod hardening (signup off, auth rate limits, storage size/MIME caps) — [supabase-setup.md](./supabase-setup.md) step 12
+- [ ] Backup story: PITR or scheduled dumps + storage mirror — [supabase-setup.md](./supabase-setup.md) step 13
 
 **Done when:** deployed and pleasant to browse daily.

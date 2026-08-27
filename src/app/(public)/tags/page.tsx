@@ -8,7 +8,10 @@ import { isSupabaseConfigured } from '@/lib/env'
 import { searchHref } from '@/lib/search'
 
 export const metadata: Metadata = {
-  title: 'Tags — Booru',
+  title: 'Tags',
+  description: 'Every tag on the board, grouped by category and sorted by post count.',
+  alternates: { canonical: '/tags' },
+  openGraph: { url: '/tags', title: 'Tags' },
 }
 
 export default async function TagsPage() {

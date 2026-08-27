@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 
 export type Profile = {
@@ -7,8 +8,9 @@ export type Profile = {
   created_at: string
 }
 
-/** Profile of the signed-in user, or null when anonymous. */
-export async function getCurrentProfile(): Promise<Profile | null> {
+/** Profile of the signed-in user, or null when anonymous. Cached per request —
+ *  a page, its metadata and the bottom nav all ask the same question. */
+export const getCurrentProfile = cache(async (): Promise<Profile | null> => {
   const supabase = await createClient()
   const {
     data: { user },
@@ -21,7 +23,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     .eq('id', user.id)
     .single()
   return data
-}
+})
 
 export async function isAdmin(): Promise<boolean> {
   const profile = await getCurrentProfile()
