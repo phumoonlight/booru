@@ -2,25 +2,16 @@ import Link from 'next/link'
 
 export default function AdminHome() {
   return (
-    <div className="flex flex-col gap-3">
-      <ul className="flex flex-col gap-2">
-        <li>
-          <Link
-            href="/admin/upload"
-            className="block rounded-lg border border-border bg-surface px-4 py-3 text-sm hover:border-accent"
-          >
-            Upload
-          </Link>
-        </li>
-        <li>
-          <Link
-            href="/admin/posts"
-            className="block rounded-lg border border-border bg-surface px-4 py-3 text-sm hover:border-accent"
-          >
-            Manage posts
-          </Link>
-        </li>
-      </ul>
+    <div className="flex flex-col gap-3 text-sm text-muted">
+      <p>
+        To add images, drop them anywhere on the{' '}
+        <Link href="/" className="text-accent hover:underline">
+          posts page
+        </Link>{' '}
+        (or use its Upload button). Every upload starts tagged{' '}
+        <span className="font-mono">tagme</span>.
+      </p>
+      <p>Editing and deleting live in the Manage section of each post page.</p>
     </div>
   )
 }

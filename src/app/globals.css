@@ -26,3 +26,14 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Tailwind v4 drops the UA pointer cursor on buttons — put it back while enabled */
+button:not(:disabled),
+[type='submit']:not(:disabled),
+summary {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}

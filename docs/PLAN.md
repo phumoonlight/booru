@@ -59,9 +59,9 @@ Status legend: 🔲 not started · 🟡 in progress · ✅ done
 ## Current status
 
 **Phases 0–4 code-complete.** 6 migrations written (schema, functions/triggers, RLS,
-storage, post RPCs, `search_posts`). Upload pipeline: `/admin/upload` (file → MD5 dedup
-→ sharp WebP thumb → storage → `create_post_with_tags` RPC with rollback),
-`/admin/posts` with delete + edit. Public site: home grid backed by the multi-tag
+storage, post RPCs, `search_posts`). Upload pipeline: page-wide drop zone on the posts
+page (file → MD5 dedup → sharp WebP thumb → storage → `create_post_with_tags` RPC with
+rollback, tagged `tagme`), admin Manage section on `/posts/[id]` for edit + delete. Public site: home grid backed by the multi-tag
 search RPC, sticky search bar with debounced autocomplete and `-tag` exclusion, tag
 sidebar/bottom-drawer facets, `/posts/[id]` detail, `/tags` index.
 Build + lint clean; every route returns 200 in dev; `/admin` redirects anonymous;

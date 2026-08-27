@@ -1,11 +1,15 @@
 import type { Post } from '@/lib/data/posts'
 import { PostCard } from '@/components/post-card'
 
+// Every item is the same height; ratios survive because the width flexes
+const ROW = 'flex flex-wrap gap-2'
+const ITEM_HEIGHT = 'h-36 sm:h-44 lg:h-56'
+
 export function PostGrid({ posts }: { posts: Post[] }) {
   return (
-    <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+    <ul className={ROW}>
       {posts.map((post) => (
-        <li key={post.id}>
+        <li key={post.id} className={ITEM_HEIGHT}>
           <PostCard post={post} />
         </li>
       ))}
@@ -13,13 +17,18 @@ export function PostGrid({ posts }: { posts: Post[] }) {
   )
 }
 
+// Cycled so the placeholder row looks like the ragged widths of real thumbs
+const SKELETON_WIDTHS = ['w-28', 'w-40', 'w-32', 'w-24', 'w-36']
+
 export function PostGridSkeleton({ count = 12 }: { count?: number }) {
   return (
-    <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+    <ul className={ROW}>
       {Array.from({ length: count }, (_, i) => (
         <li
           key={i}
-          className="aspect-square animate-pulse rounded-lg border border-border bg-surface"
+          className={`animate-pulse bg-surface ${ITEM_HEIGHT} ${
+            SKELETON_WIDTHS[i % SKELETON_WIDTHS.length]
+          }`}
         />
       ))}
     </ul>

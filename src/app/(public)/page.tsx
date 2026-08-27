@@ -5,7 +5,10 @@ import { Pagination } from '@/components/pagination'
 import { SearchHeader } from '@/components/search-header'
 import { TagDrawer } from '@/components/tag-drawer'
 import { TagList } from '@/components/tag-list'
+import { RatingList } from '@/components/rating-list'
 import { SetupNotice } from '@/components/setup-notice'
+import { UploadZone } from '@/components/upload-zone'
+import { isAdmin } from '@/lib/data/profiles'
 import { isSupabaseConfigured } from '@/lib/env'
 import { parseSearchQuery, searchHref } from '@/lib/search'
 
@@ -32,17 +35,28 @@ export default async function HomePage({ searchParams }: PageProps<'/'>) {
   }
 
   const { posts, total, pageCount } = await searchPosts({ query, page })
+  // Admins get the page-wide drop zone and the Upload button in the header
+  const canUpload = await isAdmin()
   // Sidebar/drawer facets describe the posts actually on screen
   const tagEntries = await getTagsForPosts(posts.map((p) => p.id))
   const { include, exclude } = parseSearchQuery(query)
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">
-      <SearchHeader query={query} />
+      <SearchHeader query={query} actions={canUpload ? <UploadZone /> : undefined} />
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <TagDrawer count={tagEntries.length}>
-          <TagList entries={tagEntries.slice(0, 50)} currentQuery={query} />
+        <TagDrawer label={`Tags (${tagEntries.length})`}>
+          <div className="flex flex-col gap-4">
+            <section>
+              <h2 className="mb-2 text-sm font-semibold">Rating</h2>
+              <RatingList posts={posts} />
+            </section>
+            <section>
+              <h2 className="mb-2 text-sm font-semibold">Tags ({tagEntries.length})</h2>
+              <TagList entries={tagEntries.slice(0, 50)} currentQuery={query} />
+            </section>
+          </div>
         </TagDrawer>
 
         <div className="flex min-w-0 flex-1 flex-col gap-4">
@@ -63,7 +77,9 @@ export default async function HomePage({ searchParams }: PageProps<'/'>) {
             <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
               {query
                 ? 'No posts match that search.'
-                : 'No posts yet — the first upload will show up here.'}
+                : canUpload
+                  ? 'No posts yet — drop images anywhere on this page to upload.'
+                  : 'No posts yet — the first upload will show up here.'}
             </p>
           ) : (
             <PostGrid posts={posts} />

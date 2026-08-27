@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { suggestTags } from '@/lib/actions/search'
 import type { Tag } from '@/lib/data/tags'
 import { queryTokens, searchHref, withoutTag } from '@/lib/search'
+import { SearchIcon } from '@/components/icons'
 
 const DEBOUNCE_MS = 200
 
@@ -106,9 +107,11 @@ export function SearchBar({ initialQuery = '' }: { initialQuery?: string }) {
         />
         <button
           type="submit"
-          className="min-h-11 rounded-lg bg-accent px-4 text-sm font-medium text-background"
+          title="Search"
+          aria-label="Search"
+          className="flex min-h-11 w-12 items-center justify-center rounded-lg bg-accent text-background"
         >
-          Search
+          <SearchIcon />
         </button>
 
         {open && suggestions.length > 0 && (

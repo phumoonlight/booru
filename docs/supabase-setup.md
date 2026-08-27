@@ -94,20 +94,21 @@ anonymous `select` on `posts where status='active'` succeeds; anonymous `insert`
 
 ## Step 6 — Verify the upload pipeline (finishes Phase 2)
 
-Log in as admin, open `/admin/upload` in a phone-sized viewport (~375px), and upload a
-real image with two or three tags.
+Log in as admin, open `/` in a phone-sized viewport (~375px), and upload a real image
+with the header's **Upload** button (or by dropping it on the page).
 
 Confirm all of the following:
 
-- Success message with the new post id.
+- Status panel shows the new post id, and the post is tagged `tagme`.
 - **Storage → originals** contains `{md5}.{ext}`; **thumbnails** contains `{md5}.webp`
   and it is ≤400px on its longest side.
 - `posts` has the row with correct `width`/`height`/`file_size`/`rating`.
 - `tags` has one row per tag with `post_count = 1`; `post_tags` links them.
 - Re-upload the same file → rejected with "This image already exists" plus a link to
   the existing post, and no duplicate storage objects.
-- `/admin/posts` lists the post with its thumbnail; **Edit** changes tags/rating and
-  the removed tag's `post_count` drops; **Delete** removes the row and both files.
+- `/posts/[id]` shows the post; while signed in as admin its **Manage** section
+  changes tags/rating (the removed tag's `post_count` drops) and **Delete post**
+  removes the row and both files.
 
 Upload a handful more images before the next step — the browse UI needs real content.
 

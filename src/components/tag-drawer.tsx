@@ -3,20 +3,17 @@
 import { useState, type ReactNode } from 'react'
 
 /**
- * Danbooru's fixed left sidebar, translated for mobile: a "Tags" button that opens
- * a bottom sheet under `lg`, and a plain sidebar column from `lg` up.
- * Content is server-rendered and passed in as children.
+ * Danbooru's fixed left sidebar, translated for mobile: a button that opens a bottom
+ * sheet under `lg`, and a plain sidebar column from `lg` up. Content (tag facets,
+ * rating breakdown) is server-rendered and passed in as children.
  */
-export function TagDrawer({ children, count }: { children: ReactNode; count: number }) {
+export function TagDrawer({ children, label }: { children: ReactNode; label: string }) {
   const [open, setOpen] = useState(false)
 
   return (
     <>
       {/* Desktop: static sidebar */}
-      <aside className="hidden lg:block lg:w-56 lg:shrink-0">
-        <h2 className="mb-2 text-sm font-semibold">Tags ({count})</h2>
-        {children}
-      </aside>
+      <aside className="hidden lg:block lg:w-56 lg:shrink-0">{children}</aside>
 
       {/* Mobile: trigger + bottom sheet */}
       <button
@@ -24,7 +21,7 @@ export function TagDrawer({ children, count }: { children: ReactNode; count: num
         onClick={() => setOpen(true)}
         className="flex min-h-11 w-fit items-center rounded-lg border border-border px-4 text-sm lg:hidden"
       >
-        Tags ({count})
+        {label}
       </button>
 
       {open && (
@@ -36,8 +33,7 @@ export function TagDrawer({ children, count }: { children: ReactNode; count: num
             className="flex-1 bg-black/60"
           />
           <div className="max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-border bg-surface p-4 pb-8">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Tags ({count})</h2>
+            <div className="mb-3 flex items-center justify-end">
               <button
                 type="button"
                 onClick={() => setOpen(false)}

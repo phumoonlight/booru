@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getPost, getPostNeighbours, getPostTags } from '@/lib/data/posts'
+import { isAdmin } from '@/lib/data/profiles'
+import { ManagePost } from '@/components/manage-post'
 import { originalUrl } from '@/lib/storage'
 import { GroupedTagList } from '@/components/tag-list'
 import { SearchHeader } from '@/components/search-header'
@@ -36,9 +38,10 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
   const post = await getPost(postId)
   if (!post) notFound()
 
-  const [tags, { prevId, nextId }] = await Promise.all([
+  const [tags, { prevId, nextId }, canManage] = await Promise.all([
     getPostTags(postId),
     getPostNeighbours(postId),
+    isAdmin(),
   ])
 
   const fullSize = originalUrl(post.md5, post.file_ext)
@@ -58,7 +61,7 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
               height={post.height}
               sizes="(min-width: 1024px) 60vw, 100vw"
               priority
-              className="h-auto w-full rounded-lg border border-border"
+              className="h-auto w-full"
             />
           </a>
           <p className="text-center text-xs text-muted">
@@ -70,9 +73,11 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
             {prevId ? (
               <Link
                 href={`/posts/${prevId}`}
+                title="Newer post"
+                aria-label="Newer post"
                 className="flex min-h-11 items-center rounded-lg border border-border px-4 text-sm"
               >
-                ← Newer
+                ←
               </Link>
             ) : (
               <span />
@@ -80,9 +85,11 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
             {nextId && (
               <Link
                 href={`/posts/${nextId}`}
+                title="Older post"
+                aria-label="Older post"
                 className="flex min-h-11 items-center rounded-lg border border-border px-4 text-sm"
               >
-                Older →
+                →
               </Link>
             )}
           </nav>
@@ -124,22 +131,31 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
                 </dd>
               </div>
               {post.source_url && (
-                <div className="flex justify-between gap-3">
+                <div className="flex flex-col gap-0.5">
                   <dt className="text-muted">Source</dt>
-                  <dd className="min-w-0 truncate">
+                  <dd className="min-w-0">
                     <a
                       href={post.source_url}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-accent hover:underline"
+                      className="break-all text-accent hover:underline"
                     >
-                      {URL.parse(post.source_url)?.hostname ?? post.source_url}
+                      {post.source_url}
                     </a>
                   </dd>
                 </div>
               )}
             </dl>
           </section>
+
+          {canManage && (
+            <ManagePost
+              postId={post.id}
+              initialTags={tags.map((tag) => tag.name).join(' ')}
+              initialRating={post.rating}
+              initialSourceUrl={post.source_url ?? ''}
+            />
+          )}
         </aside>
       </div>
     </div>

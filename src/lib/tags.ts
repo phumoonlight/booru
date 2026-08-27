@@ -1,5 +1,8 @@
 export const TAG_PATTERN = /^[a-z0-9_().-]+$/
 
+/** Every fresh upload starts here — the admin retags from the edit page. */
+export const INITIAL_TAG = 'tagme'
+
 /**
  * Normalize free-text tag input (space/newline separated) into a clean,
  * deduped tag list. Returns invalid tokens separately for error messages.

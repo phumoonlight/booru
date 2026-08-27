@@ -3,8 +3,8 @@ import { getCurrentProfile } from '@/lib/data/profiles'
 import { isSupabaseConfigured } from '@/lib/env'
 
 /**
- * Mobile-first tab bar. A /tags entry and search land in Phase 4,
- * a real /account page in Phase 5.
+ * Mobile-first tab bar. Uploading has no page of its own — it lives on the posts
+ * page as a drop zone plus an Upload button.
  */
 export async function BottomNav() {
   const profile = isSupabaseConfigured() ? await getCurrentProfile() : null
@@ -12,7 +12,6 @@ export async function BottomNav() {
 
   const items = [
     { href: '/', label: 'Posts' },
-    ...(isAdmin ? [{ href: '/admin/upload', label: 'Upload' }] : []),
     isAdmin
       ? { href: '/admin', label: 'Admin' }
       : { href: '/login', label: profile ? 'Account' : 'Log in' },

@@ -77,14 +77,3 @@ export async function getPostNeighbours(
   ])
   return { prevId: newer.data?.id ?? null, nextId: older.data?.id ?? null }
 }
-
-/** Admin list — RLS lets the admin see all statuses. */
-export async function getRecentPosts(limit = 50): Promise<Post[]> {
-  const supabase = await createClient()
-  const { data } = await supabase
-    .from('posts')
-    .select('*')
-    .order('id', { ascending: false })
-    .limit(limit)
-  return data ?? []
-}

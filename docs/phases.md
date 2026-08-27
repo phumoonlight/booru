@@ -54,10 +54,10 @@ mobile — creating the admin user and checking the redirects are
 **Goal:** admin uploads an image with tags from a phone; post + thumbnail + tags appear in DB/storage.
 
 - [x] Migration: `create_post_with_tags` RPC (+ `update_post_with_tags` for edits) — `20260826110000_post_rpcs.sql`
-- [x] Upload action: zod validation → admin check → MD5 dedup → sharp (dimensions + WebP thumb ≤400px) → storage upload → RPC insert, with storage rollback on DB failure (`src/lib/actions/upload.ts`)
-- [x] `/admin/upload` form: file picker (`accept="image/*"`), client-side preview, tag input, rating select, source URL
+- [x] Upload action: admin check → MD5 dedup → sharp (dimensions + WebP thumb ≤400px) → storage upload → RPC insert, with storage rollback on DB failure (`src/lib/actions/upload.ts`)
+- [x] No upload page/form: the posts page is a page-wide drop zone with an Upload button in the header (`src/components/upload-zone.tsx`); every upload lands `general` + `tagme` and is retagged from the edit page
 - [x] Handle duplicate-MD5 with a friendly "already exists → link to post" error
-- [x] `/admin/posts`: list of recent posts with delete (row + storage files) and edit page (tags/rating/source via RPC)
+- [x] No manage-posts page: the post page shows a Manage section to admins — edit tags/rating/source via RPC, plus delete (row + storage files)
 - [x] Verify: build + lint pass
 
 **Done when:** end-to-end upload works and dedup rejects a re-upload — exercised in
@@ -76,7 +76,7 @@ mobile — creating the admin user and checking the redirects are
 - [x] Tags on the detail page link to search: `/?tags=<name>` (single-tag filter until Phase 4)
 - [x] Empty states + loading skeletons (`loading.tsx` for grid and detail)
 - [x] `next.config.ts` image `remotePatterns` for the Supabase storage host (derived from env)
-- [x] Bottom nav wired to real routes; admin sees Upload/Admin entries
+- [x] Bottom nav wired to real routes; admin sees the Admin entry
 - [x] Verify: build + lint pass; all public routes render 200 in dev, `/admin` redirects anon
 - [ ] Verify: lighthouse mobile pass on home page; grid comfortable at 375px — needs real posts, see [supabase-setup.md](./supabase-setup.md) step 6
 

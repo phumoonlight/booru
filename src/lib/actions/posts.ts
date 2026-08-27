@@ -29,7 +29,7 @@ export async function deletePost(formData: FormData) {
   await storage.from('thumbnails').remove([thumbnailPath(post.md5)])
 
   revalidatePath('/')
-  revalidatePath('/admin/posts')
+  redirect('/')
 }
 
 const editSchema = z.object({
@@ -39,7 +39,7 @@ const editSchema = z.object({
   source_url: z.union([z.literal(''), z.url('Source must be a valid URL')]).optional(),
 })
 
-export type EditPostState = { error: string } | null
+export type EditPostState = { error: string; ok?: never } | { ok: true; error?: never } | null
 
 export async function updatePost(
   _prevState: EditPostState,
@@ -79,6 +79,6 @@ export async function updatePost(
   }
 
   revalidatePath('/')
-  revalidatePath('/admin/posts')
-  redirect('/admin/posts')
+  revalidatePath(`/posts/${parsed.data.id}`)
+  return { ok: true }
 }

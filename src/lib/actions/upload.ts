@@ -2,9 +2,8 @@
 
 import { createHash } from 'node:crypto'
 import sharp from 'sharp'
-import { z } from 'zod'
 import { requireAdmin } from '@/lib/auth'
-import { parseTagInput } from '@/lib/tags'
+import { INITIAL_TAG } from '@/lib/tags'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPostByMd5 } from '@/lib/data/posts'
@@ -30,19 +29,15 @@ const CONTENT_TYPES: Record<string, string> = {
   webp: 'image/webp',
 }
 
-const uploadSchema = z.object({
-  tags: z.string().min(1, 'At least one tag is required'),
-  rating: z.enum(['general', 'sensitive', 'questionable', 'explicit']),
-  source_url: z.union([z.literal(''), z.url('Source must be a valid URL')]).optional(),
-})
+export type UploadResult =
+  | { ok: true; postId: number }
+  | { ok: false; error: string; existingPostId?: number }
 
-export type UploadState =
-  { ok: true; postId: number } | { ok: false; error: string; existingPostId?: number } | null
-
-export async function uploadPost(
-  _prevState: UploadState,
-  formData: FormData
-): Promise<UploadState> {
+/**
+ * Drop-to-upload: no form, no metadata. Every upload lands as `general` with the
+ * single `tagme` tag; the admin fixes tags/rating/source later from the edit page.
+ */
+export async function uploadPost(formData: FormData): Promise<UploadResult> {
   await requireAdmin()
 
   const file = formData.get('file')
@@ -54,26 +49,6 @@ export async function uploadPost(
       ok: false,
       error: `File is too large (max ${MAX_FILE_SIZE / 1024 / 1024}MB)`,
     }
-  }
-
-  const parsed = uploadSchema.safeParse({
-    tags: formData.get('tags'),
-    rating: formData.get('rating'),
-    source_url: formData.get('source_url') ?? '',
-  })
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0].message }
-  }
-
-  const { tags, invalid } = parseTagInput(parsed.data.tags)
-  if (invalid.length > 0) {
-    return {
-      ok: false,
-      error: `Invalid tags (lowercase a-z 0-9 _ ( ) . - only): ${invalid.join(', ')}`,
-    }
-  }
-  if (tags.length === 0) {
-    return { ok: false, error: 'At least one tag is required' }
   }
 
   const buffer = Buffer.from(await file.arrayBuffer())
@@ -136,9 +111,9 @@ export async function uploadPost(
     p_file_size: buffer.length,
     p_width: width,
     p_height: height,
-    p_rating: parsed.data.rating,
-    p_source_url: parsed.data.source_url ?? '',
-    p_tags: tags,
+    p_rating: 'general',
+    p_source_url: '',
+    p_tags: [INITIAL_TAG],
   })
   if (rpcError) {
     // Roll back storage so a retry starts clean
@@ -148,6 +123,5 @@ export async function uploadPost(
   }
 
   revalidatePath('/')
-  revalidatePath('/admin/posts')
   return { ok: true, postId: postId as number }
 }
