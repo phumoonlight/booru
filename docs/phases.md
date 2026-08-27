@@ -106,10 +106,9 @@ creating the admin user and checking the session are
 
 **Goal:** production-quality daily-driver.
 
-- [x] Rating filter: `rating:x` / `-rating:x` metatags in the same `?tags=` string (`lib/search.ts` `splitRatings` + `resolveRatings` → the RPC's existing `p_rating`), clickable rating facet in the sidebar/drawer, anonymous visitors get `explicit` hidden by default with a "Show them" opt-in
-- [x] Explicit posts reached by direct link are blurred behind a tap for anonymous viewers (`components/explicit-gate.tsx`); admins/signed-in see everything
-- [x] SEO: `metadataBase` + title template + OG/Twitter defaults in the root layout, per-post `generateMetadata` (tags in title/description, thumbnail as OG image, `noindex` on explicit), query-aware home metadata (only the plain first page is indexable), canonicals everywhere, `noindex` on `/login`
-- [x] `app/robots.ts` and `app/sitemap.ts` (static routes + non-explicit active posts, hourly revalidate via the cookie-less `lib/supabase/anon.ts` client)
+- [x] Rating filter: `rating:x` / `-rating:x` metatags in the same `?tags=` string (`lib/search.ts` `splitRatings` + `resolveRatings` → the RPC's existing `p_rating`), clickable rating facet in the sidebar/drawer listing every tier — no rating is hidden from any visitor
+- [x] SEO: `metadataBase` + title template + OG/Twitter defaults in the root layout, per-post `generateMetadata` (tags in title/description, thumbnail as OG image, `noindex` on the adult tiers), query-aware home metadata (only the plain first page is indexable), canonicals everywhere, `noindex` on `/login`
+- [x] `app/robots.ts` and `app/sitemap.ts` (static routes + active posts below the adult tiers, hourly revalidate via the cookie-less `lib/supabase/anon.ts` client)
 - [x] Error pages: root `not-found.tsx`, `/posts/[id]/not-found.tsx`, `error.tsx` (Next 16 `retry` prop) and `global-error.tsx`
 - [x] Blur placeholders on every remote image (`lib/blur.ts`)
 - [x] `getPost` / `getPostTags` / `getCurrentProfile` wrapped in React `cache` so `generateMetadata` and the page share one query

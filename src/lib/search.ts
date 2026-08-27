@@ -84,7 +84,10 @@ export const RATING_LABEL: Record<Rating, string> = {
   e4: 'E4',
 }
 
-/** The tiers anonymous visitors don't get by default. */
+/**
+ * The adult tiers. Every visitor sees them on the site; this list only keeps them
+ * out of the sitemap and out of search-engine results (`robots: noindex`).
+ */
 export const RESTRICTED_RATINGS: readonly Rating[] = ['e3', 'e4']
 
 export function isRestricted(rating: Rating): boolean {
@@ -135,23 +138,16 @@ export function splitRatings(parsed: ParsedQuery): SplitQuery {
 
 /**
  * The rating whitelist to hand the search RPC, or `null` for "no filter".
- *
- * `allowRestricted` is the viewer's baseline: anonymous visitors don't see the
- * restricted tiers unless the query asks for one by name. (A signed-in preference
- * replaces the opt-in later — see docs/future.md.)
+ * Only the query narrows it: no rating is hidden from anyone by default.
  */
-export function resolveRatings(
-  { ratings, excludeRatings }: Pick<SplitQuery, 'ratings' | 'excludeRatings'>,
-  { allowRestricted }: { allowRestricted: boolean }
-): Rating[] | null {
+export function resolveRatings({
+  ratings,
+  excludeRatings,
+}: Pick<SplitQuery, 'ratings' | 'excludeRatings'>): Rating[] | null {
   let allowed: Rating[] = ratings.length > 0 ? [...ratings] : [...RATINGS]
 
   if (excludeRatings.length > 0) {
     allowed = allowed.filter((r) => !excludeRatings.includes(r))
-  }
-  // Hiding the restricted tiers is the default, not a ceiling: naming one opts in.
-  if (!allowRestricted) {
-    allowed = allowed.filter((r) => !isRestricted(r) || ratings.includes(r))
   }
 
   return allowed.length === RATINGS.length ? null : allowed

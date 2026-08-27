@@ -162,21 +162,16 @@ their rows to ✅ in [PLAN.md](./PLAN.md). Phase 5 finishes at step 13.
 
 ## Step 10 — Verify the rating filter (Phase 5)
 
-Set at least one post to each rating from its **Manage** section, including one
-`explicit`. Then, signed out (private window):
+Set at least one post to each rating from its **Manage** section, including one `e4`.
+Then, signed out (private window):
 
-- The home grid never shows the explicit post, and the total count excludes it.
+- The home grid shows every post regardless of rating, and the total count includes them.
 - The **Rating** facet (bottom sheet under `lg`, sidebar above) lists the ratings on
   screen; tapping one narrows the search to `/?tags=rating:<name>`, the − gives
   `-rating:<name>`, and tapping an active row clears it again.
-- The facet ends with "Explicit posts are hidden. **Show them**" — following that link
-  puts `rating:explicit` in the query and the post appears.
-- Opening the explicit post directly by URL shows the image blurred behind an
-  **Explicit content → Show image** button.
-- Its `<head>` carries `<meta name="robots" content="noindex, follow">`, and
-  `/sitemap.xml` does not list it.
-
-Signed in as admin, none of the above hiding applies — every rating shows by default.
+- Opening the `e4` post directly by URL shows the image immediately — there is no gate.
+- Its `<head>` still carries `<meta name="robots" content="noindex, follow">`, and
+  `/sitemap.xml` does not list it: the adult tiers are kept out of search engines only.
 
 Direct SQL check of the RPC's rating argument:
 

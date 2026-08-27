@@ -81,9 +81,10 @@ booru/
   metatags off the tag names and `resolveRatings()` turns them into the whitelist for
   `search_posts`'s existing `p_rating` argument. Nothing else — chips, tag links,
   autocomplete, pagination hrefs — needs to know they exist.
-- Hiding `explicit` from anonymous visitors is a **default, not a boundary**: naming the
-  rating in the query opts in, and RLS is unchanged. When accounts arrive (future.md §3)
-  the per-user preference replaces the `allowExplicit` argument, nothing else.
+- No rating is hidden from anyone: the facet lists every tier and `resolveRatings()`
+  narrows only when the query names one. The adult tiers (`RESTRICTED_RATINGS`) are
+  still kept out of `sitemap.xml` and carry `noindex` — a search-engine policy, not a
+  viewer one.
 - Absolute URLs (canonicals, OpenGraph, `robots.txt`, `sitemap.xml`) all come from
   `lib/site.ts` → `NEXT_PUBLIC_SITE_URL`, so the origin is configured in one place.
 - Search-result URLs are `noindex, follow` and disallowed in `robots.txt` — the

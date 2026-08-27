@@ -9,7 +9,7 @@ import { RatingList } from '@/components/rating-list'
 import { SetupNotice } from '@/components/setup-notice'
 import { getCurrentProfile } from '@/lib/data/profiles'
 import { isSupabaseConfigured } from '@/lib/env'
-import { isRestricted, parseSearchQuery, searchHref, splitRatings } from '@/lib/search'
+import { parseSearchQuery, searchHref, splitRatings } from '@/lib/search'
 import { SITE_DESCRIPTION, SITE_NAME } from '@/lib/site'
 
 function readParams(params: Record<string, string | string[] | undefined>) {
@@ -55,17 +55,13 @@ export default async function HomePage({ searchParams }: PageProps<'/'>) {
     )
   }
 
-  // Signed-in viewers see every rating; anonymous ones get the safe default unless
-  // the query names a restricted rating itself.
   const profile = await getCurrentProfile()
   const canUpload = profile !== null
-  const allowRestricted = profile !== null
 
-  const { posts, total, pageCount } = await searchPosts({ query, page, allowRestricted })
+  const { posts, total, pageCount } = await searchPosts({ query, page })
   // Sidebar/drawer facets describe the posts actually on screen
   const tagEntries = await getTagsForPosts(posts.map((p) => p.id))
   const { include, exclude, ratings, excludeRatings } = splitRatings(parseSearchQuery(query))
-  const restrictedHidden = !allowRestricted && !ratings.some(isRestricted)
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">
@@ -81,7 +77,6 @@ export default async function HomePage({ searchParams }: PageProps<'/'>) {
                 currentQuery={query}
                 activeRatings={ratings}
                 excludedRatings={excludeRatings}
-                restrictedHidden={restrictedHidden}
               />
             </section>
             <section>

@@ -5,7 +5,6 @@ import type { Metadata } from 'next'
 import { getPost, getPostNeighbours, getPostTags } from '@/lib/data/posts'
 import { getCurrentProfile } from '@/lib/data/profiles'
 import { ManagePost } from '@/components/manage-post'
-import { ExplicitGate } from '@/components/explicit-gate'
 import { RATING_COLOR } from '@/components/rating-list'
 import { isRestricted, RATING_LABEL } from '@/lib/search'
 import { originalUrl, thumbnailUrl } from '@/lib/storage'
@@ -45,7 +44,7 @@ export async function generateMetadata({ params }: PageProps<'/posts/[id]'>): Pr
     title,
     description,
     alternates: { canonical: `/posts/${post.id}` },
-    // Restricted posts stay out of search results, matching the anonymous default
+    // Adult tiers are shown on the site but kept out of search-engine results
     robots: isRestricted(post.rating) ? { index: false, follow: true } : undefined,
     openGraph: {
       type: 'article',
@@ -88,9 +87,6 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
   ])
 
   const canManage = profile !== null
-  // The gallery never surfaces restricted posts to anonymous visitors, so a direct
-  // link is the only way here — blur it behind one tap rather than 404.
-  const gated = isRestricted(post.rating) && profile === null
 
   const fullSize = originalUrl(post.md5, post.file_ext)
 
@@ -117,7 +113,7 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
       <div className="flex flex-col gap-5 pt-4 lg:flex-row-reverse lg:items-start">
         {/* Image first on mobile, right column on desktop */}
         <div className="flex flex-col gap-3 lg:flex-1">
-          {gated ? <ExplicitGate>{image}</ExplicitGate> : image}
+          {image}
           <p className="text-center text-xs text-muted">
             Tap the image to open the original ({post.width}×{post.height},{' '}
             {formatBytes(post.file_size)})

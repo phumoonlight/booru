@@ -65,9 +65,9 @@ rollback, tagged `tagme`), admin Manage section on `/posts/[id]` for edit + dele
 search RPC, sticky search bar with debounced autocomplete and `-tag` exclusion, tag
 sidebar/bottom-drawer facets, `/posts/[id]` detail, `/tags` index.
 Phase 5 polish: `rating:x` / `-rating:x` metatags ride in the same `?tags=` string and
-resolve to the search RPC's existing `p_rating` argument, so anonymous visitors get
-`explicit` hidden by default (with a "Show them" opt-in) and a clickable rating facet
-in the sidebar/drawer; explicit posts opened by direct link are blurred behind a tap.
+resolve to the search RPC's existing `p_rating` argument, backing a clickable rating
+facet in the sidebar/drawer. No rating is hidden from any visitor; the adult tiers are
+only kept out of `sitemap.xml` and search-engine results.
 SEO is `metadataBase` + title template + OG/Twitter defaults in the root layout, real
 per-post metadata with the thumbnail as OG image, `robots.ts` and `sitemap.ts`.
 Error pages: root 404, post 404, `error.tsx` and `global-error.tsx`.
@@ -101,6 +101,19 @@ of public pages, and `requireAdmin()` plus the RPCs' `is_admin()` are the real g
 ## Session log
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
+
+- **2026-08-28** — Dropped `profiles.role`: any signed-in user can upload and manage
+  posts. Migration `20260828110000_drop_role_any_user_manages.sql` rewrites every
+  `is_admin()` policy (posts, tags, post_tags, storage) to `auth.uid() is not null`,
+  moves the same test into the create/update RPCs, then drops the helper and the column.
+  `requireAdmin()` → `requireUser()`; the upload link, `canUpload` and `canManage` key
+  off `profile !== null`. Also removed rating gating entirely: the facet lists every
+  tier for everyone, `resolveRatings()` lost its `allowRestricted` argument, and
+  `components/explicit-gate.tsx` is gone. Decision: `RESTRICTED_RATINGS` survives, but
+  now means "keep out of `sitemap.xml` and search-engine results" only — nothing on the
+  site is hidden from a visitor. Consequence to watch: with no role tier, any account
+  that can sign in can delete posts, so public signup needs a privilege tier first
+  (future.md §1).
 
 - **2026-08-27** — Phase 5 code: rating filter as `rating:x` metatags parsed out of the
   existing query string (`splitRatings` + `resolveRatings` in `lib/search.ts`) and fed
