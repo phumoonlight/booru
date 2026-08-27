@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
-import { BottomNav } from '@/components/bottom-nav'
 import { SITE_DESCRIPTION, SITE_NAME, siteUrl } from '@/lib/site'
 
 const geistSans = Geist({
@@ -49,8 +48,8 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        <main className="flex-1 pb-16">{children}</main>
-        <BottomNav />
+        {/* Navigation lives in the sticky SearchHeader each page renders */}
+        <main className="flex-1 pb-8">{children}</main>
       </body>
     </html>
   )

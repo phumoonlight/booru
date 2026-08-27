@@ -21,7 +21,7 @@ during that runbook.
 - [x] `.env.example` template for the three Supabase keys
 - [x] Client factories in `src/lib/supabase/`: `server.ts` (cookies), `client.ts` (browser), `admin.ts` (service role, server-only)
 - [x] Session refresh in `src/proxy.ts` (Next 16 renamed `middleware.ts` → `proxy.ts`)
-- [x] Base layout: dark theme, mobile viewport meta, placeholder bottom nav
+- [x] Base layout: dark theme, mobile viewport meta, placeholder nav
 - [x] Home page renders a live Supabase connection-status badge
 - [x] Verify: `npm run build`, `npm run lint`, and `npm run dev` all pass
 
@@ -76,7 +76,7 @@ creating the admin user and checking the session are
 - [x] Tags on the detail page link to search: `/?tags=<name>` (single-tag filter until Phase 4)
 - [x] Empty states + loading skeletons (`loading.tsx` for grid and detail)
 - [x] `next.config.ts` image `remotePatterns` for the Supabase storage host (derived from env)
-- [x] Bottom nav wired to real routes
+- [x] Nav wired to real routes (a bottom tab bar at the time; Phase 5 folded it into the sticky top bar)
 - [x] Verify: build + lint pass; all public routes render 200 in dev
 - [ ] Verify: lighthouse mobile pass on home page; grid comfortable at 375px — needs real posts, see [supabase-setup.md](./supabase-setup.md) step 6
 

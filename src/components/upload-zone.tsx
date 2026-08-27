@@ -138,7 +138,7 @@ export function UploadZone() {
       )}
 
       {items.length > 0 && (
-        <div className="fixed inset-x-3 bottom-20 z-50 mx-auto max-w-sm rounded-lg border border-border bg-surface p-3 text-left shadow-lg sm:inset-x-auto sm:right-3">
+        <div className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-sm rounded-lg border border-border bg-surface p-3 text-left shadow-lg sm:inset-x-auto sm:right-3">
           <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-sm font-medium">
               {busy

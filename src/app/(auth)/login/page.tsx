@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useActionState } from 'react'
 import { login, type AuthFormState } from '@/lib/actions/auth'
 
@@ -8,6 +9,10 @@ export default function LoginPage() {
 
   return (
     <div className="mx-auto flex min-h-[80vh] w-full max-w-sm flex-col justify-center gap-6 px-4">
+      {/* This page has no SearchHeader, so it carries its own way back */}
+      <Link href="/" className="text-center text-base font-bold tracking-tight">
+        Booru
+      </Link>
       <h1 className="text-center text-2xl font-bold tracking-tight">Log in</h1>
       <form action={formAction} className="flex flex-col gap-4">
         <label className="flex flex-col gap-1.5 text-sm">
