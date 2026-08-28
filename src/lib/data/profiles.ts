@@ -23,3 +23,14 @@ export const getCurrentProfile = cache(async (): Promise<Profile | null> => {
     .single()
   return data
 })
+
+/** The address behind the session. It lives on auth.users, not profiles, so it takes
+ *  its own call — and it stays off `Profile` because nothing but the account screen
+ *  should be able to read it out of a profile that is otherwise publicly shaped. */
+export const getCurrentEmail = cache(async (): Promise<string | null> => {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  return user?.email ?? null
+})
