@@ -5,7 +5,7 @@ import { CATEGORY_COLOR, CATEGORY_LABEL } from '@/components/tag-list'
 import { SearchHeader } from '@/components/search-header'
 import { SetupNotice } from '@/components/setup-notice'
 import { isSupabaseConfigured } from '@/lib/env'
-import { searchHref } from '@/lib/search'
+import { searchHref, tagLabel } from '@/lib/search'
 
 export const metadata: Metadata = {
   title: 'Tags',
@@ -56,7 +56,7 @@ export default async function TagsPage() {
                     href={searchHref(tag.name)}
                     className={`min-h-9 flex-1 truncate py-1 text-sm hover:underline ${CATEGORY_COLOR[category]}`}
                   >
-                    {tag.name}
+                    {tagLabel(tag.name)}
                   </Link>
                   <span className="text-xs tabular-nums text-muted">{tag.post_count}</span>
                 </li>

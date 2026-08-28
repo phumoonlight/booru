@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { TAG_CATEGORIES, type Tag, type TagCategory } from '@/lib/data/tags'
-import { searchHref, withTag } from '@/lib/search'
+import { searchHref, tagLabel, withTag } from '@/lib/search'
 
 // Danbooru-style category colours, tuned for the dark theme
 const CATEGORY_COLOR: Record<TagCategory, string> = {
@@ -40,7 +40,7 @@ function TagRow({ entry, currentQuery }: { entry: TagEntry; currentQuery: string
         href={searchHref(withTag(currentQuery, tag.name))}
         className={`min-h-9 flex-1 py-1 text-sm hover:underline ${CATEGORY_COLOR[tag.category]}`}
       >
-        {tag.name}
+        {tagLabel(tag.name)}
       </Link>
       <span className="text-xs tabular-nums text-muted">{count}</span>
     </li>

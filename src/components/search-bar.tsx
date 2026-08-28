@@ -4,8 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { suggestTags } from '@/lib/actions/search'
 import type { Tag } from '@/lib/data/tags'
-import { queryTokens, searchHref, withoutTag } from '@/lib/search'
-import { SearchIcon } from '@/components/icons'
+import { queryTokens, searchHref, tagLabel, withoutTag } from '@/lib/search'
 
 const DEBOUNCE_MS = 200
 
@@ -111,7 +110,7 @@ export function SearchBar({ initialQuery = '' }: { initialQuery?: string }) {
           aria-label="Search"
           className="flex min-h-11 w-12 items-center justify-center rounded-lg bg-accent text-background"
         >
-          <SearchIcon />
+          <span aria-hidden>🔍</span>
         </button>
 
         {open && suggestions.length > 0 && (
@@ -126,7 +125,7 @@ export function SearchBar({ initialQuery = '' }: { initialQuery?: string }) {
                     i === activeIndex ? 'bg-accent/20' : ''
                   }`}
                 >
-                  <span>{tag.name}</span>
+                  <span>{tagLabel(tag.name)}</span>
                   <span className="text-xs tabular-nums text-muted">{tag.post_count}</span>
                 </button>
               </li>
@@ -148,7 +147,7 @@ export function SearchBar({ initialQuery = '' }: { initialQuery?: string }) {
                 }`}
               >
                 {negated && <span aria-hidden>−</span>}
-                {name}
+                {tagLabel(name)}
                 <span aria-hidden className="text-muted">
                   ✕
                 </span>
