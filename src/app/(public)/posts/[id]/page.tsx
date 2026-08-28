@@ -130,7 +130,7 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
             way back and the walk through the post's neighbours */}
         <div className="flex items-center justify-between gap-2">
           <Link href="/" className="text-lg font-bold tracking-tight hover:underline">
-            ← {SITE_NAME}
+            {SITE_NAME}
           </Link>
           <PostNav prevId={prevId} nextId={nextId} />
         </div>
