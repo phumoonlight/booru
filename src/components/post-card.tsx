@@ -9,7 +9,13 @@ const GRID_SIZES = '(min-width: 1024px) 20vw, (min-width: 640px) 30vw, 50vw'
 
 export function PostCard({ post }: { post: Post }) {
   return (
-    <Link href={`/posts/${post.id}`} className="group block h-full bg-surface">
+    // `data-rating` is what the blur CSS keys off; overflow keeps the blurred edges
+    // from spilling past the thumb. See `lib/rating-blur.ts`.
+    <Link
+      href={`/posts/${post.id}`}
+      data-rating={post.rating}
+      className="group block h-full overflow-hidden bg-surface"
+    >
       {/* Full aspect ratio, never cropped — the row height sets the scale */}
       <Image
         src={thumbnailUrl(post.md5)}

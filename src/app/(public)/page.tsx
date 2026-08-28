@@ -6,6 +6,7 @@ import { SearchHeader } from '@/components/search-header'
 import { TagDrawer } from '@/components/tag-drawer'
 import { TagList } from '@/components/tag-list'
 import { RatingList } from '@/components/rating-list'
+import { RatingDisplayOptions } from '@/components/rating-display-options'
 import { SetupNotice } from '@/components/setup-notice'
 import { getCurrentProfile } from '@/lib/data/profiles'
 import { isSupabaseConfigured } from '@/lib/env'
@@ -74,7 +75,7 @@ export default async function HomePage({ searchParams }: PageProps<'/'>) {
         <TagDrawer label={`Tags (${tagEntries.length})`}>
           <div className="flex flex-col gap-4">
             <section>
-              <h2 className="mb-2 text-sm font-semibold">Rating</h2>
+              <RatingDisplayOptions />
               <RatingList
                 counts={ratingCounts}
                 currentQuery={query}

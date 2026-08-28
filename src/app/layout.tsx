@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { SITE_DESCRIPTION, SITE_NAME, siteUrl } from '@/lib/site'
+import { BLUR_INIT_SCRIPT, DEFAULT_BLUR_ATTR_VALUE } from '@/lib/rating-blur'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -46,7 +47,14 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
+      // The rating blur every visitor starts with; the script below swaps in a stored
+      // choice while the head parses, so nothing unblurred is ever painted.
+      data-blur-ratings={DEFAULT_BLUR_ATTR_VALUE}
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: BLUR_INIT_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {/* Navigation lives in the sticky SearchHeader each page renders */}
         <main className="flex-1 pb-8">{children}</main>

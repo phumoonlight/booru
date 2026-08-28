@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { FacetActions } from '@/components/tag-list'
 import {
+  RATING_COLOR,
   RATING_LABEL,
   RATINGS,
   ratingToken,
@@ -9,16 +10,6 @@ import {
   withoutTag,
   type Rating,
 } from '@/lib/search'
-
-// Danbooru's traffic-light convention, tuned for the dark theme
-export const RATING_COLOR: Record<Rating, string> = {
-  general: 'text-[#35c64a]',
-  e1: 'text-[#4fa3e3]',
-  e2: 'text-[#ead084]',
-  e3: 'text-[#ff8a8b]',
-  e4: 'text-[#ff5d5f]',
-  e5: 'text-[#ff2e31]',
-}
 
 /**
  * Rating facet: how many posts the whole gallery holds at each tier — a site-wide count

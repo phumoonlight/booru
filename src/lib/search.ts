@@ -90,6 +90,16 @@ export const RATING_LABEL: Record<Rating, string> = {
   e5: 'E5',
 }
 
+// Danbooru's traffic-light convention, tuned for the dark theme
+export const RATING_COLOR: Record<Rating, string> = {
+  general: 'text-[#35c64a]',
+  e1: 'text-[#4fa3e3]',
+  e2: 'text-[#ead084]',
+  e3: 'text-[#ff8a8b]',
+  e4: 'text-[#ff5d5f]',
+  e5: 'text-[#ff2e31]',
+}
+
 /**
  * The adult tiers. Every visitor sees them on the site; this list only keeps them
  * out of the sitemap and out of search-engine results (`robots: noindex`).
