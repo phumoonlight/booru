@@ -46,7 +46,7 @@ export function RatingList({
             <Link
               href={searchHref(token)}
               aria-label={`Search only ${label} posts`}
-              className={`min-h-9 flex-1 py-1 text-sm hover:underline ${RATING_COLOR[rating]} ${
+              className={`pointer-fine:min-h-7 min-h-9 flex-1 py-1 text-sm hover:underline ${RATING_COLOR[rating]} ${
                 active ? 'font-semibold underline' : ''
               } ${excluded ? 'line-through opacity-60' : ''}`}
             >
