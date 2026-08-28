@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getPost, getPostNeighbours, getPostTags } from '@/lib/data/posts'
@@ -9,7 +10,6 @@ import { PostNav } from '@/components/post-nav'
 import { isRestricted, RATING_COLOR, RATING_LABEL } from '@/lib/search'
 import { postImageUrl, thumbnailUrl } from '@/lib/storage'
 import { GroupedTagList } from '@/components/tag-list'
-import { SearchHeader } from '@/components/search-header'
 import { isSupabaseConfigured } from '@/lib/env'
 import { SetupNotice } from '@/components/setup-notice'
 import { BLUR_DATA_URL } from '@/lib/blur'
@@ -96,7 +96,9 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
   // Running it through the Next optimizer would re-encode it at quality 75 and strip
   // animation — compression belongs to the thumbnail, which the grid uses instead.
   const image = (
-    <a href={fullSize} target="_blank" rel="noreferrer" className="block">
+    <div className="flex min-h-0 flex-1 items-start justify-center lg:items-center">
+      {/* The caps resolve against this column while width and height stay auto —
+          whichever one binds scales the other with it, so the image can't be squashed. */}
       <Image
         src={fullSize}
         alt={`Post ${post.id}`}
@@ -106,93 +108,101 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
         blurDataURL={BLUR_DATA_URL}
         priority
         unoptimized
-        className="h-auto w-full"
+        className="h-auto max-h-full w-auto max-w-full object-contain"
       />
-    </a>
+    </div>
   )
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-3 py-4">
-      <SearchHeader />
+    // Fixed to the viewport so the image can be sized against it. Taken out of the
+    // flow, the root layout's <main> collapses and the document itself never scrolls —
+    // only the sidebar does.
+    <div className="fixed inset-0 flex flex-col lg:flex-row-reverse">
       <PostViewCounter postId={post.id} />
 
-      <div className="flex flex-col gap-5 pt-4 lg:flex-row-reverse lg:items-start">
-        {/* Image first on mobile, right column on desktop */}
-        <div className="flex flex-col gap-3 lg:flex-1">
+      {/* Image first on mobile, right column on desktop */}
+      <div className="flex h-[55dvh] shrink-0 flex-col p-3 lg:h-auto lg:min-h-0 lg:flex-1">
+        {image}
+      </div>
+
+      <aside className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto border-border p-3 lg:flex-none lg:w-72 lg:border-r">
+        {/* The top bar is gone from this page, so the sidebar's header carries both the
+            way back and the walk through the post's neighbours */}
+        <div className="flex items-center justify-between gap-2">
+          <Link href="/" className="text-lg font-bold tracking-tight hover:underline">
+            ← {SITE_NAME}
+          </Link>
           <PostNav prevId={prevId} nextId={nextId} />
-          {image}
         </div>
 
-        <aside className="flex flex-col gap-5 lg:w-64 lg:shrink-0">
-          <section>
-            <h2 className="mb-2 text-sm font-semibold">Tags</h2>
-            <GroupedTagList
-              entries={tags.map((tag) => ({ tag, count: tag.post_count }))}
-              empty="No tags on this post."
-            />
-          </section>
+        <section>
+          <h2 className="mb-2 text-sm font-semibold">Tags</h2>
+          <GroupedTagList
+            entries={tags.map((tag) => ({ tag, count: tag.post_count }))}
+            empty="No tags on this post."
+          />
+        </section>
 
-          <section>
-            <h2 className="mb-2 text-sm font-semibold">Details</h2>
-            <dl className="flex flex-col gap-1 text-sm">
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted">ID</dt>
-                <dd>#{post.id}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted">Rating</dt>
-                <dd className={RATING_COLOR[post.rating]}>{RATING_LABEL[post.rating]}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted">Size</dt>
-                <dd>
-                  {post.width}×{post.height} · {formatBytes(post.file_size)}
+        <section>
+          <h2 className="mb-2 text-sm font-semibold">Details</h2>
+          <dl className="flex flex-col gap-1 text-sm">
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">ID</dt>
+              <dd>#{post.id}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">Rating</dt>
+              <dd className={RATING_COLOR[post.rating]}>{RATING_LABEL[post.rating]}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">Size</dt>
+              <dd>
+                {post.width}×{post.height} · {formatBytes(post.file_size)}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">Type</dt>
+              <dd className="uppercase">{post.file_ext}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">Views</dt>
+              <dd>{post.view_count.toLocaleString('en-US')}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">Posted</dt>
+              <dd>
+                <time dateTime={post.created_at}>
+                  {new Date(post.created_at).toISOString().slice(0, 10)}
+                </time>
+              </dd>
+            </div>
+            {post.source_url && (
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-muted">Source</dt>
+                <dd className="min-w-0">
+                  <a
+                    href={post.source_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="break-all text-accent hover:underline"
+                  >
+                    {post.source_url}
+                  </a>
                 </dd>
               </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted">Type</dt>
-                <dd className="uppercase">{post.file_ext}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted">Views</dt>
-                <dd>{post.view_count.toLocaleString('en-US')}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted">Posted</dt>
-                <dd>
-                  <time dateTime={post.created_at}>
-                    {new Date(post.created_at).toISOString().slice(0, 10)}
-                  </time>
-                </dd>
-              </div>
-              {post.source_url && (
-                <div className="flex flex-col gap-0.5">
-                  <dt className="text-muted">Source</dt>
-                  <dd className="min-w-0">
-                    <a
-                      href={post.source_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="break-all text-accent hover:underline"
-                    >
-                      {post.source_url}
-                    </a>
-                  </dd>
-                </div>
-              )}
-            </dl>
-          </section>
+            )}
+          </dl>
+        </section>
 
-          {canManage && (
-            <ManagePost
-              postId={post.id}
-              initialTags={tags.map(({ name, category }) => ({ name, category }))}
-              initialRating={post.rating}
-              initialSourceUrl={post.source_url ?? ''}
-            />
-          )}
-        </aside>
-      </div>
+        {canManage && (
+          <ManagePost
+            postId={post.id}
+            initialTags={tags.map(({ name, category }) => ({ name, category }))}
+            initialRating={post.rating}
+            initialSourceUrl={post.source_url ?? ''}
+          />
+        )}
+      </aside>
     </div>
   )
 }

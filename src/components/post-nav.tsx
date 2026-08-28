@@ -15,13 +15,14 @@ function isTyping(target: EventTarget | null) {
 }
 
 /**
- * Bare emoji — no chrome, since the glyph already reads as a button. Height is
- * mirrored by the post page's loading skeleton, so keep the two in step.
+ * Bare emoji — no chrome, since the glyph already reads as a button. Height is mirrored
+ * by the post page's loading skeleton, so keep the two in step.
  */
 const BUTTON = 'flex items-center justify-center text-lg hover:opacity-80'
 
 /**
- * Prev/next arrows above the image, one at each end, plus ←/→ as keyboard shortcuts.
+ * Prev/next arrows, plus ←/→ as keyboard shortcuts. They ride the sidebar's header row
+ * beside the wordmark, so the image column is left entirely to the image.
  * `<Link>` keeps them prefetched and crawlable; the shortcut only mirrors them.
  */
 export function PostNav({ prevId, nextId }: { prevId: number | null; nextId: number | null }) {
@@ -46,8 +47,8 @@ export function PostNav({ prevId, nextId }: { prevId: number | null; nextId: num
   if (!prevId && !nextId) return null
 
   return (
-    <nav className="flex items-center justify-between gap-2">
-      {prevId ? (
+    <nav className="flex items-center gap-2">
+      {prevId && (
         <Link
           href={`/posts/${prevId}`}
           title="Newer post (←)"
@@ -56,9 +57,6 @@ export function PostNav({ prevId, nextId }: { prevId: number | null; nextId: num
         >
           <span aria-hidden>⬅️</span>
         </Link>
-      ) : (
-        // Holds the left slot so a post with no newer neighbour keeps → on the right
-        <span />
       )}
       {nextId && (
         <Link
