@@ -20,9 +20,14 @@ const MAX_FILE_SIZE = 8 * 1024 * 1024
 
 // A small file can still decode enormous: a flat 12000x12000 PNG compresses to
 // ~400KB, sails past the byte cap, and expands to 412MB in memory. Bytes bound
-// the upload, pixels bound the decode. 50MP is far above anything real here — a
-// 2000x3000 illustration is 6MP — and holds one decode near 150MB.
-const MAX_PIXELS = 50_000_000
+// the upload, pixels bound the decode.
+//
+// 20MP is a time budget as much as a memory one. Lossless AVIF costs roughly
+// 0.17s per megapixel, so a 49MP upload — still only 375KB, still legal under
+// every other limit — spent 9.9s here and lost to the 10s function timeout after
+// doing all the work. 20MP holds the whole pipeline near 3.5s, and is still far
+// above anything real: a 2000x3000 illustration is 6MP, a 4000x3000 photo 12MP.
+const MAX_PIXELS = 20_000_000
 const THUMB_MAX = 400
 
 const FORMAT_TO_EXT: Record<string, string> = {
