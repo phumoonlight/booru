@@ -6,6 +6,19 @@ A booru-style image board (Danbooru is the reference): tag-centric gallery, mult
 search with negation, post detail pages, uploads by any signed-in user. Fullstack
 Next.js 16 App Router + Supabase (Postgres, Storage, Auth), Tailwind v4, mobile-first.
 
+## Replies
+
+Answer like a TL;DR. The work can be thorough; the message about it is short.
+
+- First line is the outcome — what changed, or the answer. No preamble, no "Let me…".
+- Then at most 2–4 bullets: what the user has to decide, what broke, what to do next.
+  Nothing that only restates the diff or the plan.
+- Link files (`[file.ts:42](src/file.ts#L42)`) instead of pasting code back; the user
+  can read the diff.
+- No closing recap of what the message just said.
+- Keep it full-length only for errors, failing output, security notes, and confirmations
+  before something destructive — those never get trimmed.
+
 ## Commands
 
 | | |
