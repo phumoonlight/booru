@@ -35,6 +35,11 @@ export function queryTokens(raw: string): { name: string; negated: boolean }[] {
   ]
 }
 
+/** Display form of a tag name — underscores are word separators, not characters. */
+export function tagLabel(name: string): string {
+  return name.replace(/_/g, ' ')
+}
+
 /** Adds a tag to the query, replacing any existing entry for the same name. */
 export function withTag(raw: string, tag: string, mode: 'include' | 'exclude' = 'include'): string {
   const { include, exclude } = parseSearchQuery(raw)
@@ -71,7 +76,7 @@ export function searchHref(query: string, page = 1): string {
 // so the search bar, chips and tag links need no special cases — only the data
 // layer splits them back out.
 
-export const RATINGS = ['general', 'e1', 'e2', 'e3', 'e4'] as const
+export const RATINGS = ['general', 'e1', 'e2', 'e3', 'e4', 'e5'] as const
 
 export type Rating = (typeof RATINGS)[number]
 
@@ -82,13 +87,14 @@ export const RATING_LABEL: Record<Rating, string> = {
   e2: 'E2',
   e3: 'E3',
   e4: 'E4',
+  e5: 'E5',
 }
 
 /**
  * The adult tiers. Every visitor sees them on the site; this list only keeps them
  * out of the sitemap and out of search-engine results (`robots: noindex`).
  */
-export const RESTRICTED_RATINGS: readonly Rating[] = ['e3', 'e4']
+export const RESTRICTED_RATINGS: readonly Rating[] = ['e3', 'e4', 'e5']
 
 export function isRestricted(rating: Rating): boolean {
   return RESTRICTED_RATINGS.includes(rating)

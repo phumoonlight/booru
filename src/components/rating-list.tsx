@@ -17,13 +17,14 @@ export const RATING_COLOR: Record<Rating, string> = {
   e2: 'text-[#ead084]',
   e3: 'text-[#ff8a8b]',
   e4: 'text-[#ff5d5f]',
+  e5: 'text-[#ff2e31]',
 }
 
 /**
  * Rating facet: the breakdown of the posts on screen, each row filtering the search
  * down to that rating (`rating:x`) or excluding it (`-rating:x`), exactly like the
- * tag facet. Ratings already in the query stay listed even at count 0 so the filter
- * can always be undone.
+ * tag facet. Every rating is always listed, count 0 included, so the scale reads as a
+ * fixed set of filters rather than a list that shifts with the results.
  */
 export function RatingList({
   posts,
@@ -41,11 +42,7 @@ export function RatingList({
     count: posts.filter((post) => post.rating === rating).length,
     active: activeRatings.includes(rating),
     excluded: excludedRatings.includes(rating),
-  })).filter((row) => row.count > 0 || row.active || row.excluded)
-
-  if (rows.length === 0) {
-    return <p className="text-sm text-muted">No posts here.</p>
-  }
+  }))
 
   return (
     <ul className="flex flex-col gap-0.5">
