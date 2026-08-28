@@ -22,25 +22,22 @@ export async function SearchHeader({ query = '' }: { query?: string }) {
         </Link>
         <nav className="flex items-center gap-3">
           <Link href="/tags" className="text-sm text-muted hover:text-foreground">
-            Tags
+            🏷️ Tags
           </Link>
+          {profile && (
+            <Link href="/upload" className="text-sm text-muted hover:text-foreground">
+              ⬆️ Upload
+            </Link>
+          )}
           {profile ? (
             <form action={logout}>
               <button type="submit" className="text-sm text-muted hover:text-foreground">
-                Log out
+                👋 Log out
               </button>
             </form>
           ) : (
             <Link href="/login" className="text-sm text-muted hover:text-foreground">
-              Log in
-            </Link>
-          )}
-          {profile && (
-            <Link
-              href="/upload"
-              className="flex min-h-9 items-center rounded-lg bg-accent px-3 text-sm font-medium text-background"
-            >
-              Upload
+              🔑 Log in
             </Link>
           )}
         </nav>
