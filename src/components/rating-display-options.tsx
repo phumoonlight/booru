@@ -75,7 +75,7 @@ export function RatingDisplayOptions() {
     // works), so these controls have to keep their clicks to themselves.
     <div onClick={(event) => event.stopPropagation()}>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">Rating</h2>
+        <h2 className="text-base font-semibold">Rating</h2>
         <button
           type="button"
           onClick={() => setOpen(!open)}

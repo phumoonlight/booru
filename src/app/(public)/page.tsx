@@ -83,8 +83,9 @@ export default async function HomePage({ searchParams }: PageProps<'/'>) {
                 excludedRatings={excludeRatings}
               />
             </section>
-            <section>
-              <h2 className="mb-2 text-sm font-semibold">Tags ({tagEntries.length})</h2>
+            {/* Ruled off from the rating scale above it */}
+            <section className="border-t border-border pt-4">
+              <h2 className="mb-2 text-base font-semibold">Tags ({tagEntries.length})</h2>
               <TagList entries={tagEntries.slice(0, 50)} currentQuery={query} />
             </section>
           </div>
