@@ -166,14 +166,22 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
   // better-packed PNG. Adaptive filtering wins big on photographic content and
   // loses on flat colour, so both are tried and the smaller one kept.
   // `palette` must stay false — `effort` alone silently turns on quantisation.
+  //
+  // `.rotate()` applies the EXIF orientation rather than turning by any angle.
+  // libvips does that on its own when it resizes or changes format, but PNG to
+  // PNG does neither: the pixels would pass through untouched while the tag is
+  // dropped on output, losing the rotation for good. Every other branch here
+  // ends up turned, so this one has to be told to.
   if (!animated && ext === 'png' && postExt !== 'avif') {
     try {
       const [plain, adaptive] = await Promise.all([
         sharp(buffer)
+          .rotate()
           .png({ compressionLevel: 9, palette: false })
           .keepIccProfile()
           .toBuffer(),
         sharp(buffer)
+          .rotate()
           .png({ compressionLevel: 9, palette: false, adaptiveFiltering: true })
           .keepIccProfile()
           .toBuffer(),
