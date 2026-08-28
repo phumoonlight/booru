@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { suggestTags } from '@/lib/actions/search'
-import type { Tag } from '@/lib/data/tags'
+import type { Tag } from '@/lib/tags'
 import { queryTokens, searchHref, SEARCH_PARAM, tagLabel, withoutTag } from '@/lib/search'
 
 const DEBOUNCE_MS = 200

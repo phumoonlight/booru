@@ -1,15 +1,6 @@
+import 'server-only'
 import { createClient } from '@/lib/supabase/server'
-
-export const TAG_CATEGORIES = ['artist', 'copyright', 'character', 'general', 'meta'] as const
-
-export type TagCategory = (typeof TAG_CATEGORIES)[number]
-
-export type Tag = {
-  id: number
-  name: string
-  category: TagCategory
-  post_count: number
-}
+import { TAG_CATEGORIES, type Tag, type TagCategory } from '@/lib/tags'
 
 export async function getTagByName(name: string): Promise<Tag | null> {
   const supabase = await createClient()

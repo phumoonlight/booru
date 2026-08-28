@@ -1,7 +1,7 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { createAnonClient } from '@/lib/supabase/anon'
-import type { Tag } from '@/lib/data/tags'
+import type { Tag } from '@/lib/tags'
 import { RESTRICTED_RATINGS, type Rating } from '@/lib/search'
 
 export type Post = {

@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import type { Post, PostPage } from '@/lib/data/posts'
-import type { Tag } from '@/lib/data/tags'
+import type { Tag } from '@/lib/tags'
 import { parseSearchQuery, RATINGS, resolveRatings, splitRatings, type Rating } from '@/lib/search'
 
 export const POSTS_PER_PAGE = 24

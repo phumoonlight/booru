@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { TAG_CATEGORIES, type Tag, type TagCategory } from '@/lib/data/tags'
+import { TAG_CATEGORIES, type Tag, type TagCategory } from '@/lib/tags'
 import { parseSearchQuery, searchHref, tagLabel, withTag, withoutTag } from '@/lib/search'
 
 // Danbooru-style category colours, tuned for the dark theme

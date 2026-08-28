@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import { getTags, TAG_CATEGORIES, type TagCategory } from '@/lib/data/tags'
+import { getTags } from '@/lib/data/tags'
+import { TAG_CATEGORIES, type TagCategory } from '@/lib/tags'
+import { getCurrentProfile } from '@/lib/data/profiles'
 import { CATEGORY_COLOR, CATEGORY_LABEL } from '@/components/tag-list'
 import { SearchHeader } from '@/components/search-header'
 import { SetupNotice } from '@/components/setup-notice'
@@ -26,7 +28,7 @@ export default async function TagsPage() {
     )
   }
 
-  const tags = await getTags(500)
+  const [tags, profile] = await Promise.all([getTags(500), getCurrentProfile()])
 
   const groups = TAG_CATEGORIES.map(
     (category) =>
@@ -37,7 +39,18 @@ export default async function TagsPage() {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">
       <SearchHeader />
 
-      <h1 className="text-lg font-bold tracking-tight">Tags</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-lg font-bold tracking-tight">Tags</h1>
+        {profile && (
+          <Link
+            href="/tags/manage"
+            title="Manage tags"
+            className="text-sm text-muted hover:text-foreground"
+          >
+            ⚙️ Manage
+          </Link>
+        )}
+      </div>
 
       {groups.length === 0 ? (
         <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">

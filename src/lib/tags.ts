@@ -1,3 +1,14 @@
+export const TAG_CATEGORIES = ['artist', 'copyright', 'character', 'general', 'meta'] as const
+
+export type TagCategory = (typeof TAG_CATEGORIES)[number]
+
+export type Tag = {
+  id: number
+  name: string
+  category: TagCategory
+  post_count: number
+}
+
 export const TAG_PATTERN = /^[a-z0-9_().-]+$/
 
 /**

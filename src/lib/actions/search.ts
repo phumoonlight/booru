@@ -1,7 +1,7 @@
 'use server'
 
 import { searchTags } from '@/lib/data/search'
-import type { Tag } from '@/lib/data/tags'
+import type { Tag } from '@/lib/tags'
 
 /**
  * Autocomplete source for the client search bar. Deliberately a server action
