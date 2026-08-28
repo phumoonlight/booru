@@ -3,7 +3,6 @@
 import { startTransition, useActionState, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { deletePost, updatePost, type EditPostState } from '@/lib/actions/posts'
-import { SaveIcon, TrashIcon } from '@/components/icons'
 import { TagField, type TagSeed } from '@/components/tag-field'
 import { RATING_LABEL, RATINGS } from '@/lib/search'
 
@@ -30,17 +29,6 @@ export function ManagePost({
   return (
     <section className="flex flex-col gap-3 border-t border-border pt-4">
       <h2 className="text-sm font-semibold">Manage</h2>
-
-      {state?.error && (
-        <p className="rounded-lg border border-red-500/30 bg-red-500/15 px-3 py-2 text-sm text-red-400">
-          {state.error}
-        </p>
-      )}
-      {state?.ok && (
-        <p className="rounded-lg border border-green-500/30 bg-green-500/15 px-3 py-2 text-sm text-green-400">
-          Saved
-        </p>
-      )}
 
       {/*
         onSubmit, not <form action>: React resets a form as soon as its action runs, which
@@ -91,29 +79,43 @@ export function ManagePost({
           />
         </label>
 
-        <div className="flex gap-2">
+        {/* Plain labelled actions rather than filled buttons — the panel is a narrow
+            sidebar column, and two solid blocks outweighed the fields above them */}
+        <div className="flex items-center gap-4">
           <button
             type="submit"
             disabled={pending}
-            title="Save"
-            aria-label="Save"
-            className="flex min-h-11 flex-1 items-center justify-center rounded-lg bg-accent text-background disabled:opacity-50"
+            className="flex min-h-11 items-center gap-1.5 text-sm text-accent hover:underline disabled:opacity-50 disabled:no-underline"
           >
-            <SaveIcon />
+            <span aria-hidden>💾</span>
+            Save
           </button>
+          {/* Armed reads as underlined, the state the border used to carry */}
           <button
             type="button"
             onClick={() => setConfirming((armed) => !armed)}
-            title="Delete post"
-            aria-label="Delete post"
             aria-expanded={confirming}
-            className={`flex min-h-11 w-14 items-center justify-center rounded-lg border text-red-400 hover:bg-red-500/10 ${
-              confirming ? 'border-red-500 bg-red-500/10' : 'border-red-500/30'
+            className={`flex min-h-11 items-center gap-1.5 text-sm text-red-400 hover:underline ${
+              confirming ? 'underline' : ''
             }`}
           >
-            <TrashIcon />
+            <span aria-hidden>🗑️</span>
+            Delete
           </button>
         </div>
+
+        {/* Under the buttons, not above the fields: the outcome belongs where the tap
+            that caused it was, and the panel is tall enough that the top scrolls away */}
+        {state?.error && (
+          <p className="rounded-lg border border-red-500/30 bg-red-500/15 px-3 py-2 text-sm text-red-400">
+            {state.error}
+          </p>
+        )}
+        {state?.ok && (
+          <p className="rounded-lg border border-green-500/30 bg-green-500/15 px-3 py-2 text-sm text-green-400">
+            Saved
+          </p>
+        )}
       </form>
 
       {/* Its own form, outside the edit form — Save must never carry a delete intent */}
