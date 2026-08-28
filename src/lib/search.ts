@@ -1,12 +1,15 @@
 // Pure query-string helpers — shared by server components and the client search bar.
-// URL is the state: /?tags=blue_hair+solo+-photo&page=2
+// URL is the state: /?query=blue_hair+solo+-photo&page=2
+
+/** The search param's name. Read it from here so the URL only spells it in one place. */
+export const SEARCH_PARAM = 'query'
 
 export type ParsedQuery = {
   include: string[]
   exclude: string[]
 }
 
-/** Splits a raw `tags` string into include/exclude lists. `-tag` means exclude. */
+/** Splits a raw query string into include/exclude lists. `-tag` means exclude. */
 export function parseSearchQuery(raw: string): ParsedQuery {
   const include: string[] = []
   const exclude: string[] = []
@@ -64,7 +67,7 @@ export function withoutTag(raw: string, tag: string): string {
 export function searchHref(query: string, page = 1): string {
   const params = new URLSearchParams()
   const trimmed = query.trim()
-  if (trimmed) params.set('tags', trimmed)
+  if (trimmed) params.set(SEARCH_PARAM, trimmed)
   if (page > 1) params.set('page', String(page))
   const qs = params.toString()
   return qs ? `/?${qs}` : '/'
@@ -72,7 +75,7 @@ export function searchHref(query: string, page = 1): string {
 
 // ── Rating metatags ────────────────────────────────────────────────────────────
 // `rating:e4` narrows the search to that rating; `-rating:e4` drops it.
-// They travel in the same `?tags=` string as ordinary tags (Danbooru convention),
+// They travel in the same `?query=` string as ordinary tags (Danbooru convention),
 // so the search bar, chips and tag links need no special cases — only the data
 // layer splits them back out.
 

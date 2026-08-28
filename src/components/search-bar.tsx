@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { suggestTags } from '@/lib/actions/search'
 import type { Tag } from '@/lib/data/tags'
-import { queryTokens, searchHref, tagLabel, withoutTag } from '@/lib/search'
+import { queryTokens, searchHref, SEARCH_PARAM, tagLabel, withoutTag } from '@/lib/search'
 
 const DEBOUNCE_MS = 200
 
@@ -89,7 +89,7 @@ export function SearchBar({ initialQuery = '' }: { initialQuery?: string }) {
         <input
           ref={inputRef}
           type="search"
-          name="tags"
+          name={SEARCH_PARAM}
           value={value}
           placeholder="Search tags — use -tag to exclude"
           autoComplete="off"

@@ -69,7 +69,7 @@ booru/
    small action finalizes the post). Decide when it first hurts.
 
 ### Search (Phase 4 detail)
-- URL is the state: `/?tags=blue_hair+solo+-photo&page=2`.
+- URL is the state: `/?query=blue_hair+solo+-photo&page=2`.
 - Query runs through a Postgres function `search_posts(include_tags text[], exclude_tags text[], ...)`
   (defined in database-schema.md) — multi-tag AND + negation is awkward in PostgREST
   syntax, easy in SQL.

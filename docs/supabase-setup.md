@@ -119,7 +119,7 @@ Log out (or use a private window) so you are testing as an anonymous visitor, at
 - Home page shows the thumbnail grid, two columns, with a post count.
 - Tapping a thumbnail opens `/posts/[id]`: image fits the width, tags are grouped and
   colour-coded by category, metadata is right, **Newer**/**Older** move between posts.
-- Tapping a tag goes to `/?tags=<name>` and the grid narrows to that tag; **Clear
+- Tapping a tag goes to `/?query=<name>` and the grid narrows to that tag; **Clear
   filter** returns to everything.
 - With more than 24 posts, the pagination row appears and page 2 loads a different set.
 - Lighthouse mobile run on the home page passes.
@@ -148,7 +148,7 @@ Then in the UI, at ~375px:
   count, and are tappable with a thumb; arrow keys and Enter also select.
 - Typing `-` before a tag still autocompletes and produces an exclusion chip.
 - Searching `tag_a tag_b -tag_c` narrows the grid to the same set the SQL returned,
-  and the URL reads `/?tags=tag_a+tag_b+-tag_c`.
+  and the URL reads `/?query=tag_a+tag_b+-tag_c`.
 - Tapping a chip's ✕ removes that tag and re-runs the search.
 - The **Tags** button opens the bottom sheet listing the tags of the posts on screen;
   tapping one adds it to the search, the − excludes it. At `lg` width the same list is
@@ -167,7 +167,7 @@ Then, signed out (private window):
 
 - The home grid shows every post regardless of rating, and the total count includes them.
 - The **Rating** facet (bottom sheet under `lg`, sidebar above) lists the ratings on
-  screen; tapping one narrows the search to `/?tags=rating:<name>`, the − gives
+  screen; tapping one narrows the search to `/?query=rating:<name>`, the − gives
   `-rating:<name>`, and tapping an active row clears it again.
 - Opening the `e4` post directly by URL shows the image immediately — there is no gate.
 - Its `<head>` still carries `<meta name="robots" content="noindex, follow">`, and
@@ -211,7 +211,7 @@ build `next build`, install `npm install`, no root-directory override.
 **Verify** on the deployed origin:
 
 - `https://<domain>/robots.txt` lists your domain in `Sitemap:`, and disallows
-  `/login` and `?tags=` URLs.
+  `/login` and `?query=` URLs.
 - `https://<domain>/sitemap.xml` lists `/`, `/tags` and one entry per non-explicit
   active post.
 - A post page's source contains `og:image` pointing at the Supabase thumbnail URL and

@@ -1,9 +1,10 @@
 import type { MetadataRoute } from 'next'
+import { SEARCH_PARAM } from '@/lib/search'
 import { siteUrl } from '@/lib/site'
 
 /**
  * Search results are an unbounded tag-combination space, so crawlers get the
- * gallery, post pages and /tags only — `?tags=` URLs are also marked noindex by
+ * gallery, post pages and /tags only — `?query=` URLs are also marked noindex by
  * the page itself (see the home page's generateMetadata).
  */
 export default function robots(): MetadataRoute.Robots {
@@ -12,7 +13,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: ['/login', '/upload', '/?tags=', '/*?tags='],
+      disallow: ['/login', '/upload', `/?${SEARCH_PARAM}=`, `/*?${SEARCH_PARAM}=`],
     },
     sitemap: `${base}/sitemap.xml`,
   }

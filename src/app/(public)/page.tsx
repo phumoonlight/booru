@@ -10,11 +10,12 @@ import { RatingDisplayOptions } from '@/components/rating-display-options'
 import { SetupNotice } from '@/components/setup-notice'
 import { getCurrentProfile } from '@/lib/data/profiles'
 import { isSupabaseConfigured } from '@/lib/env'
-import { parseSearchQuery, searchHref, splitRatings } from '@/lib/search'
+import { parseSearchQuery, searchHref, SEARCH_PARAM, splitRatings } from '@/lib/search'
 import { SITE_DESCRIPTION, SITE_NAME } from '@/lib/site'
 
 function readParams(params: Record<string, string | string[] | undefined>) {
-  const query = typeof params.tags === 'string' ? params.tags.trim() : ''
+  const raw = params[SEARCH_PARAM]
+  const query = typeof raw === 'string' ? raw.trim() : ''
   const rawPage = typeof params.page === 'string' ? Number(params.page) : 1
   const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1
   return { query, page }
