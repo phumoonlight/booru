@@ -7,6 +7,20 @@ import type { TagCategory } from '@/lib/tags'
 
 export type TagSeed = { name: string; category: TagCategory }
 
+/**
+ * Committed chips *and* the half-typed word. The draft belongs to the value because a
+ * form submitted mid-word must still keep that word — the same reason the hidden input
+ * below joins it on.
+ */
+export type TagFieldValue = { tags: TagSeed[]; draft: string }
+
+export const EMPTY_TAGS: TagFieldValue = { tags: [], draft: '' }
+
+/** The value as the server actions read it: one space-separated `tags` string. */
+export function tagsToInput({ tags, draft }: TagFieldValue): string {
+  return [...tags.map((tag) => tag.name), draft.trim()].filter(Boolean).join(' ')
+}
+
 /** Anything a tag name can't hold is dropped as it's typed — whitespace survives to split on. */
 const STRIP = /[^a-z0-9_().\-\s]+/g
 
@@ -16,16 +30,44 @@ const STRIP = /[^a-z0-9_().\-\s]+/g
  * `blackhair` by accident takes effort. Whitespace ends a tag — the same rule the old
  * space-separated textarea ran on, which also means pasting a whole tag string still works.
  *
- * The form still submits one space-joined `tags` field, so the server action is unchanged.
+ * Two ways to drive it. `name` + `initialTags` keeps the state in here and submits a hidden
+ * field, which is all a plain form needs. `value` + `onChange` hands the tags to the parent
+ * instead — that's the upload queue, where one editor per staged file sits in a list that
+ * also gets written to from the bulk bar above it.
  */
-export function TagField({ name, initialTags }: { name: string; initialTags: TagSeed[] }) {
-  const [tags, setTags] = useState<TagSeed[]>(initialTags)
-  const [draft, setDraft] = useState('')
+export function TagField({
+  name,
+  initialTags = [],
+  value,
+  onChange,
+  label = 'Tags',
+  hint = true,
+  disabled = false,
+  placeholder,
+}: {
+  name?: string
+  initialTags?: TagSeed[]
+  value?: TagFieldValue
+  onChange?: (next: TagFieldValue) => void
+  label?: string
+  hint?: boolean
+  disabled?: boolean
+  placeholder?: string
+}) {
+  const [own, setOwn] = useState<TagFieldValue>({ tags: initialTags, draft: '' })
   const [suggestions, setSuggestions] = useState<TagSuggestion[]>([])
   const [active, setActive] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
   const id = useId()
   const listId = `${id}-list`
+
+  const state = value ?? own
+  const { tags, draft } = state
+
+  function update(next: TagFieldValue) {
+    if (value) onChange?.(next)
+    else setOwn(next)
+  }
 
   // One lookup per pause in typing, and only the newest answer may land — a slow reply for
   // `bl` must not overwrite the results already shown for `blue`.
@@ -54,15 +96,13 @@ export function TagField({ name, initialTags }: { name: string; initialTags: Tag
   const options = open ? suggestions.filter((option) => !chosen.has(option.name)) : []
   const highlighted = active >= 0 ? options[active] : undefined
 
-  function add(entries: TagSeed[]) {
-    if (entries.length === 0) return
-    setTags((prev) => {
-      const next = [...prev]
-      for (const entry of entries) {
-        if (!next.some((tag) => tag.name === entry.name)) next.push(entry)
-      }
-      return next
-    })
+  /** The chip list with `entries` appended, minus the ones already on it. */
+  function merged(entries: TagSeed[]): TagSeed[] {
+    const next = [...tags]
+    for (const entry of entries) {
+      if (!next.some((tag) => tag.name === entry.name)) next.push(entry)
+    }
+    return next
   }
 
   /** A name typed freehand is new until proven otherwise, and new tags start out general. */
@@ -70,8 +110,7 @@ export function TagField({ name, initialTags }: { name: string; initialTags: Tag
     suggestions.find((option) => option.name === tagName)?.category ?? 'general'
 
   function accept(entry: TagSeed) {
-    add([entry])
-    setDraft('')
+    update({ tags: merged([entry]), draft: '' })
     setSuggestions([])
     setActive(-1)
     inputRef.current?.focus()
@@ -80,8 +119,8 @@ export function TagField({ name, initialTags }: { name: string; initialTags: Tag
   function handleChange(raw: string) {
     const parts = raw.toLowerCase().replace(STRIP, '').split(/\s+/)
     const rest = parts.pop() ?? ''
-    add(parts.filter(Boolean).map((part) => ({ name: part, category: categoryOf(part) })))
-    setDraft(rest)
+    const added = parts.filter(Boolean).map((part) => ({ name: part, category: categoryOf(part) }))
+    update({ tags: merged(added), draft: rest })
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -111,21 +150,21 @@ export function TagField({ name, initialTags }: { name: string; initialTags: Tag
         setActive(-1)
         break
       case 'Backspace':
-        if (draft === '') setTags((prev) => prev.slice(0, -1))
+        if (draft === '') update({ tags: tags.slice(0, -1), draft })
         break
     }
   }
 
-  // The draft rides along, so hitting Save mid-word still saves that word. It can repeat a
-  // chip, which costs nothing — the action dedupes the list anyway.
-  const value = [...tags.map((tag) => tag.name), draft.trim()].filter(Boolean).join(' ')
-
   return (
     <div className="flex flex-col gap-1.5 text-sm">
-      <label htmlFor={`${id}-input`}>Tags</label>
-      <input type="hidden" name={name} value={value} />
+      <label htmlFor={`${id}-input`}>{label}</label>
+      {name && <input type="hidden" name={name} value={tagsToInput(state)} />}
 
-      <div className="flex flex-wrap items-center gap-1 rounded-lg border border-border bg-surface p-1.5 focus-within:border-accent">
+      <div
+        className={`flex flex-wrap items-center gap-1 rounded-lg border border-border bg-surface p-1.5 focus-within:border-accent ${
+          disabled ? 'opacity-50' : ''
+        }`}
+      >
         {tags.map((tag) => (
           <span
             key={tag.name}
@@ -134,7 +173,8 @@ export function TagField({ name, initialTags }: { name: string; initialTags: Tag
             {tag.name}
             <button
               type="button"
-              onClick={() => setTags((prev) => prev.filter((t) => t.name !== tag.name))}
+              disabled={disabled}
+              onClick={() => update({ tags: tags.filter((t) => t.name !== tag.name), draft })}
               aria-label={`Remove ${tag.name}`}
               className="flex min-h-7 items-center px-1.5 text-muted hover:text-red-400"
             >
@@ -148,13 +188,14 @@ export function TagField({ name, initialTags }: { name: string; initialTags: Tag
             id={`${id}-input`}
             ref={inputRef}
             value={draft}
+            disabled={disabled}
             onChange={(event) => handleChange(event.target.value)}
             onKeyDown={handleKeyDown}
             onBlur={() => {
               setSuggestions([])
               setActive(-1)
             }}
-            placeholder={tags.length > 0 ? 'add tag' : 'blue_hair solo'}
+            placeholder={placeholder ?? (tags.length > 0 ? 'add tag' : 'blue_hair solo')}
             autoComplete="off"
             role="combobox"
             aria-autocomplete="list"
@@ -198,7 +239,9 @@ export function TagField({ name, initialTags }: { name: string; initialTags: Tag
         </div>
       </div>
 
-      <p className="text-xs text-muted">Space or Enter adds a tag, ↑↓ picks a suggestion.</p>
+      {hint && (
+        <p className="text-xs text-muted">Space or Enter adds a tag, ↑↓ picks a suggestion.</p>
+      )}
     </div>
   )
 }

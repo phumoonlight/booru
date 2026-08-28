@@ -2,7 +2,11 @@
 
 import { createHash } from 'node:crypto'
 import sharp from 'sharp'
+import { z } from 'zod'
 import { requireUser } from '@/lib/auth'
+import { parseTagInput } from '@/lib/tags'
+import { RATINGS } from '@/lib/search'
+import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL } from '@/lib/upload-limits'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPostByMd5 } from '@/lib/data/posts'
@@ -13,10 +17,6 @@ import {
   thumbnailPath,
 } from '@/lib/storage'
 import { revalidatePath } from 'next/cache'
-
-// Keep under Vercel's server-action body limit; switch to signed upload URLs
-// when this first hurts (docs/architecture.md).
-const MAX_FILE_SIZE = 8 * 1024 * 1024
 
 // A small file can still decode enormous: a flat 12000x12000 PNG compresses to
 // ~400KB, sails past the byte cap, and expands to 412MB in memory. Bytes bound
@@ -50,12 +50,43 @@ export type UploadResult =
   | { ok: true; postId: number }
   | { ok: false; error: string; existingPostId?: number }
 
+// Same shape the edit form posts, minus the id — a staged file carries the metadata
+// it will be created with, so an upload never has to be fixed up afterwards.
+const metadataSchema = z.object({
+  tags: z.string(),
+  rating: z.enum(RATINGS),
+  source_url: z
+    .string()
+    .trim()
+    .pipe(z.union([z.literal(''), z.url('Source must be a valid URL')])),
+})
+
 /**
- * Drop-to-upload: no form, no metadata. Every upload lands as `general` with no
- * tags at all; the uploader adds tags/rating/source later from the edit page.
+ * Creates one post from one staged file. The uploader reviews and tags each image
+ * before submitting, so `tags`, `rating` and `source_url` arrive with the bytes;
+ * they still default to an untagged `general` post when the caller omits them.
+ *
+ * One file per call: each image is its own post, its own failure, and its own row
+ * in the queue's progress list.
  */
 export async function uploadPost(formData: FormData): Promise<UploadResult> {
   await requireUser()
+
+  const metadata = metadataSchema.safeParse({
+    tags: formData.get('tags') ?? '',
+    rating: formData.get('rating') ?? 'general',
+    source_url: formData.get('source_url') ?? '',
+  })
+  if (!metadata.success) {
+    return { ok: false, error: metadata.error.issues[0].message }
+  }
+  const { tags, invalid } = parseTagInput(metadata.data.tags)
+  if (invalid.length > 0) {
+    return {
+      ok: false,
+      error: `Invalid tags (lowercase a-z 0-9 _ ( ) . - only): ${invalid.join(', ')}`,
+    }
+  }
 
   const file = formData.get('file')
   if (!(file instanceof File) || file.size === 0) {
@@ -64,7 +95,7 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
   if (file.size > MAX_FILE_SIZE) {
     return {
       ok: false,
-      error: `File is too large (max ${MAX_FILE_SIZE / 1024 / 1024}MB)`,
+      error: `File is too large (max ${MAX_FILE_SIZE_LABEL})`,
     }
   }
 
@@ -225,9 +256,9 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
     p_file_size: postBuffer.length,
     p_width: width,
     p_height: height,
-    p_rating: 'general',
-    p_source_url: '',
-    p_tags: [],
+    p_rating: metadata.data.rating,
+    p_source_url: metadata.data.source_url,
+    p_tags: tags,
   })
   if (rpcError) {
     // Roll back storage so a retry starts clean

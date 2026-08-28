@@ -31,7 +31,8 @@ export default async function UploadPage() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">
       <SearchHeader />
-      <div className="mx-auto w-full max-w-md">
+      {/* Wider than a plain drop box needs: each staged file gets a preview beside its fields */}
+      <div className="mx-auto w-full max-w-3xl">
         <h1 className="mb-4 text-lg font-bold tracking-tight">Upload</h1>
         <UploadZone />
       </div>
