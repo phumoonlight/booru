@@ -59,7 +59,7 @@ export default async function HomePage({ searchParams }: PageProps<'/'>) {
   const profile = await getCurrentProfile()
   const canUpload = profile !== null
 
-  const { posts, total, pageCount } = await searchPosts({ query, page })
+  const { posts, pageCount } = await searchPosts({ query, page })
   // Tag facets describe the posts actually on screen; the rating scale is site-wide
   const [tagEntries, ratingCounts] = await Promise.all([
     getTagsForPosts(posts.map((p) => p.id)),
@@ -91,18 +91,14 @@ export default async function HomePage({ searchParams }: PageProps<'/'>) {
         </TagDrawer>
 
         <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <div className="flex items-baseline justify-between gap-3">
-            <h1 className="text-sm text-muted">
-              {include.length === 0 && exclude.length === 0 && ratings.length === 0
-                ? 'All posts'
-                : `Matching ${[...include, ...ratings.map((r) => `rating:${r}`)].join(', ') || 'any'}${
-                    exclude.length ? ` without ${exclude.join(', ')}` : ''
-                  }`}
-            </h1>
-            <span className="shrink-0 text-xs text-muted">
-              {total} {total === 1 ? 'post' : 'posts'}
-            </span>
-          </div>
+          {/* The grid speaks for itself, so the heading is left for assistive tech only */}
+          <h1 className="sr-only">
+            {include.length === 0 && exclude.length === 0 && ratings.length === 0
+              ? 'All posts'
+              : `Matching ${[...include, ...ratings.map((r) => `rating:${r}`)].join(', ') || 'any'}${
+                  exclude.length ? ` without ${exclude.join(', ')}` : ''
+                }`}
+          </h1>
 
           {posts.length === 0 ? (
             <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
