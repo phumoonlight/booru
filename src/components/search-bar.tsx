@@ -108,7 +108,7 @@ export function SearchBar({ initialQuery = '' }: { initialQuery?: string }) {
           type="submit"
           title="Search"
           aria-label="Search"
-          className="flex min-h-11 w-12 items-center justify-center rounded-lg bg-accent text-background"
+          className="flex min-h-11 w-12 items-center justify-center rounded-lg border border-border bg-surface transition-colors text-xl hover:border-accent"
         >
           <span aria-hidden>🔍</span>
         </button>

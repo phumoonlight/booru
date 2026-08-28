@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { SearchBar } from '@/components/search-bar'
-import { logout } from '@/lib/actions/auth'
+import { AccountMenu } from '@/components/account-menu'
 import { getCurrentProfile } from '@/lib/data/profiles'
 import { isSupabaseConfigured } from '@/lib/env'
 import { SITE_NAME } from '@/lib/site'
@@ -32,11 +32,7 @@ export async function SearchHeader({ query = '' }: { query?: string }) {
             </Link>
           )}
           {profile ? (
-            <form action={logout}>
-              <button type="submit" className="text-sm text-muted hover:text-foreground">
-                👋 Log out
-              </button>
-            </form>
+            <AccountMenu username={profile.username} />
           ) : (
             <Link href="/login" className="text-sm text-muted hover:text-foreground">
               🔑 Log in
@@ -69,7 +65,7 @@ export function SearchHeaderSkeleton() {
       </div>
       <div className="flex gap-2">
         <div className="h-11 flex-1 animate-pulse rounded-lg border border-border bg-surface" />
-        <div className="h-11 w-12 animate-pulse rounded-lg bg-surface" />
+        <div className="h-11 w-12 animate-pulse rounded-lg border border-border bg-surface" />
       </div>
     </div>
   )
