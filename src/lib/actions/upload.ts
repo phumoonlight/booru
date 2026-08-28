@@ -17,6 +17,12 @@ import { revalidatePath } from 'next/cache'
 // Keep under Vercel's server-action body limit; switch to signed upload URLs
 // when this first hurts (docs/architecture.md).
 const MAX_FILE_SIZE = 8 * 1024 * 1024
+
+// A small file can still decode enormous: a flat 12000x12000 PNG compresses to
+// ~400KB, sails past the byte cap, and expands to 412MB in memory. Bytes bound
+// the upload, pixels bound the decode. 50MP is far above anything real here — a
+// 2000x3000 illustration is 6MP — and holds one decode near 150MB.
+const MAX_PIXELS = 50_000_000
 const THUMB_MAX = 400
 
 const FORMAT_TO_EXT: Record<string, string> = {
@@ -79,6 +85,14 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
   }
   if (!ext || !width || !height) {
     return { ok: false, error: 'Unsupported format (jpg/png/gif/webp/avif only)' }
+  }
+  // Nothing has been decoded yet — metadata() only reads headers — so this is the
+  // last point where an oversized image can be turned away for free.
+  if (width * height > MAX_PIXELS) {
+    return {
+      ok: false,
+      error: `Image has too many pixels (max ${MAX_PIXELS / 1_000_000}MP)`,
+    }
   }
 
   // md5 identifies the *uploaded* bytes, so dedupe stays stable no matter what
