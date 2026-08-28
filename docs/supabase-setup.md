@@ -11,7 +11,7 @@
 ## Step 1 — Create the project
 
 1. Go to [supabase.com/dashboard](https://supabase.com/dashboard) → **New project**.
-2. Pick a name (e.g. `booru`), a strong database password (save it), and the region
+2. Pick a name (e.g. `pubooru`), a strong database password (save it), and the region
    closest to you.
 3. Wait for provisioning (~2 minutes).
 
@@ -196,7 +196,7 @@ build `next build`, install `npm install`, no root-directory override.
    | `NEXT_PUBLIC_SUPABASE_URL` | same as `.env.local` |
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | same as `.env.local` |
    | `SUPABASE_SERVICE_ROLE_KEY` | same as `.env.local` — **not** prefixed `NEXT_PUBLIC_` |
-   | `NEXT_PUBLIC_SITE_URL` | the final origin, e.g. `https://booru.example.com` |
+   | `NEXT_PUBLIC_SITE_URL` | the final origin, e.g. `https://pubooru.example.com` |
 
    `NEXT_PUBLIC_SITE_URL` is what `src/lib/site.ts` turns into `metadataBase`,
    canonical links, `robots.txt` and `sitemap.xml`. Leave it unset on previews and

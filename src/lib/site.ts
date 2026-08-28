@@ -3,7 +3,7 @@
  * Set NEXT_PUBLIC_SITE_URL in production; Vercel's own env var is the fallback so
  * preview deploys still emit sane absolute URLs.
  */
-export const SITE_NAME = 'Booru'
+export const SITE_NAME = 'Pubooru'
 
 export const SITE_DESCRIPTION =
   'A tag-centric image board — browse by tag, search with multiple tags, exclude with -tag.'

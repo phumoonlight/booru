@@ -1,5 +1,7 @@
 'use client'
 
+import { SITE_NAME } from '@/lib/site'
+
 /**
  * Last-resort boundary: errors thrown by the root layout itself never reach
  * `error.tsx`, so this file has to ship its own <html>/<body> and inline styling
@@ -30,7 +32,7 @@ export default function GlobalError({
           padding: '1rem',
         }}
       >
-        <h1 style={{ fontSize: '1.125rem', margin: 0 }}>Booru is temporarily unavailable</h1>
+        <h1 style={{ fontSize: '1.125rem', margin: 0 }}>{SITE_NAME} is temporarily unavailable</h1>
         {error.digest && (
           <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: 0 }}>
             Reference: {error.digest}

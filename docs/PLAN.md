@@ -1,4 +1,4 @@
-# Booru — Implementation Plan (Master Document)
+# Pubooru — Implementation Plan (Master Document)
 
 > **Purpose:** This is the entry point for every work session. Read this file first,
 > then jump to the phase you're working on in [phases.md](./phases.md).

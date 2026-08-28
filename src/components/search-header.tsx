@@ -3,6 +3,7 @@ import { SearchBar } from '@/components/search-bar'
 import { logout } from '@/lib/actions/auth'
 import { getCurrentProfile } from '@/lib/data/profiles'
 import { isSupabaseConfigured } from '@/lib/env'
+import { SITE_NAME } from '@/lib/site'
 
 /**
  * Sticky top bar — the mobile stand-in for Danbooru's left sidebar search box, and
@@ -18,7 +19,7 @@ export async function SearchHeader({ query = '' }: { query?: string }) {
     <div className="sticky top-0 z-30 -mx-3 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
       <div className="mb-2 flex items-center justify-between gap-3">
         <Link href="/" className="text-base font-bold tracking-tight">
-          Booru
+          {SITE_NAME}
         </Link>
         <nav className="flex items-center gap-3">
           <Link href="/tags" className="text-sm text-muted hover:text-foreground">
