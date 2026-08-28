@@ -121,7 +121,7 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
       <PostViewCounter postId={post.id} />
 
       {/* Image first on mobile, right column on desktop */}
-      <div className="flex h-[55dvh] shrink-0 flex-col p-3 lg:h-auto lg:min-h-0 lg:flex-1">
+      <div className="flex h-[55dvh] shrink-0 flex-col p-2 lg:h-auto lg:min-h-0 lg:flex-1">
         {image}
       </div>
 

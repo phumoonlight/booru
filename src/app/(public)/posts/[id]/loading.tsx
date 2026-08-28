@@ -9,7 +9,7 @@ const DETAIL_ROWS = 6
 export default function Loading() {
   return (
     <div className="fixed inset-0 flex flex-col lg:flex-row-reverse">
-      <div className="flex h-[55dvh] shrink-0 flex-col p-3 lg:h-auto lg:min-h-0 lg:flex-1">
+      <div className="flex h-[55dvh] shrink-0 flex-col p-2 lg:h-auto lg:min-h-0 lg:flex-1">
         <div className="min-h-0 flex-1 animate-pulse rounded-lg border border-border bg-surface" />
       </div>
 
