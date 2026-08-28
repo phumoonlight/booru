@@ -49,3 +49,28 @@ export async function SearchHeader({ query = '' }: { query?: string }) {
     </div>
   )
 }
+
+/**
+ * Stand-in for the bar above, matching it box for box so a `loading.tsx` reserves the
+ * exact height the real header takes and the page beneath it doesn't jump on hydration.
+ * Keep the two in step: same wrapper classes, same line boxes.
+ */
+export function SearchHeaderSkeleton() {
+  return (
+    <div className="sticky top-0 z-30 -mx-3 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        {/* Matches the wordmark's 1.75rem / sm:2rem line box */}
+        <div className="h-7 w-32 animate-pulse rounded bg-surface sm:h-8" />
+        <div className="flex items-center gap-3">
+          <div className="h-5 w-14 animate-pulse rounded bg-surface" />
+          <div className="h-5 w-16 animate-pulse rounded bg-surface" />
+          <div className="h-5 w-16 animate-pulse rounded bg-surface" />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <div className="h-11 flex-1 animate-pulse rounded-lg border border-border bg-surface" />
+        <div className="h-11 w-12 animate-pulse rounded-lg bg-surface" />
+      </div>
+    </div>
+  )
+}
