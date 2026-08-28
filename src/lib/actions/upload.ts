@@ -65,8 +65,13 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
   let animated = false
   try {
     const meta = await sharp(buffer).metadata()
-    width = meta.width
-    height = meta.height
+    // EXIF orientations 5-8 turn the image a quarter turn, and metadata() reports
+    // the size *before* that turn. Both ends of the pipeline show it turned —
+    // browsers apply the tag to a stored original, and sharp bakes the rotation
+    // into anything it re-encodes — so the recorded size has to be swapped to match.
+    const quarterTurned = (meta.orientation ?? 1) >= 5
+    width = quarterTurned ? meta.height : meta.width
+    height = quarterTurned ? meta.width : meta.height
     ext = meta.format ? FORMAT_TO_EXT[meta.format] : undefined
     animated = (meta.pages ?? 1) > 1
   } catch {
