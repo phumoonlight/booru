@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import type { Post } from '@/lib/data/posts'
+import { FacetActions } from '@/components/tag-list'
 import {
   RATING_LABEL,
   RATINGS,
@@ -21,10 +22,11 @@ export const RATING_COLOR: Record<Rating, string> = {
 }
 
 /**
- * Rating facet: the breakdown of the posts on screen, each row filtering the search
- * down to that rating (`rating:x`) or excluding it (`-rating:x`), exactly like the
- * tag facet. Every rating is always listed, count 0 included, so the scale reads as a
- * fixed set of filters rather than a list that shifts with the results.
+ * Rating facet: the breakdown of the posts on screen. Tapping a label replaces the whole
+ * query with just that rating, while the hover-revealed ➕/➖ add it to the current search
+ * (`rating:x`) or exclude it (`-rating:x`). Every rating is always listed, count 0
+ * included, so the scale reads as a fixed set of filters rather than a list that shifts
+ * with the results.
  */
 export function RatingList({
   posts,
@@ -48,39 +50,37 @@ export function RatingList({
     <ul className="flex flex-col gap-0.5">
       {rows.map(({ rating, count, active, excluded }) => {
         const token = ratingToken(rating)
+        const label = RATING_LABEL[rating]
         return (
-          <li key={rating} className="flex items-center gap-1">
+          <li key={rating} className="group flex items-center gap-1">
             <Link
-              href={searchHref(
-                excluded ? withoutTag(currentQuery, token) : withTag(currentQuery, token, 'exclude')
-              )}
-              aria-label={
-                excluded
-                  ? `Stop excluding ${RATING_LABEL[rating]}`
-                  : `Exclude ${RATING_LABEL[rating]}`
-              }
-              className={`flex min-h-9 w-6 items-center justify-center text-sm hover:text-red-400 ${
-                excluded ? 'text-red-400' : 'text-muted'
-              }`}
+              href={searchHref(token)}
+              aria-label={`Search only ${label} posts`}
+              className={`min-h-9 flex-1 py-1 text-sm hover:underline ${RATING_COLOR[rating]} ${
+                active ? 'font-semibold underline' : ''
+              } ${excluded ? 'line-through opacity-60' : ''}`}
             >
-              −
+              {label}
             </Link>
-            <Link
-              href={searchHref(
-                active ? withoutTag(currentQuery, token) : withTag(currentQuery, token)
-              )}
-              aria-label={
-                active
-                  ? `Clear the ${RATING_LABEL[rating]} filter`
-                  : `Only ${RATING_LABEL[rating]} posts`
-              }
-              className={`min-h-9 flex-1 py-1 text-sm hover:underline ${
-                RATING_COLOR[rating]
-              } ${active ? 'font-semibold underline' : ''}`}
-            >
-              {RATING_LABEL[rating]}
-            </Link>
-            <span className="text-xs tabular-nums text-muted">{count}</span>
+            <FacetActions
+              count={count}
+              plus={{
+                href: searchHref(
+                  active ? withoutTag(currentQuery, token) : withTag(currentQuery, token)
+                ),
+                label: active ? `Remove ${label} from the search` : `Add ${label} to the search`,
+                on: active,
+              }}
+              minus={{
+                href: searchHref(
+                  excluded
+                    ? withoutTag(currentQuery, token)
+                    : withTag(currentQuery, token, 'exclude')
+                ),
+                label: excluded ? `Stop excluding ${label}` : `Exclude ${label}`,
+                on: excluded,
+              }}
+            />
           </li>
         )
       })}
