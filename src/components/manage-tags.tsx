@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { startTransition, useActionState, useState } from 'react'
 import {
   deleteTag,
   updateTagCategory,
@@ -44,8 +44,13 @@ function TagRow({ tag }: { tag: Tag }) {
       }`}
     >
       <div className="flex items-center gap-2">
-        <form action={formAction} className="flex min-w-0 flex-1 items-center gap-2">
-          <input type="hidden" name="id" value={tag.id} />
+        {/*
+          Dispatched by hand rather than through a <form action>: React resets a form once
+          its action runs, and a native reset drops the <select> back to its first option
+          (Artist) while React state still holds the pick — so the row would misreport a
+          category that in fact saved correctly.
+        */}
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <span className={`min-w-0 flex-1 truncate text-sm ${CATEGORY_COLOR[category]}`}>
             {label}
           </span>
@@ -55,8 +60,12 @@ function TagRow({ tag }: { tag: Tag }) {
             value={category}
             disabled={pending || removing || gone}
             onChange={(event) => {
-              setCategory(event.target.value as Tag['category'])
-              event.currentTarget.form?.requestSubmit()
+              const next = event.target.value as Tag['category']
+              setCategory(next)
+              const data = new FormData()
+              data.set('id', String(tag.id))
+              data.set('category', next)
+              startTransition(() => formAction(data))
             }}
             aria-label={`Category of ${label}`}
             className="min-h-9 rounded-lg border border-border bg-surface px-2 text-sm outline-none focus:border-accent disabled:opacity-50"
@@ -67,7 +76,7 @@ function TagRow({ tag }: { tag: Tag }) {
               </option>
             ))}
           </select>
-        </form>
+        </div>
 
         <button
           type="button"

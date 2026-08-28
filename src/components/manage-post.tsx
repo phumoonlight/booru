@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { startTransition, useActionState, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { deletePost, updatePost, type EditPostState } from '@/lib/actions/posts'
 import { SaveIcon, TrashIcon } from '@/components/icons'
@@ -42,7 +42,19 @@ export function ManagePost({
         </p>
       )}
 
-      <form action={formAction} className="flex flex-col gap-3">
+      {/*
+        onSubmit, not <form action>: React resets a form as soon as its action runs, which
+        would snap the rating and source boxes back to the values they held on mount right
+        after a save that in fact stored the new ones.
+      */}
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          const data = new FormData(event.currentTarget)
+          startTransition(() => formAction(data))
+        }}
+        className="flex flex-col gap-3"
+      >
         <input type="hidden" name="id" value={postId} />
 
         <TagField name="tags" initialTags={initialTags} />
