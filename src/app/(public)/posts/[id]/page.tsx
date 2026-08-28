@@ -1,11 +1,11 @@
 import Image from 'next/image'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getPost, getPostNeighbours, getPostTags } from '@/lib/data/posts'
 import { getCurrentProfile } from '@/lib/data/profiles'
 import { ManagePost } from '@/components/manage-post'
 import { PostViewCounter } from '@/components/post-view-counter'
+import { PostNav } from '@/components/post-nav'
 import { isRestricted, RATING_COLOR, RATING_LABEL } from '@/lib/search'
 import { postImageUrl, thumbnailUrl } from '@/lib/storage'
 import { GroupedTagList } from '@/components/tag-list'
@@ -115,37 +115,11 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
     <div className="mx-auto w-full max-w-5xl px-3 py-4">
       <SearchHeader />
       <PostViewCounter postId={post.id} />
+      <PostNav prevId={prevId} nextId={nextId} />
 
       <div className="flex flex-col gap-5 pt-4 lg:flex-row-reverse lg:items-start">
         {/* Image first on mobile, right column on desktop */}
-        <div className="flex flex-col gap-3 lg:flex-1">
-          {image}
-
-          <nav className="flex items-center justify-between gap-2">
-            {prevId ? (
-              <Link
-                href={`/posts/${prevId}`}
-                title="Newer post"
-                aria-label="Newer post"
-                className="flex min-h-11 items-center rounded-lg border border-border px-4 text-sm"
-              >
-                ←
-              </Link>
-            ) : (
-              <span />
-            )}
-            {nextId && (
-              <Link
-                href={`/posts/${nextId}`}
-                title="Older post"
-                aria-label="Older post"
-                className="flex min-h-11 items-center rounded-lg border border-border px-4 text-sm"
-              >
-                →
-              </Link>
-            )}
-          </nav>
-        </div>
+        <div className="lg:flex-1">{image}</div>
 
         <aside className="flex flex-col gap-5 lg:w-64 lg:shrink-0">
           <section>
