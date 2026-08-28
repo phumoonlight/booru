@@ -52,9 +52,13 @@ npx supabase db push
 | `20260826100300_storage_buckets.sql` | `originals` / `thumbnails` buckets + policies |
 | `20260826110000_post_rpcs.sql` | `create_post_with_tags`, `update_post_with_tags` |
 | `20260826120000_search_posts.sql` | `search_posts` (multi-tag AND + negation) |
+| … | later migrations; see `supabase/migrations/` |
+| `20260829100000_drop_post_query_rpcs.sql` | drops `search_posts`, `create_post_with_tags`, `update_post_with_tags` — that logic now lives in `src/lib/data/` |
 
 **Verify:** dashboard → **Table Editor** shows the four tables; **Storage** shows both
-buckets; **Database → Functions** lists the six functions.
+buckets; **Database → Functions** lists the trigger functions plus
+`increment_post_view` (the three post/search RPCs are dropped again by
+`20260829100000`).
 
 Never edit schema in the dashboard — write a new timestamped migration instead, so the
 schema stays reproducible.
@@ -126,23 +130,13 @@ Log out (or use a private window) so you are testing as an anonymous visitor, at
 
 ## Step 8 — Verify tag search (finishes Phase 4)
 
-This is the one step with SQL that has never run against a real Postgres — the
-`search_posts` function was written offline, so check it deliberately.
+Search is `searchPosts()` in `src/lib/data/search.ts` — it used to be a `search_posts`
+SQL function, dropped in `20260829100000`, so there is no RPC left to call from the SQL
+editor. Check it through the UI (and read `console.error('searchPosts failed:')` in the
+server log if the grid comes back empty when it shouldn't).
 
 Upload (or tag) posts so that at least one carries `tag_a` and `tag_b`, one carries
-`tag_a` only, and one carries all of `tag_a`, `tag_b`, `tag_c`. Then in the SQL editor:
-
-```sql
--- Expect: only posts with BOTH tag_a and tag_b, and NOT tag_c
-select id from public.search_posts(
-  array['tag_a','tag_b'], array['tag_c'], null, 24, 0
-);
-
--- Expect: every active post, and total_count equal to that number
-select id, total_count from public.search_posts();
-```
-
-Then in the UI, at ~375px:
+`tag_a` only, and one carries all of `tag_a`, `tag_b`, `tag_c`. Then in the UI, at ~375px:
 
 - Type into the search bar: suggestions appear after a short pause, ordered by post
   count, and are tappable with a thumb; arrow keys and Enter also select.
@@ -173,14 +167,9 @@ Then, signed out (private window):
 - Its `<head>` still carries `<meta name="robots" content="noindex, follow">`, and
   `/sitemap.xml` does not list it: the adult tiers are kept out of search engines only.
 
-Direct SQL check of the RPC's rating argument:
-
-```sql
--- Expect: no explicit posts in the result
-select id, rating from public.search_posts(
-  '{}', '{}', array['general','sensitive','questionable'], 24, 0
-);
-```
+- Searching `rating:general rating:e1` returns those two tiers and nothing else, and
+  `-rating:e4` returns everything except that tier — the whitelist `resolveRatings()`
+  builds is what `searchPosts()` filters `rating` against.
 
 ## Step 11 — Deploy to Vercel (Phase 5)
 

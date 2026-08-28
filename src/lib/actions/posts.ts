@@ -8,7 +8,7 @@ import { parseTagInput } from '@/lib/tags'
 import { RATINGS } from '@/lib/search'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getPost } from '@/lib/data/posts'
+import { getPost, updatePostWithTags } from '@/lib/data/posts'
 import {
   POSTS_BUCKET,
   THUMBNAILS_BUCKET,
@@ -76,15 +76,14 @@ export async function updatePost(
     }
   }
 
-  const supabase = await createClient()
-  const { error } = await supabase.rpc('update_post_with_tags', {
-    p_post_id: parsed.data.id,
-    p_rating: parsed.data.rating,
-    p_source_url: parsed.data.source_url ?? '',
-    p_tags: tags,
-  })
-  if (error) {
-    return { error: `Update failed: ${error.message}` }
+  try {
+    await updatePostWithTags(parsed.data.id, {
+      rating: parsed.data.rating,
+      source_url: parsed.data.source_url ?? '',
+      tags,
+    })
+  } catch (error) {
+    return { error: `Update failed: ${error instanceof Error ? error.message : String(error)}` }
   }
 
   revalidatePath('/')

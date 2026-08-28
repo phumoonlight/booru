@@ -1,5 +1,5 @@
 import 'server-only'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, type ServerClient } from '@/lib/supabase/server'
 import { TAG_CATEGORIES, type Tag, type TagCategory } from '@/lib/tags'
 
 export async function getTagByName(name: string): Promise<Tag | null> {
@@ -50,4 +50,25 @@ export async function searchTags(query: string, limit = 8): Promise<Tag[]> {
     .order('name')
     .limit(limit)
   return data ?? []
+}
+
+/**
+ * Ids for `names`, creating any tag that isn't on the board yet. `ignoreDuplicates`
+ * makes the write an `on conflict do nothing`, so an existing tag keeps its category
+ * and its post_count — only genuinely new names get a row.
+ */
+export async function ensureTagIds(supabase: ServerClient, names: string[]): Promise<number[]> {
+  if (names.length === 0) return []
+
+  const { error } = await supabase
+    .from('tags')
+    .upsert(
+      names.map((name) => ({ name })),
+      { onConflict: 'name', ignoreDuplicates: true }
+    )
+  if (error) throw new Error(`Could not create tags: ${error.message}`)
+
+  const { data, error: readError } = await supabase.from('tags').select('id').in('name', names)
+  if (readError) throw new Error(`Could not read tags: ${readError.message}`)
+  return (data ?? []).map((row) => row.id)
 }

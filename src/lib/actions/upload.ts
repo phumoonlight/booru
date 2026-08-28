@@ -7,9 +7,8 @@ import { requireUser } from '@/lib/auth'
 import { parseTagInput } from '@/lib/tags'
 import { RATINGS } from '@/lib/search'
 import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL } from '@/lib/upload-limits'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getPostByMd5 } from '@/lib/data/posts'
+import { createPostWithTags, getPostByMd5 } from '@/lib/data/posts'
 import {
   POSTS_BUCKET,
   THUMBNAILS_BUCKET,
@@ -70,7 +69,7 @@ const metadataSchema = z.object({
  * in the queue's progress list.
  */
 export async function uploadPost(formData: FormData): Promise<UploadResult> {
-  await requireUser()
+  const uploader = await requireUser()
 
   const metadata = metadataSchema.safeParse({
     tags: formData.get('tags') ?? '',
@@ -248,25 +247,29 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
     return { ok: false, error: `Thumbnail upload failed: ${thumbUpload.error.message}` }
   }
 
-  // RPC runs on the user's session — auth.uid() must be the uploader, not service role
-  const supabase = await createClient()
-  const { data: postId, error: rpcError } = await supabase.rpc('create_post_with_tags', {
-    p_md5: md5,
-    p_file_ext: postExt,
-    p_file_size: postBuffer.length,
-    p_width: width,
-    p_height: height,
-    p_rating: metadata.data.rating,
-    p_source_url: metadata.data.source_url,
-    p_tags: tags,
-  })
-  if (rpcError) {
+  // Written on the user's session, not the service role — the row records the uploader
+  let postId: number
+  try {
+    postId = await createPostWithTags(uploader.id, {
+      md5,
+      file_ext: postExt,
+      file_size: postBuffer.length,
+      width,
+      height,
+      rating: metadata.data.rating,
+      source_url: metadata.data.source_url,
+      tags,
+    })
+  } catch (error) {
     // Roll back storage so a retry starts clean
     await storage.from(POSTS_BUCKET).remove([postImagePath(md5, postExt)])
     await storage.from(THUMBNAILS_BUCKET).remove([thumbnailPath(md5)])
-    return { ok: false, error: `Database insert failed: ${rpcError.message}` }
+    return {
+      ok: false,
+      error: `Database insert failed: ${error instanceof Error ? error.message : String(error)}`,
+    }
   }
 
   revalidatePath('/')
-  return { ok: true, postId: postId as number }
+  return { ok: true, postId }
 }

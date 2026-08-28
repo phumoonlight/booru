@@ -25,3 +25,6 @@ export async function createClient() {
     }
   )
 }
+
+/** The request-scoped client, for helpers that take one instead of making their own. */
+export type ServerClient = Awaited<ReturnType<typeof createClient>>

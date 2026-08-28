@@ -1,16 +1,86 @@
-import { createClient } from '@/lib/supabase/server'
-import type { Post, PostPage } from '@/lib/data/posts'
+import { createClient, type ServerClient } from '@/lib/supabase/server'
+import { POST_COLUMNS, type Post, type PostPage } from '@/lib/data/posts'
 import type { Tag } from '@/lib/tags'
 import { parseSearchQuery, RATINGS, resolveRatings, splitRatings, type Rating } from '@/lib/search'
 
 export const POSTS_PER_PAGE = 24
 
-type SearchRow = Post & { total_count: number }
+// PostgREST answers a request with one page of rows, so anything that has to be
+// complete before it can be reasoned about — every post behind a tag — is read in
+// chunks this size rather than assumed to arrive whole.
+const ROWS_PER_READ = 1000
 
 /**
- * Multi-tag search via the search_posts RPC (AND over includes, NOT over excludes).
+ * Ids of the named tags. A name nobody has used simply has no row, so comparing the
+ * result's length against `names` tells the caller whether every name resolved.
+ */
+async function tagIds(supabase: ServerClient, names: string[]): Promise<number[]> {
+  if (names.length === 0) return []
+
+  const { data, error } = await supabase.from('tags').select('id').in('name', names)
+  if (error) throw new Error(`Tag lookup failed: ${error.message}`)
+  return (data ?? []).map((row) => row.id)
+}
+
+/** Every (post, tag) link carried by the given tags, read to the end. */
+async function postTagLinks(
+  supabase: ServerClient,
+  ids: number[]
+): Promise<{ post_id: number; tag_id: number }[]> {
+  const links: { post_id: number; tag_id: number }[] = []
+
+  for (let from = 0; ; from += ROWS_PER_READ) {
+    const { data, error } = await supabase
+      .from('post_tags')
+      .select('post_id, tag_id')
+      .in('tag_id', ids)
+      // A total order, not just post_id: that repeats across tags, and rows sharing a
+      // sort key can shuffle between pages — read twice, or skipped entirely.
+      .order('post_id', { ascending: false })
+      .order('tag_id', { ascending: true })
+      .range(from, from + ROWS_PER_READ - 1)
+    if (error) throw new Error(`Tag link read failed: ${error.message}`)
+
+    links.push(...(data ?? []))
+    if ((data?.length ?? 0) < ROWS_PER_READ) return links
+  }
+}
+
+/** Posts carrying *every* one of `names` — the AND the search bar spells with spaces. */
+async function postsWithAllTags(supabase: ServerClient, names: string[]): Promise<number[]> {
+  const ids = await tagIds(supabase, names)
+  // One unknown name is enough: nothing can carry a tag that doesn't exist
+  if (ids.length < names.length) return []
+
+  const seenPerPost = new Map<number, Set<number>>()
+  for (const link of await postTagLinks(supabase, ids)) {
+    const seen = seenPerPost.get(link.post_id)
+    if (seen) seen.add(link.tag_id)
+    else seenPerPost.set(link.post_id, new Set([link.tag_id]))
+  }
+
+  return [...seenPerPost.entries()]
+    .filter(([, seen]) => seen.size === ids.length)
+    .map(([postId]) => postId)
+}
+
+/** Posts carrying *any* of `names` — what `-tag` takes away. */
+async function postsWithAnyTag(supabase: ServerClient, names: string[]): Promise<number[]> {
+  const ids = await tagIds(supabase, names)
+  if (ids.length === 0) return []
+
+  const links = await postTagLinks(supabase, ids)
+  return [...new Set(links.map((link) => link.post_id))]
+}
+
+/**
+ * Multi-tag search: AND over includes, NOT over excludes.
  * An empty query returns the whole gallery, so this backs plain browsing too.
  * Ratings narrow only when the query says so — nothing is hidden by default.
+ *
+ * Tag membership is resolved to plain id lists first, leaving the posts request with
+ * only what PostgREST does well: filter, order, count. The lists are bounded by the
+ * tags' post_count, and browsing with no tags at all skips them entirely.
  */
 export async function searchPosts({
   query = '',
@@ -21,42 +91,52 @@ export async function searchPosts({
   page?: number
   perPage?: number
 } = {}): Promise<PostPage> {
+  const empty: PostPage = { posts: [], total: 0, page, pageCount: 0 }
+
   const { include, exclude, ratings, excludeRatings } = splitRatings(parseSearchQuery(query))
   const allowedRatings: Rating[] | null = resolveRatings({ ratings, excludeRatings })
   const supabase = await createClient()
 
-  const { data, error } = await supabase.rpc('search_posts', {
-    include_tags: include,
-    exclude_tags: exclude,
-    p_rating: allowedRatings,
-    p_limit: perPage,
-    p_offset: (page - 1) * perPage,
-  })
+  try {
+    let onlyIds: number[] | null = null
+    if (include.length > 0) {
+      onlyIds = await postsWithAllTags(supabase, include)
+      if (onlyIds.length === 0) return empty
+    }
 
-  if (error || !data) {
-    return { posts: [], total: 0, page, pageCount: 0 }
-  }
+    let notIds = exclude.length > 0 ? await postsWithAnyTag(supabase, exclude) : []
+    if (onlyIds && notIds.length > 0) {
+      // Both sets are already in hand, so subtract here instead of sending a second
+      // id list down the wire
+      const banned = new Set(notIds)
+      onlyIds = onlyIds.filter((id) => !banned.has(id))
+      notIds = []
+      if (onlyIds.length === 0) return empty
+    }
 
-  const rows = data as SearchRow[]
-  // total_count is a window function over the filtered set — identical on every row
-  const total = rows[0]?.total_count ?? 0
+    let posts = supabase.from('posts').select(POST_COLUMNS, { count: 'exact' })
+    if (allowedRatings) posts = posts.in('rating', allowedRatings)
+    if (onlyIds) posts = posts.in('id', onlyIds)
+    if (notIds.length > 0) posts = posts.not('id', 'in', `(${notIds.join(',')})`)
 
-  return {
-    posts: rows.map((row) => ({
-      id: row.id,
-      md5: row.md5,
-      file_ext: row.file_ext,
-      file_size: row.file_size,
-      width: row.width,
-      height: row.height,
-      rating: row.rating,
-      source_url: row.source_url,
-      view_count: row.view_count,
-      created_at: row.created_at,
-    })),
-    total,
-    page,
-    pageCount: Math.ceil(total / perPage),
+    const from = (page - 1) * perPage
+    const { data, count, error } = await posts
+      .order('id', { ascending: false })
+      .range(from, from + perPage - 1)
+    if (error) throw new Error(`Post read failed: ${error.message}`)
+
+    // `count: 'exact'` counts the filtered set, not the page — what pagination needs
+    const total = count ?? 0
+    return {
+      posts: (data ?? []) as Post[],
+      total,
+      page,
+      pageCount: Math.ceil(total / perPage),
+    }
+  } catch (error) {
+    // The grid renders empty rather than throwing, so the reason has to be logged
+    console.error('searchPosts failed:', error)
+    return empty
   }
 }
 

@@ -87,12 +87,18 @@ On insert/delete of `posts`, and on update **of `rating`** only (guarded by a `w
 clause so view_count bumps never fire it), increment/decrement the matching
 `rating_counts` row.
 
-### `create_post_with_tags(...)` RPC
+### Post writes — `src/lib/data/posts.ts`
 
-Transactional insert used by the upload action: inserts the post, upserts each tag
-name (default category `general`), inserts `post_tags`. Security definer, but
-**checks the caller is signed in** internally (`auth.uid() is not null`) — do not
-rely on the client only calling it from the upload UI.
+`createPostWithTags()` and `updatePostWithTags()` were the `create_post_with_tags` /
+`update_post_with_tags` RPCs until `20260829100000`; they are now plain PostgREST calls
+on the caller's session, so RLS (`auth.uid() is not null`) is the only guard and each
+step's failure carries its own message. Both end in the same `setPostTags()`: upsert the
+tag names that are new, delete the `post_tags` links that are no longer wanted, upsert
+the ones that are — so `tags.post_count` keeps riding on its trigger.
+
+There is no transaction across those requests any more. `createPostWithTags()` makes up
+for it by deleting the post it just inserted if tagging fails, which cascades
+`post_tags` and unwinds the count triggers.
 
 ### `increment_post_view(p_post_id bigint)` RPC
 
@@ -101,19 +107,23 @@ requires a signed-in user and anonymous visitors still count as views. Called fr
 `recordPostView` server action only — never from a read path, so prefetches,
 `generateMetadata` and crawlers don't inflate the number.
 
-### `search_posts(include_tags text[], exclude_tags text[], p_rating text[], p_limit int, p_offset int)`
+### Search — `src/lib/data/search.ts`
 
-The core query. Returns posts (id, md5, file_ext, width, height, rating) where:
+`searchPosts()` was the `search_posts` SQL function until `20260829100000`. It now
+resolves tag membership to plain id lists first, then makes one PostgREST request that
+only filters, orders and counts:
 
-- post has **all** of `include_tags` — implemented as
-  `group by post_id having count(distinct tag_id) = array_length(include_tags, 1)`
-  over `post_tags` joined to `tags`
-- post has **none** of `exclude_tags` (`not exists` subquery)
-- rating in `p_rating`
-- ordered `id desc`, limit/offset
+- **all** of the include tags — read the `post_tags` links for those tag ids (in pages,
+  so nothing is silently truncated) and keep the posts whose distinct match count equals
+  the number of tags asked for
+- **none** of the exclude tags — the posts carrying any of them are subtracted from the
+  candidate list, or filtered out with `not.in` when there are no include tags
+- rating in the whitelist `resolveRatings()` produced, `order id desc`,
+  `range(offset, offset + limit - 1)`, `count: 'exact'` for the pagination UI
 
-Also return `count(*) over()` (or a separate cheap count) for pagination UI.
-This function is fine to ~100k posts; revisit (materialized tag arrays + GIN) only if it gets slow.
+The id lists are bounded by the tags' `post_count`, and plain browsing (no tags in the
+query) skips them entirely — that path is a single indexed read. Fine to ~100k posts;
+revisit (materialized tag arrays + GIN, or a function again) only if it gets slow.
 
 ## Row Level Security
 
@@ -123,8 +133,8 @@ RLS **enabled on every table**. Any signed-in user is a moderator:
 | ------------- | ------ | ------------------- | ----------------------- | ------------ |
 | profiles      | public | trigger only        | own row (username only) | —            |
 | posts         | public | signed-in           | signed-in               | signed-in    |
-| tags          | public | signed-in (via RPC) | signed-in               | signed-in    |
-| post_tags     | public | signed-in (via RPC) | —                       | signed-in    |
+| tags          | public | signed-in          | signed-in               | signed-in    |
+| post_tags     | public | signed-in          | —                       | signed-in    |
 | rating_counts | public | trigger only        | trigger only            | trigger only |
 
 The write test is `(select auth.uid()) is not null` inline in each policy; the old

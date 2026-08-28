@@ -102,6 +102,25 @@ of public pages, and `requireAdmin()` plus the RPCs' `is_admin()` are the real g
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
 
+- **2026-08-29** — Moved the query logic out of the SQL functions. `search_posts`,
+  `create_post_with_tags` and `update_post_with_tags` are gone (migration
+  `20260829100000_drop_post_query_rpcs.sql`); their work is now `searchPosts()` in
+  `lib/data/search.ts` and `createPostWithTags()` / `updatePostWithTags()` in
+  `lib/data/posts.ts`, both plain PostgREST calls on the caller's session. Reason: a
+  plpgsql body needs a migration to edit and a deploy to try, and reports a failure as
+  one opaque message; as separate requests each step is visible, loggable and
+  re-runnable, and a search change is a code edit. Search resolves the multi-tag AND to
+  id lists in TypeScript (reading `post_tags` in 1000-row pages so nothing truncates
+  silently) and lets one request filter, order and count — plain browsing with no tags
+  skips that entirely. Decisions: `increment_post_view` stays in SQL — it is an atomic
+  in-place increment anonymous visitors must be able to run, which PostgREST can't
+  express without a read-modify-write race. And the write path gives up its
+  transaction, so `createPostWithTags()` deletes the post it just inserted if tagging
+  fails (the cascade unwinds `post_tags` and the count triggers). Consequence to watch:
+  the tag-membership id lists ride in the request URL, so a tag with a very large
+  `post_count` is the thing that will hurt first — that is when a materialized tag
+  array or a function comes back.
+
 - **2026-08-28** — Uploads no longer get the `tagme` placeholder: `INITIAL_TAG` is gone
   and `create_post_with_tags` is called with an empty array, so a fresh post has no
   tags. The Manage form's tags box lost its `required` attribute and `updatePost`'s

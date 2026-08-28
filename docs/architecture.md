@@ -62,24 +62,26 @@ booru/
 2. Action: verify session → compute MD5 → reject if a post with that hash exists (dedup)
    → read dimensions with sharp → generate WebP thumbnail (fit within 400×400)
    → upload original to `originals/{md5}.{ext}` and thumb to `thumbnails/{md5}.webp`
-   → insert `posts` row + upsert tags + `post_tags` rows in one RPC (see database-schema.md)
-   → `revalidatePath('/')`.
+   → `createPostWithTags()` inserts the `posts` row, upserts the tags and links them
+   (see database-schema.md) → `revalidatePath('/')`.
 3. Keep files under Vercel's server action body limit; if originals can exceed ~4MB,
    switch to a **signed upload URL** flow (client uploads straight to Storage, then a
    small action finalizes the post). Decide when it first hurts.
 
 ### Search (Phase 4 detail)
 - URL is the state: `/?query=blue_hair+solo+-photo&page=2`.
-- Query runs through a Postgres function `search_posts(include_tags text[], exclude_tags text[], ...)`
-  (defined in database-schema.md) — multi-tag AND + negation is awkward in PostgREST
-  syntax, easy in SQL.
+- Query runs through `searchPosts()` in `lib/data/search.ts` (see database-schema.md).
+  Multi-tag AND is the one thing PostgREST can't say in a single filter, so tag
+  membership is resolved to id lists in TypeScript first and the request that follows
+  only filters, orders and counts. It lived in a `search_posts` SQL function until
+  `20260829100000`, which was faster to write and much harder to change.
 - Tag autocomplete: prefix search on `tags.name` ordered by `post_count desc`, debounced.
 
 ### Ratings and SEO (Phase 5 detail)
 - Ratings are **metatags inside the same query string**: `rating:general`,
   `-rating:explicit`. `lib/search.ts` parses the string once, `splitRatings()` peels the
-  metatags off the tag names and `resolveRatings()` turns them into the whitelist for
-  `search_posts`'s existing `p_rating` argument. Nothing else — chips, tag links,
+  metatags off the tag names and `resolveRatings()` turns them into the whitelist
+  `searchPosts()` filters `rating` against. Nothing else — chips, tag links,
   autocomplete, pagination hrefs — needs to know they exist.
 - No rating is hidden from anyone: the facet lists every tier and `resolveRatings()`
   narrows only when the query names one. The adult tiers (`RESTRICTED_RATINGS`) are

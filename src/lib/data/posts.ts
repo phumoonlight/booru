@@ -1,6 +1,7 @@
 import { cache } from 'react'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, type ServerClient } from '@/lib/supabase/server'
 import { createAnonClient } from '@/lib/supabase/anon'
+import { ensureTagIds } from '@/lib/data/tags'
 import type { Tag } from '@/lib/tags'
 import { RESTRICTED_RATINGS, type Rating } from '@/lib/search'
 
@@ -16,6 +17,10 @@ export type Post = {
   view_count: number
   created_at: string
 }
+
+/** The columns behind `Post`, spelled out so a select can't quietly drift from the type. */
+export const POST_COLUMNS =
+  'id, md5, file_ext, file_size, width, height, rating, source_url, view_count, created_at'
 
 export type PostPage = {
   posts: Post[]
@@ -97,4 +102,107 @@ export async function getSitemapPosts(
     .order('id', { ascending: false })
     .limit(limit)
   return data ?? []
+}
+
+// ── Writes ─────────────────────────────────────────────────────────────────────
+// These replace the create_post_with_tags / update_post_with_tags SQL functions.
+// Each step is now a request you can see, log and re-run on its own; what is lost is
+// the single transaction the functions ran in, so the create path undoes its own work
+// (see below) and every failure carries the message of the step that produced it.
+
+export type PostFields = {
+  md5: string
+  file_ext: string
+  file_size: number
+  width: number
+  height: number
+  rating: Rating
+  /** Empty string means "no source" — it is stored as null. */
+  source_url: string
+  tags: string[]
+}
+
+/**
+ * Inserts a post and its tag links, returning the new id. Runs on the caller's
+ * session so RLS records the uploader; pass the signed-in profile's id.
+ *
+ * If tagging fails the post is deleted again rather than left half-tagged: the row
+ * cascades post_tags and the count triggers unwind with it.
+ */
+export async function createPostWithTags(uploaderId: string, fields: PostFields): Promise<number> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('posts')
+    .insert({
+      uploader_id: uploaderId,
+      md5: fields.md5,
+      file_ext: fields.file_ext,
+      file_size: fields.file_size,
+      width: fields.width,
+      height: fields.height,
+      rating: fields.rating,
+      source_url: fields.source_url || null,
+    })
+    .select('id')
+    .single()
+  if (error) throw new Error(`Could not create the post: ${error.message}`)
+
+  try {
+    await setPostTags(supabase, data.id, fields.tags)
+  } catch (tagError) {
+    await supabase.from('posts').delete().eq('id', data.id)
+    throw tagError
+  }
+
+  return data.id
+}
+
+/** Rewrites an existing post's rating, source and whole tag set. */
+export async function updatePostWithTags(
+  postId: number,
+  fields: Pick<PostFields, 'rating' | 'source_url' | 'tags'>
+): Promise<void> {
+  const supabase = await createClient()
+
+  // `select` after the update is how "no such post" is detected — an update that
+  // matches nothing is not an error to PostgREST, it just returns no row.
+  const { data, error } = await supabase
+    .from('posts')
+    .update({ rating: fields.rating, source_url: fields.source_url || null })
+    .eq('id', postId)
+    .select('id')
+    .maybeSingle()
+  if (error) throw new Error(`Could not update the post: ${error.message}`)
+  if (!data) throw new Error(`Post ${postId} not found`)
+
+  await setPostTags(supabase, postId, fields.tags)
+}
+
+/**
+ * Makes `names` the post's exact tag set: creates any missing tag, drops the links
+ * that are no longer wanted, adds the ones that are. Every change goes through
+ * post_tags rows, so tags.post_count stays right via its trigger.
+ */
+async function setPostTags(
+  supabase: ServerClient,
+  postId: number,
+  names: string[]
+): Promise<void> {
+  const tagIds = await ensureTagIds(supabase, names)
+
+  // On a fresh post this matches nothing, which is why create and update can share it
+  let stale = supabase.from('post_tags').delete().eq('post_id', postId)
+  if (tagIds.length > 0) stale = stale.not('tag_id', 'in', `(${tagIds.join(',')})`)
+  const { error: staleError } = await stale
+  if (staleError) throw new Error(`Could not remove old tags: ${staleError.message}`)
+
+  if (tagIds.length === 0) return
+
+  const { error: linkError } = await supabase.from('post_tags').upsert(
+    tagIds.map((tag_id) => ({ post_id: postId, tag_id })),
+    // Links the post already has are left untouched, so the count trigger can't double-fire
+    { onConflict: 'post_id,tag_id', ignoreDuplicates: true }
+  )
+  if (linkError) throw new Error(`Could not apply tags: ${linkError.message}`)
 }
