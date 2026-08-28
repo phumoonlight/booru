@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import type { Post } from '@/lib/data/posts'
 import { FacetActions } from '@/components/tag-list'
 import {
   RATING_LABEL,
@@ -22,26 +21,26 @@ export const RATING_COLOR: Record<Rating, string> = {
 }
 
 /**
- * Rating facet: the breakdown of the posts on screen. Tapping a label replaces the whole
- * query with just that rating, while the hover-revealed ➕/➖ add it to the current search
- * (`rating:x`) or exclude it (`-rating:x`). Every rating is always listed, count 0
- * included, so the scale reads as a fixed set of filters rather than a list that shifts
- * with the results.
+ * Rating facet: how many posts the whole gallery holds at each tier — a site-wide count
+ * like a tag's, so the numbers don't shift as you page through or narrow the search.
+ * Tapping a label replaces the whole query with just that rating, while the hover-revealed
+ * ➕/➖ add it to the current search (`rating:x`) or exclude it (`-rating:x`). Every rating
+ * is always listed, count 0 included, so the scale reads as a fixed set of filters.
  */
 export function RatingList({
-  posts,
+  counts,
   currentQuery = '',
   activeRatings = [],
   excludedRatings = [],
 }: {
-  posts: Post[]
+  counts: Record<Rating, number>
   currentQuery?: string
   activeRatings?: Rating[]
   excludedRatings?: Rating[]
 }) {
   const rows = RATINGS.map((rating) => ({
     rating,
-    count: posts.filter((post) => post.rating === rating).length,
+    count: counts[rating] ?? 0,
     active: activeRatings.includes(rating),
     excluded: excludedRatings.includes(rating),
   }))

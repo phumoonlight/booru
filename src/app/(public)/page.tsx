@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { searchPosts, getTagsForPosts } from '@/lib/data/search'
+import { searchPosts, getTagsForPosts, getRatingCounts } from '@/lib/data/search'
 import { PostGrid } from '@/components/post-grid'
 import { Pagination } from '@/components/pagination'
 import { SearchHeader } from '@/components/search-header'
@@ -59,8 +59,11 @@ export default async function HomePage({ searchParams }: PageProps<'/'>) {
   const canUpload = profile !== null
 
   const { posts, total, pageCount } = await searchPosts({ query, page })
-  // Sidebar/drawer facets describe the posts actually on screen
-  const tagEntries = await getTagsForPosts(posts.map((p) => p.id))
+  // Tag facets describe the posts actually on screen; the rating scale is site-wide
+  const [tagEntries, ratingCounts] = await Promise.all([
+    getTagsForPosts(posts.map((p) => p.id)),
+    getRatingCounts(),
+  ])
   const { include, exclude, ratings, excludeRatings } = splitRatings(parseSearchQuery(query))
 
   return (
@@ -73,7 +76,7 @@ export default async function HomePage({ searchParams }: PageProps<'/'>) {
             <section>
               <h2 className="mb-2 text-sm font-semibold">Rating</h2>
               <RatingList
-                posts={posts}
+                counts={ratingCounts}
                 currentQuery={query}
                 activeRatings={ratings}
                 excludedRatings={excludeRatings}

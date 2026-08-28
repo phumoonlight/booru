@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import type { Post, PostPage } from '@/lib/data/posts'
 import type { Tag } from '@/lib/data/tags'
-import { parseSearchQuery, resolveRatings, splitRatings, type Rating } from '@/lib/search'
+import { parseSearchQuery, RATINGS, resolveRatings, splitRatings, type Rating } from '@/lib/search'
 
 export const POSTS_PER_PAGE = 24
 
@@ -103,4 +103,23 @@ export async function getTagsForPosts(postIds: number[]): Promise<{ tag: Tag; co
   return [...counts.values()].sort(
     (a, b) => b.count - a.count || a.tag.name.localeCompare(b.tag.name)
   )
+}
+
+/**
+ * Site-wide post count per rating — the whole gallery, not the page on screen, so the
+ * rating facet reads like a tag's `post_count`: a fixed scale whose numbers stay put as
+ * you page through or narrow the search. `rating_counts` is a denormalized counter row
+ * per tier kept current by a trigger on posts, so this is a six-row read, not six
+ * `count(*)` scans.
+ */
+export async function getRatingCounts(): Promise<Record<Rating, number>> {
+  const supabase = await createClient()
+  const { data } = await supabase.from('rating_counts').select('rating, post_count')
+
+  const counts = Object.fromEntries(RATINGS.map((rating) => [rating, 0])) as Record<Rating, number>
+  for (const row of data ?? []) {
+    // `rating` is free-form text in the DB; the sidebar only renders the known scale
+    if (row.rating in counts) counts[row.rating as Rating] = row.post_count
+  }
+  return counts
 }
