@@ -125,83 +125,90 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
         {image}
       </div>
 
-      <aside className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto border-border p-3 lg:flex-none lg:w-72 lg:border-r pb-25">
+      {/* The aside itself no longer scrolls — it is the frame. Its header sits outside
+          the scroller below so the way back and the walk to the next post stay put
+          however far down the tags and the manage panel go. */}
+      <aside className="flex min-h-0 flex-1 flex-col border-border p-3 lg:flex-none lg:w-72 lg:border-r">
         {/* The top bar is gone from this page, so the sidebar's header carries both the
             way back and the walk through the post's neighbours */}
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex shrink-0 items-center justify-between gap-2 pb-5">
           <Link href="/" className="text-lg font-bold tracking-tight hover:underline">
             {SITE_NAME}
           </Link>
           <PostNav prevId={prevId} nextId={nextId} />
         </div>
 
-        <section>
-          <h2 className="mb-2 text-sm font-semibold">Tags</h2>
-          <GroupedTagList
-            entries={tags.map((tag) => ({ tag, count: tag.post_count }))}
-            empty="No tags on this post."
-          />
-        </section>
+        {/* Negative margin plus matching padding puts the scrollbar on the aside's own
+            edge rather than floating a gutter's width inside it */}
+        <div className="-mr-3 flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto pb-25 pr-3">
+          <section>
+            <h2 className="mb-2 text-sm font-semibold">Tags</h2>
+            <GroupedTagList
+              entries={tags.map((tag) => ({ tag, count: tag.post_count }))}
+              empty="No tags on this post."
+            />
+          </section>
 
-        <section>
-          <h2 className="mb-2 text-sm font-semibold">Details</h2>
-          <dl className="flex flex-col gap-1 text-sm">
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted">ID</dt>
-              <dd>#{post.id}</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted">Rating</dt>
-              <dd className={RATING_COLOR[post.rating]}>{RATING_LABEL[post.rating]}</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted">Size</dt>
-              <dd>
-                {post.width}×{post.height} · {formatBytes(post.file_size)}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted">Type</dt>
-              <dd className="uppercase">{post.file_ext}</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted">Views</dt>
-              <dd>{post.view_count.toLocaleString('en-US')}</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted">Posted</dt>
-              <dd>
-                <time dateTime={post.created_at}>
-                  {new Date(post.created_at).toISOString().slice(0, 10)}
-                </time>
-              </dd>
-            </div>
-            {post.source_url && (
-              <div className="flex flex-col gap-0.5">
-                <dt className="text-muted">Source</dt>
-                <dd className="min-w-0">
-                  <a
-                    href={post.source_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="break-all text-accent hover:underline"
-                  >
-                    {post.source_url}
-                  </a>
+          <section>
+            <h2 className="mb-2 text-sm font-semibold">Details</h2>
+            <dl className="flex flex-col gap-1 text-sm">
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted">ID</dt>
+                <dd>#{post.id}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted">Rating</dt>
+                <dd className={RATING_COLOR[post.rating]}>{RATING_LABEL[post.rating]}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted">Size</dt>
+                <dd>
+                  {post.width}×{post.height} · {formatBytes(post.file_size)}
                 </dd>
               </div>
-            )}
-          </dl>
-        </section>
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted">Type</dt>
+                <dd className="uppercase">{post.file_ext}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted">Views</dt>
+                <dd>{post.view_count.toLocaleString('en-US')}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted">Posted</dt>
+                <dd>
+                  <time dateTime={post.created_at}>
+                    {new Date(post.created_at).toISOString().slice(0, 10)}
+                  </time>
+                </dd>
+              </div>
+              {post.source_url && (
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-muted">Source</dt>
+                  <dd className="min-w-0">
+                    <a
+                      href={post.source_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="break-all text-accent hover:underline"
+                    >
+                      {post.source_url}
+                    </a>
+                  </dd>
+                </div>
+              )}
+            </dl>
+          </section>
 
-        {canManage && (
-          <ManagePost
-            postId={post.id}
-            initialTags={tags.map(({ name, category }) => ({ name, category }))}
-            initialRating={post.rating}
-            initialSourceUrl={post.source_url ?? ''}
-          />
-        )}
+          {canManage && (
+            <ManagePost
+              postId={post.id}
+              initialTags={tags.map(({ name, category }) => ({ name, category }))}
+              initialRating={post.rating}
+              initialSourceUrl={post.source_url ?? ''}
+            />
+          )}
+        </div>
       </aside>
     </div>
   )

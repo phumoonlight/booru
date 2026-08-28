@@ -13,9 +13,10 @@ export default function Loading() {
         <div className="min-h-0 flex-1 animate-pulse rounded-lg border border-border bg-surface" />
       </div>
 
-      <aside className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto border-border p-3 lg:w-72 lg:flex-none lg:border-r">
-        {/* The header row: wordmark link, then the two prev/next arrows */}
-        <div className="flex items-center justify-between gap-2">
+      <aside className="flex min-h-0 flex-1 flex-col border-border p-3 lg:w-72 lg:flex-none lg:border-r">
+        {/* The header row: wordmark link, then the two prev/next arrows. Outside the
+            scroller, as on the real page, so the two reserve the same boxes */}
+        <div className="flex shrink-0 items-center justify-between gap-2 pb-5">
           <div className="h-7 w-32 animate-pulse rounded bg-surface" />
           <div className="flex gap-2">
             <div className="size-7 animate-pulse rounded bg-surface" />
@@ -23,24 +24,26 @@ export default function Loading() {
           </div>
         </div>
 
-        <section>
-          <div className="mb-2 h-5 w-12 animate-pulse rounded bg-surface" />
-          <div className="mb-1.5 h-4 w-16 animate-pulse rounded bg-surface" />
-          <div className="flex flex-col gap-0.5">
-            {Array.from({ length: 3 }, (_, i) => (
-              <div key={i} className="pointer-fine:h-7 h-9 animate-pulse rounded bg-surface" />
-            ))}
-          </div>
-        </section>
+        <div className="-mr-3 flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto pr-3">
+          <section>
+            <div className="mb-2 h-5 w-12 animate-pulse rounded bg-surface" />
+            <div className="mb-1.5 h-4 w-16 animate-pulse rounded bg-surface" />
+            <div className="flex flex-col gap-0.5">
+              {Array.from({ length: 3 }, (_, i) => (
+                <div key={i} className="pointer-fine:h-7 h-9 animate-pulse rounded bg-surface" />
+              ))}
+            </div>
+          </section>
 
-        <section>
-          <div className="mb-2 h-5 w-14 animate-pulse rounded bg-surface" />
-          <div className="flex flex-col gap-1">
-            {Array.from({ length: DETAIL_ROWS }, (_, i) => (
-              <div key={i} className="h-5 w-full animate-pulse rounded bg-surface" />
-            ))}
-          </div>
-        </section>
+          <section>
+            <div className="mb-2 h-5 w-14 animate-pulse rounded bg-surface" />
+            <div className="flex flex-col gap-1">
+              {Array.from({ length: DETAIL_ROWS }, (_, i) => (
+                <div key={i} className="h-5 w-full animate-pulse rounded bg-surface" />
+              ))}
+            </div>
+          </section>
+        </div>
       </aside>
     </div>
   )
