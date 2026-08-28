@@ -34,8 +34,7 @@ created from the Supabase dashboard — public signup is deferred ([future.md](.
 | width / height | int not null | from sharp |
 | rating | text not null default 'general' | `'general'` \| `'sensitive'` \| `'questionable'` \| `'explicit'` |
 | source_url | text | original source |
-| status | text not null default 'active' | `'active'` \| `'pending'` \| `'deleted'` — pending unused until community uploads |
-| score | int not null default 0 | placeholder until voting exists |
+| view_count | int not null default 0 | bumped only by `increment_post_view()`, never by reading a post |
 | created_at | timestamptz default now() | |
 
 Storage paths are derived, not stored: `originals/{md5}.{file_ext}`, `thumbnails/{md5}.webp`.
@@ -75,6 +74,12 @@ name (default category `general`), inserts `post_tags`. Security definer, but
 **checks the caller is signed in** internally (`auth.uid() is not null`) — do not
 rely on the client only calling it from the upload UI.
 
+### `increment_post_view(p_post_id bigint)` RPC
+Adds 1 to `posts.view_count`. Security definer, because the update policy on `posts`
+requires a signed-in user and anonymous visitors still count as views. Called from the
+`recordPostView` server action only — never from a read path, so prefetches,
+`generateMetadata` and crawlers don't inflate the number.
+
 ### `search_posts(include_tags text[], exclude_tags text[], p_rating text[], p_limit int, p_offset int)`
 The core query. Returns posts (id, md5, file_ext, width, height, rating) where:
 
@@ -82,7 +87,7 @@ The core query. Returns posts (id, md5, file_ext, width, height, rating) where:
   `group by post_id having count(distinct tag_id) = array_length(include_tags, 1)`
   over `post_tags` joined to `tags`
 - post has **none** of `exclude_tags` (`not exists` subquery)
-- `status = 'active'`, rating in `p_rating`
+- rating in `p_rating`
 - ordered `id desc`, limit/offset
 
 Also return `count(*) over()` (or a separate cheap count) for pagination UI.
@@ -95,7 +100,7 @@ RLS **enabled on every table**. Any signed-in user is a moderator:
 | table | select | insert | update | delete |
 |---|---|---|---|---|
 | profiles | public | trigger only | own row (username only) | — |
-| posts | public where `status='active'`; signed-in sees all | signed-in | signed-in | signed-in |
+| posts | public | signed-in | signed-in | signed-in |
 | tags | public | signed-in (via RPC) | signed-in | signed-in |
 | post_tags | public | signed-in (via RPC) | — | signed-in |
 

@@ -9,7 +9,7 @@ type SearchRow = Post & { total_count: number }
 
 /**
  * Multi-tag search via the search_posts RPC (AND over includes, NOT over excludes).
- * An empty query returns the whole active gallery, so this backs plain browsing too.
+ * An empty query returns the whole gallery, so this backs plain browsing too.
  * Ratings narrow only when the query says so — nothing is hidden by default.
  */
 export async function searchPosts({
@@ -51,8 +51,7 @@ export async function searchPosts({
       height: row.height,
       rating: row.rating,
       source_url: row.source_url,
-      status: row.status,
-      score: row.score,
+      view_count: row.view_count,
       created_at: row.created_at,
     })),
     total,

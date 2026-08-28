@@ -13,8 +13,7 @@ export type Post = {
   height: number
   rating: Rating
   source_url: string | null
-  status: 'active' | 'pending' | 'deleted'
-  score: number
+  view_count: number
   created_at: string
 }
 
@@ -26,7 +25,7 @@ export type PostPage = {
 }
 
 // Browse listings go through searchPosts() in lib/data/search.ts — an empty query
-// returns the whole active gallery.
+// returns the whole gallery.
 
 export async function getPostByMd5(md5: string): Promise<Post | null> {
   const supabase = await createClient()
@@ -94,7 +93,6 @@ export async function getSitemapPosts(
   const { data } = await supabase
     .from('posts')
     .select('id, created_at')
-    .eq('status', 'active')
     .not('rating', 'in', `(${RESTRICTED_RATINGS.join(',')})`)
     .order('id', { ascending: false })
     .limit(limit)

@@ -11,14 +11,13 @@ server actions. There is no role column — a privilege tier is a new migration,
 config flip.
 
 **Hooks already in place:**
-- `posts.status` includes `'pending'` (unused today) — uploads could land as
-  `pending` instead of `active`.
 - `posts.uploader_id` already records who uploaded.
 
 **When enabling:**
 - Re-add a privilege column (`profiles.role`) and a helper like the old `is_admin()`.
-- Change RLS: ordinary users insert posts with `status='pending'`; public select stays
-  `status='active'`.
+- Re-add `posts.status` (`'pending'`/`'active'`/`'deleted'`, dropped in
+  `20260828130000_view_count_drop_score_status.sql`) and change RLS: ordinary users
+  insert posts with `status='pending'`; public select narrows to `status='active'`.
 - Add a queue page: approve (→ active) / reject (→ deleted) with reason.
 - Add `moderation_log` table (who, action, post, reason, timestamp).
 - Consider per-user upload limits and tag-edit permissions (Danbooru lets any user edit
@@ -62,16 +61,39 @@ step 4). Nothing in the site is personalised, so every page is anonymous-cacheab
 - `/account`: username edit + the user's favorites (reuses the post grid).
 - Decide `fav:me` search syntax vs. a plain favorites page — the page is simpler.
 - Verify with two accounts that RLS isolates favorites.
-- Knock-on: per-user rating preferences and tag blacklists (§4) only make sense once
+- Knock-on: per-user rating preferences and tag blacklists (§5) only make sense once
   accounts exist.
 
-## 4. Other classic booru features (rough priority order)
+## 4. Server-side view dedup (currently: client-side only)
+
+**Now:** `posts.view_count` is bumped by the `increment_post_view()` RPC, called from
+the `recordPostView` server action, which `PostViewCounter` fires from the browser. The
+only guard against re-counting is client-side — an in-memory `Set` per tab plus a
+`localStorage` map with a 1h cooldown per post. That is deliberate: it is free, needs no
+schema, and a view counter is a popularity signal, not an audited metric.
+
+**What it doesn't stop:** clearing storage, incognito tabs, a second browser, or anyone
+calling the server action directly. The number is inflatable by whoever wants to.
+
+**When enabling:**
+- Migration: `post_views(post_id bigint → posts.id on delete cascade, viewer_key text,
+  viewed_at timestamptz default now(), PK (post_id, viewer_key))` where `viewer_key` is
+  `auth.uid()` for signed-in users and a hashed IP + salt otherwise (hash it — raw IPs
+  are personal data).
+- Move the cooldown into `increment_post_view()`: upsert into `post_views` and only
+  bump `view_count` when the row was absent or older than the window.
+- The IP has to come from the request, so the action must read the forwarded-for header
+  and pass it in — `auth.uid()` alone is not enough for anonymous viewers.
+- Rate-limit the action too, so the table itself can't be flooded.
+- Keep the client guard: it saves a round trip on the common case.
+
+## 5. Other classic booru features (rough priority order)
 
 | Feature | Notes / schema impact |
 |---|---|
 | Tag aliases | `tag_aliases(alias_name → tag_id)`; resolve at search + upload time |
 | Tag implications | `tag_implications(tag_id → implied_tag_id)`; expand on upload |
-| Post voting / score | `post_votes(user_id, post_id, vote)`; `posts.score` column already exists |
+| Post voting / score | `post_votes(user_id, post_id, vote)` + a `posts.score` column (the old placeholder was dropped) |
 | Comments | `comments(post_id, user_id, body, created_at)` + moderation |
 | Pools | `pools` + ordered `pool_posts(pool_id, post_id, position)` |
 | Notes (translation overlays) | `notes(post_id, x, y, w, h, body)` — positioned boxes on the image |

@@ -86,3 +86,16 @@ export async function updatePost(
   revalidatePath(`/posts/${parsed.data.id}`)
   return { ok: true }
 }
+
+/**
+ * Count one view of a post. Deliberately its own action rather than a side effect
+ * of getPost() — rendering, prefetching or generating metadata must not inflate the
+ * counter, so only an explicit call from the viewer bumps it.
+ */
+export async function recordPostView(postId: number) {
+  if (!Number.isInteger(postId) || postId < 1) return
+
+  const supabase = await createClient()
+  // Best effort: a lost view is not worth failing the page over.
+  await supabase.rpc('increment_post_view', { p_post_id: postId })
+}

@@ -5,6 +5,7 @@ import type { Metadata } from 'next'
 import { getPost, getPostNeighbours, getPostTags } from '@/lib/data/posts'
 import { getCurrentProfile } from '@/lib/data/profiles'
 import { ManagePost } from '@/components/manage-post'
+import { PostViewCounter } from '@/components/post-view-counter'
 import { RATING_COLOR } from '@/components/rating-list'
 import { isRestricted, RATING_LABEL } from '@/lib/search'
 import { postImageUrl, thumbnailUrl } from '@/lib/storage'
@@ -114,6 +115,7 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
   return (
     <div className="mx-auto w-full max-w-5xl px-3 py-4">
       <SearchHeader />
+      <PostViewCounter postId={post.id} />
 
       <div className="flex flex-col gap-5 pt-4 lg:flex-row-reverse lg:items-start">
         {/* Image first on mobile, right column on desktop */}
@@ -172,6 +174,10 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
               <div className="flex justify-between gap-3">
                 <dt className="text-muted">Type</dt>
                 <dd className="uppercase">{post.file_ext}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted">Views</dt>
+                <dd>{post.view_count.toLocaleString('en-US')}</dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-muted">Posted</dt>

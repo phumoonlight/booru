@@ -22,8 +22,8 @@ tag-centric image gallery with multi-tag search, post detail pages, and admin-ma
 Documented in [future.md](./future.md) so current decisions don't block them later:
 
 - **Community moderation** — for now only the admin (site owner) uploads/moderates.
-  Schema still includes `status` and `uploader_id` columns so opening this up later
-  is a policy change, not a migration.
+  Schema still records `uploader_id`, so opening this up later is mostly a policy
+  change; the moderation `status` column was dropped and would come back with it.
 - **Public API** — for now all data access goes through Server Actions / RSC.
   Keep data-access logic in `src/lib/data/` (not inline in actions) so route
   handlers can reuse it when the public API arrives.
