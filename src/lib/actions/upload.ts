@@ -6,7 +6,12 @@ import { requireUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPostByMd5 } from '@/lib/data/posts'
-import { originalPath, thumbnailPath } from '@/lib/storage'
+import {
+  POSTS_BUCKET,
+  THUMBNAILS_BUCKET,
+  postImagePath,
+  thumbnailPath,
+} from '@/lib/storage'
 import { revalidatePath } from 'next/cache'
 
 // Keep under Vercel's server-action body limit; switch to signed upload URLs
@@ -19,6 +24,7 @@ const FORMAT_TO_EXT: Record<string, string> = {
   png: 'png',
   gif: 'gif',
   webp: 'webp',
+  avif: 'avif',
 }
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -26,6 +32,7 @@ const CONTENT_TYPES: Record<string, string> = {
   png: 'image/png',
   gif: 'image/gif',
   webp: 'image/webp',
+  avif: 'image/avif',
 }
 
 export type UploadResult =
@@ -55,18 +62,22 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
   let width: number | undefined
   let height: number | undefined
   let ext: string | undefined
+  let animated = false
   try {
     const meta = await sharp(buffer).metadata()
     width = meta.width
     height = meta.height
     ext = meta.format ? FORMAT_TO_EXT[meta.format] : undefined
+    animated = (meta.pages ?? 1) > 1
   } catch {
     return { ok: false, error: 'File is not a readable image' }
   }
   if (!ext || !width || !height) {
-    return { ok: false, error: 'Unsupported format (jpg/png/gif/webp only)' }
+    return { ok: false, error: 'Unsupported format (jpg/png/gif/webp/avif only)' }
   }
 
+  // md5 identifies the *uploaded* bytes, so dedupe stays stable no matter what
+  // we re-encode below. Storage paths derive from it either way.
   const md5 = createHash('md5').update(buffer).digest('hex')
 
   const existing = await getPostByMd5(md5)
@@ -78,27 +89,81 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
     }
   }
 
-  // First frame only for animated inputs — thumbnails stay static
+  // Thumbnail: lossy AVIF. AVIF is 4:4:4 by default where WebP lossy is stuck at
+  // 4:2:0, so coloured line art and text edges survive; 10-bit costs nothing and
+  // stops smooth gradients banding. First frame only for animated inputs.
   const thumb = await sharp(buffer)
     .resize(THUMB_MAX, THUMB_MAX, { fit: 'inside', withoutEnlargement: true })
-    .webp({ quality: 80 })
+    .avif({ quality: 80, effort: 6, bitdepth: 10 })
+    .keepIccProfile()
     .toBuffer()
+
+  // Post image: lossless AVIF, so the detail view never shows a degraded pixel.
+  // It only wins on some inputs; an already-lossy JPEG re-encodes several times
+  // larger, and flat-colour PNG often beats it too — either way the upload is
+  // stored untouched unless AVIF actually comes out smaller.
+  // Animated inputs are skipped outright: sharp would flatten them to frame 1.
+  let postBuffer = buffer
+  let postExt = ext
+  if (!animated) {
+    try {
+      const avif = await sharp(buffer)
+        .avif({ lossless: true, effort: 4 })
+        .keepIccProfile()
+        .toBuffer()
+      if (avif.length < postBuffer.length) {
+        postBuffer = avif
+        postExt = 'avif'
+      }
+    } catch {
+      // Encoder gave up (huge or exotic input) — keep the upload as-is
+    }
+  }
+
+  // AVIF lost and the upload is a PNG: re-deflate it instead. Same pixels, just a
+  // better-packed PNG. Adaptive filtering wins big on photographic content and
+  // loses on flat colour, so both are tried and the smaller one kept.
+  // `palette` must stay false — `effort` alone silently turns on quantisation.
+  if (!animated && ext === 'png' && postExt !== 'avif') {
+    try {
+      const [plain, adaptive] = await Promise.all([
+        sharp(buffer)
+          .png({ compressionLevel: 9, palette: false })
+          .keepIccProfile()
+          .toBuffer(),
+        sharp(buffer)
+          .png({ compressionLevel: 9, palette: false, adaptiveFiltering: true })
+          .keepIccProfile()
+          .toBuffer(),
+      ])
+      const best = adaptive.length < plain.length ? adaptive : plain
+      if (best.length < postBuffer.length) {
+        postBuffer = best
+      }
+    } catch {
+      // Same fallback as above — the upload is always a valid answer
+    }
+  }
 
   // Storage writes need the service-role client (RLS floor is signed-in-only anyway)
   const storage = createAdminClient().storage
-  const origUpload = await storage.from('originals').upload(originalPath(md5, ext), buffer, {
-    contentType: CONTENT_TYPES[ext],
-    upsert: false,
-  })
-  if (origUpload.error) {
-    return { ok: false, error: `Storage upload failed: ${origUpload.error.message}` }
+  const postUpload = await storage
+    .from(POSTS_BUCKET)
+    .upload(postImagePath(md5, postExt), postBuffer, {
+      contentType: CONTENT_TYPES[postExt],
+      upsert: false,
+    })
+  if (postUpload.error) {
+    return { ok: false, error: `Storage upload failed: ${postUpload.error.message}` }
   }
-  const thumbUpload = await storage.from('thumbnails').upload(thumbnailPath(md5), thumb, {
-    contentType: 'image/webp',
-    upsert: true,
-  })
+  const thumbUpload = await storage
+    .from(THUMBNAILS_BUCKET)
+    .upload(thumbnailPath(md5), thumb, {
+      contentType: 'image/avif',
+      upsert: true,
+    })
   if (thumbUpload.error) {
-    await storage.from('originals').remove([originalPath(md5, ext)])
+    await storage.from(POSTS_BUCKET).remove([postImagePath(md5, postExt)])
     return { ok: false, error: `Thumbnail upload failed: ${thumbUpload.error.message}` }
   }
 
@@ -106,8 +171,8 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
   const supabase = await createClient()
   const { data: postId, error: rpcError } = await supabase.rpc('create_post_with_tags', {
     p_md5: md5,
-    p_file_ext: ext,
-    p_file_size: buffer.length,
+    p_file_ext: postExt,
+    p_file_size: postBuffer.length,
     p_width: width,
     p_height: height,
     p_rating: 'general',
@@ -116,8 +181,8 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
   })
   if (rpcError) {
     // Roll back storage so a retry starts clean
-    await storage.from('originals').remove([originalPath(md5, ext)])
-    await storage.from('thumbnails').remove([thumbnailPath(md5)])
+    await storage.from(POSTS_BUCKET).remove([postImagePath(md5, postExt)])
+    await storage.from(THUMBNAILS_BUCKET).remove([thumbnailPath(md5)])
     return { ok: false, error: `Database insert failed: ${rpcError.message}` }
   }
 

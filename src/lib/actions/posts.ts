@@ -9,7 +9,12 @@ import { RATINGS } from '@/lib/search'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPost } from '@/lib/data/posts'
-import { originalPath, thumbnailPath } from '@/lib/storage'
+import {
+  POSTS_BUCKET,
+  THUMBNAILS_BUCKET,
+  postImagePath,
+  thumbnailPath,
+} from '@/lib/storage'
 
 export async function deletePost(formData: FormData) {
   await requireUser()
@@ -26,8 +31,8 @@ export async function deletePost(formData: FormData) {
   if (error) throw new Error(`Delete failed: ${error.message}`)
 
   const storage = createAdminClient().storage
-  await storage.from('originals').remove([originalPath(post.md5, post.file_ext)])
-  await storage.from('thumbnails').remove([thumbnailPath(post.md5)])
+  await storage.from(POSTS_BUCKET).remove([postImagePath(post.md5, post.file_ext)])
+  await storage.from(THUMBNAILS_BUCKET).remove([thumbnailPath(post.md5)])
 
   revalidatePath('/')
   redirect('/')

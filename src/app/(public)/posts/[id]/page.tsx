@@ -7,7 +7,7 @@ import { getCurrentProfile } from '@/lib/data/profiles'
 import { ManagePost } from '@/components/manage-post'
 import { RATING_COLOR } from '@/components/rating-list'
 import { isRestricted, RATING_LABEL } from '@/lib/search'
-import { originalUrl, thumbnailUrl } from '@/lib/storage'
+import { postImageUrl, thumbnailUrl } from '@/lib/storage'
 import { GroupedTagList } from '@/components/tag-list'
 import { SearchHeader } from '@/components/search-header'
 import { isSupabaseConfigured } from '@/lib/env'
@@ -88,9 +88,11 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
 
   const canManage = profile !== null
 
-  const fullSize = originalUrl(post.md5, post.file_ext)
+  const fullSize = postImageUrl(post.md5, post.file_ext)
 
   // `unoptimized` on purpose: the detail view shows the stored file byte-for-byte.
+  // That file is either the upload itself or a lossless AVIF of it, so it already is
+  // the best available quality.
   // Running it through the Next optimizer would re-encode it at quality 75 and strip
   // animation — compression belongs to the thumbnail, which the grid uses instead.
   const image = (
