@@ -4,6 +4,7 @@ import { useActionState, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { deletePost, updatePost, type EditPostState } from '@/lib/actions/posts'
 import { SaveIcon, TrashIcon } from '@/components/icons'
+import { TagField, type TagSeed } from '@/components/tag-field'
 import { RATING_LABEL, RATINGS } from '@/lib/search'
 
 /**
@@ -17,7 +18,7 @@ export function ManagePost({
   initialSourceUrl,
 }: {
   postId: number
-  initialTags: string
+  initialTags: TagSeed[]
   initialRating: string
   initialSourceUrl: string
 }) {
@@ -44,16 +45,7 @@ export function ManagePost({
       <form action={formAction} className="flex flex-col gap-3">
         <input type="hidden" name="id" value={postId} />
 
-        <label className="flex flex-col gap-1.5 text-sm">
-          Tags (space-separated)
-          <textarea
-            name="tags"
-            rows={3}
-            placeholder="blue_hair solo"
-            defaultValue={initialTags}
-            className="rounded-lg border border-border bg-surface px-3 py-2 font-mono text-sm outline-none focus:border-accent"
-          />
-        </label>
+        <TagField name="tags" initialTags={initialTags} />
 
         <label className="flex flex-col gap-1.5 text-sm">
           Rating

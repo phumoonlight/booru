@@ -210,7 +210,7 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
           {canManage && (
             <ManagePost
               postId={post.id}
-              initialTags={tags.map((tag) => tag.name).join(' ')}
+              initialTags={tags.map(({ name, category }) => ({ name, category }))}
               initialRating={post.rating}
               initialSourceUrl={post.source_url ?? ''}
             />

@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { requireUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { TAG_CATEGORIES } from '@/lib/tags'
+import { searchTags } from '@/lib/data/tags'
+import { TAG_CATEGORIES, type TagCategory } from '@/lib/tags'
 
 const categorySchema = z.object({
   id: z.coerce.number().int(),
@@ -82,4 +83,21 @@ export async function deleteTag(
 
   revalidatePath('/', 'layout')
   return { ok: true }
+}
+
+export type TagSuggestion = { name: string; category: TagCategory; post_count: number }
+
+/**
+ * Autocomplete for the tag field. Read-only, but gated like the field it serves —
+ * the tag list is only quietly interesting, and there's no reason to hand an
+ * unauthenticated caller a search endpoint over it.
+ */
+export async function suggestTags(query: string): Promise<TagSuggestion[]> {
+  await requireUser()
+
+  const parsed = z.string().max(64).safeParse(query)
+  if (!parsed.success) return []
+
+  const tags = await searchTags(parsed.data)
+  return tags.map(({ name, category, post_count }) => ({ name, category, post_count }))
 }
