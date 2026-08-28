@@ -1,1 +1,101 @@
 @AGENTS.md
+
+# Pubooru
+
+A booru-style image board (Danbooru is the reference): tag-centric gallery, multi-tag
+search with negation, post detail pages, uploads by any signed-in user. Fullstack
+Next.js 16 App Router + Supabase (Postgres, Storage, Auth), Tailwind v4, mobile-first.
+
+## Commands
+
+| | |
+|---|---|
+| `npm run dev` / `build` / `lint` | the only verification the repo has — there is no test runner |
+| `npm run db:push` / `db:push:dry` | apply migrations to the linked Supabase project |
+| `npm run db:list` / `db:reset` | migration status / local reset |
+
+Ad-hoc checks (query parser, rating resolution) have been run as throwaway scripts in
+the scratchpad, never committed. Keep it that way unless asked for a test setup.
+
+## Layering — do not cross these lines
+
+- **Reads:** RSC → `src/lib/data/*` → Supabase server client (anon key, RLS enforced).
+  Never call Supabase from a page or component directly.
+- **Writes:** `'use server'` actions in `src/lib/actions/*` → `requireUser()` first →
+  zod parse → `src/lib/data/*`. RLS (`auth.uid() is not null`) is the real guard;
+  `requireUser()` exists to fail loudly rather than update zero rows.
+- **Pure helpers** (`lib/search.ts`, `lib/tags.ts`, `lib/storage.ts`, `lib/site.ts`)
+  import nothing server-side, so client components can share them.
+- Query logic stays in `lib/data/` and out of actions/pages so the deferred public API
+  can reuse it verbatim (docs/future.md §2).
+- Four Supabase clients, each with one job: `server.ts` (cookies, request-scoped),
+  `client.ts` (browser), `anon.ts` (cookie-less, for cacheable routes like the sitemap),
+  `admin.ts` (service role, storage writes/deletes only — never reaches the browser).
+
+## Database
+
+- Schema changes are **always** a new timestamped file in `supabase/migrations/`, never
+  a dashboard edit. Migrations are the source of truth.
+- SQL functions are deliberately almost gone: `20260829100000` moved search and the post
+  writes into TypeScript because a plpgsql body needs a migration to edit and reports one
+  opaque error. Only `increment_post_view()` remains — an atomic increment anonymous
+  visitors must run, which PostgREST can't express without a race. Don't add RPCs back
+  without that kind of reason.
+- Denormalized counters ride on triggers: `tags.post_count` (on `post_tags`) and
+  `rating_counts.post_count` (on `posts`). Any tag/post write must go through rows those
+  triggers watch, or the counts drift.
+- `createPostWithTags()` has no transaction — it deletes the post it just inserted if
+  tagging fails. Preserve that unwind if you touch the write path.
+
+## Things the code decided that are easy to get wrong
+
+- **`src/proxy.ts`, not `middleware.ts`** — Next 16 renamed the convention. It only
+  refreshes the session; it guards no routes. Pages check the session themselves.
+- **Search param is `?query=`** (`SEARCH_PARAM` in `lib/search.ts`), space-separated,
+  `-tag` excludes. Ratings ride in the same string as `rating:e3` metatags — nothing
+  outside `splitRatings`/`resolveRatings` needs to know they exist.
+- **Rating scale is `general, e1, e2, e3, e4, e5`.** `RESTRICTED_RATINGS` (e3–e5) means
+  "kept out of sitemap.xml and search results" only — nothing is hidden from a visitor.
+  Column is free-form text; the constraint was dropped in `20260828160000`.
+- **Buckets are `posts` and `post-thumbnails`**, both AVIF-era: thumbnails are lossy AVIF
+  (≤400px, `mitchell` kernel), the post image is lossless AVIF only when it beats the
+  uploaded bytes, otherwise the original byte-for-byte. Paths derive from md5, never stored.
+- **MD5 is the dedup key on purpose** — collision resistance is not what it's for.
+- Grid images go through the Next optimizer; the detail image is `unoptimized` so the
+  stored file is served untouched (animation intact, no quality-75 re-encode).
+- `view_count` is bumped only by the `recordPostView` action from the browser, never on a
+  read path — prefetches, `generateMetadata` and crawlers must not inflate it.
+- Rating blur is a `data-blur-ratings` attribute on `<html>` set before first paint, so
+  the grid stays a plain server render (`lib/rating-blur.ts` + `globals.css`).
+- `MAX_FILE_SIZE` lives in `lib/upload-limits.ts` because three layers must agree:
+  the drop zone, the upload action, and `serverActions.bodySizeLimit` in `next.config.ts`.
+- Pages fall back to `<SetupNotice />` when `isSupabaseConfigured()` is false, so the app
+  is browsable before the runbook has been run.
+
+## Style
+
+- Prettier (`.prettierrc`): no semicolons, single quotes, 100 cols, 2 spaces. Run nothing —
+  match the surrounding file.
+- Comments explain *why*, in prose, and are common in this codebase — the measured
+  trade-off, the failure that motivated the choice. Match that register; don't narrate
+  what the code already says.
+- No component library. Plain Tailwind against the CSS variables in `globals.css`
+  (`background`, `surface`, `border`, `muted`, `accent`). Dark theme only.
+- Mobile-first: design at 375px, scale up with `sm:`/`md:`/`lg:`. 44px tap targets.
+- No role tier exists — any signed-in account can upload, edit and delete. Public signup
+  therefore needs a privilege tier first (docs/future.md §1).
+
+## Docs
+
+`docs/PLAN.md` is the entry point (status + working conventions + session log),
+`architecture.md`, `database-schema.md`, `phases.md`, `future.md`, and
+`supabase-setup.md` (the runbook for everything needing the live project).
+
+**Update `docs/PLAN.md`'s Current status and Session log at the end of a work session** —
+that log is where the reasoning behind past decisions lives.
+
+Parts of `architecture.md`, `database-schema.md` and `phases.md` predate later
+migrations (they still say `?tags=`, the old `general/sensitive/questionable/explicit`
+scale, `originals`/`thumbnails` buckets, WebP thumbs, `requireAdmin()`, shadcn/ui).
+When they disagree with `src/` or `supabase/migrations/`, the code wins — and fix the
+doc line you tripped over.
