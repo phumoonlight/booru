@@ -18,7 +18,8 @@ export async function SearchHeader({ query = '' }: { query?: string }) {
   return (
     <div className="sticky top-0 z-30 -mx-3 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <Link href="/" className="text-base font-bold tracking-tight">
+        {/* The wordmark carries the bar — it outsizes the nav links rather than matching them */}
+        <Link href="/" className="text-xl font-bold tracking-tight sm:text-2xl hover:underline">
           {SITE_NAME}
         </Link>
         <nav className="flex items-center gap-3">
