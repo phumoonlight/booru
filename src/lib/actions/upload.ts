@@ -102,15 +102,24 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
   // site is full of, haloing every line, and the extra high-frequency detail also
   // encodes larger. Measured on line art — peak overshoot +19 levels vs +3, and
   // 15% more bytes.
-  const thumb = await sharp(buffer)
-    .resize(THUMB_MAX, THUMB_MAX, {
-      fit: 'inside',
-      withoutEnlargement: true,
-      kernel: 'mitchell',
-    })
-    .avif({ quality: 80, effort: 6, bitdepth: 10 })
-    .keepIccProfile()
-    .toBuffer()
+  //
+  // Unlike the lossless attempts below there is no fallback here — a post with no
+  // thumbnail has nothing to show in the grid — so a failure ends the upload with
+  // the same error shape as everything else rather than throwing out of the action.
+  let thumb: Buffer
+  try {
+    thumb = await sharp(buffer)
+      .resize(THUMB_MAX, THUMB_MAX, {
+        fit: 'inside',
+        withoutEnlargement: true,
+        kernel: 'mitchell',
+      })
+      .avif({ quality: 80, effort: 6, bitdepth: 10 })
+      .keepIccProfile()
+      .toBuffer()
+  } catch {
+    return { ok: false, error: 'Could not build a thumbnail for this image' }
+  }
 
   // Post image: lossless AVIF, so the detail view never shows a degraded pixel.
   // It only wins on some inputs; an already-lossy JPEG re-encodes several times
