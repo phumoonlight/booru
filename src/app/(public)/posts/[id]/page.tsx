@@ -125,7 +125,7 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
         {image}
       </div>
 
-      <aside className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto border-border p-3 lg:flex-none lg:w-72 lg:border-r">
+      <aside className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto border-border p-3 lg:flex-none lg:w-72 lg:border-r pb-25">
         {/* The top bar is gone from this page, so the sidebar's header carries both the
             way back and the walk through the post's neighbours */}
         <div className="flex items-center justify-between gap-2">

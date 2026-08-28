@@ -2,6 +2,10 @@
 
 /* Dark theme by default (booru convention) */
 :root {
+  /* Tells the UA to paint its own furniture dark — scrollbars, the select popup,
+     the date picker. Without it a white Windows scrollbar cuts down the sidebar. */
+  color-scheme: dark;
+
   --background: #0d0f14;
   --foreground: #e5e7eb;
   --muted: #9ca3af;
@@ -25,6 +29,34 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* ── Scrollbars ────────────────────────────────────────────────────────────────
+   The sidebar scrolls beside the image, so its bar is on screen the whole time —
+   thin, and in the palette, so it reads as a rule rather than a second column.
+   The standard properties cover Firefox and Chromium 121+; the -webkit- block
+   below is the same look for older WebKit (Safari, iOS). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
 }
 
 /* Tailwind v4 drops the UA pointer cursor on buttons — put it back while enabled */
