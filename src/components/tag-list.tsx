@@ -37,12 +37,12 @@ export function FacetActions({
   // a near-black background that lands it around `--muted`, where fading it with opacity
   // would only sink it into the background. Hover restores the glyph's own colour.
   const button = (on: boolean) =>
-    `flex min-h-9 w-6 items-center justify-center text-xs transition-[filter] ${
+    `pointer-fine:min-h-7 flex min-h-9 w-6 items-center justify-center text-xs transition-[filter] ${
       on ? '' : 'brightness-150 grayscale hover:brightness-100 hover:grayscale-0'
     }`
 
   return (
-    <span className="relative flex min-h-9 items-center justify-end">
+    <span className="pointer-fine:min-h-7 relative flex min-h-9 items-center justify-end">
       <span className="pointer-coarse:opacity-100 text-xs tabular-nums text-muted transition-opacity group-focus-within:opacity-0 group-hover:opacity-0">
         {count}
       </span>
@@ -64,6 +64,9 @@ export type TagEntry = { tag: Tag; count: number }
  * A tag row: tapping the name replaces the whole query with just this tag — one filter,
  * nothing carried over — while the hover-revealed ➕/➖ add it to the current search or
  * exclude it. Both toggle: pressing the one already on removes the tag again.
+ *
+ * `min-h-9` buys a thumb-sized target, but a mouse doesn't need one and the slack reads as
+ * a gappy list, so fine pointers get rows just tall enough for the text.
  */
 function TagRow({ entry, currentQuery }: { entry: TagEntry; currentQuery: string }) {
   const { tag, count } = entry
@@ -77,7 +80,7 @@ function TagRow({ entry, currentQuery }: { entry: TagEntry; currentQuery: string
       <Link
         href={searchHref(tag.name)}
         aria-label={`Search only ${label}`}
-        className={`min-h-9 flex-1 py-1 text-sm hover:underline ${CATEGORY_COLOR[tag.category]} ${
+        className={`pointer-fine:min-h-7 min-h-9 flex-1 py-1 text-sm hover:underline ${CATEGORY_COLOR[tag.category]} ${
           included ? 'font-semibold underline' : ''
         } ${excluded ? 'line-through opacity-60' : ''}`}
       >
@@ -128,7 +131,7 @@ export function GroupedTagList({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="pointer-fine:gap-3 flex flex-col gap-4">
       {groups.map(([category, group]) => (
         <section key={category}>
           <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
