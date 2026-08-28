@@ -115,11 +115,13 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
     <div className="mx-auto w-full max-w-5xl px-3 py-4">
       <SearchHeader />
       <PostViewCounter postId={post.id} />
-      <PostNav prevId={prevId} nextId={nextId} />
 
       <div className="flex flex-col gap-5 pt-4 lg:flex-row-reverse lg:items-start">
         {/* Image first on mobile, right column on desktop */}
-        <div className="lg:flex-1">{image}</div>
+        <div className="flex flex-col gap-3 lg:flex-1">
+          <PostNav prevId={prevId} nextId={nextId} />
+          {image}
+        </div>
 
         <aside className="flex flex-col gap-5 lg:w-64 lg:shrink-0">
           <section>
