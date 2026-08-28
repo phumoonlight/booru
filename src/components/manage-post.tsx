@@ -72,12 +72,18 @@ export function ManagePost({
 
         <label className="flex flex-col gap-1.5 text-sm">
           Source URL (optional)
-          <input
-            type="url"
+          {/*
+            A textarea, not an `input type="url"`: the panel is a ~220px sidebar column and a
+            single-line box scrolls a source link out of sight just when you want to check it.
+            Wrapping shows the whole URL at once; the server still validates it as a URL and
+            trims the newline a paste can leave behind.
+          */}
+          <textarea
             name="source_url"
+            rows={2}
             defaultValue={initialSourceUrl}
             placeholder="https://…"
-            className="min-h-11 rounded-lg border border-border bg-surface px-3 text-base outline-none focus:border-accent"
+            className="resize-y break-all rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs outline-none focus:border-accent"
           />
         </label>
 

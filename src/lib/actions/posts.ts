@@ -42,7 +42,12 @@ const editSchema = z.object({
   id: z.coerce.number().int(),
   tags: z.string(),
   rating: z.enum(RATINGS),
-  source_url: z.union([z.literal(''), z.url('Source must be a valid URL')]).optional(),
+  // Trimmed first: the box wraps, so a pasted link can arrive with stray whitespace
+  source_url: z
+    .string()
+    .trim()
+    .pipe(z.union([z.literal(''), z.url('Source must be a valid URL')]))
+    .optional(),
 })
 
 export type EditPostState = { error: string; ok?: never } | { ok: true; error?: never } | null
