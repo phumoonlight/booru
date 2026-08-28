@@ -4,7 +4,7 @@ import { PostGrid } from '@/components/post-grid'
 import { Pagination } from '@/components/pagination'
 import { SearchHeader } from '@/components/search-header'
 import { TagDrawer } from '@/components/tag-drawer'
-import { TagList } from '@/components/tag-list'
+import { GroupedTagList } from '@/components/tag-list'
 import { RatingList } from '@/components/rating-list'
 import { RatingDisplayOptions } from '@/components/rating-display-options'
 import { SetupNotice } from '@/components/setup-notice'
@@ -87,7 +87,7 @@ export default async function HomePage({ searchParams }: PageProps<'/'>) {
             {/* Ruled off from the rating scale above it */}
             <section className="border-t border-border pt-4">
               <h2 className="mb-2 text-base font-semibold">Tags ({tagEntries.length})</h2>
-              <TagList entries={tagEntries.slice(0, 50)} currentQuery={query} />
+              <GroupedTagList entries={tagEntries.slice(0, 50)} currentQuery={query} />
             </section>
           </div>
         </TagDrawer>

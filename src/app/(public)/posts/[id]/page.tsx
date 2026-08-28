@@ -150,7 +150,10 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
         <aside className="flex flex-col gap-5 lg:w-64 lg:shrink-0">
           <section>
             <h2 className="mb-2 text-sm font-semibold">Tags</h2>
-            <GroupedTagList entries={tags.map((tag) => ({ tag, count: tag.post_count }))} />
+            <GroupedTagList
+              entries={tags.map((tag) => ({ tag, count: tag.post_count }))}
+              empty="No tags on this post."
+            />
           </section>
 
           <section>

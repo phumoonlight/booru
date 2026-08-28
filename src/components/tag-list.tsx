@@ -106,40 +106,25 @@ function TagRow({ entry, currentQuery }: { entry: TagEntry; currentQuery: string
   )
 }
 
-/** Flat list, already ordered by the caller. Used by the sidebar/drawer. */
-export function TagList({
-  entries,
-  currentQuery = '',
-}: {
-  entries: TagEntry[]
-  currentQuery?: string
-}) {
-  if (entries.length === 0) {
-    return <p className="text-sm text-muted">No tags here.</p>
-  }
-  return (
-    <ul className="flex flex-col gap-0.5">
-      {entries.map((entry) => (
-        <TagRow key={entry.tag.id} entry={entry} currentQuery={currentQuery} />
-      ))}
-    </ul>
-  )
-}
-
-/** Sectioned by category in Danbooru order. Used on the post detail page. */
+/**
+ * Sectioned by category in Danbooru order, entries already ordered by the caller within
+ * each one. Used by the sidebar/drawer facets and the post detail page.
+ */
 export function GroupedTagList({
   entries,
   currentQuery = '',
+  empty = 'No tags here.',
 }: {
   entries: TagEntry[]
   currentQuery?: string
+  empty?: string
 }) {
   const groups = TAG_CATEGORIES.map(
     (category) => [category, entries.filter((e) => e.tag.category === category)] as const
   ).filter(([, group]) => group.length > 0)
 
   if (groups.length === 0) {
-    return <p className="text-sm text-muted">No tags on this post.</p>
+    return <p className="text-sm text-muted">{empty}</p>
   }
 
   return (
