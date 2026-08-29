@@ -30,6 +30,14 @@ Answer like a TL;DR. The work can be thorough; the message about it is short.
 Ad-hoc checks (query parser, rating resolution) have been run as throwaway scripts in
 the scratchpad, never committed. Keep it that way unless asked for a test setup.
 
+## Git
+
+**Commit on `main`. Do not create a branch unless asked for one.** This is a solo repo
+with a linear history; a branch per change just adds a merge step the author then has
+to undo. When a branch is genuinely wanted, the author will say so.
+
+Commit only when asked. Never push unless asked.
+
 ## Layering — do not cross these lines
 
 - **Reads:** RSC → `src/lib/data/*` → Supabase server client (anon key, RLS enforced).
