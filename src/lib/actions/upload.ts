@@ -161,10 +161,11 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
   let thumb: Buffer
   try {
     thumb = await sharp(buffer)
-      .resize(THUMB_MAX, THUMB_MAX, {
+      .resize({
         fit: 'inside',
         kernel: 'mitchell',
         withoutEnlargement: true,
+        height: THUMB_MAX,
       })
       .avif({ effort: 9 })
       .keepIccProfile()
