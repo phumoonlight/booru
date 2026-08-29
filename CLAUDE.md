@@ -18,6 +18,10 @@ Answer like a TL;DR. The work can be thorough; the message about it is short.
 - No closing recap of what the message just said.
 - Keep it full-length only for errors, failing output, security notes, and confirmations
   before something destructive — those never get trimmed.
+- When a reply genuinely has to run long, it is bullets, not paragraphs. One claim per
+  bullet. This includes explanations — answer the question asked, then stop: no
+  background the user didn't ask for, no "worth knowing" asides, no survey of where else
+  the same pattern appears.
 
 ## Commands
 
