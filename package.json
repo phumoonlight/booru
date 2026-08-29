@@ -10,7 +10,8 @@
     "db:list": "supabase migration list",
     "db:push": "supabase db push",
     "db:push:dry": "supabase db push --dry-run",
-    "db:reset": "supabase db reset"
+    "db:reset": "supabase db reset",
+    "db:reset:remote": "supabase db reset --linked"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.5",
