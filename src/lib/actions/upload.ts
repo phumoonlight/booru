@@ -179,7 +179,7 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
         height: THUMB_HEIGHT,
         width: THUMB_MAX_WIDTH,
       })
-      .avif({ effort: 9 })
+      .avif({ effort: 9, quality: 25 })
       .keepIccProfile()
       .toBuffer()
   } catch {
