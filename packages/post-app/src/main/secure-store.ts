@@ -21,12 +21,13 @@ import { app, safeStorage } from 'electron'
 const SEALED = 'sealed:'
 const PLAIN = 'plain:'
 
-function pathFor(name: string): string {
+/** Where a store file lives. Exported so the settings screen can point at it. */
+export function storePath(name: string): string {
   return join(app.getPath('userData'), name)
 }
 
 export function readStore<T>(name: string): T | null {
-  const file = pathFor(name)
+  const file = storePath(name)
   if (!existsSync(file)) return null
 
   try {
@@ -47,7 +48,7 @@ export function readStore<T>(name: string): T | null {
 }
 
 export function writeStore(name: string, value: unknown): void {
-  const file = pathFor(name)
+  const file = storePath(name)
   mkdirSync(dirname(file), { recursive: true })
 
   const json = JSON.stringify(value)
@@ -58,5 +59,5 @@ export function writeStore(name: string, value: unknown): void {
 }
 
 export function clearStore(name: string): void {
-  rmSync(pathFor(name), { force: true })
+  rmSync(storePath(name), { force: true })
 }

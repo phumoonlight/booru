@@ -82,6 +82,8 @@ export type PostAppApi = {
   suggestTags: (query: string) => Promise<TagSuggestion[]>
   uploadPost: (request: UploadRequest) => Promise<UploadResult>
   openExternal: (url: string) => Promise<void>
+  /** Reveals the stored settings file in the OS file manager. */
+  openConfigFolder: () => Promise<void>
 }
 
 export type { UploadResult } from '@web/lib/upload/pipeline'

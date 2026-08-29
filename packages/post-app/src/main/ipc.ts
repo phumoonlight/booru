@@ -11,7 +11,7 @@ import { z } from 'zod'
 import { searchTags } from '@web/lib/data/shared'
 import { createPostFromImage, parsePostMetadata } from '@web/lib/upload/pipeline'
 import { DESKTOP_UPLOAD_LIMITS } from './limits'
-import { loadConfig, saveConfig } from './config'
+import { loadConfig, revealConfig, saveConfig } from './config'
 import { stageFiles } from './staging'
 import { adminClient, currentUser, resetClients, signIn, signOut, userClient } from './supabase'
 import type { AppConfigInput, AppStatus, Outcome, TagSuggestion } from '../shared/api'
@@ -168,6 +168,9 @@ export function registerIpc(): void {
       DESKTOP_UPLOAD_LIMITS
     )
   })
+
+  /** Shows `config.json` in Explorer/Finder — the settings screen's "where is this?". */
+  ipcMain.handle('shell:open-config-folder', async (): Promise<void> => revealConfig())
 
   /**
    * Only ever a post on the board. `openExternal` hands the string to the OS, which will

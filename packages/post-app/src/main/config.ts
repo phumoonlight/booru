@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { app } from 'electron'
-import { readStore, writeStore } from './secure-store'
+import { app, shell } from 'electron'
+import { readStore, storePath, writeStore } from './secure-store'
 
 /**
  * What the app needs to reach the board. Three of the four are the same variables the
@@ -122,6 +122,21 @@ export function saveConfig(config: AppConfig): { ok: true } | { ok: false; error
   writeStore(CONFIG_FILE, trimmed)
   cached = trimmed
   return { ok: true }
+}
+
+/**
+ * Shows the stored settings in the OS file manager — the answer to "where did that
+ * actually go", which is otherwise a path nobody would guess. The file itself is
+ * ciphertext, so revealing it gives nothing away; it is selected rather than opened
+ * because opening it would only show that.
+ *
+ * Falls back to the folder when there is no file yet, which is the case in a checkout
+ * running off the repo's `.env.local`.
+ */
+export function revealConfig(): void {
+  const file = storePath(CONFIG_FILE)
+  if (existsSync(file)) shell.showItemInFolder(file)
+  else void shell.openPath(app.getPath('userData'))
 }
 
 /**

@@ -100,12 +100,23 @@ export function Settings({
           </p>
         )}
 
-        <p className="text-xs text-muted">
-          {encryptedAtRest
-            ? 'Saved to this app’s data folder, encrypted with your OS keystore.'
-            : 'Your OS offered no keystore, so these are saved as plain text in this ' +
-              'app’s data folder.'}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="min-w-0 flex-1 text-xs text-muted">
+            {encryptedAtRest
+              ? 'Saved to this app’s data folder, encrypted with your OS keystore.'
+              : 'Your OS offered no keystore, so these are saved as plain text in this ' +
+                'app’s data folder.'}
+          </p>
+          {/* The folder is a path nobody would guess, and the file in it is ciphertext —
+              so this reveals it rather than opening it. */}
+          <button
+            type="button"
+            onClick={() => void window.api.openConfigFolder()}
+            className="min-h-9 shrink-0 rounded-lg border border-border px-3 text-xs"
+          >
+            Open config folder
+          </button>
+        </div>
 
         <div className="flex gap-2">
           <button
