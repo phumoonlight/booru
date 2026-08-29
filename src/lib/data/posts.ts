@@ -110,7 +110,7 @@ export async function getSitemapPosts(limit: number): Promise<Pick<Post, 'id' | 
 // the single transaction the functions ran in, so the create path undoes its own work
 // (see below) and every failure carries the message of the step that produced it.
 //
-// Since `20260829130000` that includes the counters: `tags.post_count` and
+// That includes the counters: `tags.post_count` and
 // `rating_counts` were kept by triggers on the rows these functions write, and are now
 // recomputed here instead (lib/data/counters.ts). Every write below is followed by a
 // sync naming exactly the tags and ratings it moved.
@@ -229,7 +229,7 @@ export async function deletePostRow(
 /**
  * Adds one view to a post.
  *
- * This was the `increment_post_view` SQL function until `20260829120000`. PostgREST
+ * This was the `increment_post_view` SQL function until it was moved here. PostgREST
  * cannot send `view_count = view_count + 1`, so the increment is a read and then a
  * write, and the compare-and-swap is what stands in for the atomicity the SQL function
  * had for free: the update only lands while `view_count` is still what was read, and a

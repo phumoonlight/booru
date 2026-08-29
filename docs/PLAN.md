@@ -58,12 +58,13 @@ Status legend: 🔲 not started · 🟡 in progress · ✅ done
 
 ## Current status
 
-**Phases 0–5 code-complete.** 18 migrations written — the first six built the schema,
-functions/triggers, RLS, storage and the post RPCs; the later ones walk most of that
-back out of SQL (see the session log). Upload pipeline: page-wide drop zone on the posts
-page (file → MD5 dedup → AVIF thumbnail and lossless-AVIF post candidate in
-`lib/imgcmp/` → storage → `createPostWithTags()` with rollback, untagged), Manage
-section on `/posts/[id]` for edit + delete. Public site: home grid backed by
+**Phases 0–5 code-complete.** The schema is six migrations — storage, then one per table
+in foreign-key order (`profiles`, `posts`, `tags`, `post_tags`, `rating_counts`), each
+carrying its own indexes and RLS. The 18 written during the build were squashed into
+them, because most of them only undid each other (see the session log). Upload pipeline:
+page-wide drop zone on the posts page (file → MD5 dedup → AVIF thumbnail and
+lossless-AVIF post candidate in `lib/imgcmp/` → storage → `createPostWithTags()` with
+rollback, untagged), Manage section on `/posts/[id]` for edit + delete. Public site: home grid backed by
 `searchPosts()`, sticky search bar with debounced autocomplete and `-tag` exclusion, tag
 sidebar/bottom-drawer facets, `/posts/[id]` detail, `/tags` index.
 Phase 5 polish: `rating:x` / `-rating:x` metatags ride in the same `?query=` string and
@@ -119,6 +120,52 @@ the real gate.
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
 
+- **2026-08-29 (8)** — Squashed the 18 migrations into six before the first real
+  deployment: `20260826090000_storage_buckets.sql`, then one file per table in
+  foreign-key order — `profiles` (with `handle_new_user()`), `posts`, `tags`,
+  `post_tags`, `rating_counts`. Reason: twelve of the eighteen existed only to undo the
+  other six. A reader of `supabase/migrations/` met `is_admin()`, a Google-OAuth email
+  allow-list, `posts.status`/`score`, four counter triggers and four RPCs before finding
+  out that none of them are in the schema, and replaying all that is the slowest and
+  most fragile way to arrive at five tables.
+
+  Decision: **one file per table**, each carrying that table's columns, indexes *and*
+  RLS policies. The build's migrations were grouped by kind — all the tables, then all
+  the triggers, then all the policies — which meant answering "what is `post_tags`?"
+  took three files. The failure modes are per-table too, so the file you open on a
+  policy problem is the one that defines the table. Storage is its own file and runs
+  first: `storage.*` is extension-owned with its own rules (its tables refuse direct
+  deletes, so a bad bucket is cleaned up from the dashboard, never from a migration),
+  and nothing in it depends on the app's tables — the policies test `bucket_id` and
+  `auth.uid()` only.
+
+  Decision: the files keep early timestamps rather than new ones, so a fresh `db push`
+  sees only unapplied migrations; the cost is that a project already carrying the old
+  series cannot be pushed to and has to be reset (`db:reset`, or `db:reset:remote` for
+  the linked project — which is why that script exists). Decision: the surviving *why*
+  comments were carried across (free-form `rating`, the recompute-not-increment
+  counters, the `revoke execute` on `handle_new_user`, md5 as the dedup key), the
+  archaeology of removed features was not — that is what this log is for. Migration ids
+  that no longer resolve were taken out of `CLAUDE.md`, `docs/`, and the comments in
+  `lib/data/posts.ts` / `counters.ts`.
+
+  The first `db:reset:remote` failed, and not because of the squash: VS Code's
+  format-on-save ran a SQL formatter over the migration and rewrote `$$` as `$ $`, which
+  ends `handle_new_user()`'s dollar-quoted body mid-declaration (`syntax error at or
+  near "$"`). `.vscode/settings.json` now sets `"[sql]": { "editor.formatOnSave":
+  false }`, and `20260826100000_profiles.sql` says why at the top — migrations are
+  hand-written and read top to bottom, so no formatter should touch them. Two warnings
+  in that output are harmless and unrelated: no `supabase/seed.sql` exists (there is
+  nothing to seed), and the migration-catalog cache needs Docker, which this machine
+  does not have.
+
+  Also considered and rejected: moving the bucket `insert` to `seed.sql`. Seeds run on
+  `db reset` only, never on `db push`, so a project provisioned by push would get the
+  four `storage.objects` policies with neither bucket existing. Buckets are structure
+  here, not sample data. Note: `supabase-setup.md` step 4 still tells you to promote a
+  `profiles.role` that was dropped long before this; it was already stale and is
+  untouched.
+
 - **2026-08-29 (7)** — Phase 5 closed, and with it the plan. The rating filter was
   verified against real posts (runbook step 10), so its last verify box is ticked.
   Decision: steps 11–13 are **dropped**, not deferred — the site is a hobby project on
@@ -143,7 +190,7 @@ _Newest first. Format: date — what was done, what's next, any decisions made._
   `create_post_with_tags` RPCs that the 202608291* migrations deleted. The boxes are
   right, the prose behind them is stale.
 
-- **2026-08-29 (last)** — Moved the two image encoders out of `actions/upload.ts` into
+- **2026-08-29 (5)** — Moved the two image encoders out of `actions/upload.ts` into
   `src/lib/imgcmp/`: `compressImgForThumbnail()` (resize + lossy AVIF) and
   `compressImgForPost()` (the lossless-AVIF candidate), both returning the same
   `{ ok, message, buffer, error }` shape rather than throwing. Reason: the action's job

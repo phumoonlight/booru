@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 /**
  * The denormalized counters — `tags.post_count` and `rating_counts.post_count`.
  *
- * These rode on Postgres triggers until `20260829130000`. Two things changed with
+ * These rode on Postgres triggers until they were moved here. Two things changed with
  * the move to TypeScript. The counters are now recomputed rather than incremented,
  * because PostgREST has no `set post_count = post_count + 1` and the read-then-write
  * that stands in for it can lose a concurrent update — permanently, since an
@@ -74,7 +74,7 @@ export async function syncRatingCounts(ratings: string[]): Promise<void> {
         return
       }
 
-      // Upsert, not update: `rating` is free-form text since 20260828160000, so the
+      // Upsert, not update: `rating` is free-form text, so the
       // first post on a tier outside the seeded scale has no row to update yet.
       const { error: writeError } = await supabase
         .from('rating_counts')

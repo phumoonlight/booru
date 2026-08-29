@@ -80,7 +80,7 @@ There is no role column — every signed-in user may upload and manage posts.
 ### Counters — `src/lib/data/counters.ts`
 
 `tags.post_count` and `rating_counts.post_count` were kept by triggers (`tag_post_count`
-on `post_tags`, three `posts_rating_count` triggers on `posts`) until `20260829130000`.
+on `post_tags`, three `posts_rating_count` triggers on `posts`) until they moved into TypeScript.
 They are now recomputed in TypeScript, by `syncTagPostCounts()` / `syncRatingCounts()`,
 which every write in `lib/data/posts.ts` calls with exactly the tags and ratings it moved.
 They run on the service-role client, for the reason the triggers were `security definer`:
@@ -99,7 +99,7 @@ failing the upload afterwards would trade a wrong number for a lost image.
 ### Post writes — `src/lib/data/posts.ts`
 
 `createPostWithTags()` and `updatePostWithTags()` were the `create_post_with_tags` /
-`update_post_with_tags` RPCs until `20260829100000`; they are now plain PostgREST calls
+`update_post_with_tags` RPCs early on; they are now plain PostgREST calls
 on the caller's session, so RLS (`auth.uid() is not null`) is the only guard and each
 step's failure carries its own message. Both end in the same `setPostTags()`: create the
 tag names that are new, then diff the wanted set against the links already stored and
@@ -113,7 +113,7 @@ the row cascades them away, then recounts those tags and the rating it emptied.
 
 ### View counting — `incrementPostView()`
 
-Was the `increment_post_view` RPC until `20260829120000`. PostgREST can't send
+Was the `increment_post_view` RPC early on. PostgREST can't send
 `view_count = view_count + 1`, so it reads the count and writes back with
 `.eq('view_count', <what it read>)`: a concurrent view that landed first makes the
 update match no row, and it reads again, up to three attempts. It runs on the service
@@ -125,7 +125,7 @@ prefetches, `generateMetadata` and crawlers don't inflate the number.
 
 ### Search — `src/lib/data/search.ts`
 
-`searchPosts()` was the `search_posts` SQL function until `20260829100000`. It now
+`searchPosts()` was the `search_posts` SQL function early on. It now
 resolves tag membership to plain id lists first, then makes one PostgREST request that
 only filters, orders and counts:
 
@@ -154,8 +154,7 @@ RLS **enabled on every table**. Any signed-in user is a moderator:
 | rating_counts | public | service role only   | service role only       | —            |
 
 The write test is `(select auth.uid()) is not null` inline in each policy; the old
-`is_admin()` helper and `profiles.role` were dropped in
-`20260828110000_drop_role_any_user_manages.sql`.
+`is_admin()` helper and `profiles.role` were dropped before the schema was squashed.
 
 Public accounts and `favorites` are still deferred; see [future.md](./future.md) §3.
 

@@ -35,10 +35,10 @@ Supabase — the badge turning green is confirmed in
 
 **Goal:** full schema migrated; the admin can log in; admin mutations are role-checked.
 
-- [x] Migration 1: tables `profiles`, `posts`, `tags`, `post_tags` (+ indexes) — `20260826100000_initial_tables.sql`
-- [x] Migration 2: `handle_new_user` trigger, `tag_post_count` trigger, `is_admin()` helper — `20260826100100_functions_triggers.sql`
-- [x] Migration 3: enable RLS + all policies — `20260826100200_rls_policies.sql`
-- [x] Migration 4: storage buckets `originals`, `thumbnails` + storage policies — `20260826100300_storage_buckets.sql`
+- [x] Migration 1: tables `profiles`, `posts`, `tags`, `post_tags` (+ indexes)
+- [x] Migration 2: `handle_new_user` trigger, `tag_post_count` trigger, `is_admin()` helper
+- [x] Migration 3: enable RLS + all policies
+- [x] Migration 4: storage buckets `originals`, `thumbnails` + storage policies
 - [x] `/login` page (email/password) + logout action (`src/app/(auth)/login/`, `src/lib/actions/auth.ts`)
 - [x] `requireAdmin()` helper (`src/lib/auth.ts`) at the top of every admin server action, backed by the RPCs' own `is_admin()` test — there is no admin-only route to guard (Phase 5 removed `/admin`)
 - [x] Verify: build + lint pass
@@ -53,7 +53,7 @@ creating the admin user and checking the session are
 
 **Goal:** admin uploads an image with tags from a phone; post + thumbnail + tags appear in DB/storage.
 
-- [x] Migration: `create_post_with_tags` RPC (+ `update_post_with_tags` for edits) — `20260826110000_post_rpcs.sql`
+- [x] Migration: `create_post_with_tags` RPC (+ `update_post_with_tags` for edits)
 - [x] Upload action: admin check → MD5 dedup → sharp (dimensions + WebP thumb ≤400px) → storage upload → RPC insert, with storage rollback on DB failure (`src/lib/actions/upload.ts`)
 - [x] No upload page/form: the posts page is a page-wide drop zone with an Upload button in the header (`src/components/upload-zone.tsx`); every upload lands `general` and untagged, then is tagged from the edit page
 - [x] Handle duplicate-MD5 with a friendly "already exists → link to post" error
@@ -88,7 +88,7 @@ creating the admin user and checking the session are
 
 **Goal:** the defining booru feature — multi-tag search with negation and autocomplete.
 
-- [x] Migration: `search_posts()` function — `20260826120000_search_posts.sql`
+- [x] Migration: `search_posts()` function
 - [x] `lib/data/search.ts` calling the RPC; `lib/search.ts` parses `?tags=` (space-separated, `-` prefix = exclude)
 - [x] Search bar (sticky top on mobile): tokenizes tags as chips, `-tag` supported
 - [x] Autocomplete: `searchTags(prefix)` ordered by post_count, debounced 200ms, arrow-key + touch friendly

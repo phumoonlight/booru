@@ -73,8 +73,8 @@ booru/
 - Query runs through `searchPosts()` in `lib/data/search.ts` (see database-schema.md).
   Multi-tag AND is the one thing PostgREST can't say in a single filter, so tag
   membership is resolved to id lists in TypeScript first and the request that follows
-  only filters, orders and counts. It lived in a `search_posts` SQL function until
-  `20260829100000`, which was faster to write and much harder to change.
+  only filters, orders and counts. It lived in a `search_posts` SQL function early on,
+  which was faster to write and much harder to change.
 - Tag autocomplete: prefix search on `tags.name` ordered by `post_count desc`, debounced.
 
 ### Ratings and SEO (Phase 5 detail)

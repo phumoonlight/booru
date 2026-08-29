@@ -42,26 +42,30 @@ npx supabase link --project-ref <project-ref>
 npx supabase db push
 ```
 
-`db push` applies every file in `supabase/migrations/` in timestamp order:
+`db push` applies every file in `supabase/migrations/` in timestamp order. One is
+storage, then one per table — each holding that table's columns, indexes and RLS
+policies, so everything about a table is in one place:
 
 | Migration | Contents |
 |---|---|
-| `20260826100000_initial_tables.sql` | `profiles`, `posts`, `tags`, `post_tags` + indexes |
-| `20260826100100_functions_triggers.sql` | `is_admin()`, `handle_new_user`, `tag_post_count` |
-| `20260826100200_rls_policies.sql` | RLS enabled + all policies |
-| `20260826100300_storage_buckets.sql` | `originals` / `thumbnails` buckets + policies |
-| `20260826110000_post_rpcs.sql` | `create_post_with_tags`, `update_post_with_tags` |
-| `20260826120000_search_posts.sql` | `search_posts` (multi-tag AND + negation) |
-| … | later migrations; see `supabase/migrations/` |
-| `20260829100000_drop_post_query_rpcs.sql` | drops `search_posts`, `create_post_with_tags`, `update_post_with_tags` — that logic now lives in `src/lib/data/` |
-| `20260829110000_revoke_trigger_function_execute.sql` | takes `EXECUTE` on the trigger functions away from `anon` / `authenticated` |
-| `20260829120000_drop_increment_post_view.sql` | drops `increment_post_view` — the counter is `incrementPostView()` in `src/lib/data/posts.ts` |
-| `20260829130000_drop_counter_triggers.sql` | drops the `tag_post_count` / `posts_rating_count` triggers — the counters are recomputed by `src/lib/data/counters.ts`; adds `posts_rating_idx` |
+| `20260826090000_storage_buckets.sql` | the `posts` / `post-thumbnails` buckets and their `storage.objects` policies |
+| `20260826100000_profiles.sql` | `profiles` + RLS, `handle_new_user()` and its `auth.users` trigger |
+| `20260826100100_posts.sql` | `posts` + indexes + RLS |
+| `20260826100200_tags.sql` | `tags` + indexes + RLS |
+| `20260826100300_post_tags.sql` | `post_tags` + index + RLS (after both tables it references) |
+| `20260826100400_rating_counts.sql` | `rating_counts`, the seeded rating scale, + RLS |
 
-**Verify:** dashboard → **Table Editor** shows the four tables; **Storage** shows both
-buckets; **Database → Functions** lists `handle_new_user` and nothing else — every
-function that held query logic is dropped again by `20260829100000` and
-`20260829120000`.
+The order is the foreign keys': `profiles` → `posts` → `tags` → `post_tags`, with
+`rating_counts` last because its seed reads `posts`.
+
+The eighteen migrations written while the app was being built were squashed into these
+before the first deployment. Anything applied to a project from the old series has to be
+reset (`npm run db:reset` locally, `npm run db:reset:remote` for the linked project)
+rather than pushed on top.
+
+**Verify:** dashboard → **Table Editor** shows the five tables; **Storage** shows both
+buckets; **Database → Functions** lists `handle_new_user` and nothing else — no query
+logic lives in SQL.
 
 Never edit schema in the dashboard — write a new timestamped migration instead, so the
 schema stays reproducible.
@@ -134,7 +138,7 @@ Log out (or use a private window) so you are testing as an anonymous visitor, at
 ## Step 8 — Verify tag search (finishes Phase 4)
 
 Search is `searchPosts()` in `src/lib/data/search.ts` — it used to be a `search_posts`
-SQL function, dropped in `20260829100000`, so there is no RPC left to call from the SQL
+SQL function early on, so there is no RPC left to call from the SQL
 editor. Check it through the UI (and read `console.error('searchPosts failed:')` in the
 server log if the grid comes back empty when it shouldn't).
 

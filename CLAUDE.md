@@ -61,16 +61,20 @@ Commit only when asked. Never push unless asked.
 
 ## Database
 
-- Schema changes are **always** a new timestamped file in `supabase/migrations/`, never
-  a dashboard edit. Migrations are the source of truth.
-- SQL functions holding query logic are gone: `20260829100000` moved search and the post
-  writes into TypeScript, `20260829120000` the view counter, `20260829130000` the two
-  counter triggers — a plpgsql body needs a migration to edit and reports one opaque
-  error, from inside a statement that was about something else. What remains in SQL is
-  `handle_new_user()`, which fires on `auth.users`; `20260829110000` took `EXECUTE` on
-  the trigger functions away from `anon` and `authenticated` so nothing definer-rights is
-  reachable over `/rest/v1/rpc`. Don't add RPCs back without a reason PostgREST
-  genuinely can't meet.
+- **The schema is six files: storage, then one per table.** `20260826090000_storage_buckets.sql`,
+  then `profiles` → `posts` → `tags` → `post_tags` → `rating_counts` in foreign-key
+  order. Each table's file holds its columns, indexes **and** RLS policies, so nothing
+  about a table is spread across migrations. The eighteen migrations from the build were
+  squashed into these before the first deployment. Schema changes from here are
+  **always** a new timestamped file, never a dashboard edit and never an edit to the
+  squashed six once they have been pushed anywhere real.
+- SQL functions holding query logic are gone: search, the post writes, the view counter
+  and the two counter triggers all moved into TypeScript, because a plpgsql body needs a
+  migration to edit and reports one opaque error, from inside a statement that was about
+  something else. What remains in SQL is `handle_new_user()`, which fires on
+  `auth.users`, and `EXECUTE` on it is revoked from `anon` and `authenticated` so nothing
+  definer-rights is reachable over `/rest/v1/rpc`. Don't add RPCs back without a reason
+  PostgREST genuinely can't meet.
 - Denormalized counters (`tags.post_count`, `rating_counts.post_count`) are maintained by
   `lib/data/counters.ts`, not by triggers. They **recompute** — PostgREST can't increment,
   and an increment that loses a race is wrong for good — so every write must call
@@ -92,7 +96,7 @@ Commit only when asked. Never push unless asked.
   outside `splitRatings`/`resolveRatings` needs to know they exist.
 - **Rating scale is `general, e1, e2, e3, e4, e5`.** `RESTRICTED_RATINGS` (e3–e5) means
   "kept out of sitemap.xml and search results" only — nothing is hidden from a visitor.
-  Column is free-form text; the constraint was dropped in `20260828160000`.
+  Column is free-form text — no check constraint, so a new tier is a code change only.
 - **Buckets are `posts` and `post-thumbnails`**, both AVIF-era: thumbnails are lossy AVIF
   (400px tall, width capped at 800 for panoramas, `mitchell` kernel — the grid scales by row height, so height is the bound that matters), the post image is lossless AVIF only when it beats the
   uploaded bytes, otherwise the original byte-for-byte. Paths derive from md5, never stored.

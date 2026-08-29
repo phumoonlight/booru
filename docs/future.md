@@ -16,7 +16,7 @@ config flip.
 **When enabling:**
 - Re-add a privilege column (`profiles.role`) and a helper like the old `is_admin()`.
 - Re-add `posts.status` (`'pending'`/`'active'`/`'deleted'`, dropped in
-  `20260828130000_view_count_drop_score_status.sql`) and change RLS: ordinary users
+  the schema was squashed) and change RLS: ordinary users
   insert posts with `status='pending'`; public select narrows to `status='active'`.
 - Add a queue page: approve (→ active) / reject (→ deleted) with reason.
 - Add `moderation_log` table (who, action, post, reason, timestamp).
