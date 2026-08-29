@@ -1,5 +1,5 @@
 {
-  "name": "pubooru",
+  "name": "booru",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -32,5 +32,8 @@
     "supabase": "^2.115.0",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "allowScripts": {
+    "unrs-resolver@1.12.2": true
   }
 }
