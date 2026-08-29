@@ -53,8 +53,12 @@ export type DeleteTagState = { error: string; ok?: never } | { ok: true; error?:
 
 /**
  * Remove a tag from the board entirely — it comes off every post that carries it.
- * post_tags has no cascade from tags, so its rows go first; that also lets the
- * post_count trigger unwind the counter before the row it points at disappears.
+ * post_tags has no cascade from tags, so its rows go first or the foreign key
+ * refuses the delete.
+ *
+ * No counter to recount: the only `post_count` these links fed belongs to the tag
+ * being deleted, and no post changes rating. Other tags on those posts keep every
+ * link they had.
  */
 export async function deleteTag(
   _prevState: DeleteTagState,

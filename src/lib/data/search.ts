@@ -189,8 +189,8 @@ export async function getTagsForPosts(postIds: number[]): Promise<{ tag: Tag; co
  * Site-wide post count per rating — the whole gallery, not the page on screen, so the
  * rating facet reads like a tag's `post_count`: a fixed scale whose numbers stay put as
  * you page through or narrow the search. `rating_counts` is a denormalized counter row
- * per tier kept current by a trigger on posts, so this is a six-row read, not six
- * `count(*)` scans.
+ * per tier, recomputed by the write path (lib/data/counters.ts), so this is a six-row
+ * read, not six `count(*)` scans.
  */
 export async function getRatingCounts(): Promise<Record<Rating, number>> {
   const supabase = await createClient()

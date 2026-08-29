@@ -8,7 +8,7 @@ import { parseTagInput } from '@/lib/tags'
 import { RATINGS } from '@/lib/search'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getPost, incrementPostView, updatePostWithTags } from '@/lib/data/posts'
+import { deletePostRow, getPost, incrementPostView, updatePostWithTags } from '@/lib/data/posts'
 import {
   POSTS_BUCKET,
   THUMBNAILS_BUCKET,
@@ -25,10 +25,11 @@ export async function deletePost(formData: FormData) {
   const post = await getPost(id)
   if (!post) throw new Error('Post not found')
 
-  // Row first (cascades post_tags, trigger decrements tag counts), then files
+  // Row first (it cascades post_tags and recounts what that emptied), then files.
+  // The order matters: a failed delete leaves the post whole, whereas removing the
+  // files first would leave a row pointing at nothing.
   const supabase = await createClient()
-  const { error } = await supabase.from('posts').delete().eq('id', id)
-  if (error) throw new Error(`Delete failed: ${error.message}`)
+  await deletePostRow(supabase, id, post.rating)
 
   const storage = createAdminClient().storage
   await storage.from(POSTS_BUCKET).remove([postImagePath(post.md5, post.file_ext)])

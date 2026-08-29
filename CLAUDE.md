@@ -43,24 +43,33 @@ the scratchpad, never committed. Keep it that way unless asked for a test setup.
   can reuse it verbatim (docs/future.md §2).
 - Four Supabase clients, each with one job: `server.ts` (cookies, request-scoped),
   `client.ts` (browser), `anon.ts` (cookie-less, for cacheable routes like the sitemap),
-  `admin.ts` (service role — never reaches the browser; storage writes/deletes, plus
-  `incrementPostView()`, the one row write an anonymous visitor is allowed to cause).
+  `admin.ts` (service role — never reaches the browser; storage writes/deletes,
+  `incrementPostView()` — the one row write an anonymous visitor is allowed to cause —
+  and the counter syncs in `lib/data/counters.ts`, whose rows no user session may set).
 
 ## Database
 
 - Schema changes are **always** a new timestamped file in `supabase/migrations/`, never
   a dashboard edit. Migrations are the source of truth.
 - SQL functions holding query logic are gone: `20260829100000` moved search and the post
-  writes into TypeScript, `20260829120000` the view counter, because a plpgsql body needs
-  a migration to edit and reports one opaque error. What remains in SQL is the three
-  trigger functions, and `20260829110000` took `EXECUTE` on those away from `anon` and
-  `authenticated` so nothing definer-rights is reachable over `/rest/v1/rpc`. Don't add
-  RPCs back without a reason PostgREST genuinely can't meet.
-- Denormalized counters ride on triggers: `tags.post_count` (on `post_tags`) and
-  `rating_counts.post_count` (on `posts`). Any tag/post write must go through rows those
-  triggers watch, or the counts drift.
+  writes into TypeScript, `20260829120000` the view counter, `20260829130000` the two
+  counter triggers — a plpgsql body needs a migration to edit and reports one opaque
+  error, from inside a statement that was about something else. What remains in SQL is
+  `handle_new_user()`, which fires on `auth.users`; `20260829110000` took `EXECUTE` on
+  the trigger functions away from `anon` and `authenticated` so nothing definer-rights is
+  reachable over `/rest/v1/rpc`. Don't add RPCs back without a reason PostgREST
+  genuinely can't meet.
+- Denormalized counters (`tags.post_count`, `rating_counts.post_count`) are maintained by
+  `lib/data/counters.ts`, not by triggers. They **recompute** — PostgREST can't increment,
+  and an increment that loses a race is wrong for good — so every write must call
+  `syncTagPostCounts` / `syncRatingCounts` with the tags and ratings it moved. They write
+  on the service role (`rating_counts` has no write policy at all — the guard is the
+  action's `requireUser()`), and they log rather than throw: the post write has already
+  landed by then.
 - `createPostWithTags()` has no transaction — it deletes the post it just inserted if
-  tagging fails. Preserve that unwind if you touch the write path.
+  tagging fails, via `deletePostRow()` (which reads the post's tag links before the
+  cascade eats them, so the counts come back down). Preserve that unwind if you touch
+  the write path.
 
 ## Things the code decided that are easy to get wrong
 

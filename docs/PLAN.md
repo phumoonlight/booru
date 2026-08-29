@@ -80,10 +80,10 @@ end against the real project. Phase 5's remaining work is entirely in that runbo
 step 10 verifies the rating filter against real data, step 11 deploys to Vercel with a
 custom domain, step 12 is Supabase production hardening, step 13 is the backup story.
 
-No SQL function in `public` is callable any more: search, the post writes and the view
-counter all live in `src/lib/data/`, the three trigger functions had `EXECUTE` revoked
-from the API roles, and the Supabase linter's `SECURITY DEFINER` findings are answered
-rather than dismissed.
+The `public` schema holds one SQL function, `handle_new_user()`, and it fires on
+`auth.users` — a table the app never writes. Search, the post writes, the view counter
+and both denormalized counters all live in `src/lib/data/`, and the Supabase linter's
+`SECURITY DEFINER` findings are answered rather than dismissed.
 
 Note: Next 16 renamed the `middleware.ts` convention to `proxy.ts` — session refresh
 lives in `src/proxy.ts`. There are no admin-only routes: admin affordances are sections
@@ -106,6 +106,32 @@ of public pages, and `requireAdmin()` plus the RPCs' `is_admin()` are the real g
 ## Session log
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
+
+- **2026-08-29 (last)** — Retired the last two counter triggers to TypeScript:
+  `20260829130000_drop_counter_triggers.sql` drops `tag_post_count_update()` and
+  `rating_count_update()` with their four triggers, and `src/lib/data/counters.ts` takes
+  over as `syncTagPostCounts()` / `syncRatingCounts()`. Same reason as the two migrations
+  before it — a plpgsql body needs a migration to edit, and a failed count aborted the
+  insert that fired it, so a bookkeeping problem surfaced as "your upload failed".
+  Decision: the counters **recompute** rather than increment. PostgREST cannot express
+  `post_count = post_count + 1` at all, and the CAS that rescued `increment_post_view`
+  is the wrong shape here — a dropped view is acceptable, a dropped tag count is drift
+  that never heals. Counting the rows that define the number is exact, and a sync that
+  fails is repaired by the next write touching the same tag or rating, so the syncs log
+  and never throw (the post write has already succeeded by then; failing it afterwards
+  would trade a wrong number for a lost image). Supporting changes: `setPostTags()` now
+  diffs the wanted tags against the links already stored and returns the ones that
+  moved, so a retag that only reorders the box recounts nothing; `deletePostRow()` is
+  shared by the delete action and the create unwind, reading the post's tag links before
+  the cascade takes them; the migration adds `posts_rating_idx` so a rating recount is
+  index-only rather than the sequential scan `rating_counts` was built to avoid. Second
+  decision, after a first pass got it wrong: the syncs run on the **service-role**
+  client, not the caller's session, so `rating_counts` keeps the select-only RLS it has
+  always had. Giving `authenticated` a write policy there would have handed every
+  signed-in session a PostgREST endpoint for setting the facet counts to anything, to
+  buy a guard the action's `requireUser()` already provides — the triggers were
+  `security definer` for exactly this reason. Consequence to watch: an upload now pays one `count(*)` per tag it
+  touches, run in parallel — a post with dozens of tags is the case to measure first.
 
 - **2026-08-29 (later)** — Emptied the `public` schema of callable SQL functions, after
   the Supabase linter flagged every `SECURITY DEFINER` function as `anon`-executable over

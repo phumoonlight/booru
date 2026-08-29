@@ -56,9 +56,10 @@ npx supabase db push
 | `20260829100000_drop_post_query_rpcs.sql` | drops `search_posts`, `create_post_with_tags`, `update_post_with_tags` — that logic now lives in `src/lib/data/` |
 | `20260829110000_revoke_trigger_function_execute.sql` | takes `EXECUTE` on the trigger functions away from `anon` / `authenticated` |
 | `20260829120000_drop_increment_post_view.sql` | drops `increment_post_view` — the counter is `incrementPostView()` in `src/lib/data/posts.ts` |
+| `20260829130000_drop_counter_triggers.sql` | drops the `tag_post_count` / `posts_rating_count` triggers — the counters are recomputed by `src/lib/data/counters.ts`; adds `posts_rating_idx` |
 
 **Verify:** dashboard → **Table Editor** shows the four tables; **Storage** shows both
-buckets; **Database → Functions** lists the trigger functions and nothing else — every
+buckets; **Database → Functions** lists `handle_new_user` and nothing else — every
 function that held query logic is dropped again by `20260829100000` and
 `20260829120000`.
 

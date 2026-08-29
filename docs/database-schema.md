@@ -47,7 +47,7 @@ Storage paths are derived, not stored: `originals/{md5}.{file_ext}`, `thumbnails
 | id         | bigint PK identity              |                                                                         |
 | name       | text unique not null            | lowercase, `snake_case`, validated `^[a-z0-9_().-]+$`                   |
 | category   | text not null default 'general' | `'general'` \| `'artist'` \| `'character'` \| `'copyright'` \| `'meta'` |
-| post_count | int not null default 0          | denormalized; maintained by trigger on post_tags                        |
+| post_count | int not null default 0          | denormalized; recomputed by the write path (counters.ts)                 |
 | created_at | timestamptz default now()       |                                                                         |
 
 ### `rating_counts`
@@ -58,7 +58,7 @@ One counter row per rating, so the sidebar's rating facet is an O(1) read instea
 | column     | type                   | notes                                                                 |
 | ---------- | ---------------------- | --------------------------------------------------------------------- |
 | rating     | text PK                | seeded with the full UI scale; a free-form value gets a row on demand |
-| post_count | int not null default 0 | denormalized; maintained by trigger on posts                          |
+| post_count | int not null default 0 | denormalized; recomputed by the write path (counters.ts)              |
 
 ### `post_tags`
 
@@ -77,28 +77,39 @@ Index both directions: PK covers `(post_id, tag_id)`; add index on `(tag_id, pos
 On insert into `auth.users`, create a `profiles` row (username from email prefix).
 There is no role column — every signed-in user may upload and manage posts.
 
-### `tag_post_count` trigger
+### Counters — `src/lib/data/counters.ts`
 
-On insert/delete of `post_tags`, increment/decrement `tags.post_count`.
+`tags.post_count` and `rating_counts.post_count` were kept by triggers (`tag_post_count`
+on `post_tags`, three `posts_rating_count` triggers on `posts`) until `20260829130000`.
+They are now recomputed in TypeScript, by `syncTagPostCounts()` / `syncRatingCounts()`,
+which every write in `lib/data/posts.ts` calls with exactly the tags and ratings it moved.
+They run on the service-role client, for the reason the triggers were `security definer`:
+no user session should get to choose these numbers. `rating_counts` therefore still has
+no write policy, and the authorization is the `requireUser()` the post write passed.
 
-### `posts_rating_count` triggers
+Recompute, not increment: PostgREST has no `set post_count = post_count + 1`, and the
+read-then-write standing in for it can lose a concurrent update permanently. A recount —
+`count(*)` over `post_tags` for a tag, over `posts` for a rating — is right regardless of
+what it finds, so a stale write is repaired by the next one. `posts_rating_idx` makes the
+rating side index-only; `post_tags (tag_id, post_id)` already covered the tag side.
 
-On insert/delete of `posts`, and on update **of `rating`** only (guarded by a `when`
-clause so view_count bumps never fire it), increment/decrement the matching
-`rating_counts` row.
+Counter syncs log and never throw: by the time one runs the post write has succeeded, and
+failing the upload afterwards would trade a wrong number for a lost image.
 
 ### Post writes — `src/lib/data/posts.ts`
 
 `createPostWithTags()` and `updatePostWithTags()` were the `create_post_with_tags` /
 `update_post_with_tags` RPCs until `20260829100000`; they are now plain PostgREST calls
 on the caller's session, so RLS (`auth.uid() is not null`) is the only guard and each
-step's failure carries its own message. Both end in the same `setPostTags()`: upsert the
-tag names that are new, delete the `post_tags` links that are no longer wanted, upsert
-the ones that are — so `tags.post_count` keeps riding on its trigger.
+step's failure carries its own message. Both end in the same `setPostTags()`: create the
+tag names that are new, then diff the wanted set against the links already stored and
+apply only the difference — which is also what it returns, so the caller knows exactly
+which tags to recount.
 
 There is no transaction across those requests any more. `createPostWithTags()` makes up
-for it by deleting the post it just inserted if tagging fails, which cascades
-`post_tags` and unwinds the count triggers.
+for it by deleting the post it just inserted if tagging fails. That delete goes through
+`deletePostRow()`, shared with the delete action: it reads the post's tag links before
+the row cascades them away, then recounts those tags and the rating it emptied.
 
 ### View counting — `incrementPostView()`
 
@@ -140,7 +151,7 @@ RLS **enabled on every table**. Any signed-in user is a moderator:
 | posts         | public | signed-in           | signed-in               | signed-in    |
 | tags          | public | signed-in          | signed-in               | signed-in    |
 | post_tags     | public | signed-in          | —                       | signed-in    |
-| rating_counts | public | trigger only        | trigger only            | trigger only |
+| rating_counts | public | service role only   | service role only       | —            |
 
 The write test is `(select auth.uid()) is not null` inline in each policy; the old
 `is_admin()` helper and `profiles.role` were dropped in
