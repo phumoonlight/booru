@@ -58,14 +58,16 @@ Status legend: 🔲 not started · 🟡 in progress · ✅ done
 
 ## Current status
 
-**Phases 0–5 code-complete.** 6 migrations written (schema, functions/triggers, RLS,
-storage, post RPCs, `search_posts`). Upload pipeline: page-wide drop zone on the posts
-page (file → MD5 dedup → sharp WebP thumb → storage → `create_post_with_tags` RPC with
-rollback, untagged), Manage section on `/posts/[id]` for edit + delete. Public site: home grid backed by the multi-tag
-search RPC, sticky search bar with debounced autocomplete and `-tag` exclusion, tag
+**Phases 0–5 code-complete.** 18 migrations written — the first six built the schema,
+functions/triggers, RLS, storage and the post RPCs; the later ones walk most of that
+back out of SQL (see the session log). Upload pipeline: page-wide drop zone on the posts
+page (file → MD5 dedup → AVIF thumbnail and lossless-AVIF post candidate in
+`lib/imgcmp/` → storage → `createPostWithTags()` with rollback, untagged), Manage
+section on `/posts/[id]` for edit + delete. Public site: home grid backed by
+`searchPosts()`, sticky search bar with debounced autocomplete and `-tag` exclusion, tag
 sidebar/bottom-drawer facets, `/posts/[id]` detail, `/tags` index.
-Phase 5 polish: `rating:x` / `-rating:x` metatags ride in the same `?tags=` string and
-resolve to the search RPC's existing `p_rating` argument, backing a clickable rating
+Phase 5 polish: `rating:x` / `-rating:x` metatags ride in the same `?query=` string and
+resolve in `lib/search.ts` before the query is built, backing a clickable rating
 facet in the sidebar/drawer. No rating is hidden from any visitor; the adult tiers are
 only kept out of `sitemap.xml` and search-engine results.
 SEO is `metadataBase` + title template + OG/Twitter defaults in the root layout, real
@@ -86,8 +88,10 @@ and both denormalized counters all live in `src/lib/data/`, and the Supabase lin
 `SECURITY DEFINER` findings are answered rather than dismissed.
 
 Note: Next 16 renamed the `middleware.ts` convention to `proxy.ts` — session refresh
-lives in `src/proxy.ts`. There are no admin-only routes: admin affordances are sections
-of public pages, and `requireAdmin()` plus the RPCs' `is_admin()` are the real gate.
+lives in `src/proxy.ts`; it guards no routes, pages check the session themselves. There
+are no admin-only routes and no role tier at all: upload, edit and delete are sections of
+public pages, and RLS's `auth.uid() is not null` plus each action's `requireUser()` are
+the real gate.
 
 ## Working conventions (for every session)
 
@@ -107,7 +111,22 @@ of public pages, and `requireAdmin()` plus the RPCs' `is_admin()` are the real g
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
 
-- **2026-08-29 (last)** — Retired the last two counter triggers to TypeScript:
+- **2026-08-29 (last)** — Moved the two image encoders out of `actions/upload.ts` into
+  `src/lib/imgcmp/`: `compressImgForThumbnail()` (resize + lossy AVIF) and
+  `compressImgForPost()` (the lossless-AVIF candidate), both returning the same
+  `{ ok, message, buffer, error }` shape rather than throwing. Reason: the action's job
+  is validation, dedup, storage and the row write, and the encoder settings sitting
+  inline meant every tuning change touched the middle of that flow. The rationale for
+  each setting travels with it now — mitchell over lanczos3, the height-not-longest-side
+  bound, why animated inputs are skipped. Decision: the size comparison that decides
+  whether the AVIF candidate is actually stored, and the debug logging around it, stay
+  in the action. They are about the uploaded bytes, not about the encoder, and the whole
+  point of the branch is that the winner depends on the input — a function that decided
+  for itself would hide the thing worth watching. The PNG re-deflate branch stayed put
+  for the same reason: it is a fallback keyed on AVIF having lost, not a third encoder.
+  No behaviour change; build and lint clean. Next: the runbook still gates every phase.
+
+- **2026-08-29 (4)** — Retired the last two counter triggers to TypeScript:
   `20260829130000_drop_counter_triggers.sql` drops `tag_post_count_update()` and
   `rating_count_update()` with their four triggers, and `src/lib/data/counters.ts` takes
   over as `syncTagPostCounts()` / `syncRatingCounts()`. Same reason as the two migrations
