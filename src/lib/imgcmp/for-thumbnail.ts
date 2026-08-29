@@ -38,7 +38,7 @@ export const compressImgForThumbnail = async (buffer: Buffer) => {
         height: THUMB_MAX_HEIGHT,
         width: THUMB_MAX_WIDTH,
       })
-      .avif({ effort: 9, quality: 25 })
+      .avif({ effort: 9 })
       .keepIccProfile()
       .toBuffer()
   } catch (err) {
