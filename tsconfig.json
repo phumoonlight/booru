@@ -10,6 +10,11 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
+    // tests/bench/*.mts runs straight through node's type stripping, which needs the
+    // real on-disk specifier — `../../src/lib/imgcmp/for-post.ts`, extension and all.
+    // Safe
+    // repo-wide because noEmit is on: this permits the form, it does not require it.
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
