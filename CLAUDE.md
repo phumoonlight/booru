@@ -8,20 +8,12 @@ Next.js 16 App Router + Supabase (Postgres, Storage, Auth), Tailwind v4, mobile-
 
 ## Replies
 
-Answer like a TL;DR. The work can be thorough; the message about it is short.
-
-- First line is the outcome — what changed, or the answer. No preamble, no "Let me…".
-- Then at most 2–4 bullets: what the user has to decide, what broke, what to do next.
-  Nothing that only restates the diff or the plan.
-- Link files (`[file.ts:42](src/file.ts#L42)`) instead of pasting code back; the user
-  can read the diff.
-- No closing recap of what the message just said.
-- Keep it full-length only for errors, failing output, security notes, and confirmations
-  before something destructive — those never get trimmed.
-- When a reply genuinely has to run long, it is bullets, not paragraphs. One claim per
-  bullet. This includes explanations — answer the question asked, then stop: no
-  background the user didn't ask for, no "worth knowing" asides, no survey of where else
-  the same pattern appears.
+- Be extremely concise. Lead directly with the result or fix.
+- Omit all conversational preambles, narration, and filler phrases.
+- Do not explain code changes unless explicitly asked.
+- Link files (`[file.ts:42](src/file.ts#L42)`) instead of pasting code back.
+- Full length only for errors, failing output, security notes, and confirmations before
+  something destructive.
 
 ## Commands
 
@@ -29,12 +21,15 @@ Answer like a TL;DR. The work can be thorough; the message about it is short.
 |---|---|
 | `npm run dev` / `build` / `lint` | the only verification the repo has — there is no test runner |
 | `npm run db:push` / `db:push:dry` | apply migrations to the linked Supabase project |
-| `npm run db:list` / `db:reset` | migration status / local reset |
+| `npm run db:list` / `db:reset` / `db:reset:remote` | migration status / local reset / reset the linked project |
 | `npm run post-app:dev` / `post-app:package` | the desktop uploader — window, or a Windows installer |
 | `npm run typecheck -w post-app` | the only check the Electron app has; the root `tsc` excludes `packages/` |
+| `npm run bench:avif` | sweeps sharp's AVIF `effort` over `tests/static/` — sizes and encode times |
 
 Ad-hoc checks (query parser, rating resolution) have been run as throwaway scripts in
-the scratchpad, never committed. Keep it that way unless asked for a test setup.
+the scratchpad, never committed. `tests/` is not a suite and there is no runner — it is
+the AVIF bench and its sample image, kept only because the numbers behind `lib/imgcmp/`
+are worth being able to re-measure. Keep it that way unless asked for a test setup.
 
 ## Git
 
@@ -84,6 +79,13 @@ at — see [packages/post-app/README.md](packages/post-app/README.md).
   same split as the web, spelled in `createPostFromImage`'s signature.
 - The renderer has no keys, no Node and no network: every capability is one
   `ipcMain.handle` in `src/main/ipc.ts`, and the file's bytes are read on the main side.
+- **Its config is four typed-in values, not an environment.** `main/secure-store.ts`
+  keeps `config.json` and `session.json` in the app's userData, sealed with Electron's
+  `safeStorage` (DPAPI / Keychain / libsecret) where the OS offers it — the service-role
+  key is in there, and a sealed file that can no longer be opened is treated as absent,
+  costing a re-setup and never a crash. The settings screen is the desktop
+  `<SetupNotice />`; in a checkout it never appears, because `main/config.ts` falls back
+  to the repo's `.env.local` so the app and `npm run dev` reach the same project.
 
 ## Database
 
@@ -127,6 +129,10 @@ at — see [packages/post-app/README.md](packages/post-app/README.md).
   (400px tall, width capped at 800 for panoramas, `mitchell` kernel — the grid scales by row height, so height is the bound that matters), the post image is lossless AVIF only when it beats the
   uploaded bytes, otherwise the original byte-for-byte. Paths derive from md5, never stored.
 - **MD5 is the dedup key on purpose** — collision resistance is not what it's for.
+- **The two encoders live in `lib/imgcmp/`, not in the upload action.** `for-post.ts` and
+  `for-thumbnail.ts` take a buffer and hand back a candidate, so the upload action, the
+  pipeline and the desktop app share one encode. The constants in there are measured, not
+  chosen — re-measure with `npm run bench:avif` before changing one.
 - **Nothing goes through the Next optimizer.** Both the grid thumb and the detail image
   are `unoptimized`, so the stored file is served untouched (animation intact, no
   re-encode). The grid used to be optimized and it was visibly softening thumbnails:
