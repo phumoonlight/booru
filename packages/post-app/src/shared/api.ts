@@ -77,6 +77,8 @@ export type PostAppApi = {
   /** Opens the OS picker. Returns the paths chosen, empty if cancelled. */
   chooseFiles: () => Promise<string[]>
   stageFiles: (paths: string[]) => Promise<StageOutcome[]>
+  /** Downloads images dragged in from a browser, then stages them like picked files. */
+  fetchImages: (urls: string[]) => Promise<StageOutcome[]>
   /** Drag-and-drop hands the renderer a `File` with no path on it; this asks Electron for one. */
   pathForFile: (file: File) => string
   suggestTags: (query: string) => Promise<TagSuggestion[]>

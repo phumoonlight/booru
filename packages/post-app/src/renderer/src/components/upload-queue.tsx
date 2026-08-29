@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { RATING_LABEL, RATINGS, type Rating } from '@web/lib/search'
 import { TrashIcon } from './icons'
 import { EMPTY_TAGS, TagField, tagsToInput, type TagFieldValue } from './tag-field'
-import type { AppStatus, StagedFile, UploadResult } from '../../../shared/api'
+import type { AppStatus, StagedFile, StageOutcome, UploadResult } from '../../../shared/api'
 
 type Status = 'ready' | 'uploading' | 'ok' | 'error'
 
@@ -41,7 +41,9 @@ function formatSize(bytes: number): string {
  */
 export function UploadQueue({ status }: { status: AppStatus }) {
   const [dragging, setDragging] = useState(false)
-  const [staging, setStaging] = useState(false)
+  // What the staging step is doing, or null. A label rather than a flag: reading a
+  // picked file and fetching one off the web take visibly different amounts of time.
+  const [staging, setStaging] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   // How far the current run has got. Counting statuses instead would miscount, since rows
   // that failed a previous run are already 'error' before this run reaches them.
@@ -58,46 +60,63 @@ export function UploadQueue({ status }: { status: AppStatus }) {
    * either a staged row or the reason it can't be one, which is said out loud rather
    * than discovered halfway through an upload.
    */
+  const absorb = useCallback((outcomes: StageOutcome[]) => {
+    const turnedAway: string[] = []
+    setItems((prev) => {
+      const seen = new Set(prev.map((item) => item.file.path))
+      const added: Staged[] = []
+      for (const outcome of outcomes) {
+        if (!outcome.ok) {
+          turnedAway.push(`${outcome.name} — ${outcome.error}`)
+          continue
+        }
+        if (seen.has(outcome.path)) continue
+        seen.add(outcome.path)
+        added.push({
+          file: {
+            path: outcome.path,
+            name: outcome.name,
+            size: outcome.size,
+            width: outcome.width,
+            height: outcome.height,
+            preview: outcome.preview,
+          },
+          tags: EMPTY_TAGS,
+          rating: 'general',
+          sourceUrl: '',
+          status: 'ready',
+        })
+      }
+      return added.length > 0 ? [...prev, ...added] : prev
+    })
+    setRefused(turnedAway)
+  }, [])
+
   const stage = useCallback(
     async (paths: string[]) => {
       if (paths.length === 0) return
-      setStaging(true)
+      setStaging('Reading images…')
       try {
-        const outcomes = await window.api.stageFiles(paths)
-        const turnedAway: string[] = []
-        setItems((prev) => {
-          const seen = new Set(prev.map((item) => item.file.path))
-          const added: Staged[] = []
-          for (const outcome of outcomes) {
-            if (!outcome.ok) {
-              turnedAway.push(`${outcome.name} — ${outcome.error}`)
-              continue
-            }
-            if (seen.has(outcome.path)) continue
-            seen.add(outcome.path)
-            added.push({
-              file: {
-                path: outcome.path,
-                name: outcome.name,
-                size: outcome.size,
-                width: outcome.width,
-                height: outcome.height,
-                preview: outcome.preview,
-              },
-              tags: EMPTY_TAGS,
-              rating: 'general',
-              sourceUrl: '',
-              status: 'ready',
-            })
-          }
-          return added.length > 0 ? [...prev, ...added] : prev
-        })
-        setRefused(turnedAway)
+        absorb(await window.api.stageFiles(paths))
       } finally {
-        setStaging(false)
+        setStaging(null)
       }
     },
-    []
+    [absorb]
+  )
+
+  /** The other way in: an image dragged straight out of a browser window. */
+  const stageUrls = useCallback(
+    async (urls: string[]) => {
+      if (urls.length === 0) return
+      setStaging(urls.length === 1 ? 'Downloading…' : `Downloading ${urls.length} images…`)
+      try {
+        absorb(await window.api.fetchImages(urls))
+      } finally {
+        setStaging(null)
+      }
+    },
+    [absorb]
   )
 
   const patch = useCallback((path: string, changes: Partial<Staged>) => {
@@ -169,23 +188,34 @@ export function UploadQueue({ status }: { status: AppStatus }) {
 
   const pending = items.filter((item) => item.status !== 'ok').length
   const uploaded = items.filter((item) => item.status === 'ok')
-  const working = busy || staging
+  const working = busy || staging !== null
 
   return (
     <div
       onDragOver={(event) => {
         event.preventDefault()
+        // Without an explicit copy effect some sources treat the drop as refused
+        event.dataTransfer.dropEffect = 'copy'
         setDragging(true)
       }}
       onDragLeave={() => setDragging(false)}
       onDrop={(event) => {
         event.preventDefault()
         setDragging(false)
-        // A dropped File stopped carrying `.path` in Electron 32 — preload asks for it
-        const paths = Array.from(event.dataTransfer.files).map((file) =>
-          window.api.pathForFile(file)
-        )
-        void stage(paths.filter(Boolean))
+
+        // Everything is read out of dataTransfer *now*: it is emptied the moment this
+        // handler returns, so nothing here may be deferred behind an await.
+        // A dropped File stopped carrying `.path` in Electron 32 — preload asks for it.
+        const paths = Array.from(event.dataTransfer.files)
+          .map((file) => window.api.pathForFile(file))
+          .filter(Boolean)
+        if (paths.length > 0) {
+          void stage(paths)
+          return
+        }
+
+        // Nothing local: this came from a browser, and what crossed is an address.
+        void stageUrls(imageUrlsFrom(event.dataTransfer))
       }}
       className="flex flex-col gap-4"
     >
@@ -208,11 +238,7 @@ export function UploadQueue({ status }: { status: AppStatus }) {
           disabled={working}
           className="flex min-h-11 items-center rounded-lg bg-accent px-4 text-sm font-medium text-background disabled:opacity-50"
         >
-          {staging
-            ? 'Reading images…'
-            : items.length > 0
-              ? 'Add more images'
-              : 'Choose images'}
+          {staging ?? (items.length > 0 ? 'Add more images' : 'Choose images')}
         </button>
       </div>
 
@@ -432,4 +458,44 @@ function PostLink({
       {label}
     </button>
   )
+}
+
+/**
+ * The image addresses in a drop that carried no file.
+ *
+ * A browser advertises the same image several ways at once. `text/uri-list` is the
+ * direct one and is what Chrome, Firefox and Safari all set for a dragged `<img>`. The
+ * HTML flavour is the fallback: dragging a *selection* containing an image sets that and
+ * not the URI list, and the `src` has to be dug out of the markup. Plain text last —
+ * dragging an address bar or a highlighted link leaves only that.
+ *
+ * Non-http entries are dropped here rather than in main: a `data:` URL from a canvas is
+ * not something to send over the bridge, and the comment lines a uri-list may contain
+ * are not addresses at all.
+ */
+function imageUrlsFrom(transfer: DataTransfer): string[] {
+  const found: string[] = []
+
+  const add = (value: string) => {
+    const url = value.trim()
+    if (!url || url.startsWith('#')) return
+    if (!/^https?:\/\//i.test(url)) return
+    if (!found.includes(url)) found.push(url)
+  }
+
+  const lines = (value: string) => value.split(/\r?\n/)
+
+  lines(transfer.getData('text/uri-list')).forEach(add)
+
+  if (found.length === 0) {
+    const html = transfer.getData('text/html')
+    if (html) {
+      const parsed = new DOMParser().parseFromString(html, 'text/html')
+      parsed.querySelectorAll('img').forEach((image) => add(image.getAttribute('src') ?? ''))
+    }
+  }
+
+  if (found.length === 0) lines(transfer.getData('text/plain')).forEach(add)
+
+  return found
 }

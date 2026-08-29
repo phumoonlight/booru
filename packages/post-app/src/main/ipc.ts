@@ -13,6 +13,7 @@ import { createPostFromImage, parsePostMetadata } from '@web/lib/upload/pipeline
 import { DESKTOP_UPLOAD_LIMITS } from './limits'
 import { loadConfig, revealConfig, saveConfig } from './config'
 import { stageFiles } from './staging'
+import { downloadImages } from './download'
 import { adminClient, currentUser, resetClients, signIn, signOut, userClient } from './supabase'
 import type { AppConfigInput, AppStatus, Outcome, TagSuggestion } from '../shared/api'
 import type { UploadResult } from '@web/lib/upload/pipeline'
@@ -112,6 +113,16 @@ export function registerIpc(): void {
   ipcMain.handle('files:stage', async (_event, paths: unknown) => {
     const parsed = z.array(z.string().min(1)).max(200).safeParse(paths)
     return parsed.success ? stageFiles(parsed.data) : []
+  })
+
+  /**
+   * Images dragged in from a browser arrive as links, not files — see `main/download.ts`.
+   * The addresses come from a page, so they are parsed as URLs before anything fetches
+   * them, and the handler answers in the same shape `files:stage` does.
+   */
+  ipcMain.handle('files:fetch', async (_event, urls: unknown) => {
+    const parsed = z.array(z.url()).max(50).safeParse(urls)
+    return parsed.success ? downloadImages(parsed.data) : []
   })
 
   /** Autocomplete for the tag field, on the same query the web's `suggestTags` action runs. */

@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, shell } from 'electron'
 import { registerIpc } from './ipc'
+import { cleanupDownloads } from './download'
 
 /**
  * Pubooru's uploader, as a desktop window.
@@ -85,6 +86,9 @@ void app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
+
+// Images fetched from a browser drag live in a temp directory for as long as the app does
+app.on('will-quit', cleanupDownloads)
 
 // macOS keeps the app alive with no windows; everywhere else closing the window is quitting
 app.on('window-all-closed', () => {
