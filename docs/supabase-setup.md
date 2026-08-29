@@ -159,6 +159,8 @@ their rows to ✅ in [PLAN.md](./PLAN.md). Phase 5 finishes at step 13.
 
 ## Step 10 — Verify the rating filter (Phase 5)
 
+> **Done 2026-08-29** — verified against real posts.
+
 Set at least one post to each rating from its **Manage** section, including one `e4`.
 Then, signed out (private window):
 
@@ -175,6 +177,10 @@ Then, signed out (private window):
   builds is what `searchPosts()` filters `rating` against.
 
 ## Step 11 — Deploy to Vercel (Phase 5)
+
+> **Dropped 2026-08-29 — hobby project, not deployed.** Kept as the recipe if that
+> changes; nothing below is pending work.
+
 
 The app is a stock Next.js project, so the defaults are right: framework Next.js,
 build `next build`, install `npm install`, no root-directory override.
@@ -214,6 +220,11 @@ build `next build`, install `npm install`, no root-directory override.
 
 ## Step 12 — Production hardening (Phase 5)
 
+> **Dropped 2026-08-29** along with step 11 — most of it hardens a public origin that
+> does not exist. The bucket size/MIME caps are the part still worth doing if the site
+> is ever exposed; the upload action enforces the same limits today.
+
+
 In the Supabase dashboard:
 
 - **Authentication → Providers → Email**: turn **Enable signup** *off*. There is no
@@ -235,6 +246,10 @@ path in; uploading a file over the bucket limit fails at storage with a clear er
 and no orphan row (the upload action rolls back).
 
 ## Step 13 — Backups (Phase 5)
+
+> **Dropped 2026-08-29 — accepted data loss.** The author keeps the original images
+> outside the bucket, so a lost project costs the tags, not the pictures.
+
 
 Pick one:
 

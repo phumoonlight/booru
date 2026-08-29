@@ -47,12 +47,12 @@ Documented in [future.md](./future.md) so current decisions don't block them lat
 
 | # | Phase | Status |
 |---|---|---|
-| 0 | Project scaffold (Next.js + Tailwind + Supabase client) | 🟡 in progress |
-| 1 | Database schema + migrations + admin auth | 🟡 in progress |
-| 2 | Upload pipeline (admin): file → dedup → thumbnail → tags | 🟡 in progress |
-| 3 | Browse: post grid, post detail page, pagination | 🟡 in progress |
-| 4 | Tag search: multi-tag query, autocomplete, tag drawer | 🟡 in progress |
-| 5 | Polish: rating filter, SEO, error pages, deploy | 🟡 in progress |
+| 0 | Project scaffold (Next.js + Tailwind + Supabase client) | ✅ done |
+| 1 | Database schema + migrations + admin auth | ✅ done |
+| 2 | Upload pipeline (admin): file → dedup → thumbnail → tags | ✅ done |
+| 3 | Browse: post grid, post detail page, pagination | ✅ done |
+| 4 | Tag search: multi-tag query, autocomplete, tag drawer | ✅ done |
+| 5 | Polish: rating filter, SEO, error pages, deploy | ✅ done |
 
 Status legend: 🔲 not started · 🟡 in progress · ✅ done
 
@@ -77,10 +77,18 @@ Error pages: root 404, post 404, `error.tsx` and `global-error.tsx`.
 Build + lint clean; every route returns 200 in dev (`/nope` 404s); the query parser and
 rating resolution have 34 passing assertions.
 
-Every phase stays 🟡 until [supabase-setup.md](./supabase-setup.md) has been run end to
-end against the real project. Phase 5's remaining work is entirely in that runbook:
-step 10 verifies the rating filter against real data, step 11 deploys to Vercel with a
-custom domain, step 12 is Supabase production hardening, step 13 is the backup story.
+**All six phases are ✅.** The runbook has been run through step 10 against the real
+project (`jxlyofznvmfsbljqttbx`): browsing, multi-tag search and the rating filter were
+all checked against real posts on 2026-08-29 — grid at 375px, `tag_a tag_b -tag_c`,
+thumb-friendly autocomplete, `rating:` / `-rating:` narrowing the grid. Steps 11–13
+(Vercel deploy, Supabase production hardening, backups) are **dropped**: this is a hobby
+project running on the author's own machine, and the two things in them that are not
+about a public origin — bucket size/MIME caps, and the images themselves — are already
+covered by the upload action's limits and by the originals living outside the bucket.
+The recipes stay in the runbook if that ever changes.
+
+There is no open work item left in the plan. What's next comes from
+[future.md](./future.md) or from using the thing.
 
 The `public` schema holds one SQL function, `handle_new_user()`, and it fires on
 `auth.users` — a table the app never writes. Search, the post writes, the view counter
@@ -110,6 +118,30 @@ the real gate.
 ## Session log
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
+
+- **2026-08-29 (7)** — Phase 5 closed, and with it the plan. The rating filter was
+  verified against real posts (runbook step 10), so its last verify box is ticked.
+  Decision: steps 11–13 are **dropped**, not deferred — the site is a hobby project on
+  the author's machine, so a Vercel deploy with a custom domain, the auth/session
+  hardening that protects a public origin, and a backup schedule are all guarding
+  something that does not exist. Two parts of them were worth a second look before
+  dropping: bucket size/MIME caps (step 12), which the upload action already enforces on
+  every path into storage, and backups (step 13), where the loss is the tags rather than
+  the images — the originals live outside the bucket. Both accepted. The steps stay
+  written down in the runbook, marked dropped rather than deleted, so a later decision to
+  publish has the recipe. Next: nothing in the plan — [future.md](./future.md) or use.
+
+- **2026-08-29 (6)** — Phases 0–4 marked ✅. The author had already run the runbook
+  through step 9 and verified browsing and tag search against real posts: the grid reads
+  well at 375px, `tag_a tag_b -tag_c` returns the right set from the database, and the
+  autocomplete is usable one-handed. The two `[ ]` verify items in phases.md (steps 6
+  and 8) are ticked and the phase table's first five rows flipped. Only Phase 5 is still
+  🟡, and only for runbook steps 10–13: rating filter against real data, Vercel deploy,
+  production hardening, backups. Note for whoever ticks the rest: phases.md's *checked*
+  items still describe the pre-refactor world — `?tags=`, WebP thumbs,
+  `originals`/`thumbnails`, `requireAdmin()`, and the `search_posts` /
+  `create_post_with_tags` RPCs that the 202608291* migrations deleted. The boxes are
+  right, the prose behind them is stale.
 
 - **2026-08-29 (last)** — Moved the two image encoders out of `actions/upload.ts` into
   `src/lib/imgcmp/`: `compressImgForThumbnail()` (resize + lossy AVIF) and

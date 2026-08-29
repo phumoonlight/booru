@@ -78,7 +78,7 @@ creating the admin user and checking the session are
 - [x] `next.config.ts` image `remotePatterns` for the Supabase storage host (derived from env)
 - [x] Nav wired to real routes (a bottom tab bar at the time; Phase 5 folded it into the sticky top bar)
 - [x] Verify: build + lint pass; all public routes render 200 in dev
-- [ ] Verify: lighthouse mobile pass on home page; grid comfortable at 375px — needs real posts, see [supabase-setup.md](./supabase-setup.md) step 6
+- [x] Verify: lighthouse mobile pass on home page; grid comfortable at 375px — checked against real posts, 2026-08-29
 
 **Done when:** anonymous visitor can browse grid → open post → tap a tag → see filtered grid.
 
@@ -96,7 +96,7 @@ creating the admin user and checking the session are
 - [x] Related-tags on post page → tag rows link into search, with an exclude affordance
 - [x] `/tags` page: browse all tags by category, sorted by post_count
 - [x] Verify: 19 assertions on the query parser pass (`tag_a tag_b -tag_c` parses correctly, dedup, case folding, href building); all routes 200 in dev; build + lint clean
-- [ ] Verify: `tag_a tag_b -tag_c` returns the correct post set from the database; autocomplete usable with thumb on phone — needs real data, see [supabase-setup.md](./supabase-setup.md) step 8
+- [x] Verify: `tag_a tag_b -tag_c` returns the correct post set from the database; autocomplete usable with thumb on phone — checked against real data, 2026-08-29
 
 **Done when:** multi-tag AND + negation search works from the URL bar and the UI.
 
@@ -113,9 +113,18 @@ creating the admin user and checking the session are
 - [x] Blur placeholders on every remote image (`lib/blur.ts`)
 - [x] `getPost` / `getPostTags` / `getCurrentProfile` wrapped in React `cache` so `generateMetadata` and the page share one query
 - [x] Verify: build + lint clean; 34 assertions on the query parser and rating resolution pass; all public routes 200 in dev, `/nope` 404s
-- [ ] Verify: rating filter behaves against real data — [supabase-setup.md](./supabase-setup.md) step 10
-- [ ] Deploy to Vercel + custom domain — [supabase-setup.md](./supabase-setup.md) step 11
-- [ ] Supabase prod hardening (signup off, auth rate limits, storage size/MIME caps) — [supabase-setup.md](./supabase-setup.md) step 12
-- [ ] Backup story: PITR or scheduled dumps + storage mirror — [supabase-setup.md](./supabase-setup.md) step 13
+- [x] Verify: rating filter behaves against real data — checked 2026-08-29, [supabase-setup.md](./supabase-setup.md) step 10
 
-**Done when:** deployed and pleasant to browse daily.
+**Dropped 2026-08-29** — this runs as a hobby project on the author's own machine, so the
+three deployment steps are not being done and the runbook's steps 11–13 are marked
+optional rather than pending:
+
+- ~~Deploy to Vercel + custom domain~~ (step 11) — no public origin, so `NEXT_PUBLIC_SITE_URL`
+  stays whatever `.env.local` says and `robots.txt`/`sitemap.xml`/OG URLs are only ever
+  read locally.
+- ~~Supabase prod hardening~~ (step 12) — the one thing here that is not about a public
+  origin is bucket size/MIME caps; the upload action already enforces both.
+- ~~Backup story~~ (step 13) — accepted data loss. Nothing here is irreplaceable, and the
+  originals exist outside the bucket.
+
+**Done when:** ~~deployed and~~ pleasant to browse daily.
