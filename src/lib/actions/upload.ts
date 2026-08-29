@@ -1,7 +1,7 @@
 'use server'
 
 import { createHash } from 'node:crypto'
-import sharp from 'sharp'
+import sharp, { Metadata } from 'sharp'
 import { z } from 'zod'
 import { requireUser } from '@/lib/auth'
 import { parseTagInput } from '@/lib/tags'
@@ -11,6 +11,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createPostWithTags, getPostByMd5 } from '@/lib/data/posts'
 import { POSTS_BUCKET, THUMBNAILS_BUCKET, postImagePath, thumbnailPath } from '@/lib/storage'
 import { revalidatePath } from 'next/cache'
+import { compressImgForThumbnail } from '../imgcmp/for-thumbnail'
+import { compressImgForPost } from '../imgcmp/for-post'
 
 // A small file can still decode enormous: a flat 12000x12000 PNG compresses to
 // ~400KB, sails past the byte cap, and expands to 412MB in memory. Bytes bound
@@ -22,18 +24,6 @@ import { revalidatePath } from 'next/cache'
 // doing all the work. 20MP holds the whole pipeline near 3.5s, and is still far
 // above anything real: a 2000x3000 illustration is 6MP, a 4000x3000 photo 12MP.
 const MAX_PIXELS = 20_000_000
-// The grid scales thumbnails by row height, not by their longest side (`h-60` /
-// `sm:h-70` / `lg:h-80` in post-grid.tsx — 240/280/320px), so height is what has to be
-// guaranteed. Bounding the longest side left every landscape thumb short: a 16:9 image
-// capped at 400 wide is only 225 tall, and the grid stretched that to 320 — a 1.4x
-// upscale, worse the wider the image. Bounding height instead makes pixel density
-// uniform across aspect ratios, and a wide post pays for it in width, which is also
-// the screen area it takes up.
-//
-// The width cap is for panoramas only: at 5:1 a height-400 thumb would be 2000px
-// across, so `fit: 'inside'` falls back to the width bound and yields 800x160.
-const THUMB_HEIGHT = 400
-const THUMB_MAX_WIDTH = 800
 
 // Debug logging for the re-encode branches below. The whole point of those branches is
 // that the winner depends on the input, so the only way to tune them is to watch real
@@ -114,24 +104,21 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
 
   const buffer = Buffer.from(await file.arrayBuffer())
 
-  let width: number | undefined
-  let height: number | undefined
-  let ext: string | undefined
-  let animated = false
+  let meta: Metadata
   try {
-    const meta = await sharp(buffer).metadata()
-    // EXIF orientations 5-8 turn the image a quarter turn, and metadata() reports
-    // the size *before* that turn. Both ends of the pipeline show it turned —
-    // browsers apply the tag to a stored original, and sharp bakes the rotation
-    // into anything it re-encodes — so the recorded size has to be swapped to match.
-    const quarterTurned = (meta.orientation ?? 1) >= 5
-    width = quarterTurned ? meta.height : meta.width
-    height = quarterTurned ? meta.width : meta.height
-    ext = meta.format ? FORMAT_TO_EXT[meta.format] : undefined
-    animated = (meta.pages ?? 1) > 1
+    meta = await sharp(buffer).metadata()
   } catch {
     return { ok: false, error: 'File is not a readable image' }
   }
+  // EXIF orientations 5-8 turn the image a quarter turn, and metadata() reports
+  // the size *before* that turn. Both ends of the pipeline show it turned —
+  // browsers apply the tag to a stored original, and sharp bakes the rotation
+  // into anything it re-encodes — so the recorded size has to be swapped to match.
+  const quarterTurned = (meta.orientation ?? 1) >= 5
+  const width = quarterTurned ? meta.height : meta.width
+  const height = quarterTurned ? meta.width : meta.height
+  const ext = meta.format ? FORMAT_TO_EXT[meta.format] : undefined
+  const animated = (meta.pages ?? 1) > 1
   if (!ext || !width || !height) {
     return { ok: false, error: 'Unsupported format (jpg/png/gif/webp/avif only)' }
   }
@@ -157,63 +144,41 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
     }
   }
 
-  // Thumbnail: lossy AVIF. AVIF is 4:4:4 by default where WebP lossy is stuck at
-  // 4:2:0, so coloured line art and text edges survive; 10-bit costs nothing and
-  // stops smooth gradients banding. First frame only for animated inputs.
-  //
-  // `mitchell` over the default `lanczos3`: lanczos rings on the hard edges this
-  // site is full of, haloing every line, and the extra high-frequency detail also
-  // encodes larger. Measured on line art — peak overshoot +19 levels vs +3, and
-  // 15% more bytes.
-  //
   // Unlike the lossless attempts below there is no fallback here — a post with no
   // thumbnail has nothing to show in the grid — so a failure ends the upload with
   // the same error shape as everything else rather than throwing out of the action.
-  let thumb: Buffer
-  try {
-    thumb = await sharp(buffer)
-      .resize({
-        fit: 'inside',
-        kernel: 'mitchell',
-        withoutEnlargement: true,
-        height: THUMB_HEIGHT,
-        width: THUMB_MAX_WIDTH,
-      })
-      .avif({ effort: 9, quality: 25 })
-      .keepIccProfile()
-      .toBuffer()
-  } catch {
-    return { ok: false, error: 'Could not build a thumbnail for this image' }
+  const thumbResult = await compressImgForThumbnail(buffer)
+  if (!thumbResult.buffer) {
+    return {
+      ok: false,
+      error: thumbResult.message,
+    }
   }
 
-  // Post image: lossless AVIF, so the detail view never shows a degraded pixel.
-  // It only wins on some inputs; an already-lossy JPEG re-encodes several times
-  // larger, and flat-colour PNG often beats it too — either way the upload is
-  // stored untouched unless AVIF actually comes out smaller.
-  // Animated inputs are skipped outright: sharp would flatten them to frame 1.
-  let postBuffer = buffer
+  // Post image: the lossless AVIF candidate is kept only when it actually comes out
+  // smaller than the uploaded bytes, which for JPEG and flat-colour PNG it usually
+  // does not. A failed encode is not fatal — the upload itself is always storable.
+  let postBuffer: Buffer = buffer
   let postExt = ext
-  if (!animated) {
-    try {
-      const startedAt = Date.now()
-      const avif = await sharp(buffer).avif({ effort: 9 }).keepIccProfile().toBuffer()
-      const won = avif.length < postBuffer.length
-      console.log(
-        `[upload ${md5.slice(0, 8)}] lossless avif: ${ext} ${kb(buffer.length)} -> ` +
-          `avif ${kb(avif.length)} (${pct(avif.length, buffer.length)}, ` +
-          `${width}x${height}, ${Date.now() - startedAt}ms) — ${won ? 'kept' : 'discarded'}`
-      )
-      if (won) {
-        postBuffer = avif
-        postExt = 'avif'
-      }
-    } catch (error) {
-      // Encoder gave up (huge or exotic input) — keep the upload as-is
-      console.log(
-        `[upload ${md5.slice(0, 8)}] lossless avif: encoder failed — ` +
-          `${error instanceof Error ? error.message : String(error)}`
-      )
+  const startedAt = Date.now()
+  const postResult = await compressImgForPost(meta, buffer)
+  if (postResult.buffer) {
+    const avif = postResult.buffer
+    const won = avif.length < postBuffer.length
+    console.log(
+      `[upload ${md5.slice(0, 8)}] lossless avif: ${ext} ${kb(buffer.length)} -> ` +
+        `avif ${kb(avif.length)} (${pct(avif.length, buffer.length)}, ` +
+        `${width}x${height}, ${Date.now() - startedAt}ms) — ${won ? 'kept' : 'discarded'}`
+    )
+    if (won) {
+      postBuffer = avif
+      postExt = 'avif'
     }
+  } else if (!postResult.ok) {
+    console.log(
+      `[upload ${md5.slice(0, 8)}] lossless avif: encoder failed — ` +
+        `${postResult.error?.message ?? postResult.message}`
+    )
   }
 
   // AVIF lost and the upload is a PNG: re-deflate it instead. Same pixels, just a
@@ -263,7 +228,7 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
   console.log(
     `[upload ${md5.slice(0, 8)}] stored: uploaded ${ext} ${kb(buffer.length)} -> ` +
       `${postExt} ${kb(postBuffer.length)} (${pct(postBuffer.length, buffer.length)}), ` +
-      `thumb ${kb(thumb.length)}`
+      `thumb ${kb(thumbResult.buffer.length)}`
   )
 
   // Storage writes need the service-role client (RLS floor is signed-in-only anyway)
@@ -277,10 +242,12 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
   if (postUpload.error) {
     return { ok: false, error: `Storage upload failed: ${postUpload.error.message}` }
   }
-  const thumbUpload = await storage.from(THUMBNAILS_BUCKET).upload(thumbnailPath(md5), thumb, {
-    contentType: 'image/avif',
-    upsert: true,
-  })
+  const thumbUpload = await storage
+    .from(THUMBNAILS_BUCKET)
+    .upload(thumbnailPath(md5), thumbResult.buffer, {
+      contentType: 'image/avif',
+      upsert: true,
+    })
   if (thumbUpload.error) {
     await storage.from(POSTS_BUCKET).remove([postImagePath(md5, postExt)])
     return { ok: false, error: `Thumbnail upload failed: ${thumbUpload.error.message}` }
