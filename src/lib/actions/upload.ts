@@ -22,7 +22,18 @@ import { revalidatePath } from 'next/cache'
 // doing all the work. 20MP holds the whole pipeline near 3.5s, and is still far
 // above anything real: a 2000x3000 illustration is 6MP, a 4000x3000 photo 12MP.
 const MAX_PIXELS = 20_000_000
-const THUMB_MAX = 400
+// The grid scales thumbnails by row height, not by their longest side (`h-60` /
+// `sm:h-70` / `lg:h-80` in post-grid.tsx — 240/280/320px), so height is what has to be
+// guaranteed. Bounding the longest side left every landscape thumb short: a 16:9 image
+// capped at 400 wide is only 225 tall, and the grid stretched that to 320 — a 1.4x
+// upscale, worse the wider the image. Bounding height instead makes pixel density
+// uniform across aspect ratios, and a wide post pays for it in width, which is also
+// the screen area it takes up.
+//
+// The width cap is for panoramas only: at 5:1 a height-400 thumb would be 2000px
+// across, so `fit: 'inside'` falls back to the width bound and yields 800x160.
+const THUMB_HEIGHT = 400
+const THUMB_MAX_WIDTH = 800
 
 // Debug logging for the re-encode branches below. The whole point of those branches is
 // that the winner depends on the input, so the only way to tune them is to watch real
@@ -165,7 +176,8 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
         fit: 'inside',
         kernel: 'mitchell',
         withoutEnlargement: true,
-        height: THUMB_MAX,
+        height: THUMB_HEIGHT,
+        width: THUMB_MAX_WIDTH,
       })
       .avif({ effort: 9 })
       .keepIccProfile()

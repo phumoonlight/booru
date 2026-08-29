@@ -107,7 +107,7 @@ Confirm all of the following:
 
 - Status panel shows the new post id, and the post has no tags yet.
 - **Storage → originals** contains `{md5}.{ext}`; **thumbnails** contains `{md5}.webp`
-  and it is ≤400px on its longest side.
+  and it is 400px tall (width capped at 800), since the grid scales by row height.
 - `posts` has the row with correct `width`/`height`/`file_size`/`rating`.
 - `tags` has one row per tag with `post_count = 1`; `post_tags` links them.
 - Re-upload the same file → rejected with "This image already exists" plus a link to

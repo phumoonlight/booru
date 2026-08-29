@@ -82,11 +82,15 @@ the scratchpad, never committed. Keep it that way unless asked for a test setup.
   "kept out of sitemap.xml and search results" only — nothing is hidden from a visitor.
   Column is free-form text; the constraint was dropped in `20260828160000`.
 - **Buckets are `posts` and `post-thumbnails`**, both AVIF-era: thumbnails are lossy AVIF
-  (≤400px, `mitchell` kernel), the post image is lossless AVIF only when it beats the
+  (400px tall, width capped at 800 for panoramas, `mitchell` kernel — the grid scales by row height, so height is the bound that matters), the post image is lossless AVIF only when it beats the
   uploaded bytes, otherwise the original byte-for-byte. Paths derive from md5, never stored.
 - **MD5 is the dedup key on purpose** — collision resistance is not what it's for.
-- Grid images go through the Next optimizer; the detail image is `unoptimized` so the
-  stored file is served untouched (animation intact, no quality-75 re-encode).
+- **Nothing goes through the Next optimizer.** Both the grid thumb and the detail image
+  are `unoptimized`, so the stored file is served untouched (animation intact, no
+  re-encode). The grid used to be optimized and it was visibly softening thumbnails:
+  Next scales the requested quality by 50/80 for AVIF, so the default 75 became an AVIF
+  quality of 47 at effort 3 — a second lossy pass over an already-lossy thumbnail, for
+  a resize it could not perform anyway (its optimizer sets `withoutEnlargement`).
 - `view_count` is bumped only by the `recordPostView` action from the browser, never on a
   read path — prefetches, `generateMetadata` and crawlers must not inflate it.
 - Rating blur is a `data-blur-ratings` attribute on `<html>` set before first paint, so
