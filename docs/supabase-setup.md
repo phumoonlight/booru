@@ -54,11 +54,13 @@ npx supabase db push
 | `20260826120000_search_posts.sql` | `search_posts` (multi-tag AND + negation) |
 | … | later migrations; see `supabase/migrations/` |
 | `20260829100000_drop_post_query_rpcs.sql` | drops `search_posts`, `create_post_with_tags`, `update_post_with_tags` — that logic now lives in `src/lib/data/` |
+| `20260829110000_revoke_trigger_function_execute.sql` | takes `EXECUTE` on the trigger functions away from `anon` / `authenticated` |
+| `20260829120000_drop_increment_post_view.sql` | drops `increment_post_view` — the counter is `incrementPostView()` in `src/lib/data/posts.ts` |
 
 **Verify:** dashboard → **Table Editor** shows the four tables; **Storage** shows both
-buckets; **Database → Functions** lists the trigger functions plus
-`increment_post_view` (the three post/search RPCs are dropped again by
-`20260829100000`).
+buckets; **Database → Functions** lists the trigger functions and nothing else — every
+function that held query logic is dropped again by `20260829100000` and
+`20260829120000`.
 
 Never edit schema in the dashboard — write a new timestamped migration instead, so the
 schema stays reproducible.

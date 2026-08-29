@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import { createClient, type ServerClient } from '@/lib/supabase/server'
 import { createAnonClient } from '@/lib/supabase/anon'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { ensureTagIds } from '@/lib/data/tags'
 import type { Tag } from '@/lib/tags'
 import { RESTRICTED_RATINGS, type Rating } from '@/lib/search'
@@ -91,9 +92,7 @@ export async function getPostNeighbours(
  * Uses the cookie-less client so the route stays cacheable, and drops the
  * restricted tiers to match what an anonymous visitor is shown.
  */
-export async function getSitemapPosts(
-  limit: number
-): Promise<Pick<Post, 'id' | 'created_at'>[]> {
+export async function getSitemapPosts(limit: number): Promise<Pick<Post, 'id' | 'created_at'>[]> {
   const supabase = createAnonClient()
   const { data } = await supabase
     .from('posts')
@@ -180,15 +179,48 @@ export async function updatePostWithTags(
 }
 
 /**
+ * Adds one view to a post.
+ *
+ * This was the `increment_post_view` SQL function until `20260829120000`. PostgREST
+ * cannot send `view_count = view_count + 1`, so the increment is a read and then a
+ * write, and the compare-and-swap is what stands in for the atomicity the SQL function
+ * had for free: the update only lands while `view_count` is still what was read, and a
+ * concurrent view that got there first makes it match no row, so we read again. Three
+ * attempts, then the view is dropped — under real contention a lost view costs less
+ * than a retry loop holding a request open.
+ *
+ * Service role, because the update policy on `posts` requires a signed-in user and an
+ * anonymous visitor's view still counts. Nothing but an id reaches this, and
+ * `view_count` is the only column written.
+ */
+export async function incrementPostView(postId: number): Promise<void> {
+  const supabase = createAdminClient()
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data: current } = await supabase
+      .from('posts')
+      .select('view_count')
+      .eq('id', postId)
+      .maybeSingle()
+    if (!current) return
+
+    const { data: bumped } = await supabase
+      .from('posts')
+      .update({ view_count: current.view_count + 1 })
+      .eq('id', postId)
+      .eq('view_count', current.view_count)
+      .select('id')
+      .maybeSingle()
+    if (bumped) return
+  }
+}
+
+/**
  * Makes `names` the post's exact tag set: creates any missing tag, drops the links
  * that are no longer wanted, adds the ones that are. Every change goes through
  * post_tags rows, so tags.post_count stays right via its trigger.
  */
-async function setPostTags(
-  supabase: ServerClient,
-  postId: number,
-  names: string[]
-): Promise<void> {
+async function setPostTags(supabase: ServerClient, postId: number, names: string[]): Promise<void> {
   const tagIds = await ensureTagIds(supabase, names)
 
   // On a fresh post this matches nothing, which is why create and update can share it

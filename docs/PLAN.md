@@ -80,6 +80,11 @@ end against the real project. Phase 5's remaining work is entirely in that runbo
 step 10 verifies the rating filter against real data, step 11 deploys to Vercel with a
 custom domain, step 12 is Supabase production hardening, step 13 is the backup story.
 
+No SQL function in `public` is callable any more: search, the post writes and the view
+counter all live in `src/lib/data/`, the three trigger functions had `EXECUTE` revoked
+from the API roles, and the Supabase linter's `SECURITY DEFINER` findings are answered
+rather than dismissed.
+
 Note: Next 16 renamed the `middleware.ts` convention to `proxy.ts` — session refresh
 lives in `src/proxy.ts`. There are no admin-only routes: admin affordances are sections
 of public pages, and `requireAdmin()` plus the RPCs' `is_admin()` are the real gate.
@@ -101,6 +106,23 @@ of public pages, and `requireAdmin()` plus the RPCs' `is_admin()` are the real g
 ## Session log
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
+
+- **2026-08-29 (later)** — Emptied the `public` schema of callable SQL functions, after
+  the Supabase linter flagged every `SECURITY DEFINER` function as `anon`-executable over
+  `/rest/v1/rpc`. Two migrations: `20260829110000_revoke_trigger_function_execute.sql`
+  revokes `EXECUTE` on `handle_new_user`, `tag_post_count_update` and
+  `rating_count_update` from `public, anon, authenticated` — a trigger's `EXECUTE` is
+  checked once at `CREATE TRIGGER`, never when it fires, so the triggers are untouched;
+  and `20260829120000_drop_increment_post_view.sql` retires the view counter to
+  `incrementPostView()` in `lib/data/posts.ts`. Decision reversed from earlier today: the
+  atomicity that kept `increment_post_view` in SQL is recoverable from TypeScript as a
+  compare-and-swap — read `view_count`, write back with `.eq('view_count', <what was
+  read>)`, and a losing writer matches no row and reads again (three attempts, then the
+  view is dropped). It runs on the service-role client, which widens `admin.ts` past
+  "storage only" for the first time; that is the trade for not having a definer function
+  anon can call. Consequence to watch: the CAS costs two round trips per view and gets
+  slower exactly where a post is popular — the `post_views` dedup table in future.md §4
+  is where that stops being a retry loop and becomes one upsert.
 
 - **2026-08-29** — Moved the query logic out of the SQL functions. `search_posts`,
   `create_post_with_tags` and `update_post_with_tags` are gone (migration

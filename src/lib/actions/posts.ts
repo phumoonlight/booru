@@ -8,7 +8,7 @@ import { parseTagInput } from '@/lib/tags'
 import { RATINGS } from '@/lib/search'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getPost, updatePostWithTags } from '@/lib/data/posts'
+import { getPost, incrementPostView, updatePostWithTags } from '@/lib/data/posts'
 import {
   POSTS_BUCKET,
   THUMBNAILS_BUCKET,
@@ -99,7 +99,6 @@ export async function updatePost(
 export async function recordPostView(postId: number) {
   if (!Number.isInteger(postId) || postId < 1) return
 
-  const supabase = await createClient()
   // Best effort: a lost view is not worth failing the page over.
-  await supabase.rpc('increment_post_view', { p_post_id: postId })
+  await incrementPostView(postId)
 }

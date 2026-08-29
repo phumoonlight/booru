@@ -66,8 +66,8 @@ step 4). Nothing in the site is personalised, so every page is anonymous-cacheab
 
 ## 4. Server-side view dedup (currently: client-side only)
 
-**Now:** `posts.view_count` is bumped by the `increment_post_view()` RPC, called from
-the `recordPostView` server action, which `PostViewCounter` fires from the browser. The
+**Now:** `posts.view_count` is bumped by `incrementPostView()` in `lib/data/posts.ts`,
+called from the `recordPostView` server action, which `PostViewCounter` fires from the browser. The
 only guard against re-counting is client-side — an in-memory `Set` per tab plus a
 `localStorage` map with a 1h cooldown per post. That is deliberate: it is free, needs no
 schema, and a view counter is a popularity signal, not an audited metric.
@@ -80,8 +80,10 @@ calling the server action directly. The number is inflatable by whoever wants to
   viewed_at timestamptz default now(), PK (post_id, viewer_key))` where `viewer_key` is
   `auth.uid()` for signed-in users and a hashed IP + salt otherwise (hash it — raw IPs
   are personal data).
-- Move the cooldown into `increment_post_view()`: upsert into `post_views` and only
-  bump `view_count` when the row was absent or older than the window.
+- Move the cooldown into `incrementPostView()`: upsert into `post_views` and only bump
+  `view_count` when the row was absent or older than the window. That upsert is also the
+  point where the compare-and-swap retry could go away — a unique `post_views` row per
+  window makes the double-count it guards against impossible.
 - The IP has to come from the request, so the action must read the forwarded-for header
   and pass it in — `auth.uid()` alone is not enough for anonymous viewers.
 - Rate-limit the action too, so the table itself can't be flooded.

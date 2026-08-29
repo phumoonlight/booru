@@ -35,7 +35,7 @@ created from the Supabase dashboard — public signup is deferred ([future.md](.
 | width / height | int not null                           | from sharp                                                       |
 | rating         | text not null default 'general'        | `'general'` \| `'sensitive'` \| `'questionable'` \| `'explicit'` |
 | source_url     | text                                   | original source                                                  |
-| view_count     | int not null default 0                 | bumped only by `increment_post_view()`, never by reading a post  |
+| view_count     | int not null default 0                 | bumped only by `incrementPostView()`, never by reading a post    |
 | created_at     | timestamptz default now()              |                                                                  |
 
 Storage paths are derived, not stored: `originals/{md5}.{file_ext}`, `thumbnails/{md5}.webp`.
@@ -100,12 +100,17 @@ There is no transaction across those requests any more. `createPostWithTags()` m
 for it by deleting the post it just inserted if tagging fails, which cascades
 `post_tags` and unwinds the count triggers.
 
-### `increment_post_view(p_post_id bigint)` RPC
+### View counting — `incrementPostView()`
 
-Adds 1 to `posts.view_count`. Security definer, because the update policy on `posts`
-requires a signed-in user and anonymous visitors still count as views. Called from the
-`recordPostView` server action only — never from a read path, so prefetches,
-`generateMetadata` and crawlers don't inflate the number.
+Was the `increment_post_view` RPC until `20260829120000`. PostgREST can't send
+`view_count = view_count + 1`, so it reads the count and writes back with
+`.eq('view_count', <what it read>)`: a concurrent view that landed first makes the
+update match no row, and it reads again, up to three attempts. It runs on the service
+role because the update policy on `posts` requires a signed-in user and an anonymous
+visitor's view still counts.
+
+Called from the `recordPostView` server action only — never from a read path, so
+prefetches, `generateMetadata` and crawlers don't inflate the number.
 
 ### Search — `src/lib/data/search.ts`
 

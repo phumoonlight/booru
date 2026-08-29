@@ -43,17 +43,19 @@ the scratchpad, never committed. Keep it that way unless asked for a test setup.
   can reuse it verbatim (docs/future.md §2).
 - Four Supabase clients, each with one job: `server.ts` (cookies, request-scoped),
   `client.ts` (browser), `anon.ts` (cookie-less, for cacheable routes like the sitemap),
-  `admin.ts` (service role, storage writes/deletes only — never reaches the browser).
+  `admin.ts` (service role — never reaches the browser; storage writes/deletes, plus
+  `incrementPostView()`, the one row write an anonymous visitor is allowed to cause).
 
 ## Database
 
 - Schema changes are **always** a new timestamped file in `supabase/migrations/`, never
   a dashboard edit. Migrations are the source of truth.
-- SQL functions are deliberately almost gone: `20260829100000` moved search and the post
-  writes into TypeScript because a plpgsql body needs a migration to edit and reports one
-  opaque error. Only `increment_post_view()` remains — an atomic increment anonymous
-  visitors must run, which PostgREST can't express without a race. Don't add RPCs back
-  without that kind of reason.
+- SQL functions holding query logic are gone: `20260829100000` moved search and the post
+  writes into TypeScript, `20260829120000` the view counter, because a plpgsql body needs
+  a migration to edit and reports one opaque error. What remains in SQL is the three
+  trigger functions, and `20260829110000` took `EXECUTE` on those away from `anon` and
+  `authenticated` so nothing definer-rights is reachable over `/rest/v1/rpc`. Don't add
+  RPCs back without a reason PostgREST genuinely can't meet.
 - Denormalized counters ride on triggers: `tags.post_count` (on `post_tags`) and
   `rating_counts.post_count` (on `posts`). Any tag/post write must go through rows those
   triggers watch, or the counts drift.
