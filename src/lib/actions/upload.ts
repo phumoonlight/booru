@@ -9,12 +9,7 @@ import { RATINGS } from '@/lib/search'
 import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL } from '@/lib/upload-limits'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createPostWithTags, getPostByMd5 } from '@/lib/data/posts'
-import {
-  POSTS_BUCKET,
-  THUMBNAILS_BUCKET,
-  postImagePath,
-  thumbnailPath,
-} from '@/lib/storage'
+import { POSTS_BUCKET, THUMBNAILS_BUCKET, postImagePath, thumbnailPath } from '@/lib/storage'
 import { revalidatePath } from 'next/cache'
 
 // A small file can still decode enormous: a flat 12000x12000 PNG compresses to
@@ -28,6 +23,14 @@ import { revalidatePath } from 'next/cache'
 // above anything real: a 2000x3000 illustration is 6MP, a 4000x3000 photo 12MP.
 const MAX_PIXELS = 20_000_000
 const THUMB_MAX = 400
+
+// Debug logging for the re-encode branches below. The whole point of those branches is
+// that the winner depends on the input, so the only way to tune them is to watch real
+// uploads lose — server-side only, one line per attempt, keyed by the md5 so concurrent
+// uploads stay legible.
+const kb = (bytes: number) => `${(bytes / 1024).toFixed(1)}kB`
+const pct = (candidate: number, baseline: number) =>
+  `${candidate < baseline ? '-' : '+'}${((Math.abs(candidate - baseline) / baseline) * 100).toFixed(1)}%`
 
 const FORMAT_TO_EXT: Record<string, string> = {
   jpeg: 'jpg',
@@ -160,10 +163,10 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
     thumb = await sharp(buffer)
       .resize(THUMB_MAX, THUMB_MAX, {
         fit: 'inside',
-        withoutEnlargement: true,
         kernel: 'mitchell',
+        withoutEnlargement: true,
       })
-      .avif({ quality: 80, effort: 6, bitdepth: 10 })
+      .avif({ effort: 9 })
       .keepIccProfile()
       .toBuffer()
   } catch {
@@ -179,16 +182,24 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
   let postExt = ext
   if (!animated) {
     try {
-      const avif = await sharp(buffer)
-        .avif({ lossless: true, effort: 4 })
-        .keepIccProfile()
-        .toBuffer()
-      if (avif.length < postBuffer.length) {
+      const startedAt = Date.now()
+      const avif = await sharp(buffer).avif({ effort: 9 }).keepIccProfile().toBuffer()
+      const won = avif.length < postBuffer.length
+      console.log(
+        `[upload ${md5.slice(0, 8)}] lossless avif: ${ext} ${kb(buffer.length)} -> ` +
+          `avif ${kb(avif.length)} (${pct(avif.length, buffer.length)}, ` +
+          `${width}x${height}, ${Date.now() - startedAt}ms) — ${won ? 'kept' : 'discarded'}`
+      )
+      if (won) {
         postBuffer = avif
         postExt = 'avif'
       }
-    } catch {
+    } catch (error) {
       // Encoder gave up (huge or exotic input) — keep the upload as-is
+      console.log(
+        `[upload ${md5.slice(0, 8)}] lossless avif: encoder failed — ` +
+          `${error instanceof Error ? error.message : String(error)}`
+      )
     }
   }
 
@@ -217,13 +228,30 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
           .toBuffer(),
       ])
       const best = adaptive.length < plain.length ? adaptive : plain
-      if (best.length < postBuffer.length) {
+      const won = best.length < postBuffer.length
+      console.log(
+        `[upload ${md5.slice(0, 8)}] png re-deflate: original ${kb(buffer.length)} -> ` +
+          `plain ${kb(plain.length)} / adaptive ${kb(adaptive.length)}, best ` +
+          `${kb(best.length)} (${pct(best.length, buffer.length)}) — ` +
+          `${won ? 'kept' : 'discarded'}`
+      )
+      if (won) {
         postBuffer = best
       }
-    } catch {
+    } catch (error) {
       // Same fallback as above — the upload is always a valid answer
+      console.log(
+        `[upload ${md5.slice(0, 8)}] png re-deflate: failed — ` +
+          `${error instanceof Error ? error.message : String(error)}`
+      )
     }
   }
+
+  console.log(
+    `[upload ${md5.slice(0, 8)}] stored: uploaded ${ext} ${kb(buffer.length)} -> ` +
+      `${postExt} ${kb(postBuffer.length)} (${pct(postBuffer.length, buffer.length)}), ` +
+      `thumb ${kb(thumb.length)}`
+  )
 
   // Storage writes need the service-role client (RLS floor is signed-in-only anyway)
   const storage = createAdminClient().storage
@@ -236,12 +264,10 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
   if (postUpload.error) {
     return { ok: false, error: `Storage upload failed: ${postUpload.error.message}` }
   }
-  const thumbUpload = await storage
-    .from(THUMBNAILS_BUCKET)
-    .upload(thumbnailPath(md5), thumb, {
-      contentType: 'image/avif',
-      upsert: true,
-    })
+  const thumbUpload = await storage.from(THUMBNAILS_BUCKET).upload(thumbnailPath(md5), thumb, {
+    contentType: 'image/avif',
+    upsert: true,
+  })
   if (thumbUpload.error) {
     await storage.from(POSTS_BUCKET).remove([postImagePath(md5, postExt)])
     return { ok: false, error: `Thumbnail upload failed: ${thumbUpload.error.message}` }
