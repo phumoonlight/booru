@@ -1,0 +1,48 @@
+appId: dev.pubooru.postapp
+productName: Pubooru Uploader
+directories:
+  output: dist
+  buildResources: build
+
+# electron-vite writes main, preload and renderer into out/. Everything else the app
+# needs is a production dependency, which electron-builder collects on its own — this
+# repo is an npm workspace, so those live in the root node_modules, not beside this file.
+files:
+  - out/**
+  - package.json
+
+# sharp is a native module: its .node binaries have to be real files on disk, not
+# entries inside app.asar, or libvips cannot be loaded at all. @img/* is where the
+# prebuilt platform binaries actually live.
+asarUnpack:
+  - '**/node_modules/sharp/**'
+  - '**/node_modules/@img/**'
+
+# Those prebuilds are Node-API, which is ABI-stable across runtimes, so there is nothing
+# to rebuild against Electron's headers. Leaving this on would recompile libvips from
+# source and need a full C++ toolchain to do it.
+npmRebuild: false
+
+win:
+  target:
+    - nsis
+
+nsis:
+  # A real installer rather than a silent one-click: it asks where to put the app and
+  # leaves a shortcut, which is the whole point of packaging this at all.
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Pubooru Uploader
+
+mac:
+  target:
+    - dmg
+  category: public.app-category.photography
+
+linux:
+  target:
+    - AppImage
+  category: Graphics

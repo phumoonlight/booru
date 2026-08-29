@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pubooru Uploader</title>
+    <!--
+      The window loads nothing from the network — every image is a data: URL the main
+      process made, and every call goes over the preload bridge — so 'self' plus data:
+      is the whole of what it needs. The localhost entries and the inline allowances are
+      for the dev server: Vite injects its client inline and pushes updates over a
+      websocket. Both are harmless here for the same reason the rest is tight: there is
+      no remote origin that could get anything into this page.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws://localhost:* http://localhost:*"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

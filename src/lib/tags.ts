@@ -31,3 +31,22 @@ export function parseTagInput(input: string): {
   }
   return { tags, invalid }
 }
+
+// Danbooru-style category colours, tuned for the dark theme. Here rather than beside the
+// tag list they paint because the desktop uploader's tag field wants the same chips and
+// imports no Next component (packages/post-app).
+export const CATEGORY_COLOR: Record<TagCategory, string> = {
+  artist: 'text-[#ff8a8b]',
+  copyright: 'text-[#c797ff]',
+  character: 'text-[#35c64a]',
+  general: 'text-[#4fa3e3]',
+  meta: 'text-[#ead084]',
+}
+
+export const CATEGORY_LABEL: Record<TagCategory, string> = {
+  artist: 'Artist',
+  copyright: 'Copyright',
+  character: 'Character',
+  general: 'General',
+  meta: 'Meta',
+}

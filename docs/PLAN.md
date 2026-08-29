@@ -88,6 +88,18 @@ about a public origin — bucket size/MIME caps, and the images themselves — a
 covered by the upload action's limits and by the originals living outside the bucket.
 The recipes stay in the runbook if that ever changes.
 
+**A second front end: `packages/post-app`**, an Electron uploader. The repo is now an
+npm workspace (`packages/*`); the desktop app is the only member. It exists because the
+upload path is mostly image compression, which is the one thing a free serverless tier is
+worst at — so the same pipeline runs on the author's own machine, where a file may be
+50MB and 100MP instead of Vercel's 4MB and 20MP, and writes to the same Supabase project.
+
+It is not a copy. `src/lib/upload/pipeline.ts` (validate → compress → store → insert →
+unwind) and `src/lib/data/shared.ts` (the post write path, `ensureTagIds`, the tag-name
+search) take their Supabase clients as arguments rather than building them, so both the
+web's server actions and the desktop app's IPC handlers run the same functions. See
+[packages/post-app/README.md](../packages/post-app/README.md).
+
 There is no open work item left in the plan. What's next comes from
 [future.md](./future.md) or from using the thing.
 
@@ -119,6 +131,42 @@ the real gate.
 ## Session log
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
+
+- **2026-08-29 (9)** — Built `packages/post-app`, an Electron uploader, and refactored
+  the web's upload path so the two share it rather than diverge. The repo gained
+  `"workspaces": ["packages/*"]`; the root `tsconfig.json` excludes `packages/`, which
+  has its own.
+
+  The refactor is the interesting half. Three things stood between the pipeline and a
+  second front end, and all three were the same thing: a module that built its own
+  Supabase client could only run inside Next, because `supabase/server.ts` imports
+  `next/headers` and `admin.ts` is `server-only`. So the write path moved to
+  `lib/data/shared.ts` and now takes `(supabase, admin, …)` — the session client for the
+  post row, the service role for the counters, which makes the old `security definer`
+  split visible in the signature instead of implied. `lib/data/counters.ts` took the
+  same treatment. `lib/data/posts.ts` and `lib/data/tags.ts` kept every signature their
+  callers already used, as thin wrappers that supply the request-scoped clients, so
+  nothing in `src/` changed. `getPostByMd5` became `findPostIdByMd5` — dedup only ever
+  asked for the id.
+
+  Then `lib/actions/upload.ts` lost everything that was not about a web request:
+  `createPostFromImage` and `parsePostMetadata` are `lib/upload/pipeline.ts` now, and
+  the action is `requireUser()` → parse → call → `revalidatePath`. `MAX_PIXELS` moved to
+  `lib/upload-limits.ts` beside `MAX_FILE_SIZE`, because both numbers are Vercel's — the
+  4.5MB request body and the 10s function timeout — and neither belongs to the pipeline.
+  The desktop app passes its own (50MB / 100MP, `packages/post-app/src/main/limits.ts`).
+  `CATEGORY_COLOR` and `CATEGORY_LABEL` moved from `components/tag-list.tsx` to
+  `lib/tags.ts` so a tag chip looks the same in a window with no Next in it.
+
+  Decisions in the app itself: it signs in as a real user (session persisted, encrypted
+  with the OS keystore via Electron `safeStorage`) **and** carries the service-role key,
+  exactly the split the web has — the post row is written on the session so
+  `uploader_id` is right, and storage plus `rating_counts` on the service role because
+  no user session may set those. The renderer holds neither key: every capability it has
+  is one `ipcMain.handle`, and the file it uploads is read on the other side of the
+  bridge rather than shipped across it. Staging goes through the main process too, which
+  means a bad file is refused with a reason before it becomes a row — the web can only
+  measure bytes from the browser.
 
 - **2026-08-29 (8)** — Squashed the 18 migrations into six before the first real
   deployment: `20260826090000_storage_buckets.sql`, then one file per table in

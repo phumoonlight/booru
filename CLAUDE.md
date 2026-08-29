@@ -30,6 +30,8 @@ Answer like a TL;DR. The work can be thorough; the message about it is short.
 | `npm run dev` / `build` / `lint` | the only verification the repo has — there is no test runner |
 | `npm run db:push` / `db:push:dry` | apply migrations to the linked Supabase project |
 | `npm run db:list` / `db:reset` | migration status / local reset |
+| `npm run post-app:dev` / `post-app:package` | the desktop uploader — window, or a Windows installer |
+| `npm run typecheck -w post-app` | the only check the Electron app has; the root `tsc` excludes `packages/` |
 
 Ad-hoc checks (query parser, rating resolution) have been run as throwaway scripts in
 the scratchpad, never committed. Keep it that way unless asked for a test setup.
@@ -53,11 +55,35 @@ Commit only when asked. Never push unless asked.
   import nothing server-side, so client components can share them.
 - Query logic stays in `lib/data/` and out of actions/pages so the deferred public API
   can reuse it verbatim (docs/future.md §2).
+- **Anything two front ends share takes its clients as arguments.** `lib/data/shared.ts`
+  (post write path, `ensureTagIds`, tag-name search), `lib/data/counters.ts` and
+  `lib/upload/pipeline.ts` never call `createClient()` — the caller passes
+  `(supabase, admin)`. That is what lets `packages/post-app` run them: `supabase/server.ts`
+  imports `next/headers` and `admin.ts` is `server-only`, so a module that builds its own
+  client can only run inside Next. `lib/data/posts.ts` and `tags.ts` wrap them with the
+  request-scoped clients, so no call site in `src/` sees the difference. Don't "simplify"
+  a client parameter away.
 - Four Supabase clients, each with one job: `server.ts` (cookies, request-scoped),
   `client.ts` (browser), `anon.ts` (cookie-less, for cacheable routes like the sitemap),
   `admin.ts` (service role — never reaches the browser; storage writes/deletes,
   `incrementPostView()` — the one row write an anonymous visitor is allowed to cause —
   and the counter syncs in `lib/data/counters.ts`, whose rows no user session may set).
+
+## The desktop uploader (`packages/post-app`)
+
+The repo is an npm workspace and Electron is the only member. It is the upload page as a
+desktop app, and it exists because compression is CPU work a free serverless tier is bad
+at — see [packages/post-app/README.md](packages/post-app/README.md).
+
+- **It imports the web's `src/`, it does not copy it** (`@web/*` → `../../src/*`, and
+  `@/*` too because the files over there spell each other that way). The pipeline, the
+  write path, both compressors and the pure helpers are one definition.
+- **Its limits are its own** (`src/main/limits.ts`, 50MB / 100MP). `MAX_FILE_SIZE` and
+  `MAX_PIXELS` in `lib/upload-limits.ts` are Vercel's numbers and stay Vercel's.
+- Session client writes the post row, service role does storage and the counters — the
+  same split as the web, spelled in `createPostFromImage`'s signature.
+- The renderer has no keys, no Node and no network: every capability is one
+  `ipcMain.handle` in `src/main/ipc.ts`, and the file's bytes are read on the main side.
 
 ## Database
 

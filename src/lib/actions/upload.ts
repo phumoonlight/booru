@@ -1,68 +1,14 @@
 'use server'
 
-import { createHash } from 'node:crypto'
-import sharp, { Metadata } from 'sharp'
-import { z } from 'zod'
-import { requireUser } from '@/lib/auth'
-import { parseTagInput } from '@/lib/tags'
-import { RATINGS } from '@/lib/search'
-import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL } from '@/lib/upload-limits'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { createPostWithTags, getPostByMd5 } from '@/lib/data/posts'
-import { POSTS_BUCKET, THUMBNAILS_BUCKET, postImagePath, thumbnailPath } from '@/lib/storage'
 import { revalidatePath } from 'next/cache'
-import { compressImgForThumbnail } from '../imgcmp/for-thumbnail'
-import { compressImgForPost } from '../imgcmp/for-post'
+import { requireUser } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { createPostFromImage, parsePostMetadata } from '@/lib/upload/pipeline'
+import { WEB_UPLOAD_LIMITS } from '@/lib/upload-limits'
 
-// A small file can still decode enormous: a flat 12000x12000 PNG compresses to
-// ~400KB, sails past the byte cap, and expands to 412MB in memory. Bytes bound
-// the upload, pixels bound the decode.
-//
-// 20MP is a time budget as much as a memory one. Lossless AVIF costs roughly
-// 0.17s per megapixel, so a 49MP upload — still only 375KB, still legal under
-// every other limit — spent 9.9s here and lost to the 10s function timeout after
-// doing all the work. 20MP holds the whole pipeline near 3.5s, and is still far
-// above anything real: a 2000x3000 illustration is 6MP, a 4000x3000 photo 12MP.
-const MAX_PIXELS = 20_000_000
-
-// Debug logging for the re-encode branches below. The whole point of those branches is
-// that the winner depends on the input, so the only way to tune them is to watch real
-// uploads lose — server-side only, one line per attempt, keyed by the md5 so concurrent
-// uploads stay legible.
-const kb = (bytes: number) => `${(bytes / 1024).toFixed(1)}kB`
-const pct = (candidate: number, baseline: number) =>
-  `${candidate < baseline ? '-' : '+'}${((Math.abs(candidate - baseline) / baseline) * 100).toFixed(1)}%`
-
-const FORMAT_TO_EXT: Record<string, string> = {
-  jpeg: 'jpg',
-  png: 'png',
-  gif: 'gif',
-  webp: 'webp',
-  avif: 'avif',
-}
-
-const CONTENT_TYPES: Record<string, string> = {
-  jpg: 'image/jpeg',
-  png: 'image/png',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  avif: 'image/avif',
-}
-
-export type UploadResult =
-  | { ok: true; postId: number }
-  | { ok: false; error: string; existingPostId?: number }
-
-// Same shape the edit form posts, minus the id — a staged file carries the metadata
-// it will be created with, so an upload never has to be fixed up afterwards.
-const metadataSchema = z.object({
-  tags: z.string(),
-  rating: z.enum(RATINGS),
-  source_url: z
-    .string()
-    .trim()
-    .pipe(z.union([z.literal(''), z.url('Source must be a valid URL')])),
-})
+export type { UploadResult } from '@/lib/upload/pipeline'
+import type { UploadResult } from '@/lib/upload/pipeline'
 
 /**
  * Creates one post from one staged file. The uploader reviews and tags each image
@@ -71,211 +17,36 @@ const metadataSchema = z.object({
  *
  * One file per call: each image is its own post, its own failure, and its own row
  * in the queue's progress list.
+ *
+ * Everything past getting the bytes out of the request is `lib/upload/pipeline.ts`,
+ * which the desktop uploader in `packages/post-app` runs too — same compression, same
+ * dedupe, same rollback. What is left here is what only exists on the web: the session,
+ * the multipart body, and the cache to revalidate.
  */
 export async function uploadPost(formData: FormData): Promise<UploadResult> {
   const uploader = await requireUser()
 
-  const metadata = metadataSchema.safeParse({
+  const parsed = parsePostMetadata({
     tags: formData.get('tags') ?? '',
     rating: formData.get('rating') ?? 'general',
     source_url: formData.get('source_url') ?? '',
   })
-  if (!metadata.success) {
-    return { ok: false, error: metadata.error.issues[0].message }
-  }
-  const { tags, invalid } = parseTagInput(metadata.data.tags)
-  if (invalid.length > 0) {
-    return {
-      ok: false,
-      error: `Invalid tags (lowercase a-z 0-9 _ ( ) . - only): ${invalid.join(', ')}`,
-    }
-  }
+  if (!parsed.ok) return { ok: false, error: parsed.error }
 
   const file = formData.get('file')
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, error: 'Pick an image file' }
   }
-  if (file.size > MAX_FILE_SIZE) {
-    return {
-      ok: false,
-      error: `File is too large (max ${MAX_FILE_SIZE_LABEL})`,
-    }
-  }
 
-  const buffer = Buffer.from(await file.arrayBuffer())
-
-  let meta: Metadata
-  try {
-    meta = await sharp(buffer).metadata()
-  } catch {
-    return { ok: false, error: 'File is not a readable image' }
-  }
-  // EXIF orientations 5-8 turn the image a quarter turn, and metadata() reports
-  // the size *before* that turn. Both ends of the pipeline show it turned —
-  // browsers apply the tag to a stored original, and sharp bakes the rotation
-  // into anything it re-encodes — so the recorded size has to be swapped to match.
-  const quarterTurned = (meta.orientation ?? 1) >= 5
-  const width = quarterTurned ? meta.height : meta.width
-  const height = quarterTurned ? meta.width : meta.height
-  const ext = meta.format ? FORMAT_TO_EXT[meta.format] : undefined
-  const animated = (meta.pages ?? 1) > 1
-  if (!ext || !width || !height) {
-    return { ok: false, error: 'Unsupported format (jpg/png/gif/webp/avif only)' }
-  }
-  // Nothing has been decoded yet — metadata() only reads headers — so this is the
-  // last point where an oversized image can be turned away for free.
-  if (width * height > MAX_PIXELS) {
-    return {
-      ok: false,
-      error: `Image has too many pixels (max ${MAX_PIXELS / 1_000_000}MP)`,
-    }
-  }
-
-  // md5 identifies the *uploaded* bytes, so dedupe stays stable no matter what
-  // we re-encode below. Storage paths derive from it either way.
-  const md5 = createHash('md5').update(buffer).digest('hex')
-
-  const existing = await getPostByMd5(md5)
-  if (existing) {
-    return {
-      ok: false,
-      error: 'This image already exists',
-      existingPostId: existing.id,
-    }
-  }
-
-  // Unlike the lossless attempts below there is no fallback here — a post with no
-  // thumbnail has nothing to show in the grid — so a failure ends the upload with
-  // the same error shape as everything else rather than throwing out of the action.
-  const thumbResult = await compressImgForThumbnail(buffer)
-  if (!thumbResult.buffer) {
-    return {
-      ok: false,
-      error: thumbResult.message,
-    }
-  }
-
-  // Post image: the lossless AVIF candidate is kept only when it actually comes out
-  // smaller than the uploaded bytes, which for JPEG and flat-colour PNG it usually
-  // does not. A failed encode is not fatal — the upload itself is always storable.
-  let postBuffer: Buffer = buffer
-  let postExt = ext
-  const startedAt = Date.now()
-  const postResult = await compressImgForPost(meta, buffer)
-  if (postResult.buffer) {
-    const avif = postResult.buffer
-    const won = avif.length < postBuffer.length
-    console.log(
-      `[upload ${md5.slice(0, 8)}] lossless avif: ${ext} ${kb(buffer.length)} -> ` +
-        `avif ${kb(avif.length)} (${pct(avif.length, buffer.length)}, ` +
-        `${width}x${height}, ${Date.now() - startedAt}ms) — ${won ? 'kept' : 'discarded'}`
-    )
-    if (won) {
-      postBuffer = avif
-      postExt = 'avif'
-    }
-  } else if (!postResult.ok) {
-    console.log(
-      `[upload ${md5.slice(0, 8)}] lossless avif: encoder failed — ` +
-        `${postResult.error?.message ?? postResult.message}`
-    )
-  }
-
-  // AVIF lost and the upload is a PNG: re-deflate it instead. Same pixels, just a
-  // better-packed PNG. Adaptive filtering wins big on photographic content and
-  // loses on flat colour, so both are tried and the smaller one kept.
-  // `palette` must stay false — `effort` alone silently turns on quantisation.
-  //
-  // `.rotate()` applies the EXIF orientation rather than turning by any angle.
-  // libvips does that on its own when it resizes or changes format, but PNG to
-  // PNG does neither: the pixels would pass through untouched while the tag is
-  // dropped on output, losing the rotation for good. Every other branch here
-  // ends up turned, so this one has to be told to.
-  if (!animated && ext === 'png' && postExt !== 'avif') {
-    try {
-      const [plain, adaptive] = await Promise.all([
-        sharp(buffer)
-          .rotate()
-          .png({ compressionLevel: 9, palette: false })
-          .keepIccProfile()
-          .toBuffer(),
-        sharp(buffer)
-          .rotate()
-          .png({ compressionLevel: 9, palette: false, adaptiveFiltering: true })
-          .keepIccProfile()
-          .toBuffer(),
-      ])
-      const best = adaptive.length < plain.length ? adaptive : plain
-      const won = best.length < postBuffer.length
-      console.log(
-        `[upload ${md5.slice(0, 8)}] png re-deflate: original ${kb(buffer.length)} -> ` +
-          `plain ${kb(plain.length)} / adaptive ${kb(adaptive.length)}, best ` +
-          `${kb(best.length)} (${pct(best.length, buffer.length)}) — ` +
-          `${won ? 'kept' : 'discarded'}`
-      )
-      if (won) {
-        postBuffer = best
-      }
-    } catch (error) {
-      // Same fallback as above — the upload is always a valid answer
-      console.log(
-        `[upload ${md5.slice(0, 8)}] png re-deflate: failed — ` +
-          `${error instanceof Error ? error.message : String(error)}`
-      )
-    }
-  }
-
-  console.log(
-    `[upload ${md5.slice(0, 8)}] stored: uploaded ${ext} ${kb(buffer.length)} -> ` +
-      `${postExt} ${kb(postBuffer.length)} (${pct(postBuffer.length, buffer.length)}), ` +
-      `thumb ${kb(thumbResult.buffer.length)}`
+  const result = await createPostFromImage(
+    await createClient(),
+    createAdminClient(),
+    uploader.id,
+    Buffer.from(await file.arrayBuffer()),
+    parsed.metadata,
+    WEB_UPLOAD_LIMITS
   )
 
-  // Storage writes need the service-role client (RLS floor is signed-in-only anyway)
-  const storage = createAdminClient().storage
-  const postUpload = await storage
-    .from(POSTS_BUCKET)
-    .upload(postImagePath(md5, postExt), postBuffer, {
-      contentType: CONTENT_TYPES[postExt],
-      upsert: false,
-    })
-  if (postUpload.error) {
-    return { ok: false, error: `Storage upload failed: ${postUpload.error.message}` }
-  }
-  const thumbUpload = await storage
-    .from(THUMBNAILS_BUCKET)
-    .upload(thumbnailPath(md5), thumbResult.buffer, {
-      contentType: 'image/avif',
-      upsert: true,
-    })
-  if (thumbUpload.error) {
-    await storage.from(POSTS_BUCKET).remove([postImagePath(md5, postExt)])
-    return { ok: false, error: `Thumbnail upload failed: ${thumbUpload.error.message}` }
-  }
-
-  // Written on the user's session, not the service role — the row records the uploader
-  let postId: number
-  try {
-    postId = await createPostWithTags(uploader.id, {
-      md5,
-      file_ext: postExt,
-      file_size: postBuffer.length,
-      width,
-      height,
-      rating: metadata.data.rating,
-      source_url: metadata.data.source_url,
-      tags,
-    })
-  } catch (error) {
-    // Roll back storage so a retry starts clean
-    await storage.from(POSTS_BUCKET).remove([postImagePath(md5, postExt)])
-    await storage.from(THUMBNAILS_BUCKET).remove([thumbnailPath(md5)])
-    return {
-      ok: false,
-      error: `Database insert failed: ${error instanceof Error ? error.message : String(error)}`,
-    }
-  }
-
-  revalidatePath('/')
-  return { ok: true, postId }
+  if (result.ok) revalidatePath('/')
+  return result
 }

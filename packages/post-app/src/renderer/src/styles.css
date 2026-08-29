@@ -1,0 +1,90 @@
+/* Only this window's own files are scanned. Left to itself Tailwind walks up to the git
+   root and would sweep the whole Next app in beside it — every class in there, none of
+   them used here. */
+@import 'tailwindcss' source(none);
+@source './**/*.{ts,tsx}';
+@source '../index.html';
+
+/* The web's palette, verbatim from src/app/globals.css. Kept in step by hand rather than
+   imported: that file also carries the rating blur and the scrollbar rules for a page
+   that scrolls a gallery, none of which this window has. Dark theme only, same as the
+   board. */
+:root {
+  /* Tells the UA to paint its own furniture dark — scrollbars, the select popup */
+  color-scheme: dark;
+
+  --background: #0d0f14;
+  --foreground: #e5e7eb;
+  --muted: #9ca3af;
+  --surface: #161a22;
+  --border: #262b36;
+  --accent: #60a5fa;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    Arial,
+    sans-serif;
+  /* A window is not a document: the app scrolls its own queue, never the frame */
+  overflow: hidden;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* Tailwind v4 drops the UA pointer cursor on buttons — put it back while enabled */
+button:not(:disabled),
+[type='submit']:not(:disabled),
+summary {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+/* Nothing in the window is a document selection, and a stray drag that highlights half
+   the queue looks broken. Inputs opt back in below. */
+body {
+  user-select: none;
+}
+
+input,
+textarea {
+  user-select: text;
+}

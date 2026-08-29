@@ -35,5 +35,8 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  // packages/post-app is its own program with its own tsconfigs (Electron main,
+  // preload and renderer each want different libs); it type-checks with `npm run
+  // typecheck -w post-app`.
+  "exclude": ["node_modules", "packages"]
 }

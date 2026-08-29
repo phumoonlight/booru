@@ -2,6 +2,9 @@
   "name": "booru",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,7 +15,9 @@
     "db:push": "supabase db push",
     "db:push:dry": "supabase db push --dry-run",
     "db:reset": "supabase db reset",
-    "db:reset:remote": "supabase db reset --linked"
+    "db:reset:remote": "supabase db reset --linked",
+    "post-app:dev": "npm run dev -w post-app",
+    "post-app:package": "npm run package -w post-app"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.5",
@@ -36,6 +41,10 @@
     "typescript": "^5"
   },
   "allowScripts": {
-    "unrs-resolver@1.12.2": true
+    "unrs-resolver@1.12.2": true,
+    "electron@44.0.0": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true,
+    "electron-winstaller@5.4.0": true
   }
 }

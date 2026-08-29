@@ -1,23 +1,7 @@
 import Link from 'next/link'
-import { TAG_CATEGORIES, type Tag, type TagCategory } from '@/lib/tags'
+import { CATEGORY_COLOR, CATEGORY_LABEL, TAG_CATEGORIES, type Tag } from '@/lib/tags'
 import { parseSearchQuery, searchHref, tagLabel, withTag, withoutTag } from '@/lib/search'
 
-// Danbooru-style category colours, tuned for the dark theme
-const CATEGORY_COLOR: Record<TagCategory, string> = {
-  artist: 'text-[#ff8a8b]',
-  copyright: 'text-[#c797ff]',
-  character: 'text-[#35c64a]',
-  general: 'text-[#4fa3e3]',
-  meta: 'text-[#ead084]',
-}
-
-const CATEGORY_LABEL: Record<TagCategory, string> = {
-  artist: 'Artist',
-  copyright: 'Copyright',
-  character: 'Character',
-  general: 'General',
-  meta: 'Meta',
-}
 
 /**
  * ➕/➖ share the count's slot on the right: the count fades out and the buttons take its
@@ -148,4 +132,5 @@ export function GroupedTagList({
   )
 }
 
+// Re-exported so the components that paint tags keep one import for the whole set
 export { CATEGORY_COLOR, CATEGORY_LABEL }

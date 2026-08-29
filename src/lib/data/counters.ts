@@ -1,5 +1,4 @@
-import 'server-only'
-import { createAdminClient } from '@/lib/supabase/admin'
+import type { BooruClient } from '@/lib/supabase/types'
 
 /**
  * The denormalized counters — `tags.post_count` and `rating_counts.post_count`.
@@ -18,25 +17,27 @@ import { createAdminClient } from '@/lib/supabase/admin'
  * that touches the same tag or rating — which, because these recount rather than
  * increment, repairs it outright.
  *
- * Service role, and deliberately not the caller's session. These are the only rows on
- * the board no user is entitled to choose the value of, and the triggers that used to
- * write them were `security definer` for the same reason: `rating_counts` has never
- * had a write policy, and it keeps none. The authorization that matters happened
- * before any of this — `requireUser()` in the action that is doing the post write.
+ * `admin` must be the service-role client, and deliberately not the caller's session.
+ * These are the only rows on the board no user is entitled to choose the value of, and
+ * the triggers that used to write them were `security definer` for the same reason:
+ * `rating_counts` has never had a write policy, and it keeps none. The authorization
+ * that matters happened before any of this — `requireUser()` in the action doing the
+ * post write, or the signed-in session the desktop uploader holds.
+ *
+ * The client is passed in rather than built here so `packages/post-app` can share this
+ * file; `createAdminClient()` is `server-only`.
  */
 
 /** Recount `tags.post_count` from `post_tags` for exactly these tags. */
-export async function syncTagPostCounts(tagIds: number[]): Promise<void> {
+export async function syncTagPostCounts(admin: BooruClient, tagIds: number[]): Promise<void> {
   const ids = [...new Set(tagIds)]
   if (ids.length === 0) return
-
-  const supabase = createAdminClient()
 
   // Independent single-row writes, so they go out together rather than one at a time —
   // a 20-tag upload would otherwise pay 20 sequential round trips for bookkeeping.
   await Promise.all(
     ids.map(async (tagId) => {
-      const { count, error } = await supabase
+      const { count, error } = await admin
         .from('post_tags')
         .select('*', { count: 'exact', head: true })
         .eq('tag_id', tagId)
@@ -45,7 +46,7 @@ export async function syncTagPostCounts(tagIds: number[]): Promise<void> {
         return
       }
 
-      const { error: writeError } = await supabase
+      const { error: writeError } = await admin
         .from('tags')
         .update({ post_count: count ?? 0 })
         .eq('id', tagId)
@@ -57,15 +58,13 @@ export async function syncTagPostCounts(tagIds: number[]): Promise<void> {
 }
 
 /** Recount `rating_counts.post_count` from `posts` for exactly these ratings. */
-export async function syncRatingCounts(ratings: string[]): Promise<void> {
+export async function syncRatingCounts(admin: BooruClient, ratings: string[]): Promise<void> {
   const tiers = [...new Set(ratings)]
   if (tiers.length === 0) return
 
-  const supabase = createAdminClient()
-
   await Promise.all(
     tiers.map(async (rating) => {
-      const { count, error } = await supabase
+      const { count, error } = await admin
         .from('posts')
         .select('*', { count: 'exact', head: true })
         .eq('rating', rating)
@@ -76,7 +75,7 @@ export async function syncRatingCounts(ratings: string[]): Promise<void> {
 
       // Upsert, not update: `rating` is free-form text, so the
       // first post on a tier outside the seeded scale has no row to update yet.
-      const { error: writeError } = await supabase
+      const { error: writeError } = await admin
         .from('rating_counts')
         .upsert({ rating, post_count: count ?? 0 }, { onConflict: 'rating' })
       if (writeError) {
