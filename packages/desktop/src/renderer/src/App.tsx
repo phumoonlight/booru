@@ -56,8 +56,7 @@ export function App() {
     }
 
     return (
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-4">
-        <h1 className="text-lg font-bold tracking-tight">Upload</h1>
+      <div className="mx-auto flex w-full max-w-3xl flex-col px-4 py-4">
         <UploadQueue status={status} />
       </div>
     )
@@ -66,7 +65,18 @@ export function App() {
   return (
     <div className="flex h-screen flex-col">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2">
-        <span className="text-sm font-bold tracking-tight">Pubooru Desktop</span>
+        {/*
+          The OS titlebar already says Pubooru Desktop, so repeating it here was the name
+          twice over. It names the screen instead — the app's only page — and doubles as
+          the way back from settings, the way the web's wordmark returns you to the board.
+        */}
+        <button
+          type="button"
+          onClick={() => setEditingSettings(false)}
+          className="text-sm font-bold tracking-tight hover:text-accent"
+        >
+          Upload
+        </button>
         <div className="flex items-center gap-2">
           <button
             type="button"
