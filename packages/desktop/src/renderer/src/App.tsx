@@ -62,9 +62,15 @@ export function App() {
       return <Login onSignedIn={refresh} />
     }
 
+    // The empty drop zone is the whole screen's content, so it sits in the middle of it
+    // rather than hugging the header. `my-auto` rather than `justify-center`: once the
+    // queue is taller than the window the auto margins collapse to zero, where centring
+    // would push the first rows off the top of a scroller, out of reach.
     return (
-      <div className="mx-auto flex w-full max-w-3xl flex-col px-4 py-4">
-        <UploadQueue status={status} />
+      <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-4 py-4">
+        <div className="my-auto">
+          <UploadQueue status={status} />
+        </div>
       </div>
     )
   }
