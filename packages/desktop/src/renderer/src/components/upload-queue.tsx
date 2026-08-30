@@ -219,11 +219,20 @@ export function UploadQueue({ status }: { status: AppStatus }) {
       }}
       className="flex flex-col gap-4"
     >
-      {/* The drop area shrinks to a strip once there's a queue below it to keep room for */}
-      <div
-        className={`flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed text-center ${
+      {/*
+        The drop area shrinks to a strip once there's a queue below it to keep room for.
+        The whole thing is the button, not just the label inside it: a dashed rectangle
+        saying "drop images" is already the target, and asking for a second, smaller aim
+        at the word inside it only made the obvious click miss. One button also means one
+        tab stop and one disabled state while staging runs.
+      */}
+      <button
+        type="button"
+        onClick={() => void window.api.chooseFiles().then(stage)}
+        disabled={working}
+        className={`flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed text-center disabled:opacity-50 ${
           items.length > 0 ? 'px-4 py-4' : 'px-6 py-12'
-        } ${dragging ? 'border-accent bg-accent/10' : 'border-border bg-surface'}`}
+        } ${dragging ? 'border-accent bg-accent/10' : 'border-border bg-surface hover:border-accent'}`}
       >
         {items.length === 0 && (
           <>
@@ -232,15 +241,11 @@ export function UploadQueue({ status }: { status: AppStatus }) {
             <p className="text-xs text-muted">Up to {status.limits.maxFileSizeLabel} each</p>
           </>
         )}
-        <button
-          type="button"
-          onClick={() => void window.api.chooseFiles().then(stage)}
-          disabled={working}
-          className="flex min-h-11 items-center rounded-lg bg-accent px-4 text-sm font-medium text-background disabled:opacity-50"
-        >
-          {staging ?? (items.length > 0 ? 'Add more images' : 'Choose images')}
-        </button>
-      </div>
+        <span className="flex min-h-11 items-center gap-2 text-sm font-medium">
+          <span aria-hidden>📂</span>
+          {staging ?? 'Browse'}
+        </span>
+      </button>
 
       {refused.length > 0 && (
         <ul className="rounded-lg border border-red-500/30 bg-red-500/15 px-3 py-2 text-sm text-red-400">
