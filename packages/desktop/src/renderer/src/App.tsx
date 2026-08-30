@@ -63,14 +63,9 @@ export function App() {
     view === 'about' ? (
       <About status={status} />
     ) : !status.configured || view === 'settings' ? (
-      <Settings
-        canCancel={status.configured}
-        onSaved={() => {
-          setView('upload')
-          void refresh()
-        }}
-        onCancel={() => setView('upload')}
-      />
+      // Nowhere to send them on save: the screen writes as you leave each field, and
+      // the first write that makes a usable config drops this branch on its own.
+      <Settings onChanged={() => void refresh()} />
     ) : !status.user ? (
       <Login onSignedIn={refresh} />
     ) : null
