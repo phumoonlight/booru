@@ -38,8 +38,21 @@ function tempRoot(): string {
   return root
 }
 
+/**
+ * Best effort, and never fatal. On Windows a file another handle still holds open — a
+ * preview the renderer has not let go of, an upload mid-flight, an antivirus scan — fails
+ * the unlink with EPERM rather than EBUSY, and `force` only swallows ENOENT. Thrown from
+ * a `will-quit` listener that is an uncaught exception, and the user's last sight of the
+ * app is a crash dialog over a directory the OS clears on its own anyway. So: retry a few
+ * times for the handle that is about to close, then let it go.
+ */
 export function cleanupDownloads(): void {
-  if (root) rmSync(root, { recursive: true, force: true })
+  if (!root) return
+  try {
+    rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+  } catch {
+    // The temp directory outlives the app this once. Not worth a dialog.
+  }
 }
 
 /**
