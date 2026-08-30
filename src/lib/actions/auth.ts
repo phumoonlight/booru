@@ -29,14 +29,16 @@ export async function login(_prevState: AuthFormState, formData: FormData): Prom
   }
 
   revalidatePath('/', 'layout')
-  redirect('/')
+  redirect('/posts')
 }
 
 export async function logout() {
   const supabase = await createClient()
   await supabase.auth.signOut()
   revalidatePath('/', 'layout')
-  redirect('/login')
+  // Back to the gallery, not to /login: signing out is not a reason to be asked to
+  // sign in again, and everything on the board is public anyway.
+  redirect('/posts')
 }
 
 const usernameSchema = z.object({
