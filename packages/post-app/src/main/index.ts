@@ -14,6 +14,12 @@ import { cleanupDownloads } from './download'
  * imported, not copied.
  */
 
+// Where the stores live. Left alone this is the app's display name — "Pubooru Desktop"
+// once packaged, "post-app" in a checkout — so it would change whenever the name on the
+// window did, and differ between the two. Spelling it out gives one folder that survives
+// a rename, and it goes first because the single-instance lock below is a file inside it.
+app.setPath('userData', join(app.getPath('appData'), 'pubooru-desktop'))
+
 // One window. A second launch raises the one already open rather than starting a second
 // uploader against the same board, which would happily create the same post twice.
 if (!app.requestSingleInstanceLock()) {
