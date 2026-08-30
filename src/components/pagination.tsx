@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { NavProgress } from '@/components/nav-progress'
 
 /** Page numbers stay in the URL so pages are linkable and crawlable. */
 export function Pagination({
@@ -22,6 +23,7 @@ export function Pagination({
       {page > 1 && (
         <Link href={buildHref(page - 1)} className={linkClass} rel="prev">
           Prev
+          <NavProgress />
         </Link>
       )}
       {window.map((p) => (
@@ -36,11 +38,13 @@ export function Pagination({
           }
         >
           {p}
+          <NavProgress />
         </Link>
       ))}
       {page < pageCount && (
         <Link href={buildHref(page + 1)} className={linkClass} rel="next">
           Next
+          <NavProgress />
         </Link>
       )}
     </nav>

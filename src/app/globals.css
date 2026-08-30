@@ -23,6 +23,18 @@
   --color-accent: var(--accent);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --animate-nav-progress: nav-progress 1.1s ease-in-out infinite;
+}
+
+/* The navigation bar's slide. Indeterminate on purpose — a query rewrite has no
+   progress to report, only the fact that the server has been asked. */
+@keyframes nav-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(350%);
+  }
 }
 
 body {

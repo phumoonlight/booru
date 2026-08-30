@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { NavProgress } from '@/components/nav-progress'
 import { CATEGORY_COLOR, CATEGORY_LABEL, TAG_CATEGORIES, type Tag } from '@/lib/tags'
 import { parseSearchQuery, searchHref, tagLabel, withTag, withoutTag } from '@/lib/search'
 
@@ -33,9 +34,11 @@ export function FacetActions({
       <span className="pointer-coarse:relative pointer-coarse:ml-1 pointer-coarse:opacity-100 absolute right-0 flex items-center opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
         <Link href={plus.href} aria-label={plus.label} className={button(plus.on)}>
           ➕
+          <NavProgress />
         </Link>
         <Link href={minus.href} aria-label={minus.label} className={button(minus.on)}>
           ➖
+          <NavProgress />
         </Link>
       </span>
     </span>
@@ -69,6 +72,7 @@ function TagRow({ entry, currentQuery }: { entry: TagEntry; currentQuery: string
         } ${excluded ? 'line-through opacity-60' : ''}`}
       >
         {label}
+        <NavProgress />
       </Link>
       <FacetActions
         count={count}

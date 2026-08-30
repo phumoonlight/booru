@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { FacetActions } from '@/components/tag-list'
+import { NavProgress } from '@/components/nav-progress'
 import {
   RATING_COLOR,
   RATING_LABEL,
@@ -51,6 +52,7 @@ export function RatingList({
               } ${excluded ? 'line-through opacity-60' : ''}`}
             >
               {label}
+              <NavProgress />
             </Link>
             <FacetActions
               count={count}

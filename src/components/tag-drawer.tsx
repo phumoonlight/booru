@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
+import { useSearchParams } from 'next/navigation'
 
 /**
  * Danbooru's fixed left sidebar, translated for mobile: a button that opens a bottom
@@ -8,7 +9,15 @@ import { useState, type ReactNode } from 'react'
  * rating breakdown) is server-rendered and passed in as children.
  */
 export function TagDrawer({ children, label }: { children: ReactNode; label: string }) {
-  const [open, setOpen] = useState(false)
+  // The sheet closes when the search it started actually lands, not on the tap that
+  // starts it: closing on the tap unmounted the link mid-navigation, which took its
+  // pending indicator with it and left the old results sitting there looking untouched.
+  // So "open" is the query the sheet was opened over — the moment the URL differs from
+  // it, the sheet is closed, and its dismissal is itself the sign the page is new.
+  const params = useSearchParams().toString()
+  const [openedOver, setOpenedOver] = useState<string | null>(null)
+  const open = openedOver === params
+  const setOpen = (next: boolean) => setOpenedOver(next ? params : null)
 
   return (
     <>
@@ -42,8 +51,7 @@ export function TagDrawer({ children, label }: { children: ReactNode; label: str
                 Close ✕
               </button>
             </div>
-            {/* Navigating away closes the sheet along with the page */}
-            <div onClick={() => setOpen(false)}>{children}</div>
+            {children}
           </div>
         </div>
       )}

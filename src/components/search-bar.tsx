@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { suggestTags } from '@/lib/actions/search'
+import { NavProgressBar } from '@/components/nav-progress'
 import type { Tag } from '@/lib/tags'
 import { queryTokens, searchHref, SEARCH_PARAM, tagLabel, withoutTag } from '@/lib/search'
 
@@ -18,6 +19,10 @@ export function SearchBar({
   showChips?: boolean
 }) {
   const router = useRouter()
+  // The push is a transition purely to know when it lands: a query rewrite keeps the
+  // same route segment, so /posts' loading.tsx never runs and nothing else would say
+  // the search is on its way.
+  const [navigating, startNavigation] = useTransition()
   const [value, setValue] = useState(initialQuery)
   // Suggestions carry the prefix they were fetched for, so a stale response
   // from a slower request can never be shown against newer input.
@@ -52,7 +57,7 @@ export function SearchBar({
 
   function submit(query: string) {
     setOpen(false)
-    router.push(searchHref(query))
+    startNavigation(() => router.push(searchHref(query)))
   }
 
   /** Replaces the token under the cursor with the chosen tag, keeping any `-`. */
@@ -87,6 +92,7 @@ export function SearchBar({
 
   return (
     <div className="flex flex-col gap-2">
+      {navigating && <NavProgressBar />}
       <form
         onSubmit={(e) => {
           e.preventDefault()
