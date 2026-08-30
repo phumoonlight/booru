@@ -55,7 +55,15 @@ export function TagField({
   placeholder?: string
 }) {
   const [own, setOwn] = useState<TagFieldValue>({ tags: initialTags, draft: '' })
-  const [suggestions, setSuggestions] = useState<TagSuggestion[]>([])
+  // Results carry the word they answer, so the list can tell "nothing matches" from
+  // "the lookup for what you have typed hasn't come back yet" — the two used to look
+  // identical, and the honest-looking wrong one was shown first.
+  const [result, setResult] = useState<{ query: string; items: TagSuggestion[] }>({
+    query: '',
+    items: [],
+  })
+  // Escape and blur close the list outright; typing opens it again
+  const [dismissed, setDismissed] = useState(false)
   const [active, setActive] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
   const id = useId()
@@ -81,7 +89,7 @@ export function TagField({
         .catch(() => [])
         .then((found) => {
           if (!current) return
-          setSuggestions(found)
+          setResult({ query, items: found })
           setActive(-1)
         })
     }, 150)
@@ -92,7 +100,12 @@ export function TagField({
   }, [draft])
 
   const chosen = new Set(tags.map((tag) => tag.name))
-  const open = draft.trim().length > 0
+  const typed = draft.trim()
+  const open = typed.length > 0 && !dismissed
+  // Debounce plus round trip: until the answer for this exact word lands, the list has
+  // nothing to say about it, and the previous word's results would be a lie.
+  const loading = result.query !== typed
+  const suggestions = loading ? [] : result.items
   const options = open ? suggestions.filter((option) => !chosen.has(option.name)) : []
   const highlighted = active >= 0 ? options[active] : undefined
 
@@ -111,12 +124,12 @@ export function TagField({
 
   function accept(entry: TagSeed) {
     update({ tags: merged([entry]), draft: '' })
-    setSuggestions([])
     setActive(-1)
     inputRef.current?.focus()
   }
 
   function handleChange(raw: string) {
+    setDismissed(false)
     const parts = raw.toLowerCase().replace(STRIP, '').split(/\s+/)
     const rest = parts.pop() ?? ''
     const added = parts.filter(Boolean).map((part) => ({ name: part, category: categoryOf(part) }))
@@ -135,7 +148,7 @@ export function TagField({
         break
       case 'Enter':
         // An empty box leaves Enter to the form, where it means Save
-        if (!highlighted && !draft.trim()) return
+        if (!highlighted && !typed) return
         event.preventDefault()
         accept(highlighted ?? { name: draft.trim(), category: 'general' })
         break
@@ -146,7 +159,7 @@ export function TagField({
         accept(highlighted)
         break
       case 'Escape':
-        setSuggestions([])
+        setDismissed(true)
         setActive(-1)
         break
       case 'Backspace':
@@ -192,7 +205,7 @@ export function TagField({
             onChange={(event) => handleChange(event.target.value)}
             onKeyDown={handleKeyDown}
             onBlur={() => {
-              setSuggestions([])
+              setDismissed(true)
               setActive(-1)
             }}
             placeholder={placeholder ?? (tags.length > 0 ? 'add tag' : 'blue_hair solo')}
@@ -229,9 +242,15 @@ export function TagField({
                   <span className="tabular-nums text-muted">{option.post_count}</span>
                 </li>
               ))}
-              {options.length === 0 && (
+              {loading && (
+                <li className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted">
+                  <span aria-hidden className="h-3 w-3 animate-pulse rounded-full bg-border" />
+                  Searching tags…
+                </li>
+              )}
+              {!loading && options.length === 0 && (
                 <li className="px-2 py-1.5 text-xs text-muted">
-                  No existing tag — Enter adds “{draft.trim()}”
+                  No existing tag — Enter adds “{typed}”
                 </li>
               )}
             </ul>
