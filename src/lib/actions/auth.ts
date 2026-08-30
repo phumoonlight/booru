@@ -34,7 +34,10 @@ export async function login(_prevState: AuthFormState, formData: FormData): Prom
 
 export async function logout() {
   const supabase = await createClient()
-  await supabase.auth.signOut()
+  // Local scope: the default is 'global', which revokes every refresh token the account
+  // holds — signing out of this browser would sign out the desktop uploader, and any
+  // other browser, along with it. Logging out of one place means one place.
+  await supabase.auth.signOut({ scope: 'local' })
   revalidatePath('/', 'layout')
   // Back to the gallery, not to /login: signing out is not a reason to be asked to
   // sign in again, and everything on the board is public anyway.

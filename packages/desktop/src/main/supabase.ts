@@ -123,8 +123,15 @@ export async function signIn(
   return { ok: true }
 }
 
+/**
+ * Local scope on purpose. `signOut()` defaults to `scope: 'global'`, which revokes every
+ * refresh token the account has — so logging out of this window logged the browser out
+ * too, on a different machine if that is where it was. Nothing about closing the
+ * uploader says anything about the board's own tab, so only this session's token is
+ * revoked and the save file's `session` section goes with it.
+ */
 export async function signOut(): Promise<void> {
-  await userClient()?.auth.signOut()
+  await userClient()?.auth.signOut({ scope: 'local' })
   clearSection('session')
 }
 
