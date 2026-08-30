@@ -162,9 +162,11 @@ export function TagField({
         setDismissed(true)
         setActive(-1)
         break
-      case 'Backspace':
-        if (draft === '') update({ tags: tags.slice(0, -1), draft })
-        break
+      // Backspace on an empty box deliberately does nothing. It used to eat the last
+      // chip, which is the usual chip-input convention and the wrong one here: tags
+      // arrive in bulk, an editor often opens on a dozen of them, and a key held down
+      // a moment too long took several away without ever naming what it removed. The
+      // ✕ on each chip is the only way out, and it says which tag it is removing.
     }
   }
 
