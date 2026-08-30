@@ -1,5 +1,5 @@
 appId: dev.pubooru.postapp
-productName: Pubooru Desktop
+productName: Pubooru
 directories:
   output: dist
   buildResources: build
