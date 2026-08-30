@@ -2,7 +2,6 @@
 
 import { useActionState, useState } from 'react'
 import { updateUsername, type UsernameState } from '@/lib/actions/auth'
-import { SaveIcon } from '@/components/icons'
 
 /**
  * The one editable thing on a profile. Seeded from the server-rendered name and kept
@@ -49,12 +48,14 @@ export function ChangeUsername({ username }: { username: string }) {
         <p className="text-sm text-muted">Saved — you are now {state.username}.</p>
       )}
 
+      {/* The post page's Manage panel spells Save the same way — a plain labelled action
+          rather than a filled block, so the two edit forms on the site match */}
       <button
         type="submit"
         disabled={pending || unchanged}
-        className="flex min-h-11 w-fit items-center gap-2 rounded-lg bg-accent px-4 font-medium text-background disabled:opacity-50"
+        className="flex min-h-11 w-fit items-center gap-1.5 text-sm text-accent hover:underline disabled:opacity-50 disabled:no-underline"
       >
-        <SaveIcon />
+        <span aria-hidden>💾</span>
         {pending ? 'Saving…' : 'Save'}
       </button>
     </form>
