@@ -22,8 +22,8 @@ Next.js 16 App Router + Supabase (Postgres, Storage, Auth), Tailwind v4, mobile-
 | `npm run dev` / `build` / `lint` | the only verification the repo has — there is no test runner |
 | `npm run db:push` / `db:push:dry` | apply migrations to the linked Supabase project |
 | `npm run db:list` / `db:reset` / `db:reset:remote` | migration status / local reset / reset the linked project |
-| `npm run post-app:dev` / `post-app:package` | the desktop uploader — window, or a Windows installer |
-| `npm run typecheck -w post-app` | the only check the Electron app has; the root `tsc` excludes `packages/` |
+| `npm run desktop:dev` / `desktop:package` | the desktop uploader — window, or a Windows installer |
+| `npm run typecheck -w desktop` | the only check the Electron app has; the root `tsc` excludes `packages/` |
 | `npm run bench:avif` | sweeps sharp's AVIF `effort` over `tests/static/` — sizes and encode times |
 
 Ad-hoc checks (query parser, rating resolution) have been run as throwaway scripts in
@@ -53,7 +53,7 @@ Commit only when asked. Never push unless asked.
 - **Anything two front ends share takes its clients as arguments.** `lib/data/shared.ts`
   (post write path, `ensureTagIds`, tag-name search), `lib/data/counters.ts` and
   `lib/upload/pipeline.ts` never call `createClient()` — the caller passes
-  `(supabase, admin)`. That is what lets `packages/post-app` run them: `supabase/server.ts`
+  `(supabase, admin)`. That is what lets `packages/desktop` run them: `supabase/server.ts`
   imports `next/headers` and `admin.ts` is `server-only`, so a module that builds its own
   client can only run inside Next. `lib/data/posts.ts` and `tags.ts` wrap them with the
   request-scoped clients, so no call site in `src/` sees the difference. Don't "simplify"
@@ -64,11 +64,11 @@ Commit only when asked. Never push unless asked.
   `incrementPostView()` — the one row write an anonymous visitor is allowed to cause —
   and the counter syncs in `lib/data/counters.ts`, whose rows no user session may set).
 
-## The desktop uploader (`packages/post-app`)
+## The desktop uploader (`packages/desktop`)
 
 The repo is an npm workspace and Electron is the only member. It is the upload page as a
 desktop app, and it exists because compression is CPU work a free serverless tier is bad
-at — see [packages/post-app/README.md](packages/post-app/README.md).
+at — see [packages/desktop/README.md](packages/desktop/README.md).
 
 - **It imports the web's `src/`, it does not copy it** (`@web/*` → `../../src/*`, and
   `@/*` too because the files over there spell each other that way). The pipeline, the
@@ -87,7 +87,7 @@ at — see [packages/post-app/README.md](packages/post-app/README.md).
   in exchange for a file that can be read, hand-edited and copied. `userData` is pinned in
   `main/index.ts` rather than defaulting to the app's display name, so renaming the app
   doesn't move the settings — `pubooru-desktop` packaged, `pubooru-desktop-dev` in a
-  checkout, because `npm run post-app:dev` must not overwrite the keys and session of the
+  checkout, because `npm run desktop:dev` must not overwrite the keys and session of the
   copy you actually use (and the split lock lets both run at once). A file that won't parse is treated
   as absent, costing a re-setup and never a crash. The settings screen is the desktop
   `<SetupNotice />` and the only way in — the app reads no environment at all, in a

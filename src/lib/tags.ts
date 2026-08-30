@@ -34,7 +34,7 @@ export function parseTagInput(input: string): {
 
 // Danbooru-style category colours, tuned for the dark theme. Here rather than beside the
 // tag list they paint because the desktop uploader's tag field wants the same chips and
-// imports no Next component (packages/post-app).
+// imports no Next component (packages/desktop).
 export const CATEGORY_COLOR: Record<TagCategory, string> = {
   artist: 'text-[#ff8a8b]',
   copyright: 'text-[#c797ff]',

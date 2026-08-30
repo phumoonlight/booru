@@ -19,7 +19,7 @@ const eslintConfig = defineConfig([
     '**/dist/**',
   ]),
   {
-    // packages/post-app is React and TypeScript, so the hook and type rules earn their
+    // packages/desktop is React and TypeScript, so the hook and type rules earn their
     // keep there — but it is an Electron window, not a Next app. `<img>` is the only
     // way it ever shows a picture (a data: URL from the main process), and there are no
     // pages to link to.

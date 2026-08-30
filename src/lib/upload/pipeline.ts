@@ -15,7 +15,7 @@ import type { BooruClient } from '@/lib/supabase/types'
  *
  * This is the half of the upload that has nothing to do with how the bytes arrived. The
  * web hands it a server action's `FormData` file (`lib/actions/upload.ts`); the desktop
- * uploader hands it a file read off disk (`packages/post-app`), because the compression
+ * uploader hands it a file read off disk (`packages/desktop`), because the compression
  * below is the CPU work that a free serverless tier is worst at. Neither owns it, so
  * neither can drift from the other on what a post is.
  *
@@ -56,7 +56,7 @@ export type UploadResult =
  * Where the ceilings come from is the caller's business. The web's are Vercel's — a
  * 4.5MB request body and a 10s function timeout (`lib/upload-limits.ts`) — and the
  * desktop uploader's are Supabase Storage's and its own patience
- * (`packages/post-app/src/main/limits.ts`). Nothing in here has an opinion about either.
+ * (`packages/desktop/src/main/limits.ts`). Nothing in here has an opinion about either.
  */
 export type UploadLimits = {
   maxFileSize: number

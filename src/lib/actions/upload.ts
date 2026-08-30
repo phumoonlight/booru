@@ -19,7 +19,7 @@ import type { UploadResult } from '@/lib/upload/pipeline'
  * in the queue's progress list.
  *
  * Everything past getting the bytes out of the request is `lib/upload/pipeline.ts`,
- * which the desktop uploader in `packages/post-app` runs too — same compression, same
+ * which the desktop uploader in `packages/desktop` runs too — same compression, same
  * dedupe, same rollback. What is left here is what only exists on the web: the session,
  * the multipart body, and the cache to revalidate.
  */

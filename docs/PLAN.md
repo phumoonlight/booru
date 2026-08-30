@@ -89,7 +89,7 @@ about a public origin — bucket size/MIME caps, and the images themselves — a
 covered by the upload action's limits and by the originals living outside the bucket.
 The recipes stay in the runbook if that ever changes.
 
-**A second front end: `packages/post-app`**, an Electron uploader. The repo is now an
+**A second front end: `packages/desktop`**, an Electron uploader. The repo is now an
 npm workspace (`packages/*`); the desktop app is the only member. It exists because the
 upload path is mostly image compression, which is the one thing a free serverless tier is
 worst at — so the same pipeline runs on the author's own machine, where a file may be
@@ -99,7 +99,7 @@ It is not a copy. `src/lib/upload/pipeline.ts` (validate → compress → store 
 unwind) and `src/lib/data/shared.ts` (the post write path, `ensureTagIds`, the tag-name
 search) take their Supabase clients as arguments rather than building them, so both the
 web's server actions and the desktop app's IPC handlers run the same functions. See
-[packages/post-app/README.md](../packages/post-app/README.md).
+[packages/desktop/README.md](../packages/desktop/README.md).
 
 Each tag also has its own page, `/tags/[id]` — the gallery grid for one tag, without the
 search bar or the tag drawer, and with the rating blur switched off. The `/tags` index
@@ -212,7 +212,7 @@ _Newest first. Format: date — what was done, what's next, any decisions made._
   revalidate `/posts` *and* `/`, since the front door quotes a number that every upload and
   delete changes.
 
-- **2026-08-29 (9)** — Built `packages/post-app`, an Electron uploader, and refactored
+- **2026-08-29 (9)** — Built `packages/desktop`, an Electron uploader, and refactored
   the web's upload path so the two share it rather than diverge. The repo gained
   `"workspaces": ["packages/*"]`; the root `tsconfig.json` excludes `packages/`, which
   has its own.
@@ -234,7 +234,7 @@ _Newest first. Format: date — what was done, what's next, any decisions made._
   the action is `requireUser()` → parse → call → `revalidatePath`. `MAX_PIXELS` moved to
   `lib/upload-limits.ts` beside `MAX_FILE_SIZE`, because both numbers are Vercel's — the
   4.5MB request body and the 10s function timeout — and neither belongs to the pipeline.
-  The desktop app passes its own (50MB / 100MP, `packages/post-app/src/main/limits.ts`).
+  The desktop app passes its own (50MB / 100MP, `packages/desktop/src/main/limits.ts`).
   `CATEGORY_COLOR` and `CATEGORY_LABEL` moved from `components/tag-list.tsx` to
   `lib/tags.ts` so a tag chip looks the same in a window with no Next in it.
 

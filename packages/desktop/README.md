@@ -1,4 +1,4 @@
-# Pubooru Desktop (`post-app`)
+# Pubooru Desktop (`desktop`)
 
 The website's upload page, as a desktop app.
 
@@ -23,8 +23,8 @@ of `../../src` through the `@web` alias. There is no second definition of what a
 From the repo root:
 
 ```
-npm run post-app:dev        # opens the window with hot reload
-npm run post-app:package    # builds an installer into packages/post-app/dist
+npm run desktop:dev        # opens the window with hot reload
+npm run desktop:package    # builds an installer into packages/desktop/dist
 ```
 
 On first launch the app asks which board it uploads to — project URL, anon key, service
@@ -32,7 +32,7 @@ role key, and optionally the site's address so a finished post can be opened in 
 browser. A checkout is no different: it reads no environment and no `.env.local`, so the
 setup screen every installed copy meets is the one development runs too.
 They are kept in `save.json` in the app's data folder, as plain readable text — service
-role key included, so treat that folder as the secret it is. `post-app:dev` uses a folder
+role key included, so treat that folder as the secret it is. `desktop:dev` uses a folder
 of its own (`pubooru-desktop-dev` beside `pubooru-desktop`), so working on the app never
 disturbs the copy you use, and both can be open at once.
 
@@ -58,7 +58,7 @@ objects and the denormalized counters — the rows no user session is allowed to
 
 ## Notes
 
-- `npm run typecheck -w post-app` checks all three sides. The root `tsconfig.json`
+- `npm run typecheck -w desktop` checks all three sides. The root `tsconfig.json`
   excludes `packages/`, so `npx tsc` at the root does not.
 - `sharp` is a native module and is unpacked from the asar at package time. Its prebuilds
   are Node-API, so there is nothing to rebuild against Electron — hence `npmRebuild: false`

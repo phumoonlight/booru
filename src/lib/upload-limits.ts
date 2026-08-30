@@ -26,7 +26,7 @@ export const MAX_PIXELS = 20_000_000
 
 /**
  * What the web hands `createPostFromImage`. The desktop uploader passes its own
- * (`packages/post-app/src/main/limits.ts`) — both numbers above are Vercel's, not
+ * (`packages/desktop/src/main/limits.ts`) — both numbers above are Vercel's, not
  * the pipeline's, and a local CPU is bound by neither.
  */
 export const WEB_UPLOAD_LIMITS = {

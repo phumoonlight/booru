@@ -4,7 +4,7 @@ import type { Rating } from '@/lib/search'
 import type { Tag } from '@/lib/tags'
 
 // The query logic two front ends run: the web's server actions and the desktop
-// uploader in packages/post-app. Everything here takes its clients rather than
+// uploader in packages/desktop. Everything here takes its clients rather than
 // building them, which is the whole point — `server.ts` reaches for `next/headers`
 // and `admin.ts` is `server-only`, so a file that calls either can only run inside
 // Next. `posts.ts` and `tags.ts` wrap these with the request-scoped clients the web
@@ -24,7 +24,7 @@ import type { Tag } from '@/lib/tags'
 // the service-role client and `supabase` is the caller's session, so the split that used
 // to be `security definer` vs. not is visible in the signature. And it keeps this file
 // clear of `server-only` and of `next/headers`, so the desktop uploader
-// (packages/post-app) creates posts through this exact code rather than a second copy of
+// (packages/desktop) creates posts through this exact code rather than a second copy of
 // it.
 
 export type PostFields = {

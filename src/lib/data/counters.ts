@@ -24,7 +24,7 @@ import type { BooruClient } from '@/lib/supabase/types'
  * that matters happened before any of this — `requireUser()` in the action doing the
  * post write, or the signed-in session the desktop uploader holds.
  *
- * The client is passed in rather than built here so `packages/post-app` can share this
+ * The client is passed in rather than built here so `packages/desktop` can share this
  * file; `createAdminClient()` is `server-only`.
  */
 

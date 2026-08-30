@@ -50,4 +50,4 @@ export async function searchTags(query: string, limit = 8): Promise<Tag[]> {
 
 // ensureTagIds and the tag-name search moved to lib/data/shared.ts — they are part of
 // the post write path and the tag field, and that file takes its client so the desktop
-// uploader (packages/post-app) can run them too.
+// uploader (packages/desktop) can run them too.

@@ -16,8 +16,8 @@
     "db:push:dry": "supabase db push --dry-run",
     "db:reset": "supabase db reset",
     "db:reset:remote": "supabase db reset --linked",
-    "post-app:dev": "npm run dev -w post-app",
-    "post-app:package": "npm run package -w post-app"
+    "desktop:dev": "npm run dev -w desktop",
+    "desktop:package": "npm run package -w desktop"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.5",
