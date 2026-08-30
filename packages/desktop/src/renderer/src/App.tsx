@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { AccountMenu } from './components/account-menu'
 import { Login } from './components/login'
 import { Settings } from './components/settings'
 import { UploadQueue } from './components/upload-queue'
@@ -69,16 +70,11 @@ export function App() {
         <span className="text-sm font-bold tracking-tight">Pubooru Desktop</span>
         <div className="flex items-center gap-2">
           {status.user && (
-            <>
-              <span className="text-xs text-muted">{status.user.username}</span>
-              <button
-                type="button"
-                onClick={() => void window.api.logOut().then(refresh)}
-                className="min-h-9 rounded-lg border border-border px-3 text-xs"
-              >
-                Log out
-              </button>
-            </>
+            <AccountMenu
+              username={status.user.username}
+              siteUrl={status.siteUrl}
+              onLogOut={() => void window.api.logOut().then(refresh)}
+            />
           )}
           <button
             type="button"
