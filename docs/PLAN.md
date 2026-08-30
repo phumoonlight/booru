@@ -141,7 +141,7 @@ _Newest first. Format: date — what was done, what's next, any decisions made._
   neither the search bar nor the tag drawer, because both exist to narrow across many tags
   and this page has already picked one. It is keyed by id rather than name so renaming a
   tag can't break a link, and `/tags` now points its cells here instead of at
-  `/posts?query=…`; the way back to the controls is a "Search this tag" link that spells
+  `/posts?query=…`; the way back to the controls is a "View in posts" link that spells
   the same query. Posts still come from `searchPosts({ query: tag.name })` — one listing
   implementation, so paging and rating handling can't drift. `SearchHeader` gained a
   `showSearch` prop (default true) so the nav stays in one place. The rating blur is off

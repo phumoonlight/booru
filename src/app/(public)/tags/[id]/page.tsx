@@ -103,7 +103,7 @@ export default async function TagPage({ params, searchParams }: PageProps<'/tags
         </div>
         {/* The way back to the controls this page drops — same tag, in the gallery */}
         <Link href={searchHref(tag.name)} className="text-sm text-muted hover:text-foreground">
-          🔍 Search this tag
+          🔍 View in posts
           <NavProgress />
         </Link>
       </div>
