@@ -31,7 +31,7 @@ config flip.
 so API route handlers can call the exact same functions.
 
 **When enabling:**
-- Add `src/app/api/v1/` route handlers: `GET /api/v1/posts?tags=...&page=`,
+- Add `src/app/api/v1/` route handlers: `GET /api/v1/posts?query=...&page=`,
   `GET /api/v1/posts/[id]`, `GET /api/v1/tags?search=`.
 - Follow the loose booru API conventions (JSON, `tags` query param) so existing booru
   client apps can point at the site with minimal changes.

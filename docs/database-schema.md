@@ -33,12 +33,12 @@ created from the Supabase dashboard — public signup is deferred ([future.md](.
 | file_ext       | text not null                          | `jpg`/`png`/`gif`/`webp`                                         |
 | file_size      | int not null                           | bytes                                                            |
 | width / height | int not null                           | from sharp                                                       |
-| rating         | text not null default 'general'        | `'general'` \| `'sensitive'` \| `'questionable'` \| `'explicit'` |
+| rating         | text not null default 'general'        | `'general'` \| `'e1'` \| `'e2'` \| `'e3'` \| `'e4'` \| `'e5'` — free-form text, no check constraint |
 | source_url     | text                                   | original source                                                  |
 | view_count     | int not null default 0                 | bumped only by `incrementPostView()`, never by reading a post    |
 | created_at     | timestamptz default now()              |                                                                  |
 
-Storage paths are derived, not stored: `originals/{md5}.{file_ext}`, `thumbnails/{md5}.webp`.
+Storage paths are derived, not stored: `posts/{md5}.{file_ext}`, `post-thumbnails/{md5}.avif`.
 
 ### `tags`
 
@@ -160,10 +160,10 @@ Public accounts and `favorites` are still deferred; see [future.md](./future.md)
 
 ## Storage buckets
 
-| bucket       | public     | policy                                                         |
-| ------------ | ---------- | -------------------------------------------------------------- |
-| `originals`  | yes (read) | write: signed-in only (or service role from the upload action) |
-| `thumbnails` | yes (read) | write: signed-in only / service role                           |
+| bucket            | public     | policy                                                    |
+| ----------------- | ---------- | --------------------------------------------------------- |
+| `posts`           | yes (read) | write: signed-in only; the upload path uses service role   |
+| `post-thumbnails` | yes (read) | write: signed-in only; the upload path uses service role   |
 
 ## Deliberately NOT in v1 (see future.md)
 

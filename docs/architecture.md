@@ -7,11 +7,11 @@
 | Framework | Next.js (latest, App Router) | RSC for reads, Server Actions for writes |
 | Language | TypeScript (strict) | |
 | Styling | Tailwind CSS v4 | Mobile-first utilities; dark theme default (booru convention) |
-| UI primitives | shadcn/ui (selective) | Dialog/Drawer/Command are the useful ones (drawer nav, tag autocomplete) |
+| UI primitives | none | Plain Tailwind against the CSS variables in `globals.css` — no component library |
 | Database | Supabase Postgres | Schema in `supabase/migrations/`, RLS enabled on all tables |
-| File storage | Supabase Storage | Two buckets: `originals`, `thumbnails` (both public-read) |
+| File storage | Supabase Storage | Two buckets: `posts`, `post-thumbnails` (both public-read) |
 | Auth | Supabase Auth | Email/password to start; any signed-in user can upload and manage posts |
-| Image processing | `sharp` (server-side) | Thumbnail + dimension extraction in the upload Server Action (Node runtime) |
+| Image processing | `sharp` (server-side) | Both AVIF encoders live in `lib/imgcmp/`, shared with the desktop uploader |
 | Deployment | Vercel + Supabase cloud | |
 
 ## Folder structure (target)
@@ -60,13 +60,15 @@ booru/
 ### Upload pipeline (Phase 2 detail)
 1. Client posts `FormData` (file + tags + rating + source) to the upload action.
 2. Action: verify session → compute MD5 → reject if a post with that hash exists (dedup)
-   → read dimensions with sharp → generate WebP thumbnail (fit within 400×400)
-   → upload original to `originals/{md5}.{ext}` and thumb to `thumbnails/{md5}.webp`
+   → read dimensions with sharp → encode a lossy AVIF thumbnail (400px tall, width
+   capped at 800 for panoramas) and try a lossless AVIF of the image itself
+   → upload the image to `posts/{md5}.{ext}`, keeping the uploaded bytes byte-for-byte
+   when the AVIF didn't beat them, and the thumb to `post-thumbnails/{md5}.avif`
    → `createPostWithTags()` inserts the `posts` row, upserts the tags and links them
    (see database-schema.md) → `revalidatePath('/')`.
-3. Keep files under Vercel's server action body limit; if originals can exceed ~4MB,
-   switch to a **signed upload URL** flow (client uploads straight to Storage, then a
-   small action finalizes the post). Decide when it first hurts.
+3. `MAX_FILE_SIZE` keeps uploads under Vercel's server action body limit. The desktop
+   uploader (`packages/desktop`) is the answer to files above it: same pipeline, on a
+   real CPU, with its own 50MB/100MP ceiling.
 
 ### Search (Phase 4 detail)
 - URL is the state: `/?query=blue_hair+solo+-photo&page=2`.
@@ -79,7 +81,7 @@ booru/
 
 ### Ratings and SEO (Phase 5 detail)
 - Ratings are **metatags inside the same query string**: `rating:general`,
-  `-rating:explicit`. `lib/search.ts` parses the string once, `splitRatings()` peels the
+  `-rating:e3`. `lib/search.ts` parses the string once, `splitRatings()` peels the
   metatags off the tag names and `resolveRatings()` turns them into the whitelist
   `searchPosts()` filters `rating` against. Nothing else — chips, tag links,
   autocomplete, pagination hrefs — needs to know they exist.
@@ -108,9 +110,11 @@ The Danbooru reference is desktop-shaped; translate it like this:
 | Pagination row | Same — plain pagination, no infinite scroll | Same |
 | Post page: image + sidebar metadata | Image full-width, tags/metadata below | Two-column |
 
-- Use `next/image` with `sizes` set per breakpoint; thumbnails from the `thumbnails` bucket.
-- Compression happens **once, at upload, to the thumbnail only**. The grid renders the
-  already-compressed thumb through the Next optimizer; the post page renders the
-  original with `unoptimized` so the stored file is served byte-for-byte (no quality-75
-  re-encode, animation intact). Cost: the detail view downloads the full original.
+- Thumbnails come from the `post-thumbnails` bucket, the post image from `posts`.
+- Compression happens **once, at upload**. Both images are `unoptimized`, so the stored
+  file is served untouched — animation intact, no second lossy pass. The grid used to go
+  through the Next optimizer and it visibly softened thumbnails: Next scales the
+  requested quality by 50/80 for AVIF, making the default 75 an AVIF quality of 47, for
+  a resize its optimizer could not perform anyway. Cost: the detail view downloads the
+  full image.
 - Tap target minimum 44px; test at 375px width throughout.

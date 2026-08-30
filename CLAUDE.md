@@ -190,14 +190,13 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
 
 ## Docs
 
-`architecture.md`, `database-schema.md` and `future.md`. The build's own paperwork —
-`PLAN.md`'s status and session log, `phases.md`'s checklists, `supabase-setup.md`'s
-runbook — was deleted once it was all done and ticked; what a live project needs is
-`.env.local` plus `npm run db:push`. The reasoning behind a decision lives in this file
-and in the comment beside the code it explains.
+`architecture.md`, `database-schema.md` and `future.md`, plus `design/` (one screenshot
+of the interface as drawn). There is no status page and no runbook: a live project needs
+`.env.local` and `npm run db:push`, and the reasoning behind a decision lives in this
+file and in the comment beside the code it explains.
 
-Parts of `architecture.md` and `database-schema.md` predate later
-migrations (they still say `?tags=`, the old `general/sensitive/questionable/explicit`
-scale, `originals`/`thumbnails` buckets, WebP thumbs, `requireAdmin()`, shadcn/ui).
-When they disagree with `src/` or `supabase/migrations/`, the code wins — and fix the
-doc line you tripped over.
+They are written from the shape of the build and lag behind it — the relics that had
+piled up (shadcn/ui, WebP thumbs, `originals`/`thumbnails`, the old
+`general/sensitive/questionable/explicit` scale, `?tags=`) have been cleared out, but
+more will accumulate. When they disagree with `src/` or `supabase/migrations/`, the code
+wins — and fix the doc line you tripped over.
