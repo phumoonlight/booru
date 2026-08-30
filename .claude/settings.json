@@ -1,3 +1,7 @@
 {
-  "outputStyle": "Concise"
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "outputStyle": "Concise",
+  "permissions": {
+    "deny": ["Read(./.env)", "Read(./.env.local)"]
+  }
 }
