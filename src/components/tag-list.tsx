@@ -98,8 +98,10 @@ function TagRow({ entry, currentQuery }: { entry: TagEntry; currentQuery: string
 }
 
 /**
- * Sectioned by category in Danbooru order, entries already ordered by the caller within
- * each one. Used by the sidebar/drawer facets and the post detail page.
+ * Sectioned by category in Danbooru order, A–Z within each one. The caller's order still
+ * matters — it decides which tags survive a facet list's cap — but once a set is on
+ * screen a name is looked up by reading down the column, so alphabetical is the order to
+ * read it in. Used by the sidebar/drawer facets and the post detail page.
  */
 export function GroupedTagList({
   entries,
@@ -111,7 +113,15 @@ export function GroupedTagList({
   empty?: string
 }) {
   const groups = TAG_CATEGORIES.map(
-    (category) => [category, entries.filter((e) => e.tag.category === category)] as const
+    (category) =>
+      [
+        category,
+        entries
+          // Sorted by the label rather than the raw name, so the underscores the reader
+          // never sees can't push a row out of the order the column appears to be in
+          .filter((e) => e.tag.category === category)
+          .sort((a, b) => tagLabel(a.tag.name).localeCompare(tagLabel(b.tag.name))),
+      ] as const
   ).filter(([, group]) => group.length > 0)
 
   if (groups.length === 0) {

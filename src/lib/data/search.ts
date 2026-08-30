@@ -163,9 +163,9 @@ export async function searchTags(prefix: string, limit = 10): Promise<Tag[]> {
  * drawer. Which tags appear is decided by the page, but the number beside each one is
  * the tag's site-wide `post_count`, the same figure the detail page and the search
  * suggestions show, so a tag doesn't read as three posts here and three hundred one
- * click later. The on-screen frequency is still counted, and still orders the list: the
- * tags that describe most of what you are looking at come first, and it breaks ties
- * between tags of equal global size.
+ * click later. The on-screen frequency is still counted, and still orders what comes
+ * back: the sidebar keeps only the first 50, so the tags describing most of what you are
+ * looking at are the ones that survive the cut. It then prints them A–Z.
  */
 export async function getTagsForPosts(postIds: number[]): Promise<{ tag: Tag; count: number }[]> {
   if (postIds.length === 0) return []
