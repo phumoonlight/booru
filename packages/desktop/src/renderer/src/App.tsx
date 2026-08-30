@@ -59,7 +59,7 @@ export function App() {
     }
 
     if (!status.user) {
-      return <Login onSignedIn={refresh} onSettings={() => setView('settings')} />
+      return <Login onSignedIn={refresh} />
     }
 
     return (
@@ -76,14 +76,20 @@ export function App() {
           The OS titlebar already says Pubooru Desktop, so repeating it here was the name
           twice over. It names the screen instead — the app's only page — and doubles as
           the way back from settings, the way the web's wordmark returns you to the board.
+          Signed out there is no such screen to name, and the corner opposite says Log in
+          instead; an empty slot is left rather than a link to a queue you cannot reach.
         */}
-        <button
-          type="button"
-          onClick={() => setView('upload')}
-          className="text-sm font-bold tracking-tight hover:text-accent"
-        >
-          Upload
-        </button>
+        {status.user ? (
+          <button
+            type="button"
+            onClick={() => setView('upload')}
+            className="text-sm font-bold tracking-tight hover:text-accent"
+          >
+            Upload
+          </button>
+        ) : (
+          <span />
+        )}
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -101,11 +107,31 @@ export function App() {
             <span aria-hidden>⚙️</span>
             Connection settings
           </button>
+          {/* Signed out, the same corner says so and goes back to the form — from About
+              or settings there was otherwise nothing naming the way to it. */}
+          {!status.user && (
+            <button
+              type="button"
+              onClick={() => setView('upload')}
+              className="flex items-center gap-1 text-xs text-muted hover:text-foreground"
+            >
+              <span aria-hidden>👤</span>
+              Log in
+            </button>
+          )}
           {status.user && (
             <AccountMenu
               username={status.user.username}
               siteUrl={status.siteUrl}
-              onLogOut={() => void window.api.logOut().then(refresh)}
+              onLogOut={() =>
+                void window.api.logOut().then(() => {
+                  // About and settings both sit in front of the login check, so logging
+                  // out from either left the window on a screen for a session that no
+                  // longer exists. Signing out ends whatever you were doing.
+                  setView('upload')
+                  return refresh()
+                })
+              }
             />
           )}
         </div>

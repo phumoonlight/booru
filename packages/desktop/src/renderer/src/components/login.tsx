@@ -10,13 +10,7 @@ import { useEffect, useState, type FormEvent } from 'react'
  * day: it keeps the email and password in the same file — in plain text, like everything
  * else in there — so the form comes back filled in instead of blank.
  */
-export function Login({
-  onSignedIn,
-  onSettings,
-}: {
-  onSignedIn: () => void
-  onSettings: () => void
-}) {
+export function Login({ onSignedIn }: { onSignedIn: () => void }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(false)
@@ -51,11 +45,12 @@ export function Login({
 
   return (
     <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center gap-6 px-4 py-10">
+      {/* The one screen with nothing else on it, so the wordmark gets to be the thing
+          you see rather than a caption above the form. */}
       <div className="text-center">
-        <p className="text-base font-bold tracking-tight">Pubooru</p>
-        <p className="text-xs text-muted">Desktop</p>
+        <p className="text-3xl font-bold tracking-tight">Pubooru</p>
+        <p className="text-sm text-muted">Desktop</p>
       </div>
-      <h1 className="text-center text-2xl font-bold tracking-tight">Log in</h1>
       <form onSubmit={submit} className="flex flex-col gap-4">
         <label className="flex flex-col gap-1.5 text-sm">
           Email
@@ -100,13 +95,6 @@ export function Login({
           {pending ? 'Logging in…' : 'Log in'}
         </button>
       </form>
-      <button
-        type="button"
-        onClick={onSettings}
-        className="text-center text-xs text-muted hover:text-foreground"
-      >
-        Connection settings
-      </button>
     </div>
   )
 }
