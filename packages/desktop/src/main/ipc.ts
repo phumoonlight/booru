@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron'
 import { z } from 'zod'
 import { searchTags } from '@web/lib/data/shared'
 import { createPostFromImage, parsePostMetadata } from '@web/lib/upload/pipeline'
@@ -58,6 +58,13 @@ export function registerIpc(): void {
       configured: config !== null,
       user: config ? await currentUser() : null,
       siteUrl: config?.siteUrl ?? '',
+      // Read here rather than baked into the bundle: the renderer has no `process`, and
+      // `app.getVersion()` is the version electron-builder actually stamped on the copy.
+      versions: {
+        app: app.getVersion(),
+        electron: process.versions.electron,
+        chrome: process.versions.chrome,
+      },
       limits: DESKTOP_UPLOAD_LIMITS,
     }
   })

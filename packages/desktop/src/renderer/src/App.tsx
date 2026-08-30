@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { About } from './components/about'
 import { AccountMenu } from './components/account-menu'
 import { Login } from './components/login'
 import { Settings } from './components/settings'
@@ -11,10 +12,14 @@ import type { AppStatus } from '../../shared/api'
  * enforces — `<SetupNotice />`, then the redirect to /login, then /upload — except here
  * the first one is a form rather than a runbook: this app reads no environment, so the
  * four values are typed in wherever it runs.
+ *
+ * About is the exception to that order rather than a fourth step: it answers "what am I
+ * running", which is a fair question before the app is set up at all, so it is the one
+ * view allowed to sit in front of an unconfigured window.
  */
 export function App() {
   const [status, setStatus] = useState<AppStatus | null>(null)
-  const [editingSettings, setEditingSettings] = useState(false)
+  const [view, setView] = useState<'upload' | 'settings' | 'about'>('upload')
 
   const refresh = useCallback(async () => {
     setStatus(await window.api.getStatus())
@@ -38,21 +43,23 @@ export function App() {
   }
 
   const screen = () => {
-    if (!status.configured || editingSettings) {
+    if (view === 'about') return <About status={status} />
+
+    if (!status.configured || view === 'settings') {
       return (
         <Settings
           canCancel={status.configured}
           onSaved={() => {
-            setEditingSettings(false)
+            setView('upload')
             void refresh()
           }}
-          onCancel={() => setEditingSettings(false)}
+          onCancel={() => setView('upload')}
         />
       )
     }
 
     if (!status.user) {
-      return <Login onSignedIn={refresh} onSettings={() => setEditingSettings(true)} />
+      return <Login onSignedIn={refresh} onSettings={() => setView('settings')} />
     }
 
     return (
@@ -72,7 +79,7 @@ export function App() {
         */}
         <button
           type="button"
-          onClick={() => setEditingSettings(false)}
+          onClick={() => setView('upload')}
           className="text-sm font-bold tracking-tight hover:text-accent"
         >
           Upload
@@ -80,7 +87,15 @@ export function App() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setEditingSettings((open) => !open)}
+            onClick={() => setView((current) => (current === 'about' ? 'upload' : 'about'))}
+            className="flex items-center gap-1 text-xs text-muted hover:text-foreground"
+          >
+            <span aria-hidden>ℹ️</span>
+            About
+          </button>
+          <button
+            type="button"
+            onClick={() => setView((current) => (current === 'settings' ? 'upload' : 'settings'))}
             className="flex items-center gap-1 text-xs text-muted hover:text-foreground"
           >
             <span aria-hidden>⚙️</span>

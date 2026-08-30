@@ -33,6 +33,8 @@ export type AppStatus = {
   user: SignedInUser | null
   /** Where a finished post can be opened, or '' if the board's address was never given. */
   siteUrl: string
+  /** What the About screen shows, and what a bug report needs: the app and the runtime under it. */
+  versions: { app: string; electron: string; chrome: string }
   limits: { maxFileSize: number; maxFileSizeLabel: string; maxPixels: number }
 }
 
