@@ -113,7 +113,6 @@ export default async function PostsPage({ searchParams }: PageProps<'/posts'>) {
           ) : (
             <PostGrid posts={posts} />
           )}
-
           <Pagination page={page} pageCount={pageCount} buildHref={(p) => searchHref(query, p)} />
         </div>
       </div>
