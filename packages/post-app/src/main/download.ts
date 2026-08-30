@@ -32,7 +32,7 @@ let root: string | undefined
 /** One directory per run of the app, emptied on quit. */
 function tempRoot(): string {
   if (!root) {
-    root = join(app.getPath('temp'), `pubooru-uploader-${process.pid}`)
+    root = join(app.getPath('temp'), `pubooru-desktop-${process.pid}`)
     mkdirSync(root, { recursive: true })
   }
   return root
