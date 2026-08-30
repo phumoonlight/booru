@@ -42,6 +42,21 @@ export function App() {
     return <div className="grid h-screen place-items-center text-sm text-muted">Starting…</div>
   }
 
+  // Which screen you are on, said in the header rather than left to be inferred from
+  // what is below it — About and settings look alike from the corner of an eye.
+  //
+  // The bar is a pseudo-element, not text-decoration: an underline is drawn per run of
+  // text, so the gap between an item's emoji and its label came out as a gap in the
+  // line. `-bottom-2` is the header's own `py-2`, which lands the bar on its border and
+  // makes the current item read as a tab rather than a visited link.
+  const ACTIVE_BAR =
+    'relative after:absolute after:inset-x-0 after:-bottom-2 after:h-0.5 after:bg-accent'
+
+  const navClass = (active: boolean) =>
+    `flex items-center gap-1 text-xs transition-colors ${
+      active ? `text-foreground ${ACTIVE_BAR}` : 'text-muted hover:text-foreground'
+    }`
+
   const screen = () => {
     if (view === 'about') return <About status={status} />
 
@@ -89,7 +104,9 @@ export function App() {
           <button
             type="button"
             onClick={() => setView('upload')}
-            className="text-sm font-bold tracking-tight hover:text-accent"
+            className={`text-sm font-bold tracking-tight transition-colors ${
+              view === 'upload' ? ACTIVE_BAR : 'text-muted hover:text-foreground'
+            }`}
           >
             Upload
           </button>
@@ -100,7 +117,7 @@ export function App() {
           <button
             type="button"
             onClick={() => setView((current) => (current === 'about' ? 'upload' : 'about'))}
-            className="flex items-center gap-1 text-xs text-muted hover:text-foreground"
+            className={navClass(view === 'about')}
           >
             <span aria-hidden>ℹ️</span>
             About
@@ -108,7 +125,7 @@ export function App() {
           <button
             type="button"
             onClick={() => setView((current) => (current === 'settings' ? 'upload' : 'settings'))}
-            className="flex items-center gap-1 text-xs text-muted hover:text-foreground"
+            className={navClass(view === 'settings' || !status.configured)}
           >
             <span aria-hidden>⚙️</span>
             Connection settings
@@ -119,7 +136,7 @@ export function App() {
             <button
               type="button"
               onClick={() => setView('upload')}
-              className="flex items-center gap-1 text-xs text-muted hover:text-foreground"
+              className={navClass(view === 'upload')}
             >
               <span aria-hidden>👤</span>
               Log in
