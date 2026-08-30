@@ -27,10 +27,10 @@ npm run post-app:dev        # opens the window with hot reload
 npm run post-app:package    # builds an installer into packages/post-app/dist
 ```
 
-In a checkout the app reads the website's own `.env.local` for the Supabase project, so
-`post-app:dev` reaches the same board `npm run dev` does. A packaged build has no repo
-beside it and asks for the values on first launch — project URL, anon key, service role
-key, and optionally the site's address so a finished post can be opened in your browser.
+On first launch the app asks which board it uploads to — project URL, anon key, service
+role key, and optionally the site's address so a finished post can be opened in your
+browser. A checkout is no different: it reads no environment and no `.env.local`, so the
+setup screen every installed copy meets is the one development runs too.
 They are kept in `save.json` in the app's data folder, as plain readable text — service
 role key included, so treat that folder as the secret it is.
 

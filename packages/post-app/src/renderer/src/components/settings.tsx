@@ -14,9 +14,9 @@ const BLANK: AppConfigInput = {
  * in the app's own `save.json` instead of coming from a `.env.local` that a packaged app
  * has no way to read.
  *
- * In a checkout this screen usually never appears — `main/config.ts` falls back to the
- * repo's `.env.local` during development, so `npm run dev` reaches the same project the
- * website does.
+ * It is the only way in, in a checkout as much as in an installed copy. Development used
+ * to read the website's `.env.local` instead, which meant this screen — the one every
+ * real user meets first — was the path nobody ever ran.
  */
 export function Settings({
   canCancel,

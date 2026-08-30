@@ -1,12 +1,15 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { existsSync } from 'node:fs'
 import { app, shell } from 'electron'
 import { readSection, savePath, writeSection } from './save-file'
 
 /**
- * What the app needs to reach the board. Three of the four are the same variables the
- * web reads out of `.env.local`; `siteUrl` is only used to open a finished post in the
- * browser.
+ * What the app needs to reach the board: the same three values the web keeps in its
+ * environment, plus `siteUrl`, which is only used to open a finished post in the browser.
+ *
+ * They come from the settings screen and nowhere else. Reading the repo's `.env.local`
+ * during development was convenient in a checkout and a lie everywhere else — the app
+ * behaved one way for whoever wrote it and another for whoever installed it, and the
+ * screen every real user has to fill in was the one path never exercised.
  *
  * The service-role key is here for the same reason it is in the web's environment: the
  * storage buckets take writes from `authenticated`, but the counter tables
@@ -22,62 +25,6 @@ export type AppConfig = {
 }
 
 let cached: AppConfig | null | undefined
-
-/**
- * A `.env`-shaped file, parsed just far enough. No dotenv dependency: this reads three
- * known keys out of the repo's own `.env.local` during development so the app runs
- * against the same project as `npm run dev` without being set up twice.
- */
-function readEnvFile(file: string): Record<string, string> {
-  if (!existsSync(file)) return {}
-  const values: Record<string, string> = {}
-  for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
-    const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line)
-    if (!match) continue
-    values[match[1]] = match[2].trim().replace(/^['"]|['"]$/g, '')
-  }
-  return values
-}
-
-/**
- * Development falls back to the web app's environment, so a checkout that already runs
- * `npm run dev` runs this too. A packaged app has no repo beside it — `app.isPackaged`
- * is the switch, and there the settings screen is the only way in.
- */
-function fromDevEnv(): AppConfig | null {
-  if (app.isPackaged) return null
-
-  const env = { ...readEnvFile(findRepoEnv()), ...process.env }
-
-  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-  const supabaseAnonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
-  const supabaseServiceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-  if (!isUsable({ supabaseUrl, supabaseAnonKey, supabaseServiceRoleKey, siteUrl: '' })) return null
-
-  return {
-    supabaseUrl,
-    supabaseAnonKey,
-    supabaseServiceRoleKey,
-    siteUrl: env.NEXT_PUBLIC_SITE_URL ?? '',
-  }
-}
-
-/**
- * The website's `.env.local`, found by walking up from wherever Electron thinks the app
- * is. `electron-vite dev` puts that two levels below the repo root, but running the
- * built `out/main/index.js` by hand does not, and a search costs four `existsSync` calls.
- */
-function findRepoEnv(): string {
-  let dir = app.getAppPath()
-  for (let up = 0; up < 5; up++) {
-    const candidate = join(dir, '.env.local')
-    if (existsSync(candidate)) return candidate
-    const parent = resolve(dir, '..')
-    if (parent === dir) break
-    dir = parent
-  }
-  return ''
-}
 
 /**
  * The same test `isSupabaseConfigured()` makes on the web: real-looking values, not the
@@ -99,7 +46,7 @@ export function loadConfig(): AppConfig | null {
   if (cached !== undefined) return cached
 
   const stored = readSection<AppConfig>('config')
-  cached = stored && isUsable(stored) ? stored : fromDevEnv()
+  cached = stored && isUsable(stored) ? stored : null
   return cached
 }
 
@@ -127,8 +74,8 @@ export function saveConfig(config: AppConfig): { ok: true } | { ok: false; error
  * go", which is otherwise a path nobody would guess. It is selected rather than opened,
  * so the choice of what reads a file full of keys stays with whoever asked.
  *
- * Falls back to the folder when there is no file yet, which is the case in a checkout
- * running off the repo's `.env.local`.
+ * Falls back to the folder when there is no file yet, which is the case until the
+ * settings screen has been filled in once.
  */
 export function revealConfig(): void {
   const file = savePath()

@@ -9,8 +9,8 @@ import type { AppStatus } from '../../shared/api'
  * Three screens, picked by what the app knows: settings until it has a project to talk
  * to, login until someone is signed in, then the queue. The same order the website
  * enforces — `<SetupNotice />`, then the redirect to /login, then /upload — except here
- * the first one is a form rather than a runbook, because a packaged app has no
- * `.env.local` to edit.
+ * the first one is a form rather than a runbook: this app reads no environment, so the
+ * four values are typed in wherever it runs.
  */
 export function App() {
   const [status, setStatus] = useState<AppStatus | null>(null)

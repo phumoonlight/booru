@@ -88,8 +88,9 @@ at — see [packages/post-app/README.md](packages/post-app/README.md).
   to `pubooru-desktop` in `main/index.ts` rather than defaulting to the app's display
   name, so renaming the app doesn't move the settings. A file that won't parse is treated
   as absent, costing a re-setup and never a crash. The settings screen is the desktop
-  `<SetupNotice />`; in a checkout it never appears, because `main/config.ts` falls back
-  to the repo's `.env.local` so the app and `npm run dev` reach the same project.
+  `<SetupNotice />` and the only way in — the app reads no environment at all, in a
+  checkout as much as in an installed copy, so the screen every user meets first is the
+  one development exercises too.
 
 ## Database
 
