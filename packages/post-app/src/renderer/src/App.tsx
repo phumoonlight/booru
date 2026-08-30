@@ -41,7 +41,6 @@ export function App() {
     if (!status.configured || editingSettings) {
       return (
         <Settings
-          encryptedAtRest={status.encryptedAtRest}
           canCancel={status.configured}
           onSaved={() => {
             setEditingSettings(false)

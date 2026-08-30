@@ -1,12 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import {
-  BrowserWindow,
-  dialog,
-  ipcMain,
-  safeStorage,
-  shell,
-  type OpenDialogOptions,
-} from 'electron'
+import { BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron'
 import { z } from 'zod'
 import { searchTags } from '@web/lib/data/shared'
 import { createPostFromImage, parsePostMetadata } from '@web/lib/upload/pipeline'
@@ -66,14 +59,13 @@ export function registerIpc(): void {
       user: config ? await currentUser() : null,
       siteUrl: config?.siteUrl ?? '',
       limits: DESKTOP_UPLOAD_LIMITS,
-      encryptedAtRest: safeStorage.isEncryptionAvailable(),
     }
   })
 
   /**
    * The settings screen reads back what it saved so the fields aren't blank when it is
-   * reopened to fix one of them. This is the only way a key ever leaves the main
-   * process, and it goes to a window that is about to let you edit it anyway.
+   * reopened to fix one of them. The window is about to let you edit these anyway, and
+   * they are sitting in readable JSON either way.
    */
   ipcMain.handle('app:read-config', async (): Promise<AppConfigInput | null> => loadConfig())
 
@@ -105,9 +97,9 @@ export function registerIpc(): void {
   )
 
   /**
-   * The one place a stored password leaves the main process, and it goes to the form
-   * that is about to submit it anyway. Log out deliberately leaves it alone — the point
-   * of the box is that the next login is already typed out.
+   * Hands the stored password to the form that is about to submit it anyway. Log out
+   * deliberately leaves it alone — the point of the box is that the next login is
+   * already typed out.
    */
   ipcMain.handle('auth:saved-login', async (): Promise<SavedLogin | null> => readCredentials())
 
@@ -195,7 +187,7 @@ export function registerIpc(): void {
     )
   })
 
-  /** Shows `config.store` in Explorer/Finder — the settings screen's "where is this?". */
+  /** Shows `save.json` in Explorer/Finder — the settings screen's "where is this?". */
   ipcMain.handle('shell:open-config-folder', async (): Promise<void> => revealConfig())
 
   /**

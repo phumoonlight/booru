@@ -11,20 +11,18 @@ const BLANK: AppConfigInput = {
 /**
  * Where the app is told which board it uploads to. This is the desktop answer to the
  * web's `<SetupNotice />`: the same four values, except they are typed in once and kept
- * in the app's own encrypted store instead of coming from a `.env.local` that a packaged
- * app has no way to read.
+ * in the app's own `save.json` instead of coming from a `.env.local` that a packaged app
+ * has no way to read.
  *
  * In a checkout this screen usually never appears — `main/config.ts` falls back to the
  * repo's `.env.local` during development, so `npm run dev` reaches the same project the
  * website does.
  */
 export function Settings({
-  encryptedAtRest,
   canCancel,
   onSaved,
   onCancel,
 }: {
-  encryptedAtRest: boolean
   canCancel: boolean
   onSaved: () => void
   onCancel: () => void
@@ -102,13 +100,11 @@ export function Settings({
 
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="min-w-0 flex-1 text-xs text-muted">
-            {encryptedAtRest
-              ? 'Saved to this app’s data folder, encrypted with your OS keystore.'
-              : 'Your OS offered no keystore, so these are saved as plain text in this ' +
-                'app’s data folder.'}
+            Saved as plain text in this app’s data folder, service role key included.
           </p>
-          {/* The folder is a path nobody would guess, and the file in it is ciphertext —
-              so this reveals it rather than opening it. */}
+          {/* The folder is a path nobody would guess; the file is selected rather than
+              opened, since opening it puts a screenful of keys in front of whoever is
+              looking. */}
           <button
             type="button"
             onClick={() => void window.api.openConfigFolder()}

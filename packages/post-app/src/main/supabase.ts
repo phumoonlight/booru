@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient, type SupportedStorage } from '@supabase/supabase-js'
-import { clearStore, readStore, writeStore } from './secure-store'
+import { clearSection, readSection, writeSection } from './save-file'
 import { exportConfigToEnv, loadConfig, type AppConfig } from './config'
 
 /**
@@ -14,28 +14,27 @@ import { exportConfigToEnv, loadConfig, type AppConfig } from './config'
  * one a signed-in user is allowed.
  */
 
-const SESSION_FILE = 'session.store'
-
 /**
  * Supabase persists the session by writing to a `Storage`. A browser hands it
- * `localStorage`; here it gets the encrypted file store, mirrored in memory so the
- * synchronous reads the auth client makes on startup never touch the disk twice.
+ * `localStorage`; here it gets the `session` section of the save file, mirrored in
+ * memory so the synchronous reads the auth client makes on startup never touch the disk
+ * twice.
  */
 function sessionStorage(): SupportedStorage {
-  let entries = readStore<Record<string, string>>(SESSION_FILE) ?? {}
+  let entries = readSection<Record<string, string>>('session') ?? {}
 
   return {
     getItem: (key) => entries[key] ?? null,
     setItem: (key, value) => {
       entries = { ...entries, [key]: value }
-      writeStore(SESSION_FILE, entries)
+      writeSection('session', entries)
     },
     removeItem: (key) => {
       const next = { ...entries }
       delete next[key]
       entries = next
-      if (Object.keys(entries).length === 0) clearStore(SESSION_FILE)
-      else writeStore(SESSION_FILE, entries)
+      if (Object.keys(entries).length === 0) clearSection('session')
+      else writeSection('session', entries)
     },
   }
 }
@@ -126,7 +125,7 @@ export async function signIn(
 
 export async function signOut(): Promise<void> {
   await userClient()?.auth.signOut()
-  clearStore(SESSION_FILE)
+  clearSection('session')
 }
 
 /** Forces the next `clients()` call to rebuild — the settings screen just changed them. */

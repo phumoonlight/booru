@@ -138,6 +138,22 @@ the real gate.
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
 
+- **2026-08-30 (5)** — The uploader is called Pubooru Desktop now, and its three sealed
+  stores are one readable `save.json`. Two decisions worth keeping straight. The folder:
+  `userData` defaults to the app's display name, which meant it moved when the name did
+  and differed between a checkout and a packaged build, so `main/index.ts` pins it to
+  `pubooru-desktop` before the single-instance lock — that lock is a file inside it. The
+  file: `main/save-file.ts` replaces `secure-store.ts`, holding `config`, `session` and
+  `credentials` as three sections of one indented JSON document. Dropping `safeStorage`
+  was asked for and is a real downgrade, recorded here rather than argued: the
+  service-role key bypasses RLS for the whole project and now sits in plain text, as does
+  the remembered password, guarded by nothing but the folder — bought in exchange for a
+  file that can be read, hand-edited, backed up and copied to another machine, none of
+  which ciphertext allowed. `AppStatus.encryptedAtRest` and the settings screen's
+  keystore/plain-text branch went with it; the line now just says what is true. No
+  migration from the old files, by the same call that skipped one for the folder rename:
+  first launch asks for setup and a login.
+
 - **2026-08-30 (4)** — The uploader's login screen got a "Remember me" box. The session
   already survived a restart, so this only matters on the day the refresh token finally
   expires — and on that day the alternative was retyping a password into an app that is

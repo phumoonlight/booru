@@ -34,8 +34,6 @@ export type AppStatus = {
   /** Where a finished post can be opened, or '' if the board's address was never given. */
   siteUrl: string
   limits: { maxFileSize: number; maxFileSizeLabel: string; maxPixels: number }
-  /** Whether the OS gave us a key to encrypt the stored credentials with. */
-  encryptedAtRest: boolean
 }
 
 /**
@@ -75,7 +73,7 @@ export type PostAppApi = {
   getStatus: () => Promise<AppStatus>
   saveConfig: (config: AppConfigInput) => Promise<Outcome>
   readConfig: () => Promise<AppConfigInput | null>
-  /** `remember` writes the credentials to the encrypted store; false wipes what was there. */
+  /** `remember` writes the credentials to the save file; false wipes what was there. */
   logIn: (email: string, password: string, remember: boolean) => Promise<Outcome>
   /** The remembered credentials, or null — the login form prefills itself from this. */
   readSavedLogin: () => Promise<SavedLogin | null>

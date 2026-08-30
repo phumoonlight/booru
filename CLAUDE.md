@@ -79,12 +79,15 @@ at — see [packages/post-app/README.md](packages/post-app/README.md).
   same split as the web, spelled in `createPostFromImage`'s signature.
 - The renderer has no keys, no Node and no network: every capability is one
   `ipcMain.handle` in `src/main/ipc.ts`, and the file's bytes are read on the main side.
-- **Its config is four typed-in values, not an environment.** `main/secure-store.ts`
-  keeps `config.store` and `session.store` in the app's userData (`.store`, not `.json` —
-  the contents are a marker and base64, not a document), sealed with Electron's
-  `safeStorage` (DPAPI / Keychain / libsecret) where the OS offers it — the service-role
-  key is in there, and a sealed file that can no longer be opened is treated as absent,
-  costing a re-setup and never a crash. The settings screen is the desktop
+- **Its config is four typed-in values, not an environment.** `main/save-file.ts` keeps
+  everything the app remembers in one readable `save.json` in the app's userData — three
+  sections, `config`, `session` and `credentials`. It was three files sealed with
+  Electron's `safeStorage`; the encryption was dropped deliberately, so the service-role
+  key and the remembered password are now plain text guarded by nothing but the folder,
+  in exchange for a file that can be read, hand-edited and copied. `userData` is pinned
+  to `pubooru-desktop` in `main/index.ts` rather than defaulting to the app's display
+  name, so renaming the app doesn't move the settings. A file that won't parse is treated
+  as absent, costing a re-setup and never a crash. The settings screen is the desktop
   `<SetupNotice />`; in a checkout it never appears, because `main/config.ts` falls back
   to the repo's `.env.local` so the app and `npm run dev` reach the same project.
 

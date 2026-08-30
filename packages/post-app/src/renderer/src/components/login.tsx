@@ -5,10 +5,10 @@ import { useEffect, useState, type FormEvent } from 'react'
  * half being wrong — there is no signup anywhere in this project, and this app is one
  * more thing an existing account can do.
  *
- * The session it creates is written to the app's encrypted store, so this screen is
- * shown once and then only when the refresh token finally expires. "Remember me" is for
- * that day: it keeps the email and password in the same store, so the form comes back
- * filled in instead of blank.
+ * The session it creates is written to the app's save file, so this screen is shown
+ * once and then only when the refresh token finally expires. "Remember me" is for that
+ * day: it keeps the email and password in the same file — in plain text, like everything
+ * else in there — so the form comes back filled in instead of blank.
  */
 export function Login({
   onSignedIn,

@@ -31,7 +31,8 @@ In a checkout the app reads the website's own `.env.local` for the Supabase proj
 `post-app:dev` reaches the same board `npm run dev` does. A packaged build has no repo
 beside it and asks for the values on first launch — project URL, anon key, service role
 key, and optionally the site's address so a finished post can be opened in your browser.
-They are kept in the app's data folder, encrypted with the OS keystore where there is one.
+They are kept in `save.json` in the app's data folder, as plain readable text — service
+role key included, so treat that folder as the secret it is.
 
 Sign in with an existing account. There is no signup here any more than there is on the
 website.
