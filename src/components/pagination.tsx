@@ -23,7 +23,7 @@ export function Pagination({
   const linkClass =
     'flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-border px-2 text-sm hover:border-accent'
 
-  const arrowClass = `flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 text-xl`
+  const arrowClass = `flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 text-xl hover:opacity-80`
 
   return (
     <nav aria-label="Pagination" className="flex items-center justify-center gap-2">
