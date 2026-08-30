@@ -5,7 +5,109 @@ import { z } from 'zod'
 import { requireUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { searchTags } from '@/lib/data/tags'
-import { TAG_CATEGORIES, type TagCategory } from '@/lib/tags'
+import { parseTagInput, TAG_CATEGORIES, type TagCategory } from '@/lib/tags'
+
+// Postgres' unique_violation. `tags.name` is the only unique column on the table, so
+// this always means "that name is already a tag" — the one failure both the create and
+// the rename below have to explain rather than hand back as a database message.
+const UNIQUE_VIOLATION = '23505'
+
+/**
+ * The typed-in name, normalized the way an upload's tag box normalizes it — same
+ * lowercasing, same character rule — so a tag created here and a tag created by an
+ * upload can never differ in form. A space is what starts a second name, which is why
+ * two tokens is an error and not a silent "we took the first one".
+ */
+function readTagName(raw: FormDataEntryValue | null): { name: string } | { error: string } {
+  const parsed = z.string().max(64).safeParse(raw)
+  if (!parsed.success) return { error: 'That name is too long — 64 characters at most.' }
+
+  const { tags, invalid } = parseTagInput(parsed.data)
+  if (invalid.length > 0) {
+    return { error: `“${invalid[0]}” can only use lowercase letters, digits and _ ( ) . -` }
+  }
+  if (tags.length === 0) return { error: 'Type a tag name.' }
+  if (tags.length > 1) return { error: 'One tag at a time — the space starts a second name.' }
+  return { name: tags[0] }
+}
+
+export type CreateTagState =
+  | { error: string; ok?: never; name?: never }
+  | { ok: true; name: string; error?: never }
+  | null
+
+/**
+ * Add a tag nobody has used yet. Uploads create tags as a side effect of applying them,
+ * so this exists for the other order: naming an artist or a series first and tagging
+ * posts with it afterwards, with the category already right. It starts on no posts, so
+ * `post_count` keeps its default of 0 and no counter needs syncing.
+ */
+export async function createTag(
+  _prevState: CreateTagState,
+  formData: FormData
+): Promise<CreateTagState> {
+  await requireUser()
+
+  const name = readTagName(formData.get('name'))
+  if ('error' in name) return { error: name.error }
+
+  const category = z.enum(TAG_CATEGORIES).safeParse(formData.get('category') ?? 'general')
+  if (!category.success) return { error: 'Pick a category.' }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('tags')
+    .insert({ name: name.name, category: category.data })
+  if (error) {
+    if (error.code === UNIQUE_VIOLATION) return { error: `${name.name} already exists.` }
+    return { error: `Could not create the tag: ${error.message}` }
+  }
+
+  revalidatePath('/', 'layout')
+  return { ok: true, name: name.name }
+}
+
+const renameSchema = z.object({ id: z.coerce.number().int() })
+
+export type RenameTagState =
+  | { error: string; ok?: never; name?: never }
+  | { ok: true; name: string; error?: never }
+  | null
+
+/**
+ * Rename a tag in place. The row keeps its id, so every `post_tags` link and every
+ * `/tags/[id]` link survives untouched — only the text moves, and with it the searches
+ * that spell the old name. Nothing is recounted: the same posts carry the same tag.
+ *
+ * A name already taken is refused rather than merged. Folding two tags into one means
+ * moving links and recounting both, and doing that silently behind a rename would be a
+ * destructive edit wearing a cosmetic one's clothes.
+ */
+export async function renameTag(
+  _prevState: RenameTagState,
+  formData: FormData
+): Promise<RenameTagState> {
+  await requireUser()
+
+  const id = renameSchema.safeParse({ id: formData.get('id') })
+  if (!id.success) return { error: id.error.issues[0].message }
+
+  const name = readTagName(formData.get('name'))
+  if ('error' in name) return { error: name.error }
+
+  const supabase = await createClient()
+  const { error } = await supabase.from('tags').update({ name: name.name }).eq('id', id.data.id)
+  if (error) {
+    if (error.code === UNIQUE_VIOLATION) {
+      return { error: `${name.name} is already a tag — rename it to something else.` }
+    }
+    return { error: `Rename failed: ${error.message}` }
+  }
+
+  // The name is painted on the grid's tag links, both tag screens and every post page
+  revalidatePath('/', 'layout')
+  return { ok: true, name: name.name }
+}
 
 const categorySchema = z.object({
   id: z.coerce.number().int(),

@@ -103,7 +103,8 @@ web's server actions and the desktop app's IPC handlers run the same functions. 
 
 Each tag also has its own page, `/tags/[id]` — the gallery grid for one tag, without the
 search bar or the tag drawer, and with the rating blur switched off. The `/tags` index
-links there rather than to `?query=`.
+links there rather than to `?query=`. `/tags/manage` is the full tag editor: create,
+rename, recategorize, delete.
 
 There is no open work item left in the plan. What's next comes from
 [future.md](./future.md) or from using the thing.
@@ -136,6 +137,22 @@ the real gate.
 ## Session log
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
+
+- **2026-08-30 (3)** — `/tags/manage` can now create and rename tags, not only
+  recategorize and delete them. Creating covers the order an upload can't: naming an
+  artist or a series first, with its category already right, before any post carries it —
+  it starts on no posts, so no counter moves. Renaming updates the row in place, which is
+  the whole reason it is safe: the id never changes, so every `post_tags` link and every
+  `/tags/[id]` URL survives and nothing is recounted; only searches spelling the old name
+  stop matching, and the panel says so. A name that is already taken is refused rather
+  than merged — folding two tags means moving links and recounting both, and doing that
+  behind a rename would be a destructive edit dressed as a cosmetic one. Both actions read
+  Postgres' 23505 explicitly so a collision reads as "already exists" instead of a raw
+  database message, and both name fields type an underscore when the space bar is pressed,
+  since a space is what would otherwise start a second tag. These two are the file's only
+  actions called through `startTransition` rather than `useActionState`: success has to
+  clear the field and close the panel, which a state-only hook can't do without the
+  setState-in-effect the React Compiler forbids.
 
 - **2026-08-30 (2)** — Gave each tag its own page at `/tags/[id]`: the gallery layout with
   neither the search bar nor the tag drawer, because both exist to narrow across many tags

@@ -9,7 +9,7 @@ import { isSupabaseConfigured } from '@/lib/env'
 
 export const metadata: Metadata = {
   title: 'Manage tags',
-  description: 'Change the category of any tag.',
+  description: 'Create, rename, recategorize and delete tags.',
   // A signed-in-only screen: nothing here belongs in search results
   robots: { index: false, follow: false },
 }
@@ -46,7 +46,7 @@ export default async function ManageTagsPage() {
           <Link href="/login" className="text-accent hover:underline">
             Log in
           </Link>{' '}
-          to change tag categories.
+          to create, rename and recategorize tags.
         </p>
       )}
     </div>
