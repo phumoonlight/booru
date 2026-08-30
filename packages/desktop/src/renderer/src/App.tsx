@@ -3,7 +3,6 @@ import { AccountMenu } from './components/account-menu'
 import { Login } from './components/login'
 import { Settings } from './components/settings'
 import { UploadQueue } from './components/upload-queue'
-import { SettingsIcon } from './components/icons'
 import type { AppStatus } from '../../shared/api'
 
 /**
@@ -69,6 +68,14 @@ export function App() {
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2">
         <span className="text-sm font-bold tracking-tight">Pubooru Desktop</span>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setEditingSettings((open) => !open)}
+            className="flex items-center gap-1 text-xs text-muted hover:text-foreground"
+          >
+            <span aria-hidden>⚙️</span>
+            Connection settings
+          </button>
           {status.user && (
             <AccountMenu
               username={status.user.username}
@@ -76,15 +83,6 @@ export function App() {
               onLogOut={() => void window.api.logOut().then(refresh)}
             />
           )}
-          <button
-            type="button"
-            onClick={() => setEditingSettings((open) => !open)}
-            title="Connection settings"
-            aria-label="Connection settings"
-            className="flex min-h-9 w-9 items-center justify-center rounded-lg border border-border text-muted hover:text-foreground"
-          >
-            <SettingsIcon />
-          </button>
         </div>
       </header>
 
