@@ -92,7 +92,23 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
   as absent, costing a re-setup and never a crash. The settings screen is the desktop
   `<SetupNotice />` and the only way in — the app reads no environment at all, in a
   checkout as much as in an installed copy, so the screen every user meets first is the
-  one development exercises too.
+  one development exercises too. That screen reads as four settings rather than a form:
+  each shows its value with an Edit beside it, and Edit opens that row alone with its own
+  Save. There is no global Save to lose the other three to, and no on-screen notice that
+  the service-role key lands in plain text — this file and the README are the only places
+  that now say so.
+- **Three views, one of them always mounted.** `App.tsx` holds `'upload' | 'settings' |
+  'about'` and the header switches them, with settings forced until there is a config and
+  the login form until there is a session. About is the exception to that order — "what
+  version is this" is a fair question before setup — and carries the versions
+  `app:status` reports, since the renderer has no `process` and a packaged app ships no
+  manifest it can read. The queue is **hidden, not unmounted**, when another view is in
+  front: glancing at About used to throw away a staged, half-tagged queue and orphan an
+  upload already in flight.
+- **`signOut({ scope: 'local' })`, here and in `lib/actions/auth.ts`.** The default is
+  `'global'`, which revokes every refresh token the account holds — logging out of the
+  uploader signed out the browser too, and the other way round. Logging out of one place
+  means one place.
 
 ## Database
 
@@ -157,7 +173,7 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
 - `MAX_FILE_SIZE` lives in `lib/upload-limits.ts` because three layers must agree:
   the drop zone, the upload action, and `serverActions.bodySizeLimit` in `next.config.ts`.
 - Pages fall back to `<SetupNotice />` when `isSupabaseConfigured()` is false, so the app
-  is browsable before the runbook has been run.
+  is browsable before `.env.local` has been filled in.
 
 ## Style
 
@@ -174,14 +190,13 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
 
 ## Docs
 
-`docs/PLAN.md` is the entry point (status + working conventions + session log),
-`architecture.md`, `database-schema.md`, `phases.md`, `future.md`, and
-`supabase-setup.md` (the runbook for everything needing the live project).
+`architecture.md`, `database-schema.md` and `future.md`. The build's own paperwork —
+`PLAN.md`'s status and session log, `phases.md`'s checklists, `supabase-setup.md`'s
+runbook — was deleted once it was all done and ticked; what a live project needs is
+`.env.local` plus `npm run db:push`. The reasoning behind a decision lives in this file
+and in the comment beside the code it explains.
 
-**Update `docs/PLAN.md`'s Current status and Session log at the end of a work session** —
-that log is where the reasoning behind past decisions lives.
-
-Parts of `architecture.md`, `database-schema.md` and `phases.md` predate later
+Parts of `architecture.md` and `database-schema.md` predate later
 migrations (they still say `?tags=`, the old `general/sensitive/questionable/explicit`
 scale, `originals`/`thumbnails` buckets, WebP thumbs, `requireAdmin()`, shadcn/ui).
 When they disagree with `src/` or `supabase/migrations/`, the code wins — and fix the

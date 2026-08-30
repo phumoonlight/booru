@@ -41,8 +41,8 @@ so API route handlers can call the exact same functions.
 ## 3. Public accounts & favorites (currently: hand-made accounts only)
 
 **Now:** there is no public signup. `/login` signs in an existing account; accounts
-are created by hand from the Supabase dashboard ([supabase-setup.md](./supabase-setup.md)
-step 4). Nothing in the site is personalised, so every page is anonymous-cacheable.
+are created by hand from the Supabase dashboard. Nothing in the site is personalised, so
+every page is anonymous-cacheable.
 
 **Hooks already in place:**
 - Supabase Auth is already wired (email/password, session refresh in `src/proxy.ts`).
