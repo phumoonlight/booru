@@ -57,38 +57,23 @@ export function App() {
       active ? `text-foreground ${ACTIVE_BAR}` : 'text-muted hover:text-foreground'
     }`
 
-  const screen = () => {
-    if (view === 'about') return <About status={status} />
-
-    if (!status.configured || view === 'settings') {
-      return (
-        <Settings
-          canCancel={status.configured}
-          onSaved={() => {
-            setView('upload')
-            void refresh()
-          }}
-          onCancel={() => setView('upload')}
-        />
-      )
-    }
-
-    if (!status.user) {
-      return <Login onSignedIn={refresh} />
-    }
-
-    // The empty drop zone is the whole screen's content, so it sits in the middle of it
-    // rather than hugging the header. `my-auto` rather than `justify-center`: once the
-    // queue is taller than the window the auto margins collapse to zero, where centring
-    // would push the first rows off the top of a scroller, out of reach.
-    return (
-      <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-4 py-4">
-        <div className="my-auto">
-          <UploadQueue status={status} />
-        </div>
-      </div>
-    )
-  }
+  // Anything that takes the window off the queue. Settings is forced open until there
+  // is a project to talk to, and the login form until someone is signed in.
+  const over =
+    view === 'about' ? (
+      <About status={status} />
+    ) : !status.configured || view === 'settings' ? (
+      <Settings
+        canCancel={status.configured}
+        onSaved={() => {
+          setView('upload')
+          void refresh()
+        }}
+        onCancel={() => setView('upload')}
+      />
+    ) : !status.user ? (
+      <Login onSignedIn={refresh} />
+    ) : null
 
   return (
     <div className="flex h-screen flex-col">
@@ -161,7 +146,34 @@ export function App() {
       </header>
 
       {/* The frame never scrolls; the queue inside it does */}
-      <main className="min-h-0 flex-1 overflow-y-auto">{screen()}</main>
+      <main className="min-h-0 flex-1 overflow-y-auto">
+        {over}
+
+        {/*
+          The queue is hidden rather than unmounted. Staging a dozen images, tagging half
+          of them and then glancing at About used to throw all of it away — and an upload
+          already in flight lost the component waiting for its answer. It only exists
+          while there is a session to upload with, so logging out still clears it.
+        */}
+        {status.configured && status.user && (
+          <div
+            className={
+              over
+                ? 'hidden'
+                : 'mx-auto flex min-h-full w-full max-w-3xl flex-col px-4 py-4'
+            }
+          >
+            {/* The empty drop zone is the whole screen's content, so it sits in the
+                middle of it rather than hugging the header. `my-auto` rather than
+                `justify-center`: once the queue is taller than the window the auto
+                margins collapse to zero, where centring would push the first rows off
+                the top of a scroller, out of reach. */}
+            <div className="my-auto">
+              <UploadQueue status={status} />
+            </div>
+          </div>
+        )}
+      </main>
     </div>
   )
 }
