@@ -13,7 +13,9 @@ const api: PostAppApi = {
   getStatus: () => ipcRenderer.invoke('app:status'),
   readConfig: () => ipcRenderer.invoke('app:read-config'),
   saveConfig: (config: AppConfigInput) => ipcRenderer.invoke('app:save-config', config),
-  logIn: (email, password) => ipcRenderer.invoke('auth:log-in', email, password),
+  logIn: (email, password, remember) =>
+    ipcRenderer.invoke('auth:log-in', email, password, remember),
+  readSavedLogin: () => ipcRenderer.invoke('auth:saved-login'),
   logOut: () => ipcRenderer.invoke('auth:log-out'),
   chooseFiles: () => ipcRenderer.invoke('files:choose'),
   stageFiles: (paths) => ipcRenderer.invoke('files:stage', paths),

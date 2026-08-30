@@ -14,7 +14,7 @@ import { exportConfigToEnv, loadConfig, type AppConfig } from './config'
  * one a signed-in user is allowed.
  */
 
-const SESSION_FILE = 'session.json'
+const SESSION_FILE = 'session.store'
 
 /**
  * Supabase persists the session by writing to a `Storage`. A browser hands it

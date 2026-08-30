@@ -138,6 +138,22 @@ the real gate.
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
 
+- **2026-08-30 (4)** — The uploader's login screen got a "Remember me" box. The session
+  already survived a restart, so this only matters on the day the refresh token finally
+  expires — and on that day the alternative was retyping a password into an app that is
+  already holding the service-role key in the file beside it. The credentials go to a
+  third `secure-store` file (`credentials.store`), sealed by the same `safeStorage`, read
+  by nothing but the login form's prefill. Ticking the box on a successful login writes
+  it; every other outcome clears it, so unticking is how you forget. Log out deliberately
+  leaves it — the box's whole promise is that the next login is already typed out. The
+  prefill won't overwrite a field already touched, since a slow disk read shouldn't
+  clobber someone who started typing. The three store files were renamed `.json` →
+  `.store` in the same pass: the contents are a marker and base64 ciphertext, so the old
+  extension promised a document nothing could open, and `.enc` would have been the
+  opposite lie on a Linux box with no `safeStorage` key. `readStore` still reads the old
+  name once and rewrites it forward, and `clearStore` deletes both, so a logout can't
+  leave a stale session for the migration to resurrect.
+
 - **2026-08-30 (3)** — `/tags/manage` can now create and rename tags, not only
   recategorize and delete them. Creating covers the order an upload can't: naming an
   artist or a series first, with its category already right, before any post carries it —

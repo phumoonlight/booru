@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 
 /**
  * The web's /login, in a window. Same account, same password, same message for either
@@ -6,7 +6,9 @@ import { useState, type FormEvent } from 'react'
  * more thing an existing account can do.
  *
  * The session it creates is written to the app's encrypted store, so this screen is
- * shown once and then only when the refresh token finally expires.
+ * shown once and then only when the refresh token finally expires. "Remember me" is for
+ * that day: it keeps the email and password in the same store, so the form comes back
+ * filled in instead of blank.
  */
 export function Login({
   onSignedIn,
@@ -17,14 +19,31 @@ export function Login({
 }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [remember, setRemember] = useState(false)
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
+
+  // Filling the form is a read from the main process, not React state anyone owns, so
+  // the answer sets state from the callback and a screen left before it arrives is
+  // dropped. Typing beats a slow disk: a field already touched is not overwritten.
+  useEffect(() => {
+    let alive = true
+    void window.api.readSavedLogin().then((saved) => {
+      if (!alive || !saved) return
+      setRemember(true)
+      setEmail((current) => current || saved.email)
+      setPassword((current) => current || saved.password)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   async function submit(event: FormEvent) {
     event.preventDefault()
     setPending(true)
     setError('')
-    const result = await window.api.logIn(email, password)
+    const result = await window.api.logIn(email, password, remember)
     setPending(false)
     if (result.ok) onSignedIn()
     else setError(result.error)
@@ -58,6 +77,15 @@ export function Login({
             onChange={(event) => setPassword(event.target.value)}
             className="min-h-11 rounded-lg border border-border bg-surface px-3 text-base outline-none focus:border-accent"
           />
+        </label>
+        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(event) => setRemember(event.target.checked)}
+            className="size-4 accent-accent"
+          />
+          Remember me
         </label>
         {error && (
           <p className="rounded-lg border border-red-500/30 bg-red-500/15 px-3 py-2 text-sm text-red-400">

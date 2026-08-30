@@ -21,7 +21,7 @@ export type AppConfig = {
   siteUrl: string
 }
 
-const CONFIG_FILE = 'config.json'
+const CONFIG_FILE = 'config.store'
 
 let cached: AppConfig | null | undefined
 

@@ -12,10 +12,11 @@ import { searchTags } from '@web/lib/data/shared'
 import { createPostFromImage, parsePostMetadata } from '@web/lib/upload/pipeline'
 import { DESKTOP_UPLOAD_LIMITS } from './limits'
 import { loadConfig, revealConfig, saveConfig } from './config'
+import { readCredentials, saveCredentials } from './credentials'
 import { stageFiles } from './staging'
 import { downloadImages } from './download'
 import { adminClient, currentUser, resetClients, signIn, signOut, userClient } from './supabase'
-import type { AppConfigInput, AppStatus, Outcome, TagSuggestion } from '../shared/api'
+import type { AppConfigInput, AppStatus, Outcome, SavedLogin, TagSuggestion } from '../shared/api'
 import type { UploadResult } from '@web/lib/upload/pipeline'
 
 /**
@@ -87,14 +88,28 @@ export function registerIpc(): void {
     return { ok: true }
   })
 
-  ipcMain.handle('auth:log-in', async (_event, email: unknown, password: unknown) => {
-    const parsed = loginSchema.safeParse({ email, password })
-    if (!parsed.success) {
-      return { ok: false, error: parsed.error.issues[0].message } satisfies Outcome
-    }
+  ipcMain.handle(
+    'auth:log-in',
+    async (_event, email: unknown, password: unknown, remember: unknown) => {
+      const parsed = loginSchema.safeParse({ email, password })
+      if (!parsed.success) {
+        return { ok: false, error: parsed.error.issues[0].message } satisfies Outcome
+      }
 
-    return signIn(parsed.data.email, parsed.data.password)
-  })
+      const result = await signIn(parsed.data.email, parsed.data.password)
+      // Only a login that worked is worth keeping, and only the box says to keep it.
+      // Everything else clears the file, so unticking it is how you forget.
+      if (result.ok) saveCredentials(remember === true ? parsed.data : null)
+      return result
+    }
+  )
+
+  /**
+   * The one place a stored password leaves the main process, and it goes to the form
+   * that is about to submit it anyway. Log out deliberately leaves it alone — the point
+   * of the box is that the next login is already typed out.
+   */
+  ipcMain.handle('auth:saved-login', async (): Promise<SavedLogin | null> => readCredentials())
 
   ipcMain.handle('auth:log-out', async (): Promise<void> => signOut())
 
@@ -180,7 +195,7 @@ export function registerIpc(): void {
     )
   })
 
-  /** Shows `config.json` in Explorer/Finder — the settings screen's "where is this?". */
+  /** Shows `config.store` in Explorer/Finder — the settings screen's "where is this?". */
   ipcMain.handle('shell:open-config-folder', async (): Promise<void> => revealConfig())
 
   /**

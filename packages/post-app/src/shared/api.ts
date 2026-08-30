@@ -68,11 +68,17 @@ export type UploadRequest = {
 
 export type Outcome = { ok: true } | { ok: false; error: string }
 
+/** What "Remember me" kept from the last login, for the form to come back filled in. */
+export type SavedLogin = { email: string; password: string }
+
 export type PostAppApi = {
   getStatus: () => Promise<AppStatus>
   saveConfig: (config: AppConfigInput) => Promise<Outcome>
   readConfig: () => Promise<AppConfigInput | null>
-  logIn: (email: string, password: string) => Promise<Outcome>
+  /** `remember` writes the credentials to the encrypted store; false wipes what was there. */
+  logIn: (email: string, password: string, remember: boolean) => Promise<Outcome>
+  /** The remembered credentials, or null — the login form prefills itself from this. */
+  readSavedLogin: () => Promise<SavedLogin | null>
   logOut: () => Promise<void>
   /** Opens the OS picker. Returns the paths chosen, empty if cancelled. */
   chooseFiles: () => Promise<string[]>
