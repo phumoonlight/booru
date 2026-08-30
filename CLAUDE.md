@@ -84,9 +84,11 @@ at — see [packages/post-app/README.md](packages/post-app/README.md).
   sections, `config`, `session` and `credentials`. It was three files sealed with
   Electron's `safeStorage`; the encryption was dropped deliberately, so the service-role
   key and the remembered password are now plain text guarded by nothing but the folder,
-  in exchange for a file that can be read, hand-edited and copied. `userData` is pinned
-  to `pubooru-desktop` in `main/index.ts` rather than defaulting to the app's display
-  name, so renaming the app doesn't move the settings. A file that won't parse is treated
+  in exchange for a file that can be read, hand-edited and copied. `userData` is pinned in
+  `main/index.ts` rather than defaulting to the app's display name, so renaming the app
+  doesn't move the settings — `pubooru-desktop` packaged, `pubooru-desktop-dev` in a
+  checkout, because `npm run post-app:dev` must not overwrite the keys and session of the
+  copy you actually use (and the split lock lets both run at once). A file that won't parse is treated
   as absent, costing a re-setup and never a crash. The settings screen is the desktop
   `<SetupNotice />` and the only way in — the app reads no environment at all, in a
   checkout as much as in an installed copy, so the screen every user meets first is the

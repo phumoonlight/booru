@@ -14,11 +14,17 @@ import { cleanupDownloads } from './download'
  * imported, not copied.
  */
 
-// Where the stores live. Left alone this is the app's display name — "Pubooru Desktop"
-// once packaged, "post-app" in a checkout — so it would change whenever the name on the
-// window did, and differ between the two. Spelling it out gives one folder that survives
-// a rename, and it goes first because the single-instance lock below is a file inside it.
-app.setPath('userData', join(app.getPath('appData'), 'pubooru-desktop'))
+// Where the save file lives. Left alone this is the app's display name, which moves
+// whenever the name on the window does, so it is spelled out instead. A checkout gets
+// its own folder: since the settings screen became the only way config gets in, dev and
+// an installed copy would otherwise share one save.json — and testing the setup or login
+// flow means overwriting the keys and session of the app you actually use. It goes first
+// because the single-instance lock below is a file inside this folder, which is also
+// what lets a dev window and an installed one run at the same time.
+app.setPath(
+  'userData',
+  join(app.getPath('appData'), app.isPackaged ? 'pubooru-desktop' : 'pubooru-desktop-dev')
+)
 
 // One window. A second launch raises the one already open rather than starting a second
 // uploader against the same board, which would happily create the same post twice.

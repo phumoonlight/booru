@@ -32,7 +32,9 @@ role key, and optionally the site's address so a finished post can be opened in 
 browser. A checkout is no different: it reads no environment and no `.env.local`, so the
 setup screen every installed copy meets is the one development runs too.
 They are kept in `save.json` in the app's data folder, as plain readable text — service
-role key included, so treat that folder as the secret it is.
+role key included, so treat that folder as the secret it is. `post-app:dev` uses a folder
+of its own (`pubooru-desktop-dev` beside `pubooru-desktop`), so working on the app never
+disturbs the copy you use, and both can be open at once.
 
 Sign in with an existing account. There is no signup here any more than there is on the
 website.
