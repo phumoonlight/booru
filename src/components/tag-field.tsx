@@ -180,23 +180,29 @@ export function TagField({
           disabled ? 'opacity-50' : ''
         }`}
       >
-        {tags.map((tag) => (
-          <span
-            key={tag.name}
-            className={`flex items-center rounded bg-background pl-2 font-mono text-xs ${CATEGORY_COLOR[tag.category]}`}
-          >
-            {tag.name}
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => update({ tags: tags.filter((t) => t.name !== tag.name), draft })}
-              aria-label={`Remove ${tag.name}`}
-              className="flex min-h-7 items-center px-1.5 text-muted hover:text-red-400"
+        {/* Sorted for display only — the value keeps the order the tags were added in,
+            since it is what the hidden field submits, and a chip that jumps into place
+            the moment you type it is easier to find again than one appended to a list
+            you have stopped reading. Same A–Z the facets and the post's tag list use. */}
+        {[...tags]
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((tag) => (
+            <span
+              key={tag.name}
+              className={`flex items-center rounded bg-background pl-2 font-mono text-xs ${CATEGORY_COLOR[tag.category]}`}
             >
-              ✕
-            </button>
-          </span>
-        ))}
+              {tag.name}
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => update({ tags: tags.filter((t) => t.name !== tag.name), draft })}
+                aria-label={`Remove ${tag.name}`}
+                className="flex min-h-7 items-center px-1.5 text-muted hover:text-red-400"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
 
         <div className="relative min-w-24 flex-1">
           <input

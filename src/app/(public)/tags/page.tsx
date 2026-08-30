@@ -31,9 +31,18 @@ export default async function TagsPage() {
 
   const [tags, profile] = await Promise.all([getTags(500), getCurrentProfile()])
 
+  // A–Z within each category, like the facets and the manage screen. The read above
+  // orders by post_count and that is what decides which tags the cap lets through, but
+  // this page is an index: you arrive holding a name, and a tag's size says nothing about
+  // where to look for it. Sorted by the label, since the underscores are not on screen.
   const groups = TAG_CATEGORIES.map(
     (category) =>
-      [category, tags.filter((t) => t.category === category)] as [TagCategory, typeof tags]
+      [
+        category,
+        tags
+          .filter((t) => t.category === category)
+          .sort((a, b) => tagLabel(a.name).localeCompare(tagLabel(b.name))),
+      ] as [TagCategory, typeof tags]
   ).filter(([, group]) => group.length > 0)
 
   return (

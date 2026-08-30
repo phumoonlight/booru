@@ -329,11 +329,18 @@ function TagRow({ tag }: { tag: Tag }) {
 /**
  * New-tag form, filter box, then the rows. The list is long enough that scrolling to a
  * tag is the slow part.
+ *
+ * The rows are A–Z, the same order the facets and a post's tag list read in — the page
+ * arrives ordered by post_count, which is what decides *which* tags the cap lets
+ * through, but you come here holding a name and nothing about a tag's size tells you
+ * where to look for it. Sorted by the label, since the underscores are not on screen.
  */
 export function ManageTags({ tags }: { tags: Tag[] }) {
   const [filter, setFilter] = useState('')
   const needle = filter.trim().toLowerCase()
-  const shown = needle ? tags.filter((tag) => tag.name.includes(needle)) : tags
+  const shown = (needle ? tags.filter((tag) => tag.name.includes(needle)) : tags)
+    .slice()
+    .sort((a, b) => tagLabel(a.name).localeCompare(tagLabel(b.name)))
 
   return (
     <div className="flex flex-col gap-3">
