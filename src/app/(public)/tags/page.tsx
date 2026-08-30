@@ -5,6 +5,7 @@ import { TAG_CATEGORIES, type TagCategory } from '@/lib/tags'
 import { getCurrentProfile } from '@/lib/data/profiles'
 import { CATEGORY_COLOR, CATEGORY_LABEL } from '@/components/tag-list'
 import { SearchHeader } from '@/components/search-header'
+import { NavProgress } from '@/components/nav-progress'
 import { SetupNotice } from '@/components/setup-notice'
 import { isSupabaseConfigured } from '@/lib/env'
 import { searchHref, tagLabel } from '@/lib/search'
@@ -62,16 +63,26 @@ export default async function TagsPage() {
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
               {CATEGORY_LABEL[category]} ({group.length})
             </h2>
-            <ul className="grid grid-cols-2 gap-x-4 sm:grid-cols-3 lg:grid-cols-4">
+            {/* Ruled like a table rather than spaced apart: a count sitting in open space
+                was as close to the next column's name as to its own, and no gap says
+                "these two belong together" as plainly as a line saying where the cell
+                ends. Each cell carries its own right/bottom rule and is pulled a pixel
+                over its neighbour so shared edges stay hairlines; the frame closes the
+                last row when it comes up short. The count keeps its fixed right-aligned
+                slot, so the numbers still line up down each column. */}
+            <ul className="grid grid-cols-2 overflow-hidden rounded-lg border border-border sm:grid-cols-3 lg:grid-cols-4">
               {group.map((tag) => (
-                <li key={tag.id} className="flex items-center gap-2">
+                <li key={tag.id} className="-mb-px -mr-px border-b border-r border-border">
                   <Link
                     href={searchHref(tag.name)}
-                    className={`min-h-9 flex-1 truncate py-1 text-sm hover:underline ${CATEGORY_COLOR[category]}`}
+                    className={`flex min-h-9 items-center gap-2 px-3 py-1.5 text-sm hover:bg-surface ${CATEGORY_COLOR[category]}`}
                   >
-                    {tagLabel(tag.name)}
+                    <span className="min-w-0 flex-1 truncate">{tagLabel(tag.name)}</span>
+                    <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted">
+                      {tag.post_count}
+                    </span>
+                    <NavProgress />
                   </Link>
-                  <span className="text-xs tabular-nums text-muted">{tag.post_count}</span>
                 </li>
               ))}
             </ul>
