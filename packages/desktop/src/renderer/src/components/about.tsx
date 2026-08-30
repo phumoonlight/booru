@@ -9,6 +9,13 @@ import type { AppStatus } from '../../../shared/api'
  * file-dialog bug is theirs as often as it is ours, and asking for them after the fact
  * means asking someone to find a devtools console.
  */
+/**
+ * Hard-coded rather than read from package.json: the packaged app ships no manifest the
+ * renderer can reach, and this is the one address that does not vary per install — the
+ * board's own URL is the one that does, and that comes from settings.
+ */
+const REPO_URL = 'https://github.com/phumoonlight/booru'
+
 export function About({ status }: { status: AppStatus }) {
   const { app, electron, chrome } = status.versions
 
@@ -41,9 +48,14 @@ export function About({ status }: { status: AppStatus }) {
             <span className="text-muted">Not set — see Connection settings</span>
           )}
         </Row>
-        <Row label="Upload limit">
-          {status.limits.maxFileSizeLabel} and {status.limits.maxPixels / 1_000_000}MP per
-          image
+        <Row label="Source">
+          <button
+            type="button"
+            onClick={() => void window.api.openExternal(REPO_URL)}
+            className="text-accent underline-offset-2 hover:underline"
+          >
+            {REPO_URL.replace('https://', '')}
+          </button>
         </Row>
         <Row label="Electron">{electron}</Row>
         <Row label="Chromium">{chrome}</Row>
