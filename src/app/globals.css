@@ -118,3 +118,11 @@ select {
   filter: blur(18px);
   transform: scale(1.2);
 }
+
+/* A subtree that opts out entirely — the tag page, where picking the tag was already
+   the choice the blur exists to offer. Three attributes deep so it outweighs the
+   rules above on specificity rather than on source order. */
+[data-blur-ratings] [data-no-blur] [data-rating] img {
+  filter: none;
+  transform: none;
+}

@@ -101,6 +101,10 @@ search) take their Supabase clients as arguments rather than building them, so b
 web's server actions and the desktop app's IPC handlers run the same functions. See
 [packages/post-app/README.md](../packages/post-app/README.md).
 
+Each tag also has its own page, `/tags/[id]` — the gallery grid for one tag, without the
+search bar or the tag drawer, and with the rating blur switched off. The `/tags` index
+links there rather than to `?query=`.
+
 There is no open work item left in the plan. What's next comes from
 [future.md](./future.md) or from using the thing.
 
@@ -132,6 +136,19 @@ the real gate.
 ## Session log
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
+
+- **2026-08-30 (2)** — Gave each tag its own page at `/tags/[id]`: the gallery layout with
+  neither the search bar nor the tag drawer, because both exist to narrow across many tags
+  and this page has already picked one. It is keyed by id rather than name so renaming a
+  tag can't break a link, and `/tags` now points its cells here instead of at
+  `/posts?query=…`; the way back to the controls is a "Search this tag" link that spells
+  the same query. Posts still come from `searchPosts({ query: tag.name })` — one listing
+  implementation, so paging and rating handling can't drift. `SearchHeader` gained a
+  `showSearch` prop (default true) so the nav stays in one place. The rating blur is off
+  here: a new `[data-no-blur]` subtree rule in `globals.css`, three attributes deep so it
+  outweighs the per-rating rules on specificity rather than on source order. Unlike page 1
+  of an arbitrary search, one tag's first page is a stable bounded listing, so it is
+  indexable; deeper pages are not.
 
 - **2026-08-30** — Split the gallery off the front page, the way the old boorus have
   theirs: `/` is now a landing page (wordmark, the same `<SearchBar />`, nav, and the post

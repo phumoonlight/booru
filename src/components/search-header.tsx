@@ -12,13 +12,21 @@ import { SITE_NAME } from '@/lib/site'
  * rather than in the layout because only pages can read searchParams, and the bar has
  * to reflect the active query.
  * Signed-in users also get the link to /upload here, so it is reachable from every page.
+ * `showSearch` drops the input for pages that are already one fixed listing (a tag's
+ * own page) — the nav above it is the part every page still needs.
  */
-export async function SearchHeader({ query = '' }: { query?: string }) {
+export async function SearchHeader({
+  query = '',
+  showSearch = true,
+}: {
+  query?: string
+  showSearch?: boolean
+}) {
   const profile = isSupabaseConfigured() ? await getCurrentProfile() : null
 
   return (
     <div className="sticky top-0 z-30 -mx-3 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
-      <div className="mb-2 flex items-center justify-between gap-3">
+      <div className={`flex items-center justify-between gap-3 ${showSearch ? 'mb-2' : ''}`}>
         {/* The wordmark carries the bar — it outsizes the nav links rather than matching
             them. It goes to the gallery, not to `/`: the landing page is a front door,
             and nothing behind it needs a way back to a search box it already has. */}
@@ -48,7 +56,7 @@ export async function SearchHeader({ query = '' }: { query?: string }) {
         </nav>
       </div>
       {/* Keyed so navigation (back/forward, tag links) resets the input to the URL */}
-      <SearchBar key={query} initialQuery={query} />
+      {showSearch && <SearchBar key={query} initialQuery={query} />}
     </div>
   )
 }

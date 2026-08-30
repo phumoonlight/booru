@@ -8,7 +8,7 @@ import { SearchHeader } from '@/components/search-header'
 import { NavProgress } from '@/components/nav-progress'
 import { SetupNotice } from '@/components/setup-notice'
 import { isSupabaseConfigured } from '@/lib/env'
-import { searchHref, tagLabel } from '@/lib/search'
+import { tagLabel } from '@/lib/search'
 
 export const metadata: Metadata = {
   title: 'Tags',
@@ -74,7 +74,7 @@ export default async function TagsPage() {
               {group.map((tag) => (
                 <li key={tag.id} className="-mb-px -mr-px border-b border-r border-border">
                   <Link
-                    href={searchHref(tag.name)}
+                    href={`/tags/${tag.id}`}
                     className={`flex min-h-9 items-center gap-2 px-3 py-1.5 text-sm hover:bg-surface ${CATEGORY_COLOR[category]}`}
                   >
                     <span className="min-w-0 flex-1 truncate">{tagLabel(tag.name)}</span>

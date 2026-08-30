@@ -13,6 +13,17 @@ export async function getTagByName(name: string): Promise<Tag | null> {
   return data
 }
 
+/** One tag by id — the tag page's own address, so a rename never breaks a link. */
+export async function getTagById(id: number): Promise<Tag | null> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('tags')
+    .select('id, name, category, post_count')
+    .eq('id', id)
+    .maybeSingle()
+  return data
+}
+
 /** All tags, most used first — backs the /tags page. */
 export async function getTags(limit = 200): Promise<Tag[]> {
   const supabase = await createClient()
