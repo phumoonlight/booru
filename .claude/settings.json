@@ -3,5 +3,18 @@
   "outputStyle": "Concise",
   "permissions": {
     "deny": ["Read(./.env)", "Read(./.env.local)"]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/deny-env.mjs"
+          }
+        ]
+      }
+    ]
   }
 }
