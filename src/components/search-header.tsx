@@ -18,8 +18,10 @@ export async function SearchHeader({ query = '' }: { query?: string }) {
   return (
     <div className="sticky top-0 z-30 -mx-3 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
       <div className="mb-2 flex items-center justify-between gap-3">
-        {/* The wordmark carries the bar — it outsizes the nav links rather than matching them */}
-        <Link href="/" className="text-xl font-bold tracking-tight sm:text-2xl hover:underline">
+        {/* The wordmark carries the bar — it outsizes the nav links rather than matching
+            them. It goes to the gallery, not to `/`: the landing page is a front door,
+            and nothing behind it needs a way back to a search box it already has. */}
+        <Link href="/posts" className="text-xl font-bold tracking-tight sm:text-2xl hover:underline">
           {SITE_NAME}
         </Link>
         <nav className="flex items-center gap-3">

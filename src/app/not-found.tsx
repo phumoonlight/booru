@@ -17,7 +17,7 @@ export default function NotFound() {
       </p>
       <div className="flex flex-wrap justify-center gap-2">
         <Link
-          href="/"
+          href="/posts"
           className="flex min-h-11 items-center rounded-lg bg-accent px-4 text-sm text-background"
         >
           Browse posts

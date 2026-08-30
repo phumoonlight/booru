@@ -8,7 +8,15 @@ import { queryTokens, searchHref, SEARCH_PARAM, tagLabel, withoutTag } from '@/l
 
 const DEBOUNCE_MS = 200
 
-export function SearchBar({ initialQuery = '' }: { initialQuery?: string }) {
+export function SearchBar({
+  initialQuery = '',
+  // The landing page has no query to reflect back, so its chip row would only ever be
+  // a duplicate of what the input already shows.
+  showChips = true,
+}: {
+  initialQuery?: string
+  showChips?: boolean
+}) {
   const router = useRouter()
   const [value, setValue] = useState(initialQuery)
   // Suggestions carry the prefix they were fetched for, so a stale response
@@ -134,7 +142,7 @@ export function SearchBar({ initialQuery = '' }: { initialQuery?: string }) {
         )}
       </form>
 
-      {tokens.length > 0 && (
+      {showChips && tokens.length > 0 && (
         <ul className="flex flex-wrap gap-1.5">
           {tokens.map(({ name, negated }) => (
             <li key={`${negated ? '-' : ''}${name}`}>

@@ -1,122 +1,69 @@
 import type { Metadata } from 'next'
-import { searchPosts, getTagsForPosts, getRatingCounts } from '@/lib/data/search'
-import { PostGrid } from '@/components/post-grid'
-import { Pagination } from '@/components/pagination'
-import { SearchHeader } from '@/components/search-header'
-import { TagDrawer } from '@/components/tag-drawer'
-import { GroupedTagList } from '@/components/tag-list'
-import { RatingList } from '@/components/rating-list'
-import { RatingDisplayOptions } from '@/components/rating-display-options'
+import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import { SearchBar } from '@/components/search-bar'
 import { SetupNotice } from '@/components/setup-notice'
-import { getCurrentProfile } from '@/lib/data/profiles'
+import { getPostCount } from '@/lib/data/posts'
 import { isSupabaseConfigured } from '@/lib/env'
-import { parseSearchQuery, searchHref, SEARCH_PARAM, splitRatings } from '@/lib/search'
+import { emojiNumber } from '@/lib/emoji-number'
+import { searchHref, SEARCH_PARAM } from '@/lib/search'
 import { SITE_DESCRIPTION, SITE_NAME } from '@/lib/site'
 
-function readParams(params: Record<string, string | string[] | undefined>) {
-  const raw = params[SEARCH_PARAM]
-  const query = typeof raw === 'string' ? raw.trim() : ''
-  const rawPage = typeof params.page === 'string' ? Number(params.page) : 1
-  const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1
-  return { query, page }
-}
-
-export async function generateMetadata({ searchParams }: PageProps<'/'>): Promise<Metadata> {
-  const { query, page } = readParams(await searchParams)
-  const suffix = page > 1 ? ` (page ${page})` : ''
-
-  // Tag combinations are unbounded, so only the plain first page is indexable.
-  const indexable = !query && page === 1
-
-  return {
-    title: query ? `${query}${suffix}` : `Posts${suffix}`,
-    description: query ? `Posts tagged ${query}.` : SITE_DESCRIPTION,
-    alternates: { canonical: searchHref(query, page) },
-    robots: indexable ? undefined : { index: false, follow: true },
-    openGraph: {
-      type: 'website',
-      siteName: SITE_NAME,
-      url: searchHref(query, page),
-      title: query ? `${query}${suffix}` : `Posts${suffix}`,
-      description: query ? `Posts tagged ${query}.` : SITE_DESCRIPTION,
-    },
-  }
+export const metadata: Metadata = {
+  title: SITE_NAME,
+  description: SITE_DESCRIPTION,
+  alternates: { canonical: '/' },
 }
 
 export default async function HomePage({ searchParams }: PageProps<'/'>) {
-  const { query, page } = readParams(await searchParams)
+  const params = await searchParams
+  // `/?query=…` was the gallery's own URL before the split — old links and bookmarks
+  // (and anything a crawler already holds) land here, so hand them on rather than
+  // silently dropping the search.
+  const legacy = params[SEARCH_PARAM]
+  if (typeof legacy === 'string' && legacy.trim()) redirect(searchHref(legacy))
 
-  if (!isSupabaseConfigured()) {
-    return (
-      <div className="mx-auto w-full max-w-7xl px-3 py-4">
-        <SearchHeader query={query} />
-        <div className="pt-4">
-          <SetupNotice />
-        </div>
-      </div>
-    )
-  }
-
-  const profile = await getCurrentProfile()
-  const canUpload = profile !== null
-
-  const { posts, pageCount } = await searchPosts({ query, page })
-  // Tag facets describe the posts actually on screen; the rating scale is site-wide
-  const [tagEntries, ratingCounts] = await Promise.all([
-    getTagsForPosts(posts.map((p) => p.id)),
-    getRatingCounts(),
-  ])
-  const { include, exclude, ratings, excludeRatings } = splitRatings(parseSearchQuery(query))
+  const configured = isSupabaseConfigured()
+  const postCount = configured ? await getPostCount() : 0
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">
-      <SearchHeader query={query} />
+    <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-6 px-3 py-16 text-center sm:py-24">
+      <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">{SITE_NAME}</h1>
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <TagDrawer label={`Tags (${tagEntries.length})`}>
-          <div className="flex flex-col gap-4">
-            <section>
-              <RatingDisplayOptions />
-              <RatingList
-                counts={ratingCounts}
-                currentQuery={query}
-                activeRatings={ratings}
-                excludedRatings={excludeRatings}
-              />
-            </section>
-            {/* Ruled off from the rating scale above it */}
-            <section className="border-t border-border pt-4">
-              <h2 className="mb-2 text-base font-semibold">Tags ({tagEntries.length})</h2>
-              <GroupedTagList entries={tagEntries.slice(0, 50)} currentQuery={query} />
-            </section>
-          </div>
-        </TagDrawer>
-
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
-          {/* The grid speaks for itself, so the heading is left for assistive tech only */}
-          <h1 className="sr-only">
-            {include.length === 0 && exclude.length === 0 && ratings.length === 0
-              ? 'All posts'
-              : `Matching ${[...include, ...ratings.map((r) => `rating:${r}`)].join(', ') || 'any'}${
-                  exclude.length ? ` without ${exclude.join(', ')}` : ''
-                }`}
-          </h1>
-
-          {posts.length === 0 ? (
-            <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
-              {query
-                ? 'No posts match that search.'
-                : canUpload
-                  ? 'No posts yet — use Upload to add the first one.'
-                  : 'No posts yet — the first upload will show up here.'}
-            </p>
-          ) : (
-            <PostGrid posts={posts} />
-          )}
-
-          <Pagination page={page} pageCount={pageCount} buildHref={(p) => searchHref(query, p)} />
-        </div>
+      {/* The front door is the search box — the same one the gallery carries, so a
+          query typed here lands on /posts already parsed. */}
+      <div className="w-full text-left">
+        <SearchBar showChips={false} />
       </div>
+
+      {/* Two links only — upload and the account live in the header of every page
+          behind them, and the front door is meant to stay a search box. */}
+      <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm">
+        <Link href="/posts" className="text-muted hover:text-foreground hover:underline">
+          Posts
+        </Link>
+        <Link href="/tags" className="text-muted hover:text-foreground hover:underline">
+          Tags
+        </Link>
+      </nav>
+
+      {configured ? (
+        <p className="flex flex-wrap items-center justify-center gap-2 text-sm text-muted">
+          <span>Serving</span>
+          {/* The keycaps are decoration; the plain number is what gets announced */}
+          <span
+            aria-label={`${postCount.toLocaleString('en-US')} posts`}
+            className="text-base tracking-tight"
+          >
+            <span aria-hidden>{emojiNumber(postCount)}</span>
+          </span>
+          <span>posts</span>
+        </p>
+      ) : (
+        <div className="w-full text-left">
+          <SetupNotice />
+        </div>
+      )}
     </div>
   )
 }

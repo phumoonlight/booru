@@ -119,6 +119,10 @@ at — see [packages/post-app/README.md](packages/post-app/README.md).
 
 - **`src/proxy.ts`, not `middleware.ts`** — Next 16 renamed the convention. It only
   refreshes the session; it guards no routes. Pages check the session themselves.
+- **The gallery is `/posts`, not `/`** — `/` is a landing page (wordmark, search box,
+  emoji post count). `searchHref()` in `lib/search.ts` is the only place that spells the
+  listing's path, so tag links, facets and pagination all derive from it; `/?query=`
+  redirects there for old links.
 - **Search param is `?query=`** (`SEARCH_PARAM` in `lib/search.ts`), space-separated,
   `-tag` excludes. Ratings ride in the same string as `rating:e3` metatags — nothing
   outside `splitRatings`/`resolveRatings` needs to know they exist.

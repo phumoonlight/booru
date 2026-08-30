@@ -33,6 +33,19 @@ export type PostPage = {
 // Browse listings go through searchPosts() in lib/data/search.ts — an empty query
 // returns the whole gallery.
 
+/**
+ * How many posts the board holds. Counted head-only, so no rows cross the wire —
+ * the landing page shows the number and nothing else about them. `rating_counts`
+ * would answer in one small read too, but it is derived data that a failed sync can
+ * leave behind, and this is the figure the front door quotes.
+ */
+export async function getPostCount(): Promise<number> {
+  const supabase = await createClient()
+  const { count, error } = await supabase.from('posts').select('*', { count: 'exact', head: true })
+  if (error) throw new Error(`Post count failed: ${error.message}`)
+  return count ?? 0
+}
+
 // Cached because the post page and its generateMetadata both need the same rows
 export const getPost = cache(async (id: number): Promise<Post | null> => {
   const supabase = await createClient()

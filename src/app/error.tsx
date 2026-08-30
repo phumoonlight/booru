@@ -34,7 +34,7 @@ export default function Error({
           Try again
         </button>
         <Link
-          href="/"
+          href="/posts"
           className="flex min-h-11 items-center rounded-lg border border-border px-4 text-sm"
         >
           Back to posts

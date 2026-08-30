@@ -132,7 +132,7 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
         {/* The top bar is gone from this page, so the sidebar's header carries both the
             way back and the walk through the post's neighbours */}
         <div className="flex shrink-0 items-center justify-between gap-2 pb-5">
-          <Link href="/" className="text-lg font-bold tracking-tight hover:underline">
+          <Link href="/posts" className="text-lg font-bold tracking-tight hover:underline">
             {SITE_NAME}
           </Link>
           <PostNav prevId={prevId} nextId={nextId} />

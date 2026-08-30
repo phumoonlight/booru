@@ -47,6 +47,10 @@ export async function uploadPost(formData: FormData): Promise<UploadResult> {
     WEB_UPLOAD_LIMITS
   )
 
-  if (result.ok) revalidatePath('/')
+  // The gallery, and the front door's post count
+  if (result.ok) {
+    revalidatePath('/posts')
+    revalidatePath('/')
+  }
   return result
 }

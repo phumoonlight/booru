@@ -35,8 +35,10 @@ export async function deletePost(formData: FormData) {
   await storage.from(POSTS_BUCKET).remove([postImagePath(post.md5, post.file_ext)])
   await storage.from(THUMBNAILS_BUCKET).remove([thumbnailPath(post.md5)])
 
+  // The gallery, and the front door's post count
+  revalidatePath('/posts')
   revalidatePath('/')
-  redirect('/')
+  redirect('/posts')
 }
 
 const editSchema = z.object({
@@ -87,7 +89,7 @@ export async function updatePost(
     return { error: `Update failed: ${error instanceof Error ? error.message : String(error)}` }
   }
 
-  revalidatePath('/')
+  revalidatePath('/posts')
   revalidatePath(`/posts/${parsed.data.id}`)
   return { ok: true }
 }

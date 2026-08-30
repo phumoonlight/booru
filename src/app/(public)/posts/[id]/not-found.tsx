@@ -9,7 +9,7 @@ export default function PostNotFound() {
         This post was deleted, or the id doesn&apos;t exist.
       </p>
       <Link
-        href="/"
+        href="/posts"
         className="flex min-h-11 items-center rounded-lg bg-accent px-4 text-sm text-background"
       >
         Browse posts

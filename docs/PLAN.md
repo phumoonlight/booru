@@ -64,7 +64,8 @@ carrying its own indexes and RLS. The 18 written during the build were squashed 
 them, because most of them only undid each other (see the session log). Upload pipeline:
 page-wide drop zone on the posts page (file → MD5 dedup → AVIF thumbnail and
 lossless-AVIF post candidate in `lib/imgcmp/` → storage → `createPostWithTags()` with
-rollback, untagged), Manage section on `/posts/[id]` for edit + delete. Public site: home grid backed by
+rollback, untagged), Manage section on `/posts/[id]` for edit + delete. Public site: `/` is a minimal front
+door (wordmark, search box, post count in keycap emoji), `/posts` is the grid backed by
 `searchPosts()`, sticky search bar with debounced autocomplete and `-tag` exclusion, tag
 sidebar/bottom-drawer facets, `/posts/[id]` detail, `/tags` index.
 Phase 5 polish: `rating:x` / `-rating:x` metatags ride in the same `?query=` string and
@@ -131,6 +132,19 @@ the real gate.
 ## Session log
 
 _Newest first. Format: date — what was done, what's next, any decisions made._
+
+- **2026-08-30** — Split the gallery off the front page, the way the old boorus have
+  theirs: `/` is now a landing page (wordmark, the same `<SearchBar />`, nav, and the post
+  count spelled in keycap emoji via `lib/emoji-number.ts`), and the listing moved verbatim
+  to `/posts` along with its `loading.tsx` — which stops the post-grid skeleton from
+  flashing on `/tags`, `/upload` and `/account`, since it had been sitting at the
+  `(public)` group root. Only `searchHref()` knew the listing's path, so every tag link,
+  rating facet, chip and pagination link followed the move for free; `/?query=…` redirects
+  to `/posts?query=…` so old links and anything a crawler holds still work. The count is
+  `getPostCount()` — a head-only exact count on `posts`, not the sum of `rating_counts`,
+  because that table is derived data a failed sync can leave behind. Post writes now
+  revalidate `/posts` *and* `/`, since the front door quotes a number that every upload and
+  delete changes.
 
 - **2026-08-29 (9)** — Built `packages/post-app`, an Electron uploader, and refactored
   the web's upload path so the two share it rather than diverge. The repo gained

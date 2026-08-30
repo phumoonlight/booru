@@ -1,5 +1,5 @@
 // Pure query-string helpers — shared by server components and the client search bar.
-// URL is the state: /?query=blue_hair+solo+-photo&page=2
+// URL is the state: /posts?query=blue_hair+solo+-photo&page=2
 
 /** The search param's name. Read it from here so the URL only spells it in one place. */
 export const SEARCH_PARAM = 'query'
@@ -63,6 +63,9 @@ export function withoutTag(raw: string, tag: string): string {
   })
 }
 
+/** Where the gallery lives. `/` is the front door and shows no posts. */
+export const POSTS_PATH = '/posts'
+
 /** Search URL for a query. Page 1 is left implicit so URLs stay clean. */
 export function searchHref(query: string, page = 1): string {
   const params = new URLSearchParams()
@@ -70,7 +73,7 @@ export function searchHref(query: string, page = 1): string {
   if (trimmed) params.set(SEARCH_PARAM, trimmed)
   if (page > 1) params.set('page', String(page))
   const qs = params.toString()
-  return qs ? `/?${qs}` : '/'
+  return qs ? `${POSTS_PATH}?${qs}` : POSTS_PATH
 }
 
 // ── Rating metatags ────────────────────────────────────────────────────────────

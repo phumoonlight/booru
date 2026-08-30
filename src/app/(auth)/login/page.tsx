@@ -11,7 +11,7 @@ export default function LoginPage() {
   return (
     <div className="mx-auto flex min-h-[80vh] w-full max-w-sm flex-col justify-center gap-6 px-4">
       {/* This page has no SearchHeader, so it carries its own way back */}
-      <Link href="/" className="text-center text-base font-bold tracking-tight">
+      <Link href="/posts" className="text-center text-base font-bold tracking-tight">
         {SITE_NAME}
       </Link>
       <h1 className="text-center text-2xl font-bold tracking-tight">Log in</h1>
