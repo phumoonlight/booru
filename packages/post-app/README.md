@@ -1,4 +1,4 @@
-# Pubooru Uploader (`post-app`)
+# Pubooru Desktop (`post-app`)
 
 The website's upload page, as a desktop app.
 

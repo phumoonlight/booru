@@ -53,7 +53,7 @@ export function Login({
     <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center gap-6 px-4 py-10">
       <div className="text-center">
         <p className="text-base font-bold tracking-tight">Pubooru</p>
-        <p className="text-xs text-muted">Uploader</p>
+        <p className="text-xs text-muted">Desktop</p>
       </div>
       <h1 className="text-center text-2xl font-bold tracking-tight">Log in</h1>
       <form onSubmit={submit} className="flex flex-col gap-4">

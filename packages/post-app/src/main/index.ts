@@ -33,7 +33,7 @@ function createWindow(): void {
     // The renderer paints on --background; without this the frame flashes white while
     // Chromium waits for the first paint.
     backgroundColor: '#0d0f14',
-    title: 'Pubooru Uploader',
+    title: 'Pubooru Desktop',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       // The defaults, spelled out because they are what keeps the keys out of the page:

@@ -1,5 +1,5 @@
 appId: dev.pubooru.postapp
-productName: Pubooru Uploader
+productName: Pubooru Desktop
 directories:
   output: dist
   buildResources: build
@@ -35,7 +35,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: Pubooru Uploader
+  shortcutName: Pubooru Desktop
 
 mac:
   target:

@@ -67,7 +67,7 @@ export function App() {
   return (
     <div className="flex h-screen flex-col">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2">
-        <span className="text-sm font-bold tracking-tight">Pubooru Uploader</span>
+        <span className="text-sm font-bold tracking-tight">Pubooru Desktop</span>
         <div className="flex items-center gap-2">
           {status.user && (
             <>
