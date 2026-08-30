@@ -1,7 +1,10 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
+import { useFormStatus } from 'react-dom'
+import { NavProgress, NavProgressBar } from '@/components/nav-progress'
 import { logout } from '@/lib/actions/auth'
 
 /**
@@ -10,7 +13,13 @@ import { logout } from '@/lib/actions/auth'
  * things you can do with the account sit in a popup under it.
  */
 export function AccountMenu({ username }: { username: string }) {
-  const [open, setOpen] = useState(false)
+  // Open is the page the menu was opened on, so arriving somewhere else closes it. The
+  // alternative — closing on the click — unmounts the link while its navigation is
+  // still out, and takes the pending bar with it.
+  const pathname = usePathname()
+  const [openedOn, setOpenedOn] = useState<string | null>(null)
+  const open = openedOn === pathname
+  const setOpen = (next: boolean) => setOpenedOn(next ? pathname : null)
   const wrapper = useRef<HTMLDivElement>(null)
 
   // A dropdown that outlives the tap that started it reads as stuck, so anything
@@ -19,10 +28,10 @@ export function AccountMenu({ username }: { username: string }) {
     if (!open) return
 
     function onPointerDown(event: PointerEvent) {
-      if (!wrapper.current?.contains(event.target as Node)) setOpen(false)
+      if (!wrapper.current?.contains(event.target as Node)) setOpenedOn(null)
     }
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false)
+      if (event.key === 'Escape') setOpenedOn(null)
     }
 
     document.addEventListener('pointerdown', onPointerDown)
@@ -37,7 +46,7 @@ export function AccountMenu({ username }: { username: string }) {
     <div ref={wrapper} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((wasOpen) => !wasOpen)}
+        onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-haspopup="menu"
         className="flex max-w-32 items-center gap-1 text-sm text-muted hover:text-foreground"
@@ -56,22 +65,36 @@ export function AccountMenu({ username }: { username: string }) {
           <Link
             href="/account"
             role="menuitem"
-            onClick={() => setOpen(false)}
             className="flex min-h-11 items-center px-3 text-sm text-muted hover:bg-background hover:text-foreground"
           >
             ⚙️ Account
+            <NavProgress />
           </Link>
           <form action={logout}>
-            <button
-              type="submit"
-              role="menuitem"
-              className="flex min-h-11 w-full items-center px-3 text-left text-sm text-muted hover:bg-background hover:text-foreground"
-            >
-              👋 Log out
-            </button>
+            <LogoutButton />
           </form>
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * Log out signs out on the server and redirects, so like every other item here it has a
+ * wait worth showing. `useFormStatus` only reads the form it sits inside, which is why
+ * this is its own component.
+ */
+function LogoutButton() {
+  const { pending } = useFormStatus()
+
+  return (
+    <button
+      type="submit"
+      role="menuitem"
+      className="flex min-h-11 w-full items-center px-3 text-left text-sm text-muted hover:bg-background hover:text-foreground"
+    >
+      👋 Log out
+      {pending && <NavProgressBar />}
+    </button>
   )
 }

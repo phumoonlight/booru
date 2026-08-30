@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { SearchBar } from '@/components/search-bar'
+import { NavProgress } from '@/components/nav-progress'
 import { SetupNotice } from '@/components/setup-notice'
 import { getPostCount } from '@/lib/data/posts'
 import { isSupabaseConfigured } from '@/lib/env'
@@ -41,9 +42,11 @@ export default async function HomePage({ searchParams }: PageProps<'/'>) {
       <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm">
         <Link href="/posts" className="text-muted hover:text-foreground hover:underline">
           Posts
+          <NavProgress />
         </Link>
         <Link href="/tags" className="text-muted hover:text-foreground hover:underline">
           Tags
+          <NavProgress />
         </Link>
       </nav>
 

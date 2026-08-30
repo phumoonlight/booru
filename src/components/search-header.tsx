@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { SearchBar } from '@/components/search-bar'
+import { NavProgress } from '@/components/nav-progress'
 import { AccountMenu } from '@/components/account-menu'
 import { getCurrentProfile } from '@/lib/data/profiles'
 import { isSupabaseConfigured } from '@/lib/env'
@@ -23,14 +24,17 @@ export async function SearchHeader({ query = '' }: { query?: string }) {
             and nothing behind it needs a way back to a search box it already has. */}
         <Link href="/posts" className="text-xl font-bold tracking-tight sm:text-2xl hover:underline">
           {SITE_NAME}
+          <NavProgress />
         </Link>
         <nav className="flex items-center gap-3">
           <Link href="/tags" className="text-sm text-muted hover:text-foreground">
             🏷️ Tags
+            <NavProgress />
           </Link>
           {profile && (
             <Link href="/upload" className="text-sm text-muted hover:text-foreground">
               ⬆️ Upload
+              <NavProgress />
             </Link>
           )}
           {profile ? (
@@ -38,6 +42,7 @@ export async function SearchHeader({ query = '' }: { query?: string }) {
           ) : (
             <Link href="/login" className="text-sm text-muted hover:text-foreground">
               🔑 Log in
+              <NavProgress />
             </Link>
           )}
         </nav>
