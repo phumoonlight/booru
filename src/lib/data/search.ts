@@ -159,8 +159,13 @@ export async function searchTags(prefix: string, limit = 10): Promise<Tag[]> {
 }
 
 /**
- * Tags carried by the posts currently on screen, with how many of them use each —
- * this is what fills the tag sidebar / drawer.
+ * Tags carried by the posts currently on screen — this is what fills the tag sidebar /
+ * drawer. Which tags appear is decided by the page, but the number beside each one is
+ * the tag's site-wide `post_count`, the same figure the detail page and the search
+ * suggestions show, so a tag doesn't read as three posts here and three hundred one
+ * click later. The on-screen frequency is still counted, and still orders the list: the
+ * tags that describe most of what you are looking at come first, and it breaks ties
+ * between tags of equal global size.
  */
 export async function getTagsForPosts(postIds: number[]): Promise<{ tag: Tag; count: number }[]> {
   if (postIds.length === 0) return []
@@ -171,18 +176,23 @@ export async function getTagsForPosts(postIds: number[]): Promise<{ tag: Tag; co
     .select('tags(id, name, category, post_count)')
     .in('post_id', postIds)
 
-  const counts = new Map<number, { tag: Tag; count: number }>()
+  const counts = new Map<number, { tag: Tag; onPage: number }>()
   for (const row of data ?? []) {
     const tag = row.tags as unknown as Tag | null
     if (!tag) continue
     const entry = counts.get(tag.id)
-    if (entry) entry.count += 1
-    else counts.set(tag.id, { tag, count: 1 })
+    if (entry) entry.onPage += 1
+    else counts.set(tag.id, { tag, onPage: 1 })
   }
 
-  return [...counts.values()].sort(
-    (a, b) => b.count - a.count || a.tag.name.localeCompare(b.tag.name)
-  )
+  return [...counts.values()]
+    .sort(
+      (a, b) =>
+        b.onPage - a.onPage ||
+        b.tag.post_count - a.tag.post_count ||
+        a.tag.name.localeCompare(b.tag.name)
+    )
+    .map(({ tag }) => ({ tag, count: tag.post_count }))
 }
 
 /**

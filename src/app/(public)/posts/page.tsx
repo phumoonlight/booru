@@ -61,7 +61,7 @@ export default async function PostsPage({ searchParams }: PageProps<'/posts'>) {
   const canUpload = profile !== null
 
   const { posts, pageCount } = await searchPosts({ query, page })
-  // Tag facets describe the posts actually on screen; the rating scale is site-wide
+  // Which tags the facets list comes from the posts on screen; both counts are site-wide
   const [tagEntries, ratingCounts] = await Promise.all([
     getTagsForPosts(posts.map((p) => p.id)),
     getRatingCounts(),
