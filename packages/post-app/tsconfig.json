@@ -19,7 +19,9 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "baseUrl": ".",
+    // No `baseUrl`: it is deprecated in TypeScript 6, and these mappings never needed
+    // it — without one, `paths` resolves relative to this file, which is what the
+    // `../../` below already assumes.
     "paths": {
       // The website's src/. `@web/*` is how this app spells it; `@/*` is how the
       // files over there spell each other, and both have to resolve.
