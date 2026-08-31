@@ -71,8 +71,10 @@ booru/
    real CPU, with its own 50MB/100MP ceiling.
 
 ### Search (Phase 4 detail)
-- URL is the state: `/posts?query=blue_hair+solo+-photo&from=900` — `from` is the
-  cursor a resumed bookmark (or a crawler following the feed) starts the listing at.
+- URL is the state, and `?query=` is all of it: `/posts?query=blue_hair+solo+-photo+start:900`.
+  `start:900` is a metatag like `rating:e3` — where the listing begins, older posts
+  below — so a saved query is one string, and the search bar's chips clear it like any
+  other token.
 - Query runs through `searchPosts()` in `lib/data/search.ts` (see database-schema.md).
   Multi-tag AND is the one thing PostgREST can't say in a single filter, so tag
   membership is resolved to id lists in TypeScript first and the request that follows
@@ -108,7 +110,7 @@ The Danbooru reference is desktop-shaped; translate it like this:
 | Fixed left sidebar (search + tag list) | Sticky top search bar; tag list in a slide-up drawer ("Tags" button) | Left sidebar returns, ~240px |
 | Dense thumbnail grid | 2–3 column grid, larger tap targets | 5–6 columns |
 | Top nav bar with many links | Everything in the sticky top bar: Pubooru · Tags · Log in/out · Upload(signed-in) | Same bar, more room |
-| Pagination row | A feed: the newest screenful is server-rendered, older ones append as you reach the bottom. No page numbers — `?from=<id>` is the only cursor | Same |
+| Pagination row | A feed: the newest screenful is server-rendered, older ones append as you reach the bottom. No page numbers — `start:<id>` in the query is the only cursor | Same |
 | Post page: image + sidebar metadata | Image full-width, tags/metadata below | Two-column |
 
 - Thumbnails come from the `post-thumbnails` bucket, the post image from `posts`.

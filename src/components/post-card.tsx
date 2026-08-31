@@ -1,22 +1,30 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import type { Post } from '@/lib/data/posts'
-import { BookmarkBadge } from '@/components/bookmark-button'
+import { StartHereBadge } from '@/components/start-here'
 import { thumbnailUrl } from '@/lib/storage'
 import { BLUR_DATA_URL } from '@/lib/blur'
 
-/** `query` is the search the card is being shown under — what a bookmark taken here
-    should resume into. */
-export function PostCard({ post, query = '' }: { post: Post; query?: string }) {
+/** `query` is the search the card is being shown under — what the 🔖 badge adds its
+    cursor to. `active` marks the post the listing already starts at. */
+export function PostCard({
+  post,
+  query = '',
+  active = false,
+}: {
+  post: Post
+  query?: string
+  active?: boolean
+}) {
   return (
     // `data-rating` is what the blur CSS keys off; overflow keeps the blurred edges
     // from spilling past the thumb. See `lib/rating-blur.ts`.
     //
-    // The wrapper exists so the bookmark badge can sit over the thumbnail: a <button>
-    // cannot be nested inside an <a>, so the two are siblings and the group/positioning
+    // The wrapper exists so the badge can sit over the thumbnail: nesting one link
+    // inside another is not a thing, so the two are siblings and the group/positioning
     // moved up here. The blur CSS is a descendant selector, so it doesn't notice.
     <div data-rating={post.rating} className="group relative h-full">
-      <BookmarkBadge postId={post.id} query={query} />
+      <StartHereBadge postId={post.id} query={query} active={active} />
       <Link
         href={`/posts/${post.id}`}
         // A new tab, because the grid is a feed now: following a post in place throws

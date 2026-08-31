@@ -9,7 +9,7 @@ import { SetupNotice } from '@/components/setup-notice'
 import { NavProgress } from '@/components/nav-progress'
 import { CATEGORY_COLOR, CATEGORY_LABEL } from '@/components/tag-list'
 import { isSupabaseConfigured } from '@/lib/env'
-import { FROM_PARAM, searchHref, tagLabel } from '@/lib/search'
+import { searchHref, tagLabel } from '@/lib/search'
 import { SITE_NAME } from '@/lib/site'
 
 /** The tag's own page is addressed by id, so a rename can't break an existing link. */
@@ -18,21 +18,16 @@ function readId(id: string): number | null {
   return Number.isInteger(value) && value > 0 ? value : null
 }
 
-/** The listing's start cursor, or undefined for "the newest". */
-function readFrom(params: Record<string, string | string[] | undefined>) {
-  const raw = params[FROM_PARAM]
-  const value = typeof raw === 'string' ? Number(raw) : NaN
-  return Number.isInteger(value) && value > 0 ? value : undefined
-}
+/**
+ * A sample, not a listing. This page exists to show what a tag looks like and hand you
+ * to the gallery — so it opens with ten posts, grows to fifty if you ask, and then
+ * stops: browsing a tag to its end is what `/posts?query=<tag>` is for, and that page
+ * has the search bar, the facets and the cursor this one deliberately drops.
+ */
+const SAMPLE_SIZE = 10
+const SAMPLE_LIMIT = 50
 
-function href(tagId: number, from?: number) {
-  return from !== undefined ? `/tags/${tagId}?${FROM_PARAM}=${from}` : `/tags/${tagId}`
-}
-
-export async function generateMetadata({
-  params,
-  searchParams,
-}: PageProps<'/tags/[id]'>): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps<'/tags/[id]'>): Promise<Metadata> {
   const tagId = readId((await params).id)
   if (tagId === null) return { title: 'Tag not found' }
   if (!isSupabaseConfigured()) return { title: 'Tag' }
@@ -40,30 +35,27 @@ export async function generateMetadata({
   const tag = await getTagById(tagId)
   if (!tag) return { title: 'Tag not found', robots: { index: false, follow: false } }
 
-  const from = readFrom(await searchParams)
-  const suffix = from !== undefined ? ` (from #${from})` : ''
   const label = tagLabel(tag.name)
-  const title = `${label}${suffix}`
+  const title = label
   const description = `${tag.post_count} post${tag.post_count === 1 ? '' : 's'} tagged ${label}.`
 
   return {
     title,
     description,
-    alternates: { canonical: href(tag.id, from) },
-    // One tag is a stable, bounded page — unlike an arbitrary search — so the tag
-    // itself is worth indexing. A cursor into it only repeats part of that.
-    robots: from === undefined ? undefined : { index: false, follow: true },
+    alternates: { canonical: `/tags/${tag.id}` },
+    // One tag is a stable, bounded page — unlike an arbitrary search — and there is only
+    // ever the one of it now, so nothing here needs holding back from an index.
     openGraph: {
       type: 'website',
       siteName: SITE_NAME,
-      url: href(tag.id, from),
+      url: `/tags/${tag.id}`,
       title,
       description,
     },
   }
 }
 
-export default async function TagPage({ params, searchParams }: PageProps<'/tags/[id]'>) {
+export default async function TagPage({ params }: PageProps<'/tags/[id]'>) {
   if (!isSupabaseConfigured()) {
     return (
       <div className="mx-auto w-full max-w-7xl px-3 py-4">
@@ -81,8 +73,7 @@ export default async function TagPage({ params, searchParams }: PageProps<'/tags
   const tag = await getTagById(tagId)
   if (!tag) notFound()
 
-  const from = readFrom(await searchParams)
-  const { posts, hasMore } = await searchPosts({ query: tag.name, from })
+  const { posts, hasMore } = await searchPosts({ query: tag.name, perPage: SAMPLE_SIZE })
 
   return (
     // `data-no-blur` turns the rating blur off for everything below it (globals.css).
@@ -116,11 +107,13 @@ export default async function TagPage({ params, searchParams }: PageProps<'/tags
         </p>
       ) : (
         <PostFeed
-          key={href(tag.id, from)}
           initialPosts={posts}
           query={tag.name}
           hasMore={hasMore}
-          nextHref={href(tag.id, posts[posts.length - 1].id - 1)}
+          perPage={SAMPLE_SIZE}
+          limit={SAMPLE_LIMIT}
+          moreHref={searchHref(tag.name)}
+          moreLabel="🖼️ View all in posts"
         />
       )}
     </div>

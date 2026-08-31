@@ -137,7 +137,7 @@ only filters, orders and counts:
 - rating in the whitelist `resolveRatings()` produced, `order id desc`, then
   `limit(perPage + 1)` — the spare row is how the feed knows there is more. Two
   cursors narrow it, both ids and neither an offset: `id <= from` starts the listing
-  at a resumed bookmark, `id < after` continues it chunk to chunk. Nothing counts:
+  where the query's `start:` metatag says, `id < after` continues it chunk to chunk. Nothing counts:
   `count: 'exact'` scanned the filtered set on every read, and the only thing that
   ever needed the total was a page number.
 

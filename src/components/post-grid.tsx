@@ -1,18 +1,21 @@
 import type { Post } from '@/lib/data/posts'
 import { PostCard } from '@/components/post-card'
+import { startOf } from '@/lib/search'
 
 // Every item is the same height; ratios survive because the width flexes
 const ROW = 'flex flex-wrap gap-2'
 const ITEM_HEIGHT = 'h-60 sm:h-70 lg:h-80'
 
-/** `query` rides along only so a bookmark taken on a card records the search it was
-    taken under — the grid itself has no use for it. */
+/** `query` rides along for the cards' 🔖 badge, which adds its cursor to whatever
+    search is on screen. Parsed once here rather than per card. */
 export function PostGrid({ posts, query = '' }: { posts: Post[]; query?: string }) {
+  const start = startOf(query)
+
   return (
     <ul className={ROW}>
       {posts.map((post) => (
         <li key={post.id} className={ITEM_HEIGHT}>
-          <PostCard post={post} query={query} />
+          <PostCard post={post} query={query} active={post.id === start} />
         </li>
       ))}
     </ul>

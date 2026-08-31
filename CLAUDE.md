@@ -152,9 +152,11 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
   emoji post count). `searchHref()` in `lib/search.ts` is the only place that spells the
   listing's path, so tag links, facets and pagination all derive from it; `/?query=`
   redirects there for old links.
-- **Search param is `?query=`** (`SEARCH_PARAM` in `lib/search.ts`), space-separated,
-  `-tag` excludes. Ratings ride in the same string as `rating:e3` metatags — nothing
-  outside `splitRatings`/`resolveRatings` needs to know they exist.
+- **`?query=` is the only param the listing has** (`SEARCH_PARAM` in `lib/search.ts`),
+  space-separated, `-tag` excludes. Ratings and the feed's cursor ride in the same
+  string as `rating:e3` and `start:900` metatags — nothing outside `splitQuery` and
+  `resolveRatings` needs to know they exist, and the search bar renders every one of
+  them as a chip you can clear. A saved query is therefore just that string.
 - **Rating scale is `general, e1, e2, e3, e4, e5`.** `RESTRICTED_RATINGS` (e3–e5) means
   "kept out of sitemap.xml and search results" only — nothing is hidden from a visitor.
   Column is free-form text — no check constraint, so a new tier is a code change only.

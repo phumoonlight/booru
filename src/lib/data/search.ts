@@ -1,7 +1,7 @@
 import { createClient, type ServerClient } from '@/lib/supabase/server'
 import { POST_COLUMNS, type Post, type PostPage } from '@/lib/data/posts'
 import type { Tag } from '@/lib/tags'
-import { parseSearchQuery, RATINGS, resolveRatings, splitRatings, type Rating } from '@/lib/search'
+import { parseSearchQuery, RATINGS, resolveRatings, splitQuery, type Rating } from '@/lib/search'
 
 export const POSTS_PER_PAGE = 24
 
@@ -87,13 +87,15 @@ type PostFilters = {
   allowedRatings: Rating[] | null
   onlyIds: number[] | null
   notIds: number[]
+  /** The `start:` metatag, already lifted out of the query. */
+  start: number | null
 }
 
 async function resolveFilters(
   supabase: ServerClient,
   query: string
 ): Promise<PostFilters | null> {
-  const { include, exclude, ratings, excludeRatings } = splitRatings(parseSearchQuery(query))
+  const { include, exclude, ratings, excludeRatings, start } = splitQuery(parseSearchQuery(query))
   const allowedRatings = resolveRatings({ ratings, excludeRatings })
 
   let onlyIds: number[] | null = null
@@ -112,15 +114,15 @@ async function resolveFilters(
     if (onlyIds.length === 0) return null
   }
 
-  return { allowedRatings, onlyIds, notIds }
+  return { allowedRatings, onlyIds, notIds, start }
 }
 
 /**
  * The posts request itself, newest id first, sliced by two cursors that mean different
  * things:
  *
- * - `from` — inclusive, `id <= from`. A starting line, not a slice: it is a resumed
- *   bookmark, and the post you marked has to be the first thing on screen.
+ * - `from` — inclusive, `id <= from`. A starting line, not a slice: it comes from the
+ *   query's own `start:` metatag, and the post it names has to be first on screen.
  * - `after` — exclusive, `id < after`. Where the feed continues from, chunk to chunk.
  *
  * Both are ids rather than offsets, which is what makes an upload landing mid-scroll a
@@ -161,14 +163,12 @@ async function readPosts(
 export async function searchPosts({
   query = '',
   perPage = POSTS_PER_PAGE,
-  from,
   after,
 }: {
+  /** Tags, rating metatags, and the `start:` cursor — the whole address of a listing. */
   query?: string
   perPage?: number
-  /** Resume point: the listing starts at this post, older ones below it. */
-  from?: number
-  /** Continue point: strictly older than this post. */
+  /** Continue point: strictly older than this post. The feed's own, never in the URL. */
   after?: number
 } = {}): Promise<PostPage> {
   const empty: PostPage = { posts: [], hasMore: false }
@@ -178,7 +178,8 @@ export async function searchPosts({
     const filters = await resolveFilters(supabase, query)
     if (!filters) return empty
 
-    return await readPosts(supabase, filters, { perPage, from, after })
+    // The cursor came in inside the query; `after` is the feed's own continuation
+    return await readPosts(supabase, filters, { perPage, from: filters.start ?? undefined, after })
   } catch (error) {
     // The grid renders empty rather than throwing, so the reason has to be logged
     console.error('searchPosts failed:', error)

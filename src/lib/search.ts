@@ -4,13 +4,6 @@
 /** The search param's name. Read it from here so the URL only spells it in one place. */
 export const SEARCH_PARAM = 'query'
 
-/**
- * The cursor param: which post the listing starts at, older ones below. It is what a
- * resumed bookmark spells in the URL, and it lives here with the other URL vocabulary
- * so the listing's address is described in exactly one file.
- */
-export const FROM_PARAM = 'from'
-
 export type ParsedQuery = {
   include: string[]
   exclude: string[]
@@ -74,19 +67,16 @@ export function withoutTag(raw: string, tag: string): string {
 export const POSTS_PATH = '/posts'
 
 /**
- * Search URL for a query, optionally starting at a post rather than at the newest.
- *
- * There is no page number in here any more. The listing is a feed with a cursor, and
- * `from` says the one thing a page number used to: where to start. It is the better
- * half of that trade — a page number moves as posts are uploaded, an id does not.
+ * Search URL for a query. That is the whole address now: where the listing starts
+ * travels inside the query as a `start:` metatag, so there is no second param to keep
+ * in step and nothing to forget to carry when a link is built.
  */
-export function searchHref(query: string, from?: number): string {
-  const params = new URLSearchParams()
+export function searchHref(query: string): string {
   const trimmed = query.trim()
-  if (trimmed) params.set(SEARCH_PARAM, trimmed)
-  if (from !== undefined) params.set(FROM_PARAM, String(from))
-  const qs = params.toString()
-  return qs ? `${POSTS_PATH}?${qs}` : POSTS_PATH
+  if (!trimmed) return POSTS_PATH
+  const params = new URLSearchParams()
+  params.set(SEARCH_PARAM, trimmed)
+  return `${POSTS_PATH}?${params.toString()}`
 }
 
 // ── Rating metatags ────────────────────────────────────────────────────────────
@@ -129,6 +119,47 @@ export function isRestricted(rating: Rating): boolean {
   return RESTRICTED_RATINGS.includes(rating)
 }
 
+// ── The cursor metatag ─────────────────────────────────────────────────────────
+// `start:900` means "begin at post 900 and go older", which is what a bookmark on a
+// thumbnail writes and what a saved query carries. It rides in `?query=` like the
+// rating metatags for the same reason: the search bar already renders every token as a
+// removable chip, so the cursor is visible and clearable with no control of its own.
+
+export const START_PREFIX = 'start:'
+
+export function startToken(id: number): string {
+  return `${START_PREFIX}${id}`
+}
+
+/** The query with its cursor replaced — one start point or none, never two. */
+export function withStart(raw: string, id: number): string {
+  return `${withoutStart(raw)} ${startToken(id)}`.trim()
+}
+
+/** The cursor a query carries, or null. Convenience over `splitQuery` for UI code. */
+export function startOf(raw: string): number | null {
+  return splitQuery(parseSearchQuery(raw)).start
+}
+
+export function withoutStart(raw: string): string {
+  return raw
+    .split(/\s+/)
+    .filter((token) => !token.toLowerCase().startsWith(START_PREFIX))
+    .join(' ')
+    .trim()
+}
+
+/**
+ * `start:` on a token, or null if it isn't one. An id that isn't a positive integer
+ * gives null, and the caller leaves the token in the tag list — so `start:soon` returns
+ * nothing rather than quietly browsing from the top, the same bargain `rating:nope` makes.
+ */
+function asStart(token: string): number | null {
+  if (!token.startsWith(START_PREFIX)) return null
+  const value = Number(token.slice(START_PREFIX.length))
+  return Number.isInteger(value) && value > 0 ? value : null
+}
+
 export const RATING_PREFIX = 'rating:'
 
 export function ratingToken(rating: Rating): string {
@@ -144,30 +175,48 @@ function asRating(token: string): Rating | null {
 export type SplitQuery = ParsedQuery & {
   ratings: Rating[]
   excludeRatings: Rating[]
+  /** Where the listing starts, or null for "the newest post". */
+  start: number | null
 }
 
 /**
- * Pulls `rating:*` metatags out of a parsed query, leaving `include`/`exclude`
- * holding tag names only. An unknown value (`rating:nope`) is left in place as a
- * tag name so the search honestly returns nothing rather than silently widening.
+ * Pulls the metatags out of a parsed query, leaving `include`/`exclude` holding tag
+ * names only. An unknown value (`rating:nope`, `start:soon`) is left in place as a tag
+ * name so the search honestly returns nothing rather than silently widening.
+ *
+ * Two `start:` tokens can only sensibly mean the older of them — a cursor is a floor,
+ * and the lower floor is the one that holds. `-start:900` is meaningless, so it stays
+ * an ordinary excluded tag and the search comes back empty, which is the honest answer
+ * to a query nobody can satisfy.
  */
-export function splitRatings(parsed: ParsedQuery): SplitQuery {
+export function splitQuery(parsed: ParsedQuery): SplitQuery {
   const ratings: Rating[] = []
   const excludeRatings: Rating[] = []
+  let start: number | null = null
 
   const keep = (list: string[], into: Rating[]) =>
     list.filter((token) => {
       const rating = asRating(token)
-      if (!rating) return true
-      if (!into.includes(rating)) into.push(rating)
-      return false
+      if (rating) {
+        if (!into.includes(rating)) into.push(rating)
+        return false
+      }
+      return true
     })
 
+  const includes = keep(parsed.include, ratings).filter((token) => {
+    const id = asStart(token)
+    if (id === null) return true
+    start = start === null ? id : Math.min(start, id)
+    return false
+  })
+
   return {
-    include: keep(parsed.include, ratings),
+    include: includes,
     exclude: keep(parsed.exclude, excludeRatings),
     ratings,
     excludeRatings,
+    start,
   }
 }
 
