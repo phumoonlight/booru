@@ -6,7 +6,7 @@ import { useLinkStatus } from 'next/link'
 /**
  * An indeterminate bar pinned to the top of the viewport. Fixed rather than inline so it
  * reads the same whether the click landed on a sidebar row, a tag inside the mobile
- * sheet or a pagination button — and so no layout shifts wherever it is rendered.
+ * sheet or the feed's own controls — and so no layout shifts wherever it is rendered.
  *
  * It goes through a portal because `position: fixed` is not as absolute as it sounds: a
  * `filter` or `transform` anywhere above makes that ancestor the containing block, and
@@ -34,7 +34,7 @@ export function NavProgressBar() {
  *
  * `/posts` has a `loading.tsx`, but Next only shows a route's fallback when the segment
  * itself changes. Every tag, facet and page link on the listing rewrites `?query=` or
- * `?page=` and stays on the same segment, so the fallback never appears: until the
+ * `?query=` or `?from=` and stays on the same segment, so the fallback never appears: until the
  * server answers, the click looks like it did nothing. This is what the docs point at
  * for exactly that case.
  */

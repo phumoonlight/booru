@@ -4,42 +4,40 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import type { Post } from '@/lib/data/posts'
 import { PostGrid, PostGridSkeleton } from '@/components/post-grid'
 import { loadMorePosts } from '@/lib/actions/search'
+import { FROM_PARAM } from '@/lib/search'
 
 /** How close to the sentinel the viewport gets before the next chunk is asked for. */
 const PREFETCH_MARGIN = '800px'
 
 /**
- * `?page=N` on whatever path we are already on. Like PageJump before it, this builds
- * its own URL rather than taking a `buildHref` closure — one can't cross into a client
- * component — and that works because every listing that pages spells it the same way:
- * `?page=N` on the current path, page 1 dropping the param so the canonical URL is clean.
+ * `?from=N` on whatever path we are already on. It builds its own URL rather than
+ * taking a `buildHref` closure — one cannot cross into a client component — and that
+ * works because both listings spell the cursor the same way.
  */
-function pageUrl(page: number): string {
+function cursorUrl(from: number): string {
   const url = new URL(window.location.href)
-  if (page > 1) url.searchParams.set('page', String(page))
-  else url.searchParams.delete('page')
+  url.searchParams.set(FROM_PARAM, String(from))
   return `${url.pathname}${url.search}`
 }
 
 /**
- * The seam between two loaded chunks. A feed with no seams is disorienting — you cannot
- * tell how far you have come, and a post you saw "a while ago" has no landmark to
- * scroll back to. Labelling it with the page number gives it one, and it is the same
- * number the URL now claims, so the divider and a refresh agree.
+ * The seam between two loaded chunks, labelled with the post the chunk starts at. A
+ * feed with no seams is disorienting — you cannot tell how far you have come, and a
+ * post you saw a while ago has no landmark to scroll back to. The id is that landmark,
+ * and it is also the address: `?from=` that number is this exact view.
  */
-function ChunkDivider({ page }: { page: number }) {
+function ChunkDivider({ firstId }: { firstId: number }) {
   return (
     <div aria-hidden className="flex items-center gap-3 py-1 text-xs text-muted">
-      <span className="h-px flex-1 bg-border" />
-      Page {page}
+      <span className="h-px flex-1 bg-border" />#{firstId} and older
       <span className="h-px flex-1 bg-border" />
     </div>
   )
 }
 
 /**
- * The gallery as one continuous feed: the server renders the first screenful, and this
- * appends the rest as you reach the bottom.
+ * The gallery as one continuous feed: the server renders the newest screenful, and this
+ * appends older ones as you reach the bottom.
  *
  * Each chunk keeps its own grid rather than being merged into one list. That leaves a
  * ragged last row where a chunk ends, which is exactly what the divider is drawn
@@ -48,38 +46,34 @@ function ChunkDivider({ page }: { page: number }) {
  *
  * Three things it deliberately keeps from the numbered bar it replaced:
  *
- * - **A real link to the next page.** The button is an `<a href="?page=N+1">` with its
- *   click intercepted, so a crawler — and a browser whose JS hasn't arrived — still has
- *   a chain to follow through the whole gallery. Infinite scroll that renders no link
- *   makes everything past the first chunk unreachable to both.
+ * - **A real link onward.** The button is an `<a href="?from=…">` with its click
+ *   intercepted, so a crawler — and a browser whose JS has not arrived — still has a
+ *   chain to follow through the whole gallery. Infinite scroll that renders no link
+ *   makes everything past the first chunk unreachable to both. Ids being integers,
+ *   `from = lastId - 1` is exactly "everything older than the last post shown".
  * - **A visible control.** Auto-loading usually wins the race, but an observer that
  *   never fires (a failed chunk, reduced-motion scroll containers, a viewport tall
  *   enough that nothing scrolls) must not be the only way forward.
- * - **The page number in the URL**, rewritten with `replaceState` as chunks land, so a
- *   refresh doesn't drop you back at post 1. It restores the page you had *reached*,
- *   not the chunks above it — an honest URL for a feed, and the reason `?page=` still
- *   renders on the server exactly as it always did.
- *
- * Paging is by cursor (`beforeId`), not offset: an upload landing mid-scroll would
- * otherwise shift every later row down one and hand you a post you already have.
+ * - **A URL that survives a refresh**, rewritten with `replaceState` as chunks land —
+ *   the cursor now, rather than a page number, which is the better half of that trade:
+ *   a page number moves when someone uploads, an id does not. It restores the chunk you
+ *   had reached, not the ones above it, which is an honest URL for a feed.
  */
 export function PostFeed({
   initialPosts,
   query,
-  page,
   hasMore: initialHasMore,
   nextHref,
 }: {
   initialPosts: Post[]
-  /** Search string for the data layer. On /tags/[id] that's the tag name, which is why
+  /** Search string for the data layer. On /tags/[id] that is the tag name, which is why
       it is a prop and not read back out of the URL. */
   query: string
-  page: number
   hasMore: boolean
   nextHref: string
 }) {
   // One entry per chunk, the server's first screenful included — the shape the dividers
-  // are drawn from, so "where does a page begin" needs no arithmetic over a flat list.
+  // are drawn from, so "where does a chunk begin" needs no arithmetic over a flat list.
   const [chunks, setChunks] = useState<Post[][]>([initialPosts])
   const [hasMore, setHasMore] = useState(initialHasMore)
   const [href, setHref] = useState(nextHref)
@@ -97,16 +91,15 @@ export function PostFeed({
     setPending(true)
     setFailed(false)
     try {
-      const next = await loadMorePosts({ query, beforeId: last.id })
-      // An empty chunk would draw a divider over nothing
-      if (next.posts.length > 0) setChunks((current) => [...current, next.posts])
+      const next = await loadMorePosts({ query, after: last.id })
       setHasMore(next.hasMore)
+      // An empty chunk would draw a divider over nothing
+      if (next.posts.length === 0) return
 
-      // `chunks` is this render's array, so its length is how many pages deep the feed
-      // stands once the chunk being appended is counted
-      const reached = page + chunks.length
-      window.history.replaceState(null, '', pageUrl(reached))
-      setHref(pageUrl(reached + 1))
+      setChunks((current) => [...current, next.posts])
+      // The URL claims the chunk that just landed, so a refresh resumes there
+      window.history.replaceState(null, '', cursorUrl(next.posts[0].id))
+      setHref(cursorUrl(next.posts[next.posts.length - 1].id - 1))
     } catch {
       // Auto-loading stops here; the button stays and says so, so a dropped connection
       // costs a tap rather than the rest of the gallery.
@@ -115,7 +108,7 @@ export function PostFeed({
       busy.current = false
       setPending(false)
     }
-  }, [chunks, hasMore, page, query])
+  }, [chunks, hasMore, query])
 
   useEffect(() => {
     const node = sentinel.current
@@ -135,8 +128,8 @@ export function PostFeed({
     <>
       {chunks.map((posts, index) => (
         <Fragment key={posts[0]?.id ?? index}>
-          {index > 0 && <ChunkDivider page={page + index} />}
-          <PostGrid posts={posts} />
+          {index > 0 && posts[0] && <ChunkDivider firstId={posts[0].id} />}
+          <PostGrid posts={posts} query={query} />
         </Fragment>
       ))}
       {pending && <PostGridSkeleton count={6} />}
@@ -147,8 +140,8 @@ export function PostFeed({
           <a
             href={href}
             onClick={(event) => {
-              // Plain left-click only: ⌘/ctrl-click and middle-click still open the
-              // next page in a tab, which is the whole point of it being a link.
+              // Plain left-click only: cmd/ctrl-click and middle-click still open the
+              // next stretch in a tab, which is the whole point of it being a link.
               if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return
               event.preventDefault()
               load()

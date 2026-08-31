@@ -1,8 +1,15 @@
 // Pure query-string helpers — shared by server components and the client search bar.
-// URL is the state: /posts?query=blue_hair+solo+-photo&page=2
+// URL is the state: /posts?query=blue_hair+solo+-photo&from=900
 
 /** The search param's name. Read it from here so the URL only spells it in one place. */
 export const SEARCH_PARAM = 'query'
+
+/**
+ * The cursor param: which post the listing starts at, older ones below. It is what a
+ * resumed bookmark spells in the URL, and it lives here with the other URL vocabulary
+ * so the listing's address is described in exactly one file.
+ */
+export const FROM_PARAM = 'from'
 
 export type ParsedQuery = {
   include: string[]
@@ -66,12 +73,18 @@ export function withoutTag(raw: string, tag: string): string {
 /** Where the gallery lives. `/` is the front door and shows no posts. */
 export const POSTS_PATH = '/posts'
 
-/** Search URL for a query. Page 1 is left implicit so URLs stay clean. */
-export function searchHref(query: string, page = 1): string {
+/**
+ * Search URL for a query, optionally starting at a post rather than at the newest.
+ *
+ * There is no page number in here any more. The listing is a feed with a cursor, and
+ * `from` says the one thing a page number used to: where to start. It is the better
+ * half of that trade — a page number moves as posts are uploaded, an id does not.
+ */
+export function searchHref(query: string, from?: number): string {
   const params = new URLSearchParams()
   const trimmed = query.trim()
   if (trimmed) params.set(SEARCH_PARAM, trimmed)
-  if (page > 1) params.set('page', String(page))
+  if (from !== undefined) params.set(FROM_PARAM, String(from))
   const qs = params.toString()
   return qs ? `${POSTS_PATH}?${qs}` : POSTS_PATH
 }

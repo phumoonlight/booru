@@ -25,9 +25,10 @@ export const POST_COLUMNS =
 
 export type PostPage = {
   posts: Post[]
-  total: number
-  page: number
-  pageCount: number
+  /** Whether anything older matched — the feed's "keep going", and nothing more. No
+      total: counting the filtered set cost a scan per read, to render a number that
+      only a page-number UI ever needed. */
+  hasMore: boolean
 }
 
 // Browse listings go through searchPosts() in lib/data/search.ts — an empty query

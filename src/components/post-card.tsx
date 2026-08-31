@@ -1,24 +1,32 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import type { Post } from '@/lib/data/posts'
+import { BookmarkBadge } from '@/components/bookmark-button'
 import { thumbnailUrl } from '@/lib/storage'
 import { BLUR_DATA_URL } from '@/lib/blur'
 
-export function PostCard({ post }: { post: Post }) {
+/** `query` is the search the card is being shown under — what a bookmark taken here
+    should resume into. */
+export function PostCard({ post, query = '' }: { post: Post; query?: string }) {
   return (
     // `data-rating` is what the blur CSS keys off; overflow keeps the blurred edges
     // from spilling past the thumb. See `lib/rating-blur.ts`.
-    <Link
-      href={`/posts/${post.id}`}
-      // A new tab, because the grid is a feed now: following a post in place throws
-      // away every chunk loaded below the fold, and coming back lands you at the top
-      // of whichever page the URL had reached rather than on the thumbnail you left.
-      target="_blank"
-      rel="noopener"
-      data-rating={post.rating}
-      className="group block h-full overflow-hidden bg-surface"
-    >
-      {/* Full aspect ratio, never cropped — the row height sets the scale */}
+    //
+    // The wrapper exists so the bookmark badge can sit over the thumbnail: a <button>
+    // cannot be nested inside an <a>, so the two are siblings and the group/positioning
+    // moved up here. The blur CSS is a descendant selector, so it doesn't notice.
+    <div data-rating={post.rating} className="group relative h-full">
+      <BookmarkBadge postId={post.id} query={query} />
+      <Link
+        href={`/posts/${post.id}`}
+        // A new tab, because the grid is a feed now: following a post in place throws
+        // away every chunk loaded below the fold, and coming back lands you at the top
+        // of whichever page the URL had reached rather than on the thumbnail you left.
+        target="_blank"
+        rel="noopener"
+        className="block h-full overflow-hidden bg-surface"
+      >
+        {/* Full aspect ratio, never cropped — the row height sets the scale */}
       {/*
         `unoptimized`, like the detail image and for the same reason: the thumbnail is
         already the optimizer's output. Upload built it as a 400px-tall AVIF sized for
@@ -36,16 +44,17 @@ export function PostCard({ post }: { post: Post }) {
         `width`/`height` stay the *post's* dimensions — they only set the aspect ratio
         that reserves grid space, and the thumbnail keeps the post's ratio.
       */}
-      <Image
-        src={thumbnailUrl(post.md5)}
-        alt={`Post ${post.id}`}
-        width={post.width}
-        height={post.height}
-        unoptimized
-        placeholder="blur"
-        blurDataURL={BLUR_DATA_URL}
-        className="h-full w-auto max-w-full object-contain transition-opacity group-hover:opacity-90"
-      />
-    </Link>
+        <Image
+          src={thumbnailUrl(post.md5)}
+          alt={`Post ${post.id}`}
+          width={post.width}
+          height={post.height}
+          unoptimized
+          placeholder="blur"
+          blurDataURL={BLUR_DATA_URL}
+          className="h-full w-auto max-w-full object-contain transition-opacity group-hover:opacity-90"
+        />
+      </Link>
+    </div>
   )
 }

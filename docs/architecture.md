@@ -71,7 +71,8 @@ booru/
    real CPU, with its own 50MB/100MP ceiling.
 
 ### Search (Phase 4 detail)
-- URL is the state: `/?query=blue_hair+solo+-photo&page=2`.
+- URL is the state: `/posts?query=blue_hair+solo+-photo&from=900` — `from` is the
+  cursor a resumed bookmark (or a crawler following the feed) starts the listing at.
 - Query runs through `searchPosts()` in `lib/data/search.ts` (see database-schema.md).
   Multi-tag AND is the one thing PostgREST can't say in a single filter, so tag
   membership is resolved to id lists in TypeScript first and the request that follows
@@ -84,7 +85,7 @@ booru/
   `-rating:e3`. `lib/search.ts` parses the string once, `splitRatings()` peels the
   metatags off the tag names and `resolveRatings()` turns them into the whitelist
   `searchPosts()` filters `rating` against. Nothing else — chips, tag links,
-  autocomplete, pagination hrefs — needs to know they exist.
+  autocomplete, listing hrefs — needs to know they exist.
 - No rating is hidden from anyone: the facet lists every tier and `resolveRatings()`
   narrows only when the query names one. The adult tiers (`RESTRICTED_RATINGS`) are
   still kept out of `sitemap.xml` and carry `noindex` — a search-engine policy, not a
@@ -107,7 +108,7 @@ The Danbooru reference is desktop-shaped; translate it like this:
 | Fixed left sidebar (search + tag list) | Sticky top search bar; tag list in a slide-up drawer ("Tags" button) | Left sidebar returns, ~240px |
 | Dense thumbnail grid | 2–3 column grid, larger tap targets | 5–6 columns |
 | Top nav bar with many links | Everything in the sticky top bar: Pubooru · Tags · Log in/out · Upload(signed-in) | Same bar, more room |
-| Pagination row | A feed: the first screenful is server-rendered, the rest appends as you reach the bottom | Same |
+| Pagination row | A feed: the newest screenful is server-rendered, older ones append as you reach the bottom. No page numbers — `?from=<id>` is the only cursor | Same |
 | Post page: image + sidebar metadata | Image full-width, tags/metadata below | Two-column |
 
 - Thumbnails come from the `post-thumbnails` bucket, the post image from `posts`.

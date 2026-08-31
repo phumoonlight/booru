@@ -5,12 +5,14 @@ import { PostCard } from '@/components/post-card'
 const ROW = 'flex flex-wrap gap-2'
 const ITEM_HEIGHT = 'h-60 sm:h-70 lg:h-80'
 
-export function PostGrid({ posts }: { posts: Post[] }) {
+/** `query` rides along only so a bookmark taken on a card records the search it was
+    taken under — the grid itself has no use for it. */
+export function PostGrid({ posts, query = '' }: { posts: Post[]; query?: string }) {
   return (
     <ul className={ROW}>
       {posts.map((post) => (
         <li key={post.id} className={ITEM_HEIGHT}>
-          <PostCard post={post} />
+          <PostCard post={post} query={query} />
         </li>
       ))}
     </ul>

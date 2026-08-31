@@ -116,37 +116,38 @@ async function resolveFilters(
 }
 
 /**
- * The posts request itself, newest id first. Two ways to ask for a slice of it:
+ * The posts request itself, newest id first, sliced by two cursors that mean different
+ * things:
  *
- * - `page` — offset paging, and the only mode that pays for `count: 'exact'`, because
- *   a page *number* is meaningless without knowing how many there are.
- * - `beforeId` — keyset paging, what the feed appends with. It costs no count, and it
- *   cannot skip or repeat a post when an upload lands mid-scroll: `id < cursor` still
- *   names the same rows it did a minute ago, where `offset 48` quietly slides.
+ * - `from` — inclusive, `id <= from`. A starting line, not a slice: it is a resumed
+ *   bookmark, and the post you marked has to be the first thing on screen.
+ * - `after` — exclusive, `id < after`. Where the feed continues from, chunk to chunk.
+ *
+ * Both are ids rather than offsets, which is what makes an upload landing mid-scroll a
+ * non-event: `id < 900` names the same rows it did a minute ago, where `offset 48`
+ * quietly slides everything down one and hands you a post you already have.
+ *
+ * It reads one row more than it returns, and that spare row is the whole answer to "is
+ * there more". Nothing here counts: `count: 'exact'` scanned the filtered set on every
+ * read, and the only thing that ever needed the total was a page number.
  */
 async function readPosts(
   supabase: ServerClient,
   filters: PostFilters,
-  { perPage, page, beforeId }: { perPage: number; page?: number; beforeId?: number }
-): Promise<{ posts: Post[]; total: number }> {
-  const wantsTotal = page !== undefined
-
-  let posts = supabase.from('posts').select(POST_COLUMNS, {
-    count: wantsTotal ? 'exact' : undefined,
-  })
+  { perPage, from, after }: { perPage: number; from?: number; after?: number }
+): Promise<PostPage> {
+  let posts = supabase.from('posts').select(POST_COLUMNS)
   if (filters.allowedRatings) posts = posts.in('rating', filters.allowedRatings)
   if (filters.onlyIds) posts = posts.in('id', filters.onlyIds)
   if (filters.notIds.length > 0) posts = posts.not('id', 'in', `(${filters.notIds.join(',')})`)
-  if (beforeId !== undefined) posts = posts.lt('id', beforeId)
+  if (from !== undefined) posts = posts.lte('id', from)
+  if (after !== undefined) posts = posts.lt('id', after)
 
-  const from = page !== undefined ? (page - 1) * perPage : 0
-  const { data, count, error } = await posts
-    .order('id', { ascending: false })
-    .range(from, from + perPage - 1)
+  const { data, error } = await posts.order('id', { ascending: false }).limit(perPage + 1)
   if (error) throw new Error(`Post read failed: ${error.message}`)
 
-  // `count: 'exact'` counts the filtered set, not the page — what page numbers need
-  return { posts: (data ?? []) as Post[], total: count ?? 0 }
+  const rows = (data ?? []) as Post[]
+  return { posts: rows.slice(0, perPage), hasMore: rows.length > perPage }
 }
 
 /**
@@ -154,61 +155,33 @@ async function readPosts(
  * An empty query returns the whole gallery, so this backs plain browsing too.
  * Ratings narrow only when the query says so — nothing is hidden by default.
  *
- * This is the first screenful — the one the server renders and a crawler sees.
- * `searchPostsAfter` continues it.
+ * One function for both halves of the feed: no cursor is the newest screenful, the one
+ * the server renders and a crawler sees; `after` is every chunk the browser appends.
  */
 export async function searchPosts({
   query = '',
-  page = 1,
   perPage = POSTS_PER_PAGE,
+  from,
+  after,
 }: {
   query?: string
-  page?: number
   perPage?: number
+  /** Resume point: the listing starts at this post, older ones below it. */
+  from?: number
+  /** Continue point: strictly older than this post. */
+  after?: number
 } = {}): Promise<PostPage> {
-  const empty: PostPage = { posts: [], total: 0, page, pageCount: 0 }
+  const empty: PostPage = { posts: [], hasMore: false }
 
   try {
     const supabase = await createClient()
     const filters = await resolveFilters(supabase, query)
     if (!filters) return empty
 
-    const { posts, total } = await readPosts(supabase, filters, { perPage, page })
-    return { posts, total, page, pageCount: Math.ceil(total / perPage) }
+    return await readPosts(supabase, filters, { perPage, from, after })
   } catch (error) {
     // The grid renders empty rather than throwing, so the reason has to be logged
     console.error('searchPosts failed:', error)
-    return empty
-  }
-}
-
-/**
- * The chunk after a post already on screen — what the feed asks for as you scroll.
- *
- * It reads one row more than it returns, and that spare row is the whole answer to
- * "is there more": a second query counting the rest would cost a full scan of the
- * filtered set on every chunk, to render one button.
- */
-export async function searchPostsAfter({
-  query = '',
-  beforeId,
-  perPage = POSTS_PER_PAGE,
-}: {
-  query?: string
-  beforeId: number
-  perPage?: number
-}): Promise<{ posts: Post[]; hasMore: boolean }> {
-  const empty = { posts: [], hasMore: false }
-
-  try {
-    const supabase = await createClient()
-    const filters = await resolveFilters(supabase, query)
-    if (!filters) return empty
-
-    const { posts } = await readPosts(supabase, filters, { perPage: perPage + 1, beforeId })
-    return { posts: posts.slice(0, perPage), hasMore: posts.length > perPage }
-  } catch (error) {
-    console.error('searchPostsAfter failed:', error)
     return empty
   }
 }

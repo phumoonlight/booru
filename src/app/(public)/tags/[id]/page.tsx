@@ -9,7 +9,7 @@ import { SetupNotice } from '@/components/setup-notice'
 import { NavProgress } from '@/components/nav-progress'
 import { CATEGORY_COLOR, CATEGORY_LABEL } from '@/components/tag-list'
 import { isSupabaseConfigured } from '@/lib/env'
-import { searchHref, tagLabel } from '@/lib/search'
+import { FROM_PARAM, searchHref, tagLabel } from '@/lib/search'
 import { SITE_NAME } from '@/lib/site'
 
 /** The tag's own page is addressed by id, so a rename can't break an existing link. */
@@ -18,13 +18,15 @@ function readId(id: string): number | null {
   return Number.isInteger(value) && value > 0 ? value : null
 }
 
-function readPage(params: Record<string, string | string[] | undefined>) {
-  const raw = typeof params.page === 'string' ? Number(params.page) : 1
-  return Number.isInteger(raw) && raw > 0 ? raw : 1
+/** The listing's start cursor, or undefined for "the newest". */
+function readFrom(params: Record<string, string | string[] | undefined>) {
+  const raw = params[FROM_PARAM]
+  const value = typeof raw === 'string' ? Number(raw) : NaN
+  return Number.isInteger(value) && value > 0 ? value : undefined
 }
 
-function href(tagId: number, page: number) {
-  return page > 1 ? `/tags/${tagId}?page=${page}` : `/tags/${tagId}`
+function href(tagId: number, from?: number) {
+  return from !== undefined ? `/tags/${tagId}?${FROM_PARAM}=${from}` : `/tags/${tagId}`
 }
 
 export async function generateMetadata({
@@ -38,8 +40,8 @@ export async function generateMetadata({
   const tag = await getTagById(tagId)
   if (!tag) return { title: 'Tag not found', robots: { index: false, follow: false } }
 
-  const page = readPage(await searchParams)
-  const suffix = page > 1 ? ` (page ${page})` : ''
+  const from = readFrom(await searchParams)
+  const suffix = from !== undefined ? ` (from #${from})` : ''
   const label = tagLabel(tag.name)
   const title = `${label}${suffix}`
   const description = `${tag.post_count} post${tag.post_count === 1 ? '' : 's'} tagged ${label}.`
@@ -47,14 +49,14 @@ export async function generateMetadata({
   return {
     title,
     description,
-    alternates: { canonical: href(tag.id, page) },
-    // One tag is a stable, bounded page — unlike an arbitrary search — so page 1 is
-    // worth indexing. Deeper pages only repeat it.
-    robots: page === 1 ? undefined : { index: false, follow: true },
+    alternates: { canonical: href(tag.id, from) },
+    // One tag is a stable, bounded page — unlike an arbitrary search — so the tag
+    // itself is worth indexing. A cursor into it only repeats part of that.
+    robots: from === undefined ? undefined : { index: false, follow: true },
     openGraph: {
       type: 'website',
       siteName: SITE_NAME,
-      url: href(tag.id, page),
+      url: href(tag.id, from),
       title,
       description,
     },
@@ -79,8 +81,8 @@ export default async function TagPage({ params, searchParams }: PageProps<'/tags
   const tag = await getTagById(tagId)
   if (!tag) notFound()
 
-  const page = readPage(await searchParams)
-  const { posts, total, pageCount } = await searchPosts({ query: tag.name, page })
+  const from = readFrom(await searchParams)
+  const { posts, hasMore } = await searchPosts({ query: tag.name, from })
 
   return (
     // `data-no-blur` turns the rating blur off for everything below it (globals.css).
@@ -97,7 +99,8 @@ export default async function TagPage({ params, searchParams }: PageProps<'/tags
             {tagLabel(tag.name)}
           </h1>
           <span className="text-xs uppercase tracking-wide text-muted">
-            {CATEGORY_LABEL[tag.category]} · {total} post{total === 1 ? '' : 's'}
+            {CATEGORY_LABEL[tag.category]} · {tag.post_count} post
+            {tag.post_count === 1 ? '' : 's'}
           </span>
         </div>
         {/* The way back to the controls this page drops — same tag, in the gallery */}
@@ -113,12 +116,11 @@ export default async function TagPage({ params, searchParams }: PageProps<'/tags
         </p>
       ) : (
         <PostFeed
-          key={href(tag.id, page)}
+          key={href(tag.id, from)}
           initialPosts={posts}
           query={tag.name}
-          page={page}
-          hasMore={page < pageCount}
-          nextHref={href(tag.id, page + 1)}
+          hasMore={hasMore}
+          nextHref={href(tag.id, posts[posts.length - 1].id - 1)}
         />
       )}
     </div>

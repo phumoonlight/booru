@@ -134,11 +134,12 @@ only filters, orders and counts:
   the number of tags asked for
 - **none** of the exclude tags — the posts carrying any of them are subtracted from the
   candidate list, or filtered out with `not.in` when there are no include tags
-- rating in the whitelist `resolveRatings()` produced, `order id desc`, then a slice:
-  `range(offset, …)` with `count: 'exact'` for the first screenful — the only read
-  that needs a total — or `id < cursor` with no count at all for each chunk the feed
-  appends afterwards (`searchPostsAfter`). The cursor is what stops an upload landing
-  mid-scroll from sliding rows into a chunk you already have.
+- rating in the whitelist `resolveRatings()` produced, `order id desc`, then
+  `limit(perPage + 1)` — the spare row is how the feed knows there is more. Two
+  cursors narrow it, both ids and neither an offset: `id <= from` starts the listing
+  at a resumed bookmark, `id < after` continues it chunk to chunk. Nothing counts:
+  `count: 'exact'` scanned the filtered set on every read, and the only thing that
+  ever needed the total was a page number.
 
 The id lists are bounded by the tags' `post_count`, and plain browsing (no tags in the
 query) skips them entirely — that path is a single indexed read. Fine to ~100k posts;

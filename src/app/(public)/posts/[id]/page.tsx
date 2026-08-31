@@ -7,6 +7,7 @@ import { getCurrentProfile } from '@/lib/data/profiles'
 import { ManagePost } from '@/components/manage-post'
 import { PostViewCounter } from '@/components/post-view-counter'
 import { PostNav } from '@/components/post-nav'
+import { BookmarkButton } from '@/components/bookmark-button'
 import { isRestricted, RATING_COLOR, RATING_LABEL } from '@/lib/search'
 import { postImageUrl, thumbnailUrl } from '@/lib/storage'
 import { GroupedTagList } from '@/components/tag-list'
@@ -135,7 +136,14 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
           <Link href="/posts" className="text-lg font-bold tracking-tight hover:underline">
             {SITE_NAME}
           </Link>
-          <PostNav prevId={prevId} nextId={nextId} />
+          <div className="flex items-center gap-1">
+            {/* Beside the walk to the neighbouring posts, because it answers the same
+                question from the other side: this is how you stop walking and come back
+                to this spot later. It is also the only way to bookmark on a phone —
+                the grid's badge needs a hover the device doesn't have. */}
+            <BookmarkButton postId={post.id} />
+            <PostNav prevId={prevId} nextId={nextId} />
+          </div>
         </div>
 
         {/* Negative margin plus matching padding puts the scrollbar on the aside's own
