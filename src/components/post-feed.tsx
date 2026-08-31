@@ -16,7 +16,7 @@ import { searchHref, withStart } from '@/lib/search'
  * request went out before the reader had scrolled at all. Half a screen of lookahead
  * cost nothing when a chunk was two dozen posts and everything when it is ten.
  */
-const PREFETCH_MARGIN = '120px'
+const PREFETCH_MARGIN = '100px'
 
 /**
  * The seam between two loaded chunks, labelled with the post the chunk starts at. A feed
