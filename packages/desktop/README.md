@@ -66,5 +66,7 @@ objects and the denormalized counters — the rows no user session is allowed to
 - `electron` is pinned to an exact version, not a range. electron-builder downloads the
   prebuilt runtime for one specific release and refuses to guess which; a caret here
   fails packaging with "version is a range, not a fixed version".
-- No icon is configured, so a packaged build wears Electron's. Drop one in `build/` and
-  point `electron-builder.yml` at it when that matters.
+- The installer's icon is `build/icon.ico`, named in [`electron-builder.yml`](electron-builder.yml).
+  Without one a packaged build wears Electron's.
+- Releases get a file each in [`changelog/`](changelog/), named for the version; the
+  number there, in `package.json` and on the About screen are the same number.
