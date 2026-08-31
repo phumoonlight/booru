@@ -18,9 +18,10 @@ import type { StagedFile } from '../../../shared/api'
 export function ImageViewer({ file, onClose }: { file: StagedFile; onClose: () => void }) {
   const [full, setFull] = useState('')
 
+  // Keyed by path where it is rendered, so a different file is a different component
+  // rather than this one holding the last file's picture until the new one arrives.
   useEffect(() => {
     let alive = true
-    setFull('')
     void window.api.previewFile(file.path).then((preview) => {
       if (alive) setFull(preview)
     })

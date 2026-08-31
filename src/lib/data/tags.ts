@@ -1,6 +1,6 @@
 import 'server-only'
 import { createClient } from '@/lib/supabase/server'
-import { searchTags as sharedSearchTags } from '@/lib/data/shared'
+import { listTags, searchTags as sharedSearchTags } from '@/lib/data/shared'
 import { TAG_CATEGORIES, type Tag, type TagCategory } from '@/lib/tags'
 
 export async function getTagByName(name: string): Promise<Tag | null> {
@@ -24,16 +24,10 @@ export async function getTagById(id: number): Promise<Tag | null> {
   return data
 }
 
-/** All tags, most used first — backs the /tags page. */
+/** All tags, most used first — backs the /tags page. Query in shared.ts; the desktop
+ *  uploader's Tags screen runs the same one. */
 export async function getTags(limit = 200): Promise<Tag[]> {
-  const supabase = await createClient()
-  const { data } = await supabase
-    .from('tags')
-    .select('id, name, category, post_count')
-    .order('post_count', { ascending: false })
-    .order('name')
-    .limit(limit)
-  return data ?? []
+  return listTags(await createClient(), limit)
 }
 
 /** Groups tags into display order: artist → copyright → character → general → meta. */
@@ -48,6 +42,6 @@ export async function searchTags(query: string, limit = 8): Promise<Tag[]> {
   return sharedSearchTags(await createClient(), query, limit)
 }
 
-// ensureTagIds and the tag-name search moved to lib/data/shared.ts — they are part of
+// ensureTagIds, the tag-name search and the tag index moved to lib/data/shared.ts — they are part of
 // the post write path and the tag field, and that file takes its client so the desktop
 // uploader (packages/desktop) can run them too.

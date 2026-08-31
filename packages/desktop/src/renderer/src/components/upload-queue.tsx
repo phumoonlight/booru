@@ -458,7 +458,13 @@ export function UploadQueue({ status }: { status: AppStatus }) {
 
       {/* Outside the drop zone on purpose: a full-window overlay sitting inside it would
         answer the drag handlers with its own hit box while it is up. */}
-      {viewed && <ImageViewer file={viewed.file} onClose={() => setViewing(null)} />}
+      {viewed && (
+        <ImageViewer
+          key={viewed.file.path}
+          file={viewed.file}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </>
   )
 }

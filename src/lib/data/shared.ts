@@ -246,3 +246,22 @@ export async function searchTags(
     .limit(limit)
   return data ?? []
 }
+
+/**
+ * Every tag, most used first — the index behind the web's /tags page and the desktop
+ * uploader's Tags screen. It lives here rather than in `tags.ts` for the same reason the
+ * write path does: the Electron app has no request-scoped client to build.
+ *
+ * The cap is the read's, not the page's. Ordering by `post_count` is what decides which
+ * tags a capped read lets through; the screens then sort the ones they got by name,
+ * because you arrive at an index holding a name, not a size.
+ */
+export async function listTags(supabase: BooruClient, limit = 200): Promise<Tag[]> {
+  const { data } = await supabase
+    .from('tags')
+    .select('id, name, category, post_count')
+    .order('post_count', { ascending: false })
+    .order('name')
+    .limit(limit)
+  return data ?? []
+}

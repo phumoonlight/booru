@@ -22,6 +22,7 @@ const api: PostAppApi = {
   fetchImages: (urls) => ipcRenderer.invoke('files:fetch', urls),
   previewFile: (path) => ipcRenderer.invoke('files:preview', path),
   pathForFile: (file: File) => webUtils.getPathForFile(file),
+  listTags: () => ipcRenderer.invoke('tags:list'),
   suggestTags: (query) => ipcRenderer.invoke('tags:suggest', query),
   uploadPost: (request: UploadRequest) => ipcRenderer.invoke('post:upload', request),
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),

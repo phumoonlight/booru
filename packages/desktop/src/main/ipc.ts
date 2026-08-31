@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron'
 import { z } from 'zod'
-import { searchTags } from '@web/lib/data/shared'
+import { listTags, searchTags } from '@web/lib/data/shared'
 import { createPostFromImage, parsePostMetadata } from '@web/lib/upload/pipeline'
 import { DESKTOP_UPLOAD_LIMITS } from './limits'
 import { loadConfig, revealConfig, saveConfig } from './config'
@@ -10,6 +10,7 @@ import { previewFile, stageFiles } from './staging'
 import { downloadImages } from './download'
 import { adminClient, currentUser, resetClients, signIn, signOut, userClient } from './supabase'
 import type { AppConfigInput, AppStatus, Outcome, SavedLogin, TagSuggestion } from '../shared/api'
+import type { Tag } from '@web/lib/tags'
 import type { UploadResult } from '@web/lib/upload/pipeline'
 
 /**
@@ -40,6 +41,10 @@ const uploadSchema = z.object({
   rating: z.string(),
   sourceUrl: z.string(),
 })
+
+/** What the web's /tags page reads, and for the same reason: an index nobody scrolls
+ *  past is not worth the round trip, and the tags past it have a post or two each. */
+const TAG_INDEX_LIMIT = 500
 
 /** Only http(s) is ever handed to the OS — see the `shell:open-external` handler. */
 function isWebUrl(url: string): boolean {
@@ -148,6 +153,18 @@ export function registerIpc(): void {
   ipcMain.handle('files:fetch', async (_event, urls: unknown) => {
     const parsed = z.array(z.url()).max(50).safeParse(urls)
     return parsed.success ? downloadImages(parsed.data) : []
+  })
+
+  /**
+   * The board's whole tag index, for the Tags screen — the same read behind the web's
+   * /tags page, capped the same way. Grouping and sorting are the screen's, not this
+   * handler's: the cap is decided by post count and the display order isn't.
+   */
+  ipcMain.handle('tags:list', async (): Promise<Tag[]> => {
+    const supabase = userClient()
+    if (!supabase) return []
+    if (!(await currentUser())) return []
+    return listTags(supabase, TAG_INDEX_LIMIT)
   })
 
   /** Autocomplete for the tag field, on the same query the web's `suggestTags` action runs. */

@@ -1,5 +1,5 @@
 import type { Rating } from '@web/lib/search'
-import type { TagCategory } from '@web/lib/tags'
+import type { Tag, TagCategory } from '@web/lib/tags'
 import type { UploadResult } from '@web/lib/upload/pipeline'
 
 /**
@@ -91,6 +91,8 @@ export type PostAppApi = {
   previewFile: (path: string) => Promise<string>
   /** Drag-and-drop hands the renderer a `File` with no path on it; this asks Electron for one. */
   pathForFile: (file: File) => string
+  /** The board's tag index, most used first — what the Tags screen paints. */
+  listTags: () => Promise<Tag[]>
   suggestTags: (query: string) => Promise<TagSuggestion[]>
   uploadPost: (request: UploadRequest) => Promise<UploadResult>
   openExternal: (url: string) => Promise<void>

@@ -100,14 +100,17 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
   Save. There is no global Save to lose the other three to, and no on-screen notice that
   the service-role key lands in plain text — this file and the README are the only places
   that now say so.
-- **Three views, one of them always mounted.** `App.tsx` holds `'upload' | 'settings' |
-  'about'` and the header switches them, with settings forced until there is a config and
-  the login form until there is a session. About is the exception to that order — "what
-  version is this" is a fair question before setup — and carries the versions
-  `app:status` reports, since the renderer has no `process` and a packaged app ships no
-  manifest it can read. The queue is **hidden, not unmounted**, when another view is in
-  front: glancing at About used to throw away a staged, half-tagged queue and orphan an
-  upload already in flight.
+- **Four views, one of them always mounted.** `App.tsx` holds `'upload' | 'tags' |
+  'settings' | 'about'` and the header switches them, with settings forced until there is
+  a config and the login form until there is a session. About is the exception to that
+  order — "what version is this" is a fair question before setup — and carries the
+  versions `app:status` reports, since the renderer has no `process` and a packaged app
+  ships no manifest it can read. Tags is not an exception: it reads the board, so it sits
+  behind the session with the queue, runs `listTags` from `lib/data/shared.ts` (the web's
+  /tags page runs the same one) and opens a tag on the board rather than here — there is
+  no gallery in this window to show it in. The queue is **hidden, not unmounted**, when
+  another view is in front: glancing at About used to throw away a staged, half-tagged
+  queue and orphan an upload already in flight.
 - **`signOut({ scope: 'local' })`, here and in `lib/actions/auth.ts`.** The default is
   `'global'`, which revokes every refresh token the account holds — logging out of the
   uploader signed out the browser too, and the other way round. Logging out of one place

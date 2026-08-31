@@ -3,23 +3,25 @@ import { About } from './components/about'
 import { AccountMenu } from './components/account-menu'
 import { Login } from './components/login'
 import { Settings } from './components/settings'
+import { TagIndex } from './components/tag-index'
 import { UploadQueue } from './components/upload-queue'
 import type { AppStatus } from '../../shared/api'
 
 /**
- * Three screens, picked by what the app knows: settings until it has a project to talk
- * to, login until someone is signed in, then the queue. The same order the website
- * enforces — `<SetupNotice />`, then the redirect to /login, then /upload — except here
- * the first one is a form rather than a runbook: this app reads no environment, so the
- * four values are typed in wherever it runs.
+ * Screens picked by what the app knows: settings until it has a project to talk to,
+ * login until someone is signed in, then the queue. The same order the website enforces
+ * — `<SetupNotice />`, then the redirect to /login, then /upload — except here the first
+ * one is a form rather than a runbook: this app reads no environment, so the four values
+ * are typed in wherever it runs.
  *
- * About is the exception to that order rather than a fourth step: it answers "what am I
- * running", which is a fair question before the app is set up at all, so it is the one
- * view allowed to sit in front of an unconfigured window.
+ * About is the exception to that order: it answers "what am I running", which is a fair
+ * question before the app is set up at all, so it is the one view allowed to sit in
+ * front of an unconfigured window. Tags is not — it reads the board, so it sits behind
+ * the session with the queue.
  */
 export function App() {
   const [status, setStatus] = useState<AppStatus | null>(null)
-  const [view, setView] = useState<'upload' | 'settings' | 'about'>('upload')
+  const [view, setView] = useState<'upload' | 'tags' | 'settings' | 'about'>('upload')
 
   const refresh = useCallback(async () => {
     setStatus(await window.api.getStatus())
@@ -68,6 +70,8 @@ export function App() {
       <Settings onChanged={() => void refresh()} />
     ) : !status.user ? (
       <Login onSignedIn={refresh} />
+    ) : view === 'tags' ? (
+      <TagIndex siteUrl={status.siteUrl} />
     ) : null
 
   return (
@@ -94,6 +98,16 @@ export function App() {
           <span />
         )}
         <div className="flex items-center gap-2">
+          {status.user && (
+            <button
+              type="button"
+              onClick={() => setView((current) => (current === 'tags' ? 'upload' : 'tags'))}
+              className={navClass(view === 'tags')}
+            >
+              <span aria-hidden>🏷️</span>
+              Tags
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setView((current) => (current === 'about' ? 'upload' : 'about'))}
