@@ -42,7 +42,10 @@ Commit only when asked. Never push unless asked.
 ## Layering — do not cross these lines
 
 - **Reads:** RSC → `src/lib/data/*` → Supabase server client (anon key, RLS enforced).
-  Never call Supabase from a page or component directly.
+  Never call Supabase from a page or component directly. The one read that isn't an RSC
+  is `loadMorePosts` in `lib/actions/search.ts` — the feed's next chunk, an action rather
+  than a route handler so `lib/data/search.ts` stays the only query surface. It takes no
+  `requireUser()`: it can return nothing a visitor couldn't reach by editing the URL.
 - **Writes:** `'use server'` actions in `src/lib/actions/*` → `requireUser()` first →
   zod parse → `src/lib/data/*`. RLS (`auth.uid() is not null`) is the real guard;
   `requireUser()` exists to fail loudly rather than update zero rows.
@@ -150,13 +153,28 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
   refreshes the session; it guards no routes. Pages check the session themselves.
 - **The gallery is `/posts`, not `/`** — `/` is a landing page (wordmark, search box,
   emoji post count). `searchHref()` in `lib/search.ts` is the only place that spells the
-  listing's path, so tag links, facets and pagination all derive from it; `/?query=`
-  redirects there for old links.
+  listing's path, so tag links, facets and the feed's own links all derive from it;
+  `/?query=` redirects there for old links.
 - **`?query=` is the only param the listing has** (`SEARCH_PARAM` in `lib/search.ts`),
   space-separated, `-tag` excludes. Ratings and the feed's cursor ride in the same
   string as `rating:e3` and `start:900` metatags — nothing outside `splitQuery` and
   `resolveRatings` needs to know they exist, and the search bar renders every one of
   them as a chip you can clear. A saved query is therefore just that string.
+- **The listing is a feed, and there are no page numbers.** `PostFeed` renders the
+  server's screenful, then appends chunks by cursor (`id < lastId`) — never by offset,
+  which slides when an upload lands mid-scroll. Three things about it are load-bearing:
+  the "load more" control is a real `<a href="?query=… start:N">` with its click
+  intercepted, because a feed that renders no link puts everything past the first chunk
+  out of reach of crawlers and of a browser whose JS hasn't arrived; each chunk keeps its
+  own `<ul>` so a landing chunk can't reflow rows you already scrolled past; and
+  `replaceState` keeps the cursor in the URL so a refresh doesn't drop you at the top.
+  Cards open in a **new tab** for the same reason — following one in place threw the
+  loaded chunks away. Nothing counts rows any more: `hasMore` is one row read past the
+  chunk, and `count: 'exact'` scanned the filtered set on every read to feed a page
+  number that no longer exists.
+- **`/tags/[id]` is a sample, not a listing** — ten posts, up to fifty, then a link into
+  the gallery. It has no search box, no facets and no cursor on purpose: browsing a tag
+  to its end is what `/posts?query=<tag>` is for, and that page has all three.
 - **Rating scale is `general, e1, e2, e3, e4, e5`.** `RESTRICTED_RATINGS` (e3–e5) means
   "kept out of sitemap.xml and search results" only — nothing is hidden from a visitor.
   Column is free-form text — no check constraint, so a new tier is a code change only.
@@ -178,6 +196,10 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
   read path — prefetches, `generateMetadata` and crawlers must not inflate it.
 - Rating blur is a `data-blur-ratings` attribute on `<html>` set before first paint, so
   the grid stays a plain server render (`lib/rating-blur.ts` + `globals.css`).
+- Saved queries are `localStorage` too, so they need no account (`lib/saved-queries.ts`,
+  module store in `use-saved-queries.ts` — the sidebar renders twice and both copies have
+  to agree). A row's identity is its tags, the query minus `start:`, which is what lets
+  💾 move a saved cursor without a second row and without any selection state.
 - `MAX_FILE_SIZE` lives in `lib/upload-limits.ts` because three layers must agree:
   the drop zone, the upload action, and `serverActions.bodySizeLimit` in `next.config.ts`.
 - Pages fall back to `<SetupNotice />` when `isSupabaseConfigured()` is false, so the app
