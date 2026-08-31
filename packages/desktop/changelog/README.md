@@ -11,5 +11,6 @@ together or the app lies about itself.
 Entries are grouped **Added** / **Changed** / **Fixed**, and say what someone using the
 app would notice.
 
+- [1.0.2](1.0.2.md) — 2026-08-31 — click a staged image for a full-window preview.
 - [1.0.1](1.0.1.md) — 2026-08-31 — tag autocomplete matches on a prefix.
 - [1.0.0](1.0.0.md) — 2026-08-30 — first installable release.

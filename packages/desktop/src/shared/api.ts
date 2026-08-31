@@ -53,8 +53,7 @@ export type StagedFile = {
 }
 
 export type StageOutcome =
-  | ({ ok: true } & StagedFile)
-  | { ok: false; path: string; name: string; error: string }
+  ({ ok: true } & StagedFile) | { ok: false; path: string; name: string; error: string }
 
 export type TagSuggestion = { name: string; category: TagCategory; post_count: number }
 
@@ -85,6 +84,11 @@ export type PostAppApi = {
   stageFiles: (paths: string[]) => Promise<StageOutcome[]>
   /** Downloads images dragged in from a browser, then stages them like picked files. */
   fetchImages: (urls: string[]) => Promise<StageOutcome[]>
+  /**
+   * A screen-sized version of one staged file, for the viewer a clicked row opens. Made
+   * on request rather than kept in `StagedFile`, and '' if it couldn't be drawn.
+   */
+  previewFile: (path: string) => Promise<string>
   /** Drag-and-drop hands the renderer a `File` with no path on it; this asks Electron for one. */
   pathForFile: (file: File) => string
   suggestTags: (query: string) => Promise<TagSuggestion[]>

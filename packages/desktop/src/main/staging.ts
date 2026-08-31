@@ -21,6 +21,13 @@ import type { StageOutcome } from '../shared/api'
 
 const PREVIEW_HEIGHT = 200
 
+/**
+ * The bound on the one image the queue blows up when a row is clicked. Big enough to fill
+ * a maximised window on a 2x display and no bigger: this is a look at what you staged,
+ * not the file, and every pixel past the screen is base64 crossing the bridge for nothing.
+ */
+const FULL_PREVIEW_EDGE = 1600
+
 async function stageOne(path: string): Promise<StageOutcome> {
   const name = basename(path)
 
@@ -88,4 +95,30 @@ export async function stageFiles(paths: string[]): Promise<StageOutcome[]> {
     outcomes.push(await stageOne(path))
   }
   return outcomes
+}
+
+/**
+ * A bigger look at one already-staged file, made on demand rather than at staging time.
+ * Forty of these held in the queue's state would be tens of megabytes of base64 sitting
+ * in the window for a picture nobody asked to see; one at a time costs a decode.
+ *
+ * Same contract as the row preview: '' rather than a throw, because a viewer that can't
+ * draw anything is a message, not a failure of the upload the row is still staged for.
+ */
+export async function previewFile(path: string): Promise<string> {
+  try {
+    const full = await sharp(path)
+      .rotate()
+      .resize({
+        width: FULL_PREVIEW_EDGE,
+        height: FULL_PREVIEW_EDGE,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .webp({ quality: 82 })
+      .toBuffer()
+    return `data:image/webp;base64,${full.toString('base64')}`
+  } catch {
+    return ''
+  }
 }

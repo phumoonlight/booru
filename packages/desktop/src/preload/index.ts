@@ -20,6 +20,7 @@ const api: PostAppApi = {
   chooseFiles: () => ipcRenderer.invoke('files:choose'),
   stageFiles: (paths) => ipcRenderer.invoke('files:stage', paths),
   fetchImages: (urls) => ipcRenderer.invoke('files:fetch', urls),
+  previewFile: (path) => ipcRenderer.invoke('files:preview', path),
   pathForFile: (file: File) => webUtils.getPathForFile(file),
   suggestTags: (query) => ipcRenderer.invoke('tags:suggest', query),
   uploadPost: (request: UploadRequest) => ipcRenderer.invoke('post:upload', request),

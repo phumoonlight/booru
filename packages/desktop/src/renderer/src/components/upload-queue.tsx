@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { RATING_LABEL, RATINGS, type Rating } from '@web/lib/search'
 import { TrashIcon } from './icons'
+import { ImageViewer } from './image-viewer'
 import { EMPTY_TAGS, TagField, tagsToInput, type TagFieldValue } from './tag-field'
 import type { AppStatus, StagedFile, StageOutcome, UploadResult } from '../../../shared/api'
 
@@ -53,6 +54,9 @@ export function UploadQueue({ status }: { status: AppStatus }) {
   const [bulkRating, setBulkRating] = useState<Rating | ''>('')
   // Files the last pick or drop turned away, with the reason main gave for each
   const [refused, setRefused] = useState<string[]>([])
+  // The row whose picture is open full-window, held by path so a re-render of the queue
+  // can't leave the viewer showing a stale copy of a row that has since been edited.
+  const [viewing, setViewing] = useState<string | null>(null)
 
   /**
    * Files never reach the queue unless they can actually be uploaded. The main process
@@ -127,6 +131,9 @@ export function UploadQueue({ status }: { status: AppStatus }) {
 
   const drop = useCallback((path: string) => {
     setItems((prev) => prev.filter((item) => item.file.path !== path))
+    // Clearing uploaded rows behind an open viewer would leave it showing a file the
+    // queue no longer has.
+    setViewing((current) => (current === path ? null : current))
   }, [])
 
   /** Merges the bulk tags into every staged row and, if one is chosen, sets the rating. */
@@ -189,253 +196,270 @@ export function UploadQueue({ status }: { status: AppStatus }) {
   const pending = items.filter((item) => item.status !== 'ok').length
   const uploaded = items.filter((item) => item.status === 'ok')
   const working = busy || staging !== null
+  const viewed = items.find((item) => item.file.path === viewing)
 
   return (
-    <div
-      onDragOver={(event) => {
-        event.preventDefault()
-        // Without an explicit copy effect some sources treat the drop as refused
-        event.dataTransfer.dropEffect = 'copy'
-        setDragging(true)
-      }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={(event) => {
-        event.preventDefault()
-        setDragging(false)
+    <>
+      <div
+        onDragOver={(event) => {
+          event.preventDefault()
+          // Without an explicit copy effect some sources treat the drop as refused
+          event.dataTransfer.dropEffect = 'copy'
+          setDragging(true)
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault()
+          setDragging(false)
 
-        // Everything is read out of dataTransfer *now*: it is emptied the moment this
-        // handler returns, so nothing here may be deferred behind an await.
-        // A dropped File stopped carrying `.path` in Electron 32 — preload asks for it.
-        const paths = Array.from(event.dataTransfer.files)
-          .map((file) => window.api.pathForFile(file))
-          .filter(Boolean)
-        if (paths.length > 0) {
-          void stage(paths)
-          return
-        }
+          // Everything is read out of dataTransfer *now*: it is emptied the moment this
+          // handler returns, so nothing here may be deferred behind an await.
+          // A dropped File stopped carrying `.path` in Electron 32 — preload asks for it.
+          const paths = Array.from(event.dataTransfer.files)
+            .map((file) => window.api.pathForFile(file))
+            .filter(Boolean)
+          if (paths.length > 0) {
+            void stage(paths)
+            return
+          }
 
-        // Nothing local: this came from a browser, and what crossed is an address.
-        void stageUrls(imageUrlsFrom(event.dataTransfer))
-      }}
-      className="flex flex-col gap-4"
-    >
-      {/*
+          // Nothing local: this came from a browser, and what crossed is an address.
+          void stageUrls(imageUrlsFrom(event.dataTransfer))
+        }}
+        className="flex flex-col gap-4"
+      >
+        {/*
         The drop area shrinks to a strip once there's a queue below it to keep room for.
         The whole thing is the button, not just the label inside it: a dashed rectangle
         saying "drop images" is already the target, and asking for a second, smaller aim
         at the word inside it only made the obvious click miss. One button also means one
         tab stop and one disabled state while staging runs.
       */}
-      <button
-        type="button"
-        onClick={() => void window.api.chooseFiles().then(stage)}
-        disabled={working}
-        className={`flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed text-center disabled:opacity-50 ${
-          items.length > 0 ? 'px-4 py-4' : 'px-6 py-12'
-        } ${dragging ? 'border-accent bg-accent/10' : 'border-border bg-surface hover:border-accent'}`}
-      >
-        {items.length === 0 && (
-          <>
-            <p className="text-base font-semibold">Drop images to upload</p>
-            <p className="text-sm text-muted">Tag and rate each one before you submit</p>
-            <p className="text-xs text-muted">Up to {status.limits.maxFileSizeLabel} each</p>
-          </>
-        )}
-        <span className="flex min-h-11 items-center gap-2 text-sm font-medium">
-          <span aria-hidden>📂</span>
-          {staging ?? 'Browse'}
-        </span>
-      </button>
+        <button
+          type="button"
+          onClick={() => void window.api.chooseFiles().then(stage)}
+          disabled={working}
+          className={`flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed text-center disabled:opacity-50 ${
+            items.length > 0 ? 'px-4 py-4' : 'px-6 py-12'
+          } ${dragging ? 'border-accent bg-accent/10' : 'border-border bg-surface hover:border-accent'}`}
+        >
+          {items.length === 0 && (
+            <>
+              <p className="text-base font-semibold">Drop images to upload</p>
+              <p className="text-sm text-muted">Tag and rate each one before you submit</p>
+              <p className="text-xs text-muted">Up to {status.limits.maxFileSizeLabel} each</p>
+            </>
+          )}
+          <span className="flex min-h-11 items-center gap-2 text-sm font-medium">
+            <span aria-hidden>📂</span>
+            {staging ?? 'Browse'}
+          </span>
+        </button>
 
-      {refused.length > 0 && (
-        <ul className="rounded-lg border border-red-500/30 bg-red-500/15 px-3 py-2 text-sm text-red-400">
-          {refused.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
-      )}
-
-      {items.length > 0 && (
-        <>
-          {/* Bulk bar: one set of fields written across the whole queue on demand */}
-          <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3">
-            <p className="text-sm font-semibold">Apply to all {pending} staged</p>
-            <TagField
-              value={bulkTags}
-              onChange={setBulkTags}
-              label="Tags to add"
-              hint={false}
-              disabled={busy}
-              placeholder="shared tags"
-            />
-            <div className="flex flex-wrap items-end gap-2">
-              <label className="flex flex-1 flex-col gap-1.5 text-sm">
-                Rating
-                <select
-                  value={bulkRating}
-                  disabled={busy}
-                  onChange={(event) => setBulkRating(event.target.value as Rating | '')}
-                  className="min-h-11 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
-                >
-                  <option value="">Leave as is</option>
-                  {RATINGS.map((rating) => (
-                    <option key={rating} value={rating}>
-                      {RATING_LABEL[rating]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                onClick={applyToAll}
-                disabled={
-                  busy || (bulkTags.tags.length === 0 && !bulkTags.draft.trim() && !bulkRating)
-                }
-                className="min-h-11 rounded-lg border border-border px-4 text-sm font-medium disabled:opacity-50"
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-
-          <ul className="flex flex-col gap-3">
-            {items.map((item) => (
-              <li
-                key={item.file.path}
-                className={`flex flex-col gap-3 rounded-lg border bg-surface p-3 sm:flex-row ${
-                  item.status === 'error' ? 'border-red-500/40' : 'border-border'
-                }`}
-              >
-                <img
-                  src={item.file.preview}
-                  alt={item.file.name}
-                  className="h-40 w-full shrink-0 rounded-lg bg-background object-contain sm:h-32 sm:w-32"
-                />
-
-                <div className="flex min-w-0 flex-1 flex-col gap-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium" title={item.file.path}>
-                        {item.file.name}
-                      </p>
-                      <p className="text-xs text-muted">
-                        {formatSize(item.file.size)} · {item.file.width}×{item.file.height}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => drop(item.file.path)}
-                      disabled={busy}
-                      title="Remove from queue"
-                      aria-label={`Remove ${item.file.name} from the queue`}
-                      className="flex min-h-9 w-11 shrink-0 items-center justify-center rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 disabled:opacity-50"
-                    >
-                      <TrashIcon />
-                    </button>
-                  </div>
-
-                  {item.status === 'ok' ? (
-                    <p className="text-sm">
-                      <PostLink
-                        siteUrl={status.siteUrl}
-                        postId={item.postId}
-                        label={`Uploaded — post #${item.postId}`}
-                      />
-                    </p>
-                  ) : (
-                    <>
-                      <TagField
-                        value={item.tags}
-                        onChange={(tags) => patch(item.file.path, { tags })}
-                        hint={false}
-                        disabled={busy}
-                      />
-
-                      <div className="flex flex-col gap-3 sm:flex-row">
-                        <label className="flex flex-col gap-1.5 text-sm sm:w-44">
-                          Rating
-                          <select
-                            value={item.rating}
-                            disabled={busy}
-                            onChange={(event) =>
-                              patch(item.file.path, { rating: event.target.value as Rating })
-                            }
-                            className="min-h-11 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
-                          >
-                            {RATINGS.map((rating) => (
-                              <option key={rating} value={rating}>
-                                {RATING_LABEL[rating]}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-sm">
-                          Source URL (optional)
-                          <input
-                            type="url"
-                            value={item.sourceUrl}
-                            disabled={busy}
-                            onChange={(event) =>
-                              patch(item.file.path, { sourceUrl: event.target.value })
-                            }
-                            placeholder="https://…"
-                            className="min-h-11 rounded-lg border border-border bg-background px-3 font-mono text-xs outline-none focus:border-accent"
-                          />
-                        </label>
-                      </div>
-
-                      {item.status === 'uploading' && (
-                        <p className="text-xs text-muted">Compressing and uploading…</p>
-                      )}
-                      {item.status === 'error' && (
-                        <p className="text-xs text-red-400">
-                          {item.message}
-                          {item.postId !== undefined && (
-                            <>
-                              {' — '}
-                              <PostLink
-                                siteUrl={status.siteUrl}
-                                postId={item.postId}
-                                label={`post #${item.postId}`}
-                              />
-                            </>
-                          )}
-                        </p>
-                      )}
-                    </>
-                  )}
-                </div>
-              </li>
+        {refused.length > 0 && (
+          <ul className="rounded-lg border border-red-500/30 bg-red-500/15 px-3 py-2 text-sm text-red-400">
+            {refused.map((line) => (
+              <li key={line}>{line}</li>
             ))}
           </ul>
+        )}
 
-          <div className="sticky bottom-0 flex items-center gap-2 border-t border-border bg-background py-3">
-            <button
-              type="button"
-              onClick={() => void submit()}
-              disabled={working || pending === 0}
-              className="flex min-h-11 flex-1 items-center justify-center rounded-lg bg-accent px-4 text-sm font-medium text-background disabled:opacity-50"
-            >
-              {busy
-                ? `Uploading ${Math.min(progress.done + 1, progress.total)}/${progress.total}…`
-                : pending === 0
-                  ? 'All uploaded'
-                  : `Upload ${pending} ${pending === 1 ? 'post' : 'posts'}`}
-            </button>
-            {uploaded.length > 0 && !busy && (
+        {items.length > 0 && (
+          <>
+            {/* Bulk bar: one set of fields written across the whole queue on demand */}
+            <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3">
+              <p className="text-sm font-semibold">Apply to all {pending} staged</p>
+              <TagField
+                value={bulkTags}
+                onChange={setBulkTags}
+                label="Tags to add"
+                hint={false}
+                disabled={busy}
+                placeholder="shared tags"
+              />
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex flex-1 flex-col gap-1.5 text-sm">
+                  Rating
+                  <select
+                    value={bulkRating}
+                    disabled={busy}
+                    onChange={(event) => setBulkRating(event.target.value as Rating | '')}
+                    className="min-h-11 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
+                  >
+                    <option value="">Leave as is</option>
+                    {RATINGS.map((rating) => (
+                      <option key={rating} value={rating}>
+                        {RATING_LABEL[rating]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  onClick={applyToAll}
+                  disabled={
+                    busy || (bulkTags.tags.length === 0 && !bulkTags.draft.trim() && !bulkRating)
+                  }
+                  className="min-h-11 rounded-lg border border-border px-4 text-sm font-medium disabled:opacity-50"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+
+            <ul className="flex flex-col gap-3">
+              {items.map((item) => (
+                <li
+                  key={item.file.path}
+                  className={`flex flex-col gap-3 rounded-lg border bg-surface p-3 sm:flex-row ${
+                    item.status === 'error' ? 'border-red-500/40' : 'border-border'
+                  }`}
+                >
+                  {/* The thumbnail is the button: 200px is enough to tell files apart and
+                    not enough to check one, so clicking the picture opens it full-window. */}
+                  <button
+                    type="button"
+                    onClick={() => setViewing(item.file.path)}
+                    title="Open a bigger preview"
+                    aria-label={`Open a bigger preview of ${item.file.name}`}
+                    className="h-40 w-full shrink-0 overflow-hidden rounded-lg bg-background ring-border hover:ring-2 sm:h-32 sm:w-32"
+                  >
+                    <img
+                      src={item.file.preview}
+                      alt={item.file.name}
+                      className="h-full w-full object-contain"
+                    />
+                  </button>
+
+                  <div className="flex min-w-0 flex-1 flex-col gap-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium" title={item.file.path}>
+                          {item.file.name}
+                        </p>
+                        <p className="text-xs text-muted">
+                          {formatSize(item.file.size)} · {item.file.width}×{item.file.height}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => drop(item.file.path)}
+                        disabled={busy}
+                        title="Remove from queue"
+                        aria-label={`Remove ${item.file.name} from the queue`}
+                        className="flex min-h-9 w-11 shrink-0 items-center justify-center rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
+
+                    {item.status === 'ok' ? (
+                      <p className="text-sm">
+                        <PostLink
+                          siteUrl={status.siteUrl}
+                          postId={item.postId}
+                          label={`Uploaded — post #${item.postId}`}
+                        />
+                      </p>
+                    ) : (
+                      <>
+                        <TagField
+                          value={item.tags}
+                          onChange={(tags) => patch(item.file.path, { tags })}
+                          hint={false}
+                          disabled={busy}
+                        />
+
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                          <label className="flex flex-col gap-1.5 text-sm sm:w-44">
+                            Rating
+                            <select
+                              value={item.rating}
+                              disabled={busy}
+                              onChange={(event) =>
+                                patch(item.file.path, { rating: event.target.value as Rating })
+                              }
+                              className="min-h-11 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
+                            >
+                              {RATINGS.map((rating) => (
+                                <option key={rating} value={rating}>
+                                  {RATING_LABEL[rating]}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-sm">
+                            Source URL (optional)
+                            <input
+                              type="url"
+                              value={item.sourceUrl}
+                              disabled={busy}
+                              onChange={(event) =>
+                                patch(item.file.path, { sourceUrl: event.target.value })
+                              }
+                              placeholder="https://…"
+                              className="min-h-11 rounded-lg border border-border bg-background px-3 font-mono text-xs outline-none focus:border-accent"
+                            />
+                          </label>
+                        </div>
+
+                        {item.status === 'uploading' && (
+                          <p className="text-xs text-muted">Compressing and uploading…</p>
+                        )}
+                        {item.status === 'error' && (
+                          <p className="text-xs text-red-400">
+                            {item.message}
+                            {item.postId !== undefined && (
+                              <>
+                                {' — '}
+                                <PostLink
+                                  siteUrl={status.siteUrl}
+                                  postId={item.postId}
+                                  label={`post #${item.postId}`}
+                                />
+                              </>
+                            )}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="sticky bottom-0 flex items-center gap-2 border-t border-border bg-background py-3">
               <button
                 type="button"
-                onClick={() => uploaded.forEach((item) => drop(item.file.path))}
-                className="min-h-11 rounded-lg border border-border px-4 text-sm"
+                onClick={() => void submit()}
+                disabled={working || pending === 0}
+                className="flex min-h-11 flex-1 items-center justify-center rounded-lg bg-accent px-4 text-sm font-medium text-background disabled:opacity-50"
               >
-                Clear uploaded
+                {busy
+                  ? `Uploading ${Math.min(progress.done + 1, progress.total)}/${progress.total}…`
+                  : pending === 0
+                    ? 'All uploaded'
+                    : `Upload ${pending} ${pending === 1 ? 'post' : 'posts'}`}
               </button>
-            )}
-          </div>
-        </>
-      )}
-    </div>
+              {uploaded.length > 0 && !busy && (
+                <button
+                  type="button"
+                  onClick={() => uploaded.forEach((item) => drop(item.file.path))}
+                  className="min-h-11 rounded-lg border border-border px-4 text-sm"
+                >
+                  Clear uploaded
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Outside the drop zone on purpose: a full-window overlay sitting inside it would
+        answer the drag handlers with its own hit box while it is up. */}
+      {viewed && <ImageViewer file={viewed.file} onClose={() => setViewing(null)} />}
+    </>
   )
 }
 

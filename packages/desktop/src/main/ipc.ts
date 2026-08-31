@@ -6,7 +6,7 @@ import { createPostFromImage, parsePostMetadata } from '@web/lib/upload/pipeline
 import { DESKTOP_UPLOAD_LIMITS } from './limits'
 import { loadConfig, revealConfig, saveConfig } from './config'
 import { readCredentials, saveCredentials } from './credentials'
-import { stageFiles } from './staging'
+import { previewFile, stageFiles } from './staging'
 import { downloadImages } from './download'
 import { adminClient, currentUser, resetClients, signIn, signOut, userClient } from './supabase'
 import type { AppConfigInput, AppStatus, Outcome, SavedLogin, TagSuggestion } from '../shared/api'
@@ -127,6 +127,17 @@ export function registerIpc(): void {
   ipcMain.handle('files:stage', async (_event, paths: unknown) => {
     const parsed = z.array(z.string().min(1)).max(200).safeParse(paths)
     return parsed.success ? stageFiles(parsed.data) : []
+  })
+
+  /**
+   * The full-size look a clicked row asks for. Deliberately not part of staging: the
+   * queue would otherwise be carrying one of these per file, in the window, forever.
+   * The path is checked against the queue by nothing — it is one the renderer was given
+   * by `files:stage`, and reading an image the user picked is what this app is for.
+   */
+  ipcMain.handle('files:preview', async (_event, path: unknown): Promise<string> => {
+    const parsed = z.string().min(1).safeParse(path)
+    return parsed.success ? previewFile(parsed.data) : ''
   })
 
   /**
