@@ -27,6 +27,10 @@ npm run desktop:dev        # opens the window with hot reload
 npm run desktop:package    # builds an installer into packages/desktop/dist
 ```
 
+`desktop:package` empties `dist/` and `out/` first. The installer is named for the
+version, so without that the folder just accumulates one file per release you ever built
+and the newest is only obvious if you read the numbers.
+
 On first launch the app asks which board it uploads to — project URL, anon key, service
 role key, and optionally the site's address so a finished post can be opened in your
 browser. A checkout is no different: it reads no environment and no `.env.local`, so the
