@@ -3,8 +3,7 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getTagById } from '@/lib/data/tags'
 import { searchPosts } from '@/lib/data/search'
-import { PostGrid } from '@/components/post-grid'
-import { Pagination } from '@/components/pagination'
+import { PostFeed } from '@/components/post-feed'
 import { SearchHeader } from '@/components/search-header'
 import { SetupNotice } from '@/components/setup-notice'
 import { NavProgress } from '@/components/nav-progress'
@@ -113,10 +112,15 @@ export default async function TagPage({ params, searchParams }: PageProps<'/tags
           No posts carry this tag.
         </p>
       ) : (
-        <PostGrid posts={posts} />
+        <PostFeed
+          key={href(tag.id, page)}
+          initialPosts={posts}
+          query={tag.name}
+          page={page}
+          hasMore={page < pageCount}
+          nextHref={href(tag.id, page + 1)}
+        />
       )}
-
-      <Pagination page={page} pageCount={pageCount} buildHref={(p) => href(tag.id, p)} />
     </div>
   )
 }

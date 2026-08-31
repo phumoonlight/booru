@@ -74,13 +74,88 @@ async function postsWithAnyTag(supabase: ServerClient, names: string[]): Promise
 }
 
 /**
- * Multi-tag search: AND over includes, NOT over excludes.
- * An empty query returns the whole gallery, so this backs plain browsing too.
- * Ratings narrow only when the query says so — nothing is hidden by default.
+ * What a query narrows to, once tag names are resolved: a rating whitelist and two id
+ * lists. `null` back from here means the query is provably empty — a name nobody has
+ * used, or an include set the excludes cancel out — and there is nothing left worth
+ * asking Postgres.
  *
  * Tag membership is resolved to plain id lists first, leaving the posts request with
  * only what PostgREST does well: filter, order, count. The lists are bounded by the
  * tags' post_count, and browsing with no tags at all skips them entirely.
+ */
+type PostFilters = {
+  allowedRatings: Rating[] | null
+  onlyIds: number[] | null
+  notIds: number[]
+}
+
+async function resolveFilters(
+  supabase: ServerClient,
+  query: string
+): Promise<PostFilters | null> {
+  const { include, exclude, ratings, excludeRatings } = splitRatings(parseSearchQuery(query))
+  const allowedRatings = resolveRatings({ ratings, excludeRatings })
+
+  let onlyIds: number[] | null = null
+  if (include.length > 0) {
+    onlyIds = await postsWithAllTags(supabase, include)
+    if (onlyIds.length === 0) return null
+  }
+
+  let notIds = exclude.length > 0 ? await postsWithAnyTag(supabase, exclude) : []
+  if (onlyIds && notIds.length > 0) {
+    // Both sets are already in hand, so subtract here instead of sending a second
+    // id list down the wire
+    const banned = new Set(notIds)
+    onlyIds = onlyIds.filter((id) => !banned.has(id))
+    notIds = []
+    if (onlyIds.length === 0) return null
+  }
+
+  return { allowedRatings, onlyIds, notIds }
+}
+
+/**
+ * The posts request itself, newest id first. Two ways to ask for a slice of it:
+ *
+ * - `page` — offset paging, and the only mode that pays for `count: 'exact'`, because
+ *   a page *number* is meaningless without knowing how many there are.
+ * - `beforeId` — keyset paging, what the feed appends with. It costs no count, and it
+ *   cannot skip or repeat a post when an upload lands mid-scroll: `id < cursor` still
+ *   names the same rows it did a minute ago, where `offset 48` quietly slides.
+ */
+async function readPosts(
+  supabase: ServerClient,
+  filters: PostFilters,
+  { perPage, page, beforeId }: { perPage: number; page?: number; beforeId?: number }
+): Promise<{ posts: Post[]; total: number }> {
+  const wantsTotal = page !== undefined
+
+  let posts = supabase.from('posts').select(POST_COLUMNS, {
+    count: wantsTotal ? 'exact' : undefined,
+  })
+  if (filters.allowedRatings) posts = posts.in('rating', filters.allowedRatings)
+  if (filters.onlyIds) posts = posts.in('id', filters.onlyIds)
+  if (filters.notIds.length > 0) posts = posts.not('id', 'in', `(${filters.notIds.join(',')})`)
+  if (beforeId !== undefined) posts = posts.lt('id', beforeId)
+
+  const from = page !== undefined ? (page - 1) * perPage : 0
+  const { data, count, error } = await posts
+    .order('id', { ascending: false })
+    .range(from, from + perPage - 1)
+  if (error) throw new Error(`Post read failed: ${error.message}`)
+
+  // `count: 'exact'` counts the filtered set, not the page — what page numbers need
+  return { posts: (data ?? []) as Post[], total: count ?? 0 }
+}
+
+/**
+ * Multi-tag search: AND over includes, NOT over excludes.
+ * An empty query returns the whole gallery, so this backs plain browsing too.
+ * Ratings narrow only when the query says so — nothing is hidden by default.
+ *
+ * This is the first screenful — the one the server renders and a crawler sees.
+ * `searchPostsAfter` continues it.
  */
 export async function searchPosts({
   query = '',
@@ -93,49 +168,47 @@ export async function searchPosts({
 } = {}): Promise<PostPage> {
   const empty: PostPage = { posts: [], total: 0, page, pageCount: 0 }
 
-  const { include, exclude, ratings, excludeRatings } = splitRatings(parseSearchQuery(query))
-  const allowedRatings: Rating[] | null = resolveRatings({ ratings, excludeRatings })
-  const supabase = await createClient()
-
   try {
-    let onlyIds: number[] | null = null
-    if (include.length > 0) {
-      onlyIds = await postsWithAllTags(supabase, include)
-      if (onlyIds.length === 0) return empty
-    }
+    const supabase = await createClient()
+    const filters = await resolveFilters(supabase, query)
+    if (!filters) return empty
 
-    let notIds = exclude.length > 0 ? await postsWithAnyTag(supabase, exclude) : []
-    if (onlyIds && notIds.length > 0) {
-      // Both sets are already in hand, so subtract here instead of sending a second
-      // id list down the wire
-      const banned = new Set(notIds)
-      onlyIds = onlyIds.filter((id) => !banned.has(id))
-      notIds = []
-      if (onlyIds.length === 0) return empty
-    }
-
-    let posts = supabase.from('posts').select(POST_COLUMNS, { count: 'exact' })
-    if (allowedRatings) posts = posts.in('rating', allowedRatings)
-    if (onlyIds) posts = posts.in('id', onlyIds)
-    if (notIds.length > 0) posts = posts.not('id', 'in', `(${notIds.join(',')})`)
-
-    const from = (page - 1) * perPage
-    const { data, count, error } = await posts
-      .order('id', { ascending: false })
-      .range(from, from + perPage - 1)
-    if (error) throw new Error(`Post read failed: ${error.message}`)
-
-    // `count: 'exact'` counts the filtered set, not the page — what pagination needs
-    const total = count ?? 0
-    return {
-      posts: (data ?? []) as Post[],
-      total,
-      page,
-      pageCount: Math.ceil(total / perPage),
-    }
+    const { posts, total } = await readPosts(supabase, filters, { perPage, page })
+    return { posts, total, page, pageCount: Math.ceil(total / perPage) }
   } catch (error) {
     // The grid renders empty rather than throwing, so the reason has to be logged
     console.error('searchPosts failed:', error)
+    return empty
+  }
+}
+
+/**
+ * The chunk after a post already on screen — what the feed asks for as you scroll.
+ *
+ * It reads one row more than it returns, and that spare row is the whole answer to
+ * "is there more": a second query counting the rest would cost a full scan of the
+ * filtered set on every chunk, to render one button.
+ */
+export async function searchPostsAfter({
+  query = '',
+  beforeId,
+  perPage = POSTS_PER_PAGE,
+}: {
+  query?: string
+  beforeId: number
+  perPage?: number
+}): Promise<{ posts: Post[]; hasMore: boolean }> {
+  const empty = { posts: [], hasMore: false }
+
+  try {
+    const supabase = await createClient()
+    const filters = await resolveFilters(supabase, query)
+    if (!filters) return empty
+
+    const { posts } = await readPosts(supabase, filters, { perPage: perPage + 1, beforeId })
+    return { posts: posts.slice(0, perPage), hasMore: posts.length > perPage }
+  } catch (error) {
+    console.error('searchPostsAfter failed:', error)
     return empty
   }
 }

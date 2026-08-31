@@ -10,6 +10,11 @@ export function PostCard({ post }: { post: Post }) {
     // from spilling past the thumb. See `lib/rating-blur.ts`.
     <Link
       href={`/posts/${post.id}`}
+      // A new tab, because the grid is a feed now: following a post in place throws
+      // away every chunk loaded below the fold, and coming back lands you at the top
+      // of whichever page the URL had reached rather than on the thumbnail you left.
+      target="_blank"
+      rel="noopener"
       data-rating={post.rating}
       className="group block h-full overflow-hidden bg-surface"
     >

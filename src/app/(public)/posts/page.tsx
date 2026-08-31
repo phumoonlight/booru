@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { searchPosts, getTagsForPosts, getRatingCounts } from '@/lib/data/search'
-import { PostGrid } from '@/components/post-grid'
-import { Pagination } from '@/components/pagination'
+import { PostFeed } from '@/components/post-feed'
 import { SearchHeader } from '@/components/search-header'
 import { TagDrawer } from '@/components/tag-drawer'
 import { GroupedTagList } from '@/components/tag-list'
@@ -111,9 +110,17 @@ export default async function PostsPage({ searchParams }: PageProps<'/posts'>) {
                   : 'No posts yet — the first upload will show up here.'}
             </p>
           ) : (
-            <PostGrid posts={posts} />
+            <PostFeed
+              // A new search is a new feed, not more of the old one: the key throws the
+              // appended chunks away rather than letting them outlive their query.
+              key={searchHref(query, page)}
+              initialPosts={posts}
+              query={query}
+              page={page}
+              hasMore={page < pageCount}
+              nextHref={searchHref(query, page + 1)}
+            />
           )}
-          <Pagination page={page} pageCount={pageCount} buildHref={(p) => searchHref(query, p)} />
         </div>
       </div>
     </div>
