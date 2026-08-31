@@ -221,10 +221,13 @@ async function setPostTags(
 }
 
 /**
- * Tags whose name contains `query`, most used first — backs the tag field's autocomplete.
- * A substring match, not a prefix one, so typing `hair` still surfaces `black_hair`.
+ * Tags whose name starts with `query`, most used first — backs the tag field's autocomplete.
+ * A prefix match, the same shape the search bar's suggestions have: a substring match put
+ * whatever was popular ahead of the tag being typed — `hair` offered `black_hair` before
+ * `hair` itself — and a tag is reached by its own opening far more often than by a word
+ * buried in it.
  * `_` is a LIKE wildcard and nearly every multi-word tag carries one, so it's escaped:
- * otherwise `black_hair` would also match `blackXhair`.
+ * otherwise `black_h` would also match `blackXh`.
  */
 export async function searchTags(
   supabase: BooruClient,
@@ -237,7 +240,7 @@ export async function searchTags(
   const { data } = await supabase
     .from('tags')
     .select('id, name, category, post_count')
-    .ilike('name', `%${needle}%`)
+    .ilike('name', `${needle}%`)
     .order('post_count', { ascending: false })
     .order('name')
     .limit(limit)
