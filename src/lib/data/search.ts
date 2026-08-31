@@ -3,7 +3,19 @@ import { POST_COLUMNS, type Post, type PostPage } from '@/lib/data/posts'
 import type { Tag } from '@/lib/tags'
 import { parseSearchQuery, RATINGS, resolveRatings, splitQuery, type Rating } from '@/lib/search'
 
-export const POSTS_PER_PAGE = 24
+/**
+ * The opening screenful, and the default read size for anything that doesn't say
+ * otherwise. Small because it is the one read a visitor waits on with nothing on
+ * screen — the feed covers the rest before they reach it.
+ */
+export const POSTS_PER_PAGE = 10
+
+/**
+ * What each scroll appends after that. Kept separate from the opening read even while
+ * the two numbers agree: one is a cold wait, the other is prefetched ahead of the
+ * viewport, so they answer to different things and get tuned apart.
+ */
+export const FEED_CHUNK_SIZE = 10
 
 // PostgREST answers a request with one page of rows, so anything that has to be
 // complete before it can be reasoned about — every post behind a tag — is read in

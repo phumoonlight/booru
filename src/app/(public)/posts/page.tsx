@@ -1,5 +1,10 @@
 import type { Metadata } from 'next'
-import { searchPosts, getTagsForPosts, getRatingCounts } from '@/lib/data/search'
+import {
+  searchPosts,
+  getTagsForPosts,
+  getRatingCounts,
+  FEED_CHUNK_SIZE,
+} from '@/lib/data/search'
 import { PostFeed } from '@/components/post-feed'
 import { SavedQueries } from '@/components/saved-queries'
 import { SearchHeader } from '@/components/search-header'
@@ -124,6 +129,7 @@ export default async function PostsPage({ searchParams }: PageProps<'/posts'>) {
               initialPosts={posts}
               query={query}
               hasMore={hasMore}
+              perPage={FEED_CHUNK_SIZE}
               resumable
             />
           )}

@@ -20,7 +20,7 @@ const PREFETCH_MARGIN = '800px'
 function ChunkDivider({ firstId }: { firstId: number }) {
   return (
     <div aria-hidden className="flex items-center gap-3 py-1 text-xs text-muted">
-      <span className="h-px flex-1 bg-border" />#{firstId} and older
+      <span className="h-px flex-1 bg-border" />#{firstId}
       <span className="h-px flex-1 bg-border" />
     </div>
   )
