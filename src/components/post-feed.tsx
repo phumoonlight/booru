@@ -8,8 +8,15 @@ import { NavProgress } from '@/components/nav-progress'
 import { loadMorePosts } from '@/lib/actions/search'
 import { searchHref, withStart } from '@/lib/search'
 
-/** How close to the sentinel the viewport gets before the next chunk is asked for. */
-const PREFETCH_MARGIN = '800px'
+/**
+ * How close to the sentinel the viewport gets before the next chunk is asked for.
+ *
+ * Deliberately less than a row: a chunk is ten posts now, so a generous lookahead
+ * chain-fired — the chunk landed, the sentinel was still inside the margin, and the next
+ * request went out before the reader had scrolled at all. Half a screen of lookahead
+ * cost nothing when a chunk was two dozen posts and everything when it is ten.
+ */
+const PREFETCH_MARGIN = '120px'
 
 /**
  * The seam between two loaded chunks, labelled with the post the chunk starts at. A feed
