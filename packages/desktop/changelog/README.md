@@ -1,14 +1,15 @@
 # Changelog
 
-One file per release, named for the version — `1.0.0.md`. A folder rather than the one
-long `CHANGELOG.md` every project grows: a release's notes are written once and never
-touched again, so appending to a shared file only produces conflicts and a diff that
-says nothing about which version changed.
+One file per release, named for the version. A folder rather than one appended
+`CHANGELOG.md`: a release's notes are written once and never edited again, so a shared
+file buys only conflicts and a diff that doesn't say which version changed.
 
-The website is not versioned — it is whatever is deployed — so these cover
-`packages/desktop` alone. The number in the filename is the one `package.json` carries
-and the one the About screen shows; they move together or the app lies about itself.
+Desktop only — the website is not versioned, it is whatever is deployed. The number in
+the filename is the one `package.json` carries and the one About shows; they move
+together or the app lies about itself.
 
-Dates are the day the version was tagged.
+Entries are grouped **Added** / **Changed** / **Fixed**, and say what someone using the
+app would notice.
 
+- [1.0.1](1.0.1.md) — 2026-08-31 — tag autocomplete matches on a prefix.
 - [1.0.0](1.0.0.md) — 2026-08-30 — first installable release.

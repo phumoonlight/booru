@@ -109,6 +109,12 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
   `'global'`, which revokes every refresh token the account holds — logging out of the
   uploader signed out the browser too, and the other way round. Logging out of one place
   means one place.
+- **Releases are a file each in `packages/desktop/changelog/`, named for the version.**
+  Bumping `package.json` and writing that file are the same change — About reads the
+  version, so drift makes the app lie about itself. Keep entries **short**: a heading
+  line, then `### Added` / `### Changed` / `### Fixed` bullets of one or two lines each,
+  written as what a user of the app would notice. The reasoning belongs in the commit and
+  beside the code, not here — a changelog nobody can skim is one nobody reads.
 
 ## Database
 
