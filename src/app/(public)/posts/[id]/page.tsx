@@ -97,7 +97,7 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
   // Running it through the Next optimizer would re-encode it at quality 75 and strip
   // animation — compression belongs to the thumbnail, which the grid uses instead.
   const image = (
-    <div className="flex min-h-0 flex-1 items-start justify-center lg:items-center">
+    <div className="flex min-h-0 flex-1 items-center justify-center">
       {/* The caps resolve against this column while width and height stay auto —
           whichever one binds scales the other with it, so the image can't be squashed. */}
       <Image

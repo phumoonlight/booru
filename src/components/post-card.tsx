@@ -34,7 +34,8 @@ export function PostCard({
         rel="noopener"
         className="block h-full overflow-hidden bg-surface"
       >
-        {/* Full aspect ratio, never cropped — the row height sets the scale */}
+        {/* Full aspect ratio, never cropped — the justified row sizes the <li>, and the box
+            it hands down already carries the thumbnail's ratio */}
       {/*
         `unoptimized`, like the detail image and for the same reason: the thumbnail is
         already the optimizer's output. Upload built it as a 400px-tall AVIF sized for
@@ -60,7 +61,7 @@ export function PostCard({
           unoptimized
           placeholder="blur"
           blurDataURL={BLUR_DATA_URL}
-          className="h-full w-auto max-w-full object-contain transition-opacity group-hover:opacity-90"
+          className="h-full w-full object-contain transition-opacity group-hover:opacity-90"
         />
       </Link>
     </div>

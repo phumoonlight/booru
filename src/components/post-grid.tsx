@@ -1,10 +1,45 @@
+import type { CSSProperties } from 'react'
 import type { Post } from '@/lib/data/posts'
 import { PostCard } from '@/components/post-card'
 import { startOf } from '@/lib/search'
 
-// Every item is the same height; ratios survive because the width flexes
-const ROW = 'flex flex-wrap gap-2'
-const ITEM_HEIGHT = 'h-60 sm:h-70 lg:h-80'
+/**
+ * Justified rows, the way Google Photos lays a gallery out: every row spans the full
+ * width, and the row's height is whatever makes that true, so ratios survive untouched.
+ *
+ * It is pure flexbox — no measuring pass, no client component, so the grid stays a plain
+ * server render. The trick is that an item's `flex-grow` and its `flex-basis` are both
+ * proportional to its aspect ratio. Free space is then handed out in the same proportion
+ * as the bases, so every item in a row ends at `ratio × H` for one shared H: the row
+ * fills the line exactly and nothing is squashed or cropped. (Flexbox subtracts the gaps
+ * before distributing, so the gutters don't spoil the fit.)
+ *
+ * Sizing is a band rather than a number. Wrapping happens at the basis, so the basis is
+ * the *shortest* a row may be and the cap is the tallest — items are laid out small and
+ * then grown into the line. The cap is what saves the ragged last row of a chunk: without
+ * it a single leftover thumb would stretch across the whole width. Every item caps at the
+ * same row height, so a capped row stays uniform, it just stops short of the right edge.
+ */
+const ROW = 'flex flex-wrap gap-1 [--row-h:15rem] sm:[--row-h:17.5rem] lg:[--row-h:20rem]'
+const MIN_ROW = 0.75
+// 1.25 × 20rem is 400px on desktop — exactly THUMB_MAX_HEIGHT, so a row never upscales
+// past the pixels the thumbnail actually has.
+const MAX_ROW = 1.25
+
+/** Thumbnails are bounded to 800×400 (`lib/imgcmp/for-thumbnail.ts`), so a panorama's
+    thumb is at most 2:1 however wide the post is. Laying it out at the post's ratio
+    would reserve width the image can't fill. */
+const MAX_RATIO = 2
+
+function itemStyle(width: number, height: number): CSSProperties {
+  const ratio = Math.min(width / Math.max(height, 1), MAX_RATIO)
+  return {
+    flexGrow: ratio * 100,
+    flexBasis: `calc(${ratio} * var(--row-h) * ${MIN_ROW})`,
+    maxWidth: `calc(${ratio} * var(--row-h) * ${MAX_ROW})`,
+    aspectRatio: ratio,
+  }
+}
 
 /** `query` rides along for the cards' 🔖 badge, which adds its cursor to whatever
     search is on screen. Parsed once here rather than per card. */
@@ -14,7 +49,7 @@ export function PostGrid({ posts, query = '' }: { posts: Post[]; query?: string 
   return (
     <ul className={ROW}>
       {posts.map((post) => (
-        <li key={post.id} className={ITEM_HEIGHT}>
+        <li key={post.id} className="min-w-0" style={itemStyle(post.width, post.height)}>
           <PostCard post={post} query={query} active={post.id === start} />
         </li>
       ))}
@@ -22,8 +57,9 @@ export function PostGrid({ posts, query = '' }: { posts: Post[]; query?: string 
   )
 }
 
-// Cycled so the placeholder row looks like the ragged widths of real thumbs
-const SKELETON_WIDTHS = ['w-28', 'w-40', 'w-32', 'w-24', 'w-36']
+// Cycled so the placeholder row has the ragged ratios of real thumbs — and, because the
+// ratios drive the layout now, so that it wraps into rows the same way one will.
+const SKELETON_RATIOS = [0.7, 1.5, 0.8, 1, 1.3]
 
 export function PostGridSkeleton({ count = 12 }: { count?: number }) {
   return (
@@ -31,9 +67,8 @@ export function PostGridSkeleton({ count = 12 }: { count?: number }) {
       {Array.from({ length: count }, (_, i) => (
         <li
           key={i}
-          className={`animate-pulse bg-surface ${ITEM_HEIGHT} ${
-            SKELETON_WIDTHS[i % SKELETON_WIDTHS.length]
-          }`}
+          className="min-w-0 animate-pulse bg-surface"
+          style={itemStyle(SKELETON_RATIOS[i % SKELETON_RATIOS.length], 1)}
         />
       ))}
     </ul>

@@ -1,7 +1,7 @@
 import sharp from 'sharp'
 
-// The grid scales thumbnails by row height, not by their longest side (`h-60` /
-// `sm:h-70` / `lg:h-80` in post-grid.tsx — 240/280/320px), so height is what has to be
+// The grid scales thumbnails by row height, not by their longest side (`--row-h` in
+// post-grid.tsx — 240/280/320px, and up to 1.25x that), so height is what has to be
 // guaranteed. Bounding the longest side left every landscape thumb short: a 16:9 image
 // capped at 400 wide is only 225 tall, and the grid stretched that to 320 — a 1.4x
 // upscale, worse the wider the image. Bounding height instead makes pixel density
