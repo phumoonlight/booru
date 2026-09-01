@@ -109,7 +109,7 @@ The Danbooru reference is desktop-shaped; translate it like this:
 |---|---|---|
 | Fixed left sidebar (search + tag list) | Sticky top search bar; tag list in a slide-up drawer ("Tags" button) | Left sidebar returns, ~240px |
 | Dense thumbnail grid | 2–3 column grid, larger tap targets | 5–6 columns |
-| Top nav bar with many links | Everything in the sticky top bar: Pubooru · Tags · Log in/out · Upload(signed-in) | Same bar, more room |
+| Top nav bar with many links | Everything in the sticky top bar: Pubooru · Tags · Log in/out. No Upload link — /upload still answers, but uploading is the desktop app's job | Same bar, more room |
 | Pagination row | A feed: the newest screenful is server-rendered, older ones append as you reach the bottom. No page numbers — `start:<id>` in the query is the only cursor | Same |
 | Post page: image + sidebar metadata | Image full-width, tags/metadata below | Two-column |
 

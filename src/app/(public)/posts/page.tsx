@@ -118,7 +118,7 @@ export default async function PostsPage({ searchParams }: PageProps<'/posts'>) {
               {query
                 ? 'No posts match that search.'
                 : canUpload
-                  ? 'No posts yet — use Upload to add the first one.'
+                  ? 'No posts yet — the desktop uploader adds the first one.'
                   : 'No posts yet — the first upload will show up here.'}
             </p>
           ) : (

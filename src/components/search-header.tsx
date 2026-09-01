@@ -11,7 +11,12 @@ import { SITE_NAME } from '@/lib/site'
  * since the bottom tab bar was dropped, the site's only navigation. Rendered per page
  * rather than in the layout because only pages can read searchParams, and the bar has
  * to reflect the active query.
- * Signed-in users also get the link to /upload here, so it is reachable from every page.
+ * No link to /upload. The page still works and still answers to its own address, but
+ * offering it from every page advertises the one thing this deployment is bad at: the
+ * compression an upload needs is seconds of CPU, and Vercel's free tier bills that by
+ * the second and kills the function at ten, so anything but a small image fails after
+ * the wait rather than before it. Uploading is the desktop app's job
+ * (`packages/desktop`), which is why the entry point is gone instead of the page.
  * `showSearch` drops the input for pages that are already one fixed listing (a tag's
  * own page) — the nav above it is the part every page still needs.
  */
@@ -39,12 +44,6 @@ export async function SearchHeader({
             🏷️ Tags
             <NavProgress />
           </Link>
-          {profile && (
-            <Link href="/upload" className="text-sm text-muted hover:text-foreground">
-              ⬆️ Upload
-              <NavProgress />
-            </Link>
-          )}
           {profile ? (
             <AccountMenu username={profile.username} />
           ) : (
@@ -74,7 +73,6 @@ export function SearchHeaderSkeleton() {
         <div className="h-7 w-32 animate-pulse rounded bg-surface sm:h-8" />
         <div className="flex items-center gap-3">
           <div className="h-5 w-14 animate-pulse rounded bg-surface" />
-          <div className="h-5 w-16 animate-pulse rounded bg-surface" />
           <div className="h-5 w-16 animate-pulse rounded bg-surface" />
         </div>
       </div>
