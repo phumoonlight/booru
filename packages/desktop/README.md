@@ -14,6 +14,14 @@ Run the same code on your own machine and those ceilings are someone else's prob
 Here a file may be **50MB and 100MP**, and nothing is on a clock
 ([`src/main/limits.ts`](src/main/limits.ts)).
 
+What it does not do is take the whole machine while it works. libvips spreads one encode
+across every core it can see, which on a 16-core desktop is 100% CPU for as long as a
+large image takes, and everything else on the desk stutters. So the app encodes on half
+the cores at below-normal priority by default — both adjustable under Compression in
+settings. Neither knob touches `effort`, so nothing is traded away: fewer threads is the
+same picture at the same settings, a little slower and (aom tiles being what they are) a
+shade smaller. The measurements are in [`src/main/cpu.ts`](src/main/cpu.ts).
+
 Everything else is identical, because it is literally the same code: the upload pipeline,
 the post write path, the tag queries and both image compressors are compiled straight out
 of `../../src` through the `@web` alias. There is no second definition of what a post is.
@@ -31,14 +39,23 @@ npm run desktop:package    # builds an installer into packages/desktop/dist
 version, so without that the folder just accumulates one file per release you ever built
 and the newest is only obvious if you read the numbers.
 
-On first launch the app asks which board it uploads to — project URL, anon key, service
-role key, and optionally the site's address so a finished post can be opened in your
-browser. A checkout is no different: it reads no environment and no `.env.local`, so the
-setup screen every installed copy meets is the one development runs too.
-They are kept in `save.json` in the app's data folder, as plain readable text — service
-role key included, so treat that folder as the secret it is. `desktop:dev` uses a folder
-of its own (`pubooru-desktop-dev` beside `pubooru-desktop`), so working on the app never
-disturbs the copy you use, and both can be open at once.
+Both read the repo's own environment file and **require all four values** —
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+and `NEXT_PUBLIC_SITE_URL` (see `.env.example`). A missing one fails the build and names
+what is missing, rather than producing an installer that cannot reach anything. The
+website treats the site URL as optional because Vercel supplies a deployment URL to fall
+back on; nothing here does, and it is how a finished post gets opened on the board.
+
+Which board a copy talks to is therefore decided when it is built, not by whoever runs
+it. There is no setup screen: the app opens on a login form, and Settings shows the
+project it was built for as a readout. Earlier versions asked for those four values on
+first launch and kept them in `save.json`, which put a service-role key on every machine
+that ran the app — a copy this version deletes on startup if it finds one.
+
+What is still in `save.json` is the session, the "remember me" credentials and the
+compression preferences, as plain readable text. `desktop:dev` uses a folder of its own
+(`pubooru-desktop-dev` beside `pubooru-desktop`), so working on the app never disturbs
+the copy you use, and both can be open at once.
 
 Sign in with an existing account. There is no signup here any more than there is on the
 website.

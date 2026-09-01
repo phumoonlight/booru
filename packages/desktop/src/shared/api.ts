@@ -11,11 +11,22 @@ import type { UploadResult } from '@web/lib/upload/pipeline'
  * a channel that changes shape breaks all three at once instead of at runtime.
  */
 
-export type AppConfigInput = {
-  supabaseUrl: string
-  supabaseAnonKey: string
-  supabaseServiceRoleKey: string
-  siteUrl: string
+/**
+ * Scheduling priority for the process that encodes. Declared here rather than in
+ * `main/cpu.ts`, where it is used, because the settings screen offers the choice and the
+ * renderer cannot import a module that pulls in sharp.
+ */
+export type EncodePriority = 'low' | 'below-normal' | 'normal'
+
+/**
+ * The only settings the window can change. Which board the app talks to is compiled into
+ * the build (`main/config.ts`) — these two are about the machine it happens to run on.
+ */
+export type PreferencesInput = {
+  /** Cores the compressor may use. Clamped to what the machine has — `main/cpu.ts`. */
+  encodeThreads: number
+  /** How hard the app argues for those cores against everything else running. */
+  encodePriority: EncodePriority
 }
 
 export type SignedInUser = {
@@ -26,16 +37,22 @@ export type SignedInUser = {
 
 export type AppStatus = {
   /**
-   * False until the project URL and both keys are known — the desktop equivalent of
-   * `isSupabaseConfigured()` gating the web's `<SetupNotice />`.
+   * False only if this build was made without the project's values, which the build
+   * itself refuses to do — the desktop equivalent of `isSupabaseConfigured()` gating the
+   * web's `<SetupNotice />`, kept so a broken bundle explains itself instead of failing
+   * inside a Supabase call.
    */
   configured: boolean
   user: SignedInUser | null
-  /** Where a finished post can be opened, or '' if the board's address was never given. */
+  /** Where a finished post can be opened. Compiled in, and shown on the settings screen. */
   siteUrl: string
+  /** The project this build talks to. Shown on the settings screen; no key ever is. */
+  supabaseUrl: string
   /** What the About screen shows, and what a bug report needs: the app and the runtime under it. */
   versions: { app: string; electron: string; chrome: string }
   limits: { maxFileSize: number; maxFileSizeLabel: string; maxPixels: number }
+  /** What the machine has, and what the encoder is currently running with. */
+  cpu: { count: number; threads: number; priority: EncodePriority }
 }
 
 /**
@@ -72,8 +89,8 @@ export type SavedLogin = { email: string; password: string }
 
 export type PostAppApi = {
   getStatus: () => Promise<AppStatus>
-  saveConfig: (config: AppConfigInput) => Promise<Outcome>
-  readConfig: () => Promise<AppConfigInput | null>
+  /** Writes and applies the compression preferences, answering with what was stored. */
+  savePreferences: (preferences: PreferencesInput) => Promise<PreferencesInput>
   /** `remember` writes the credentials to the save file; false wipes what was there. */
   logIn: (email: string, password: string, remember: boolean) => Promise<Outcome>
   /** The remembered credentials, or null — the login form prefills itself from this. */
@@ -96,8 +113,8 @@ export type PostAppApi = {
   suggestTags: (query: string) => Promise<TagSuggestion[]>
   uploadPost: (request: UploadRequest) => Promise<UploadResult>
   openExternal: (url: string) => Promise<void>
-  /** Reveals the stored settings file in the OS file manager. */
-  openConfigFolder: () => Promise<void>
+  /** Reveals `save.json` — session and preferences — in the OS file manager. */
+  openDataFolder: () => Promise<void>
 }
 
 export type { UploadResult } from '@web/lib/upload/pipeline'

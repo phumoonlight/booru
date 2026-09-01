@@ -9,19 +9,21 @@ import { app } from 'electron'
  * It was three files sealed with Electron's `safeStorage` (DPAPI / Keychain /
  * libsecret). That is gone by choice: a sealed file cannot be inspected, hand-edited or
  * copied to another machine, and a key that the OS can no longer produce takes the
- * settings with it. Plain text costs the protection that sealing gave — anything able
- * to read this folder now reads the service-role key, which bypasses RLS for the whole
- * project, and the account password if the login screen was told to remember it. The
- * file is written 0600 so it is at least the user's own; on Windows that is advisory.
+ * settings with it. What plain text costs is smaller than it was — the service-role key
+ * lives in the bundle now, not in here — but the session token does sit in this file,
+ * and the account password too if the login screen was told to remember it. It is
+ * written 0600 so it is at least the user's own; on Windows that is advisory.
  *
- * The three sections are the same three things as before: the Supabase keys the app was
- * set up with, the signed-in session, and the remembered credentials. They share a file
- * so there is one thing to look at, back up or delete.
+ * Three sections: the compression preferences, the signed-in session, and the
+ * remembered credentials. They share a file so there is one thing to look at, back up
+ * or delete. `config` is a fourth name this type still knows, and only so the keys an
+ * older version wrote there can be deleted — see `dropStoredConfig()`. Which board the
+ * app talks to is compiled into the build now and never written here.
  */
 
 const SAVE_FILE = 'save.json'
 
-export type Section = 'config' | 'session' | 'credentials'
+export type Section = 'preferences' | 'session' | 'credentials' | 'config'
 
 /** Where the save file lives. Exported so the settings screen can point at it. */
 export function savePath(): string {

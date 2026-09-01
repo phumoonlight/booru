@@ -1,15 +1,19 @@
 import { existsSync } from 'node:fs'
 import { app, shell } from 'electron'
-import { readSection, savePath, writeSection } from './save-file'
+import { clearSection, readSection, savePath } from './save-file'
 
 /**
- * What the app needs to reach the board: the same three values the web keeps in its
- * environment, plus `siteUrl`, which is only used to open a finished post in the browser.
+ * Which board this build talks to. The same three values the web keeps in its
+ * environment, plus `siteUrl` for opening a finished post in the browser — read from
+ * the repo's environment file at build time and compiled into this bundle by
+ * `electron.vite.config.ts`, which refuses to build without all four.
  *
- * They come from the settings screen and nowhere else. Reading the repo's `.env.local`
- * during development was convenient in a checkout and a lie everywhere else — the app
- * behaved one way for whoever wrote it and another for whoever installed it, and the
- * screen every real user has to fill in was the one path never exercised.
+ * They used to be typed into a settings screen on first launch and kept in `save.json`.
+ * Two things were wrong with that. The service-role key — which bypasses RLS for the
+ * whole project — ended up in a plain file on every machine that ran the app, written
+ * by the app itself. And an installer was board-agnostic, so the only way to know what
+ * a copy pointed at was to open its settings. A build is now made *for* a board, and
+ * the app asks for nothing but a login.
  *
  * The service-role key is here for the same reason it is in the web's environment: the
  * storage buckets take writes from `authenticated`, but the counter tables
@@ -24,60 +28,51 @@ export type AppConfig = {
   siteUrl: string
 }
 
-let cached: AppConfig | null | undefined
+/** Replaced at build time by `define`. Nothing else in the app may read it. */
+declare const __BUILD_ENV__: AppConfig
 
 /**
- * The same test `isSupabaseConfigured()` makes on the web: real-looking values, not the
- * placeholders `.env.example` ships. Without it the app would fail deep inside a request
- * with an opaque error instead of showing the setup screen.
+ * The same test `isSupabaseConfigured()` makes on the web. The build already refuses
+ * placeholders and blanks, so this only catches a bundle built some other way — but a
+ * window saying which value is missing beats one that fails inside a Supabase call.
  */
 function isUsable(config: AppConfig): boolean {
   return Boolean(
-    config.supabaseUrl &&
-      !config.supabaseUrl.includes('YOUR_PROJECT_REF') &&
-      config.supabaseAnonKey &&
-      !config.supabaseAnonKey.startsWith('YOUR_') &&
-      config.supabaseServiceRoleKey &&
-      !config.supabaseServiceRoleKey.startsWith('YOUR_')
+    config.supabaseUrl && config.supabaseAnonKey && config.supabaseServiceRoleKey && config.siteUrl
   )
 }
 
-export function loadConfig(): AppConfig | null {
-  if (cached !== undefined) return cached
+const compiled: AppConfig | null =
+  typeof __BUILD_ENV__ === 'object' && __BUILD_ENV__ !== null && isUsable(__BUILD_ENV__)
+    ? __BUILD_ENV__
+    : null
 
-  const stored = readSection<AppConfig>('config')
-  cached = stored && isUsable(stored) ? stored : null
-  return cached
+export function loadConfig(): AppConfig | null {
+  return compiled
 }
 
-export function saveConfig(config: AppConfig): { ok: true } | { ok: false; error: string } {
-  const trimmed: AppConfig = {
-    supabaseUrl: config.supabaseUrl.trim().replace(/\/+$/, ''),
-    supabaseAnonKey: config.supabaseAnonKey.trim(),
-    supabaseServiceRoleKey: config.supabaseServiceRoleKey.trim(),
-    siteUrl: config.siteUrl.trim().replace(/\/+$/, ''),
+/**
+ * The settings screen used to write a `config` section here, service-role key and all.
+ * Nothing reads it any more, so it is dropped on the way past rather than left on disk:
+ * an unused copy of a key that bypasses RLS is a liability the app itself created, and
+ * whoever upgrades never thinks to go looking for it.
+ */
+export function dropStoredConfig(): void {
+  if (readSection('config')) {
+    clearSection('config')
+    console.info('Removed the stored connection settings — the build supplies them now.')
   }
-  if (!isUsable(trimmed)) {
-    return { ok: false, error: 'Fill in the project URL, the anon key and the service role key' }
-  }
-  if (!/^https?:\/\//.test(trimmed.supabaseUrl)) {
-    return { ok: false, error: 'The project URL must start with https://' }
-  }
-
-  writeSection('config', trimmed)
-  cached = trimmed
-  return { ok: true }
 }
 
 /**
  * Shows `save.json` in the OS file manager — the answer to "where did that actually
- * go", which is otherwise a path nobody would guess. It is selected rather than opened,
- * so the choice of what reads a file full of keys stays with whoever asked.
+ * go", which is otherwise a path nobody would guess. It holds the session and the
+ * compression preferences now; the keys are in the bundle, not in there.
  *
- * Falls back to the folder when there is no file yet, which is the case until the
- * settings screen has been filled in once.
+ * Falls back to the folder when there is no file yet, which is the case until something
+ * has been saved once.
  */
-export function revealConfig(): void {
+export function revealSaveFile(): void {
   const file = savePath()
   if (existsSync(file)) shell.showItemInFolder(file)
   else void shell.openPath(app.getPath('userData'))

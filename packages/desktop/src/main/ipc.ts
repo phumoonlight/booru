@@ -4,12 +4,14 @@ import { z } from 'zod'
 import { listTags, searchTags } from '@web/lib/data/shared'
 import { createPostFromImage, parsePostMetadata } from '@web/lib/upload/pipeline'
 import { DESKTOP_UPLOAD_LIMITS } from './limits'
-import { loadConfig, revealConfig, saveConfig } from './config'
+import { CPU_COUNT, DEFAULT_ENCODE_PRIORITY, DEFAULT_ENCODE_THREADS } from './cpu'
+import { loadConfig, revealSaveFile } from './config'
+import { loadPreferences, savePreferences } from './preferences'
 import { readCredentials, saveCredentials } from './credentials'
 import { previewFile, stageFiles } from './staging'
 import { downloadImages } from './download'
-import { adminClient, currentUser, resetClients, signIn, signOut, userClient } from './supabase'
-import type { AppConfigInput, AppStatus, Outcome, SavedLogin, TagSuggestion } from '../shared/api'
+import { adminClient, currentUser, signIn, signOut, userClient } from './supabase'
+import type { AppStatus, Outcome, PreferencesInput, SavedLogin, TagSuggestion } from '../shared/api'
 import type { Tag } from '@web/lib/tags'
 import type { UploadResult } from '@web/lib/upload/pipeline'
 
@@ -21,11 +23,14 @@ import type { UploadResult } from '@web/lib/upload/pipeline'
  * The arguments arrive from a page and are treated that way — parsed, not trusted.
  */
 
-const configSchema = z.object({
-  supabaseUrl: z.string(),
-  supabaseAnonKey: z.string(),
-  supabaseServiceRoleKey: z.string(),
-  siteUrl: z.string(),
+// Defaulted rather than required, so a half-filled message from the window still lands
+// on something usable; `savePreferences` clamps whatever comes through here anyway.
+const preferencesSchema = z.object({
+  encodeThreads: z.number().optional().default(DEFAULT_ENCODE_THREADS),
+  encodePriority: z
+    .enum(['low', 'below-normal', 'normal'])
+    .optional()
+    .default(DEFAULT_ENCODE_PRIORITY),
 })
 
 // Same two rules the web's login action applies, so a bad address is refused here
@@ -59,10 +64,12 @@ function isWebUrl(url: string): boolean {
 export function registerIpc(): void {
   ipcMain.handle('app:status', async (): Promise<AppStatus> => {
     const config = loadConfig()
+    const preferences = loadPreferences()
     return {
       configured: config !== null,
       user: config ? await currentUser() : null,
       siteUrl: config?.siteUrl ?? '',
+      supabaseUrl: config?.supabaseUrl ?? '',
       // Read here rather than baked into the bundle: the renderer has no `process`, and
       // `app.getVersion()` is the version electron-builder actually stamped on the copy.
       versions: {
@@ -71,26 +78,30 @@ export function registerIpc(): void {
         chrome: process.versions.chrome,
       },
       limits: DESKTOP_UPLOAD_LIMITS,
+      // The settings screen needs the machine's core count to bound the field it offers,
+      // and what is actually in effect to show before anything has been saved.
+      cpu: {
+        count: CPU_COUNT,
+        threads: preferences.encodeThreads,
+        priority: preferences.encodePriority,
+      },
     }
   })
 
   /**
-   * The settings screen reads back what it saved so the fields aren't blank when it is
-   * reopened to fix one of them. The window is about to let you edit these anyway, and
-   * they are sitting in readable JSON either way.
+   * The only settings there are. Nothing here can fail in a way worth reporting — the
+   * values are clamped, not validated — so the answer is what was actually stored, and
+   * the screen shows that rather than what was typed. Both take effect on the next
+   * image, not the next launch, except raising the priority again on a POSIX host, which
+   * `main/cpu.ts` explains.
    */
-  ipcMain.handle('app:read-config', async (): Promise<AppConfigInput | null> => loadConfig())
-
-  ipcMain.handle('app:save-config', async (_event, raw: unknown): Promise<Outcome> => {
-    const parsed = configSchema.safeParse(raw)
-    if (!parsed.success) return { ok: false, error: 'Settings were not filled in' }
-
-    const saved = saveConfig(parsed.data)
-    if (!saved.ok) return saved
-    // New URL or new keys mean the cached clients are pointing at the old project
-    resetClients()
-    return { ok: true }
-  })
+  ipcMain.handle(
+    'app:save-preferences',
+    async (_event, raw: unknown): Promise<PreferencesInput> => {
+      const parsed = preferencesSchema.safeParse(raw)
+      return savePreferences(parsed.success ? parsed.data : {})
+    }
+  )
 
   ipcMain.handle(
     'auth:log-in',
@@ -223,7 +234,7 @@ export function registerIpc(): void {
   })
 
   /** Shows `save.json` in Explorer/Finder — the settings screen's "where is this?". */
-  ipcMain.handle('shell:open-config-folder', async (): Promise<void> => revealConfig())
+  ipcMain.handle('shell:open-data-folder', async (): Promise<void> => revealSaveFile())
 
   /**
    * Only ever a post on the board. `openExternal` hands the string to the OS, which will

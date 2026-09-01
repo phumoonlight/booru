@@ -3,6 +3,27 @@ import { CATEGORY_COLOR, CATEGORY_LABEL, TAG_CATEGORIES, type Tag } from '@web/l
 import { tagLabel } from '@web/lib/search'
 
 /**
+ * The last index read, kept outside React on purpose. This screen is unmounted whenever
+ * another view is in front of it (`App.tsx`), so component state meant a full re-read of
+ * every tag on the board each time the header was clicked — a round trip to answer a
+ * question whose answer had not changed. It only changes when something uploads, which
+ * is rare enough that a list from a minute ago is the right default and a re-read is
+ * worth asking for: hence 🔄 beside the title, and `invalidateTags()` below.
+ *
+ * Deliberately not persisted. It is a session's convenience, not state worth a file.
+ */
+let cached: { tags: Tag[]; at: number } | null = null
+
+/**
+ * Drops the cache without fetching, so the next visit reads the board again. Called when
+ * an upload lands: a post creates tags and moves counts, which is exactly the moment a
+ * remembered index becomes wrong.
+ */
+export function invalidateTags(): void {
+  cached = null
+}
+
+/**
  * The board's tags, as the website's /tags page draws them: grouped by category in
  * artist → copyright → character → general → meta order, A–Z inside each group, with the
  * post count in a fixed slot on the right. Same read, same cap — `listTags` in
@@ -17,17 +38,36 @@ import { tagLabel } from '@web/lib/search'
  * it in, and the app already sends finished posts to the browser the same way.
  */
 export function TagIndex({ siteUrl }: { siteUrl: string }) {
-  const [tags, setTags] = useState<Tag[] | null>(null)
+  const [tags, setTags] = useState<Tag[] | null>(cached?.tags ?? null)
+  const [fetchedAt, setFetchedAt] = useState<number | null>(cached?.at ?? null)
+  const [loading, setLoading] = useState(false)
 
+  // Only when there is nothing to show. Coming back to this screen paints the list it
+  // painted last time, and the 🔄 beside the title is how you ask for a new one.
   useEffect(() => {
+    if (cached) return
     let alive = true
+    setLoading(true)
     void window.api.listTags().then((next) => {
-      if (alive) setTags(next)
+      cached = { tags: next, at: Date.now() }
+      if (!alive) return
+      setTags(next)
+      setFetchedAt(cached.at)
+      setLoading(false)
     })
     return () => {
       alive = false
     }
   }, [])
+
+  async function refresh() {
+    setLoading(true)
+    const next = await window.api.listTags()
+    cached = { tags: next, at: Date.now() }
+    setTags(next)
+    setFetchedAt(cached.at)
+    setLoading(false)
+  }
 
   const groups = TAG_CATEGORIES.map(
     (category) =>
@@ -41,7 +81,29 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-4">
-      <h1 className="text-lg font-bold tracking-tight">Tags</h1>
+      <div className="flex items-baseline gap-2">
+        <h1 className="text-lg font-bold tracking-tight">Tags</h1>
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          disabled={loading}
+          title="Read the tag index again"
+          aria-label="Refresh tags"
+          className="min-h-9 text-sm text-muted transition-colors hover:text-foreground disabled:text-border"
+        >
+          <span aria-hidden className={loading ? 'inline-block animate-spin' : undefined}>
+            🔄
+          </span>
+        </button>
+        {/* What a cache owes you: how old it is. Time only — a list from an hour ago and
+            one from Tuesday both just say "not now", and the date is never the answer to
+            "should I press refresh". */}
+        {fetchedAt !== null && (
+          <span className="text-xs text-muted">
+            as of {new Date(fetchedAt).toLocaleTimeString([], { timeStyle: 'short' })}
+          </span>
+        )}
+      </div>
 
       {tags === null ? (
         <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">

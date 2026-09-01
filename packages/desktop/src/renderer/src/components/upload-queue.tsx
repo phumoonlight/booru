@@ -3,6 +3,7 @@ import { RATING_LABEL, RATINGS, type Rating } from '@web/lib/search'
 import { TrashIcon } from './icons'
 import { ImageViewer } from './image-viewer'
 import { EMPTY_TAGS, TagField, tagsToInput, type TagFieldValue } from './tag-field'
+import { invalidateTags } from './tag-index'
 import type { AppStatus, StagedFile, StageOutcome, UploadResult } from '../../../shared/api'
 
 type Status = 'ready' | 'uploading' | 'ok' | 'error'
@@ -181,6 +182,9 @@ export function UploadQueue({ status }: { status: AppStatus }) {
 
       if (result.ok) {
         patch(item.file.path, { status: 'ok', postId: result.postId })
+        // The post just created tags and moved counts, so the Tags screen's remembered
+        // index is out of date. Dropped rather than re-read: it may never be looked at.
+        invalidateTags()
       } else {
         patch(item.file.path, {
           status: 'error',

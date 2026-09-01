@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { searchHref } from '@web/lib/search'
 import { About } from './components/about'
 import { AccountMenu } from './components/account-menu'
 import { Login } from './components/login'
@@ -8,11 +9,11 @@ import { UploadQueue } from './components/upload-queue'
 import type { AppStatus } from '../../shared/api'
 
 /**
- * Screens picked by what the app knows: settings until it has a project to talk to,
- * login until someone is signed in, then the queue. The same order the website enforces
- * — `<SetupNotice />`, then the redirect to /login, then /upload — except here the first
- * one is a form rather than a runbook: this app reads no environment, so the four values
- * are typed in wherever it runs.
+ * Screens picked by what the app knows: login until someone is signed in, then the
+ * queue. There is no setup step any more — which board this build talks to was decided
+ * when it was built and compiled in (`main/config.ts`), so the app opens on a login form
+ * and nothing else is ever asked for. Settings is forced open in one case only: a bundle
+ * built without those values, which the build itself refuses to produce.
  *
  * About is the exception to that order: it answers "what am I running", which is a fair
  * question before the app is set up at all, so it is the one view allowed to sit in
@@ -59,15 +60,16 @@ export function App() {
       active ? `text-foreground ${ACTIVE_BAR}` : 'text-muted hover:text-foreground'
     }`
 
-  // Anything that takes the window off the queue. Settings is forced open until there
-  // is a project to talk to, and the login form until someone is signed in.
+  // Anything that takes the window off the queue. Settings is forced open only when the
+  // build carries no project — it is the screen that says so — and the login form until
+  // someone is signed in.
   const over =
     view === 'about' ? (
       <About status={status} />
     ) : !status.configured || view === 'settings' ? (
-      // Nowhere to send them on save: the screen writes as you leave each field, and
-      // the first write that makes a usable config drops this branch on its own.
-      <Settings onChanged={() => void refresh()} />
+      // `onChanged` refreshes the status the compression rows are seeded from; nothing
+      // on this screen can change which board the app talks to any more.
+      <Settings status={status} onChanged={() => void refresh()} />
     ) : !status.user ? (
       <Login onSignedIn={refresh} />
     ) : view === 'tags' ? (
@@ -98,6 +100,23 @@ export function App() {
           <span />
         )}
         <div className="flex items-center gap-2">
+          {/* The gallery this app uploads into, opened in the browser — there is no
+              grid in this window, and following a post from the queue already works
+              that way. Never marked active: it is a link out, not a view, so the tab
+              bar under the others would be a lie about where you are. `searchHref('')`
+              rather than a literal '/posts', which is the web's own rule about which
+              file is allowed to spell that path. */}
+          {status.siteUrl && (
+            <button
+              type="button"
+              onClick={() => void window.api.openExternal(`${status.siteUrl}${searchHref('')}`)}
+              title="Open the board's gallery in your browser"
+              className={navClass(false)}
+            >
+              <span aria-hidden>🖼️</span>
+              Posts
+            </button>
+          )}
           {status.user && (
             <button
               type="button"
@@ -122,7 +141,7 @@ export function App() {
             className={navClass(view === 'settings' || !status.configured)}
           >
             <span aria-hidden>⚙️</span>
-            Connection settings
+            Settings
           </button>
           {/* Signed out, the same corner says so and goes back to the form — from About
               or settings there was otherwise nothing naming the way to it. */}

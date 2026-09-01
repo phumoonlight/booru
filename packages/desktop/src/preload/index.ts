@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { AppConfigInput, PostAppApi, UploadRequest } from '../shared/api'
+import type { PostAppApi, PreferencesInput, UploadRequest } from '../shared/api'
 
 /**
  * The bridge. Nothing but these functions crosses into the page — no `ipcRenderer`, no
@@ -11,8 +11,8 @@ import type { AppConfigInput, PostAppApi, UploadRequest } from '../shared/api'
  */
 const api: PostAppApi = {
   getStatus: () => ipcRenderer.invoke('app:status'),
-  readConfig: () => ipcRenderer.invoke('app:read-config'),
-  saveConfig: (config: AppConfigInput) => ipcRenderer.invoke('app:save-config', config),
+  savePreferences: (preferences: PreferencesInput) =>
+    ipcRenderer.invoke('app:save-preferences', preferences),
   logIn: (email, password, remember) =>
     ipcRenderer.invoke('auth:log-in', email, password, remember),
   readSavedLogin: () => ipcRenderer.invoke('auth:saved-login'),
@@ -26,7 +26,7 @@ const api: PostAppApi = {
   suggestTags: (query) => ipcRenderer.invoke('tags:suggest', query),
   uploadPost: (request: UploadRequest) => ipcRenderer.invoke('post:upload', request),
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
-  openConfigFolder: () => ipcRenderer.invoke('shell:open-config-folder'),
+  openDataFolder: () => ipcRenderer.invoke('shell:open-data-folder'),
 }
 
 contextBridge.exposeInMainWorld('api', api)

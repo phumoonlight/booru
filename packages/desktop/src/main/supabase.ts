@@ -47,9 +47,9 @@ function clients(): { user: SupabaseClient; admin: SupabaseClient } | null {
   const config = loadConfig()
   if (!config) return null
 
-  // Settings can be re-saved while the window is open, and a client caches the URL and
-  // key it was built with, so both are rebuilt whenever the config it was built from is
-  // no longer the current one.
+  // The config is compiled in and cannot change while the window is open, so this is
+  // built once. The comparison stays because a client caches the URL and key it was
+  // made with, and nothing here should quietly outlive the values behind it.
   if (!user || !admin || builtFor !== config) {
     exportConfigToEnv(config)
     user = createClient(config.supabaseUrl, config.supabaseAnonKey, {
@@ -133,11 +133,4 @@ export async function signIn(
 export async function signOut(): Promise<void> {
   await userClient()?.auth.signOut({ scope: 'local' })
   clearSection('session')
-}
-
-/** Forces the next `clients()` call to rebuild — the settings screen just changed them. */
-export function resetClients(): void {
-  user = null
-  admin = null
-  builtFor = null
 }

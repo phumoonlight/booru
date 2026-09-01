@@ -2,6 +2,8 @@ import { join } from 'node:path'
 import { app, BrowserWindow, shell } from 'electron'
 import { registerIpc } from './ipc'
 import { cleanupDownloads } from './download'
+import { dropStoredConfig } from './config'
+import { applyPreferences, loadPreferences } from './preferences'
 
 /**
  * Pubooru's uploader, as a desktop window.
@@ -16,11 +18,10 @@ import { cleanupDownloads } from './download'
 
 // Where the save file lives. Left alone this is the app's display name, which moves
 // whenever the name on the window does, so it is spelled out instead. A checkout gets
-// its own folder: since the settings screen became the only way config gets in, dev and
-// an installed copy would otherwise share one save.json — and testing the setup or login
-// flow means overwriting the keys and session of the app you actually use. It goes first
-// because the single-instance lock below is a file inside this folder, which is also
-// what lets a dev window and an installed one run at the same time.
+// its own folder so a dev window and an installed copy keep their own session and
+// preferences — testing the login flow should not sign out the app you actually use. It
+// goes first because the single-instance lock below is a file inside this folder, which
+// is also what lets a dev window and an installed one run at the same time.
 app.setPath(
   'userData',
   join(app.getPath('appData'), app.isPackaged ? 'pubooru-desktop' : 'pubooru-desktop-dev')
@@ -91,6 +92,13 @@ app.on('second-instance', () => {
 void app.whenReady().then(() => {
   // Windows shows this as the app identity for notifications and the taskbar
   app.setAppUserModelId('dev.pubooru.postapp')
+  // Before anything can be encoded: an upload at effort 9 will take every core it is
+  // given, and being a good neighbour is not something to switch on after the first
+  // image has already pinned the machine (`main/cpu.ts`).
+  applyPreferences(loadPreferences())
+  // An older version kept the project's keys in the save file. This build reads them
+  // from its own bundle, so that copy is deleted rather than left lying about.
+  dropStoredConfig()
   registerIpc()
   createWindow()
 

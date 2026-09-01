@@ -22,7 +22,7 @@ Next.js 16 App Router + Supabase (Postgres, Storage, Auth), Tailwind v4, mobile-
 | `npm run dev` / `build` / `lint` | the only verification the repo has — there is no test runner |
 | `npm run db:push` / `db:push:dry` | apply migrations to the linked Supabase project |
 | `npm run db:list` / `db:reset` / `db:reset:remote` | migration status / local reset / reset the linked project |
-| `npm run desktop:dev` / `desktop:package` | the desktop uploader — window, or a Windows installer |
+| `npm run desktop:dev` / `desktop:package` | the desktop uploader — window, or installer. Both need the four env values |
 | `npm run typecheck -w desktop` | the only check the Electron app has; the root `tsc` excludes `packages/` |
 | `npm run bench:avif` | sweeps sharp's AVIF `effort` over `tests/static/` — sizes and encode times |
 
@@ -75,42 +75,77 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
 
 - **It imports the web's `src/`, it does not copy it** (`@web/*` → `../../src/*`, and
   `@/*` too because the files over there spell each other that way). The pipeline, the
-  write path, both compressors and the pure helpers are one definition.
+  write path, both compressors and the pure helpers are one definition. One catch, in
+  `renderer/src/styles.css`: Tailwind finds class names by *reading files*, and the
+  renderer scans only its own tree, so a web module that holds classes — `CATEGORY_COLOR`
+  in `lib/tags.ts` — has to be named in an `@source` there or it compiles to nothing and
+  the colour silently disappears. Import a web module with classes in it, add the
+  `@source` line.
 - **Its limits are its own** (`src/main/limits.ts`, 50MB / 100MP). `MAX_FILE_SIZE` and
   `MAX_PIXELS` in `lib/upload-limits.ts` are Vercel's numbers and stay Vercel's.
 - Session client writes the post row, service role does storage and the counters — the
   same split as the web, spelled in `createPostFromImage`'s signature.
 - The renderer has no keys, no Node and no network: every capability is one
   `ipcMain.handle` in `src/main/ipc.ts`, and the file's bytes are read on the main side.
-- **Its config is four typed-in values, not an environment.** `main/save-file.ts` keeps
-  everything the app remembers in one readable `save.json` in the app's userData — three
-  sections, `config`, `session` and `credentials`. It was three files sealed with
-  Electron's `safeStorage`; the encryption was dropped deliberately, so the service-role
-  key and the remembered password are now plain text guarded by nothing but the folder,
-  in exchange for a file that can be read, hand-edited and copied. `userData` is pinned in
-  `main/index.ts` rather than defaulting to the app's display name, so renaming the app
-  doesn't move the settings — `pubooru-desktop` packaged, `pubooru-desktop-dev` in a
-  checkout, because `npm run desktop:dev` must not overwrite the keys and session of the
-  copy you actually use (and the split lock lets both run at once). A file that won't parse is treated
-  as absent, costing a re-setup and never a crash. The settings screen is the desktop
-  `<SetupNotice />` and the only way in — the app reads no environment at all, in a
-  checkout as much as in an installed copy, so the screen every user meets first is the
-  one development exercises too. That screen reads as four settings rather than a form:
-  each shows its value with an Edit beside it, and Edit opens that row alone with its own
-  Save. There is no global Save to lose the other three to, and no on-screen notice that
-  the service-role key lands in plain text — this file and the README are the only places
-  that now say so.
-- **Four views, one of them always mounted.** `App.tsx` holds `'upload' | 'tags' |
-  'settings' | 'about'` and the header switches them, with settings forced until there is
-  a config and the login form until there is a session. About is the exception to that
-  order — "what version is this" is a fair question before setup — and carries the
-  versions `app:status` reports, since the renderer has no `process` and a packaged app
-  ships no manifest it can read. Tags is not an exception: it reads the board, so it sits
-  behind the session with the queue, runs `listTags` from `lib/data/shared.ts` (the web's
-  /tags page runs the same one) and opens a tag on the board rather than here — there is
-  no gallery in this window to show it in. The queue is **hidden, not unmounted**, when
-  another view is in front: glancing at About used to throw away a staged, half-tagged
-  queue and orphan an upload already in flight.
+- **It is a good neighbour on purpose** (`main/cpu.ts`). libvips spreads one encode across
+  every core, so an upload used to pin a 16-core machine flat. Two settings now bound it:
+  `sharp.concurrency()` from `encodeThreads` (half the cores by default) and the process's
+  scheduling priority from `encodePriority` (below normal by default, `low`/`normal`
+  offered). Neither is `effort`: thread count, priority and compression settings are
+  independent, and the measured table in that file shows fewer threads coming out
+  *smaller* (fewer aom tiles), costing only wall time. Both are applied before the first
+  encode can start and re-applied on save, since both are process-wide — with one
+  exception noted there: a POSIX host won't let a niced-down process raise itself back,
+  so low → normal takes a restart. Windows, which this app is packaged for, will.
+- **Which board it talks to is compiled in, not typed in.** `electron.vite.config.ts`
+  reads the repo's environment file at build time and `define`s the four values into the
+  main bundle — `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+  `SUPABASE_SERVICE_ROLE_KEY` and `NEXT_PUBLIC_SITE_URL`, all four **required**, the
+  build throwing with the missing names rather than shipping an installer that reaches
+  nothing. The site URL is optional for the website (Vercel supplies a fallback) and is
+  not here: it is how a finished post gets opened. `main/config.ts` reads that one
+  `__BUILD_ENV__` and nothing else; only the main bundle gets the `define`, so no key is
+  ever compiled into a file the window loads. This replaced a four-box setup screen whose
+  cost was a service-role key in a plain file on every machine that ran the app, and an
+  installer nobody could tell the target of — `dropStoredConfig()` deletes that stored
+  copy on startup. A build is now made *for* a board and asks only for a login.
+- **`save.json` holds preferences, session and credentials.** `main/save-file.ts` keeps
+  everything the app remembers in one readable file in the app's userData. It was three
+  files sealed with Electron's `safeStorage`; the encryption was dropped deliberately, in
+  exchange for a file that can be read, hand-edited and copied — the remembered password
+  and the session token are what plain text now costs, the service-role key having moved
+  into the bundle. `userData` is pinned in `main/index.ts` rather than defaulting to the
+  app's display name, so renaming the app doesn't move the settings — `pubooru-desktop`
+  packaged, `pubooru-desktop-dev` in a checkout, so `npm run desktop:dev` can't sign out
+  the copy you actually use (and the split lock lets both run at once). A file that won't
+  parse is treated as absent, costing a re-login and never a crash.
+- **The settings screen is a readout plus two settings.** Connection shows the project
+  and board URLs the build carries — never the keys, which are neither editable nor worth
+  the risk on screen — and says so. Compression is the only editable part: encoder threads
+  as a `<Field />` you type into, priority as a `<Choice />` with no Edit step since the
+  options are already on screen. `main/preferences.ts` owns that `preferences` section and
+  applies as it writes, so a change takes the next image rather than the next launch.
+  Unconfigured — which the build refuses to produce — the same screen is forced open and
+  names the four missing variables instead of letting a Supabase call fail opaquely.
+- **Four views, one of them always mounted** — plus one header item that is not a view.
+  `App.tsx` holds `'upload' | 'tags' | 'settings' | 'about'` and the header switches
+  those, with the login form in front until there is a session (and settings in front of
+  that only for a bundle built with no project). **Posts** is the item that is not a
+  view: it opens the board's gallery in the browser — `searchHref('')`, since that helper
+  is the only thing allowed to spell the listing's path — and is never drawn active,
+  because it goes somewhere else. About is the exception to the screen order, since "what
+  version is this" is a fair question before signing in, and it carries the versions
+  `app:status` reports: the renderer has no `process`, and a packaged app ships no
+  manifest it could read. Tags is not an exception — it reads the board, so it sits behind
+  the session with the queue, runs `listTags` from `lib/data/shared.ts` (the web's /tags
+  page runs the same one) and opens a tag on the board rather than here, there being no
+  gallery in this window to show it in. Its list is **cached in a module-level `let`**
+  rather than in state, because the view is unmounted whenever something is in front of
+  it and every glance was re-reading every tag on the board: 🔄 by the title re-reads on
+  request, the time of the last read sits beside it, and `invalidateTags()` drops the copy
+  when an upload lands — the one moment it is certainly wrong. The queue is **hidden, not
+  unmounted**, when another view is in front: glancing at About used to throw away a
+  staged, half-tagged queue and orphan an upload already in flight.
 - **`signOut({ scope: 'local' })`, here and in `lib/actions/auth.ts`.** The default is
   `'global'`, which revokes every refresh token the account holds — logging out of the
   uploader signed out the browser too, and the other way round. Logging out of one place
@@ -154,6 +189,11 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
 
 - **`src/proxy.ts`, not `middleware.ts`** — Next 16 renamed the convention. It only
   refreshes the session; it guards no routes. Pages check the session themselves.
+- **Nothing on the web links to `/upload` any more.** The page and the action still work
+  and the route still answers, but the header's link is gone: compression is seconds of
+  CPU, Vercel's free tier bills that by the second and kills the function at ten, so an
+  entry point on every page advertises the one thing this deployment does badly. Uploading
+  is the desktop app's job. Don't put the link back without a runtime that can hold it.
 - **The gallery is `/posts`, not `/`** — `/` is a landing page (wordmark, search box,
   emoji post count). `searchHref()` in `lib/search.ts` is the only place that spells the
   listing's path, so tag links, facets and the feed's own links all derive from it;
@@ -182,8 +222,10 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
   "kept out of sitemap.xml and search results" only — nothing is hidden from a visitor.
   Column is free-form text — no check constraint, so a new tier is a code change only.
 - **Buckets are `posts` and `post-thumbnails`**, both AVIF-era: thumbnails are lossy AVIF
-  (400px tall, width capped at 800 for panoramas, `mitchell` kernel — the grid scales by row height, so height is the bound that matters), the post image is lossless AVIF only when it beats the
-  uploaded bytes, otherwise the original byte-for-byte. Paths derive from md5, never stored.
+  (400px tall, width capped at 800 for panoramas, `mitchell` kernel — the grid scales by
+  row height, so height is the bound that matters), the post image is lossless AVIF only
+  when it beats the uploaded bytes, otherwise the original byte-for-byte. Paths derive
+  from md5, never stored.
 - **MD5 is the dedup key on purpose** — collision resistance is not what it's for.
 - **The two encoders live in `lib/imgcmp/`, not in the upload action.** `for-post.ts` and
   `for-thumbnail.ts` take a buffer and hand back a candidate, so the upload action, the
