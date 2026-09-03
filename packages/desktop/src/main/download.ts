@@ -58,15 +58,14 @@ function userAgent(): string {
  *
  * Chromium puts a `net::ERR_…` code on the error it throws, and the codes are the
  * difference between two problems with nothing in common: a board refusing anything that
- * doesn't look like a browser, and a machine that cannot resolve the host at all — the
- * second being what a browser hides by resolving over DNS-over-HTTPS while this app uses
- * the OS resolver. One flat message made those indistinguishable. Anything unmatched
- * keeps its code, which is at least searchable.
+ * doesn't look like a browser, and a machine that cannot resolve the host at all. One
+ * flat message made those indistinguishable. Anything unmatched keeps its code, which is
+ * at least searchable.
  */
 const FETCH_FAILURES: [RegExp, string][] = [
   [
     /ERR_NAME_NOT_RESOLVED|ERR_NAME_RESOLUTION_FAILED/,
-    'That host could not be resolved — your browser may reach it over a DNS this app does not use',
+    'That host could not be resolved — check the address, or whether this network blocks it',
   ],
   [/ERR_INTERNET_DISCONNECTED|ERR_NETWORK_CHANGED/, 'No network connection'],
   [/ERR_(?:CONNECTION_)?TIMED_OUT/, 'The server did not answer in time'],

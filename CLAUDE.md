@@ -146,6 +146,13 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
   when an upload lands — the one moment it is certainly wrong. The queue is **hidden, not
   unmounted**, when another view is in front: glancing at About used to throw away a
   staged, half-tagged queue and orphan an upload already in flight.
+- **It resolves like a browser, not like the host** (`main/dns.ts`). Every open-web fetch
+  it makes is an address dragged out of a browser, and a browser on DoH will happily show
+  an image the machine's own resolver answers NXDOMAIN for. `configureHostResolver` names
+  Google and Cloudflare in `secure` mode — `automatic` only upgrades when the *system's*
+  provider speaks DoH, which is never true on the networks this is for. It reaches only
+  Chromium's stack (the drag downloads); Supabase goes over Node's `fetch` and the OS
+  resolver, which is what makes a DoH-only setting safe to make.
 - **`signOut({ scope: 'local' })`, here and in `lib/actions/auth.ts`.** The default is
   `'global'`, which revokes every refresh token the account holds — logging out of the
   uploader signed out the browser too, and the other way round. Logging out of one place

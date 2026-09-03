@@ -3,6 +3,7 @@ import { app, BrowserWindow, shell } from 'electron'
 import { registerIpc } from './ipc'
 import { cleanupDownloads } from './download'
 import { dropStoredConfig } from './config'
+import { configureDns } from './dns'
 import { applyPreferences, loadPreferences } from './preferences'
 
 /**
@@ -58,6 +59,7 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
+
   mainWindow.on('closed', () => {
     mainWindow = null
   })
@@ -99,6 +101,9 @@ void app.whenReady().then(() => {
   // An older version kept the project's keys in the save file. This build reads them
   // from its own bundle, so that copy is deleted rather than left lying about.
   dropStoredConfig()
+  // Before the first drag can be fetched: images come in as addresses from a browser
+  // that may well resolve them over a DNS this machine does not use (`main/dns.ts`).
+  configureDns()
   registerIpc()
   createWindow()
 
