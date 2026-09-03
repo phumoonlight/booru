@@ -22,3 +22,11 @@ export function TrashIcon() {
     </svg>
   )
 }
+
+export function GripIcon() {
+  return (
+    <svg {...BASE}>
+      <path d="M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01" strokeWidth="2.6" />
+    </svg>
+  )
+}

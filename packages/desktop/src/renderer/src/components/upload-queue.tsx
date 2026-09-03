@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { RATING_LABEL, RATINGS, type Rating } from '@web/lib/search'
-import { TrashIcon } from './icons'
+import { GripIcon, TrashIcon } from './icons'
 import { ImageViewer } from './image-viewer'
 import { EMPTY_TAGS, TagField, tagsToInput, type TagFieldValue } from './tag-field'
 import { invalidateTags } from './tag-index'
@@ -18,6 +18,17 @@ type Staged = {
   postId?: number
 }
 
+/**
+ * The flavour a row's own drag carries. The drop zone wraps the queue, so every reorder
+ * drag passes through its handlers on the way; this is what lets it tell "a row of mine
+ * is moving" from "files are arriving" and keep its hands off the former. A drag from
+ * outside can't set it, and `dataTransfer.types` is readable during dragover, where the
+ * data itself is not.
+ */
+const ROW_MIME = 'application/x-pubooru-row'
+
+const isRowDrag = (transfer: DataTransfer) => transfer.types.includes(ROW_MIME)
+
 function formatSize(bytes: number): string {
   const mb = bytes / 1024 / 1024
   return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
@@ -30,9 +41,12 @@ function formatSize(bytes: number): string {
  * writes the same fields across every staged file at once, for the common case of a set
  * that shares an artist and a rating.
  *
- * Uploads run one at a time: each file is its own bridge call, its own row in the list,
- * and its own failure. A failed row stays staged and editable so pressing Upload again
- * retries just that one.
+ * Uploads run one at a time, top row first, and the list is draggable by the ⠿ handle so
+ * that order is the author's to choose: post ids come out in the order the queue is in,
+ * and a set whose pages or panels arrived in whatever order the file picker sorted them
+ * would otherwise be numbered that way for good. Each file is its own bridge call, its
+ * own row in the list, and its own failure. A failed row stays staged and editable so
+ * pressing Upload again retries just that one.
  *
  * Two things differ from the web, both because the file is already on this machine.
  * Staging is a round trip to the main process, which decodes each image to make the
@@ -58,6 +72,13 @@ export function UploadQueue({ status }: { status: AppStatus }) {
   // The row whose picture is open full-window, held by path so a re-render of the queue
   // can't leave the viewer showing a stale copy of a row that has since been edited.
   const [viewing, setViewing] = useState<string | null>(null)
+  // Reordering, in two parts. `grabbed` is the row whose handle is under the pointer:
+  // only that row is `draggable`, because a permanently draggable row swallows the
+  // click-and-sweep that selects text in the tag and source fields inside it. `dragPath`
+  // is the row actually in flight, which is what greys it out and what a row dragged
+  // over reorders against.
+  const [grabbed, setGrabbed] = useState<string | null>(null)
+  const [dragPath, setDragPath] = useState<string | null>(null)
 
   /**
    * Files never reach the queue unless they can actually be uploaded. The main process
@@ -137,6 +158,25 @@ export function UploadQueue({ status }: { status: AppStatus }) {
     setViewing((current) => (current === path ? null : current))
   }, [])
 
+  /**
+   * Lifts one row out and puts it where another one sits. Called from the *hovered*
+   * row's dragenter rather than from a drop, so the list settles under the pointer as
+   * it moves and the arrangement you see while dragging is the one you get. There is no
+   * separate drop-target state to keep in step, and letting go anywhere — including
+   * outside the window — simply leaves the queue as it already looks.
+   */
+  const moveTo = useCallback((from: string, to: string) => {
+    if (from === to) return
+    setItems((prev) => {
+      const at = prev.findIndex((item) => item.file.path === from)
+      const target = prev.findIndex((item) => item.file.path === to)
+      if (at < 0 || target < 0) return prev
+      const next = [...prev]
+      next.splice(target, 0, ...next.splice(at, 1))
+      return next
+    })
+  }, [])
+
   /** Merges the bulk tags into every staged row and, if one is chosen, sets the rating. */
   function applyToAll() {
     const extra = bulkTags.draft.trim()
@@ -206,6 +246,9 @@ export function UploadQueue({ status }: { status: AppStatus }) {
     <>
       <div
         onDragOver={(event) => {
+          // A row being reordered is not an arrival: no highlight, and no preventDefault,
+          // which would claim the drop for the zone and read no files out of it.
+          if (isRowDrag(event.dataTransfer)) return
           event.preventDefault()
           // Without an explicit copy effect some sources treat the drop as refused
           event.dataTransfer.dropEffect = 'copy'
@@ -213,6 +256,7 @@ export function UploadQueue({ status }: { status: AppStatus }) {
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={(event) => {
+          if (isRowDrag(event.dataTransfer)) return
           event.preventDefault()
           setDragging(false)
 
@@ -311,14 +355,54 @@ export function UploadQueue({ status }: { status: AppStatus }) {
               </div>
             </div>
 
+            <p className="text-xs text-muted">
+              Posts are created top to bottom — drag a row by its handle to reorder.
+            </p>
+
             <ul className="flex flex-col gap-3">
-              {items.map((item) => (
+              {items.map((item, index) => (
                 <li
                   key={item.file.path}
+                  draggable={grabbed === item.file.path}
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = 'move'
+                    event.dataTransfer.setData(ROW_MIME, item.file.path)
+                    setDragPath(item.file.path)
+                  }}
+                  onDragEnter={() => {
+                    if (dragPath) moveTo(dragPath, item.file.path)
+                  }}
+                  onDragOver={(event) => {
+                    if (!dragPath) return
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = 'move'
+                  }}
+                  onDrop={(event) => {
+                    if (dragPath) event.preventDefault()
+                  }}
+                  onDragEnd={() => {
+                    setDragPath(null)
+                    setGrabbed(null)
+                  }}
                   className={`flex flex-col gap-3 rounded-lg border bg-surface p-3 sm:flex-row ${
                     item.status === 'error' ? 'border-red-500/40' : 'border-border'
-                  }`}
+                  } ${dragPath === item.file.path ? 'opacity-40' : ''}`}
                 >
+                  {/* Grab handle. Draggability is switched on by pressing it and off again
+                    when the drag ends, so the rest of the row stays ordinary: a row that
+                    is always draggable can't have text selected in the fields inside it. */}
+                  <button
+                    type="button"
+                    onPointerDown={() => !busy && setGrabbed(item.file.path)}
+                    onPointerUp={() => setGrabbed(null)}
+                    disabled={busy}
+                    title="Drag to reorder"
+                    aria-label={`Reorder ${item.file.name} — currently ${index + 1} of ${items.length}`}
+                    className="flex min-h-9 w-full shrink-0 cursor-grab items-center justify-center rounded-lg border border-border text-muted hover:text-foreground active:cursor-grabbing disabled:cursor-default disabled:opacity-50 sm:min-h-0 sm:w-8 sm:self-stretch"
+                  >
+                    <GripIcon />
+                  </button>
+
                   {/* The thumbnail is the button: 200px is enough to tell files apart and
                     not enough to check one, so clicking the picture opens it full-window. */}
                   <button
