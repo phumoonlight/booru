@@ -9,7 +9,7 @@ import { SetupNotice } from '@/components/setup-notice'
 import { NavProgress } from '@/components/nav-progress'
 import { CATEGORY_COLOR, CATEGORY_LABEL } from '@/components/tag-list'
 import { isSupabaseConfigured } from '@/lib/env'
-import { searchHref, tagLabel } from '@/lib/search'
+import { searchHref, tagLabel } from '@common/search'
 import { SITE_NAME } from '@/lib/site'
 
 /** The tag's own page is addressed by id, so a rename can't break an existing link. */

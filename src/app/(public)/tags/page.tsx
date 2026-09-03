@@ -1,14 +1,14 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { getTags } from '@/lib/data/tags'
-import { TAG_CATEGORIES, type TagCategory } from '@/lib/tags'
+import { TAG_CATEGORIES, type TagCategory } from '@common/tags'
 import { getCurrentProfile } from '@/lib/data/profiles'
 import { CATEGORY_COLOR, CATEGORY_LABEL } from '@/components/tag-list'
 import { SearchHeader } from '@/components/search-header'
 import { NavProgress } from '@/components/nav-progress'
 import { SetupNotice } from '@/components/setup-notice'
 import { isSupabaseConfigured } from '@/lib/env'
-import { tagLabel } from '@/lib/search'
+import { tagLabel } from '@common/search'
 
 export const metadata: Metadata = {
   title: 'Tags',

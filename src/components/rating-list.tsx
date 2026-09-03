@@ -10,7 +10,7 @@ import {
   withTag,
   withoutTag,
   type Rating,
-} from '@/lib/search'
+} from '@common/search'
 
 /**
  * Rating facet: how many posts the whole gallery holds at each tier — a site-wide count

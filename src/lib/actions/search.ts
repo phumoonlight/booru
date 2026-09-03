@@ -2,7 +2,7 @@
 
 import { searchPosts, searchTags, POSTS_PER_PAGE } from '@/lib/data/search'
 import type { Post } from '@/lib/data/posts'
-import type { Tag } from '@/lib/tags'
+import type { Tag } from '@common/tags'
 
 /**
  * Autocomplete source for the client search bar. Deliberately a server action

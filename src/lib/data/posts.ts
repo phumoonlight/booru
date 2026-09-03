@@ -2,9 +2,9 @@ import { cache } from 'react'
 import { createClient, type ServerClient } from '@/lib/supabase/server'
 import { createAnonClient } from '@/lib/supabase/anon'
 import { createAdminClient } from '@/lib/supabase/admin'
-import * as write from '@/lib/data/shared'
-import { RESTRICTED_RATINGS, type Rating } from '@/lib/search'
-import type { Tag } from '@/lib/tags'
+import * as write from '@common/data/shared'
+import { RESTRICTED_RATINGS, type Rating } from '@common/search'
+import type { Tag } from '@common/tags'
 
 export type Post = {
   id: number
@@ -112,12 +112,12 @@ export async function getSitemapPosts(limit: number): Promise<Pick<Post, 'id' | 
 }
 
 // ── Writes ─────────────────────────────────────────────────────────────────────
-// The write path itself lives in lib/data/shared.ts, which takes its clients rather
+// The write path itself lives in `@common/data/shared`, which takes its clients rather
 // than building them so the desktop uploader can share it. What is left here is the
 // web's half of that: the request-scoped session client and the service-role client,
 // bound to the same signatures the actions have always called.
 
-export type { PostFields } from '@/lib/data/shared'
+export type { PostFields } from '@common/data/shared'
 
 /** Rewrites an existing post's rating, source and whole tag set. */
 export async function updatePostWithTags(
@@ -150,7 +150,7 @@ export async function deletePostRow(
  * attempts, then the view is dropped — under real contention a lost view costs less
  * than a retry loop holding a request open.
  *
- * The other counters recount rather than increment (lib/data/counters.ts); this one
+ * The other counters recount rather than increment (packages/common/src/data/counters.ts); this one
  * cannot, because `view_count` is not derived from anything — the rows that would
  * define it are never stored.
  *

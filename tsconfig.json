@@ -11,9 +11,9 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     // tests/bench/*.mts runs straight through node's type stripping, which needs the
-    // real on-disk specifier — `../../src/lib/imgcmp/for-post.ts`, extension and all.
-    // Safe
-    // repo-wide because noEmit is on: this permits the form, it does not require it.
+    // real on-disk specifier — `../../packages/common/src/imgcmp/for-post.ts`, extension
+    // and all. Safe repo-wide because noEmit is on: this permits the form, it does not
+    // require it.
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
@@ -24,7 +24,11 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      // Everything both front ends compile. It is a directory of this repo rather
+      // than an installed package: no build step, no publish, and Next resolves it
+      // through this mapping the same way it resolves `@/`.
+      "@common/*": ["./packages/common/src/*"]
     }
   },
   "include": [
@@ -35,8 +39,9 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  // packages/desktop is its own program with its own tsconfigs (Electron main,
-  // preload and renderer each want different libs); it type-checks with `npm run
-  // typecheck -w desktop`.
-  "exclude": ["node_modules", "packages"]
+  // packages/common is in the program: the web compiles those files, so it is the
+  // web's type-check that has to cover them. packages/desktop is not — it is its own
+  // program with its own tsconfig (Electron main, preload and renderer each want
+  // different libs) and type-checks with `npm run typecheck -w desktop`.
+  "exclude": ["node_modules", "packages/desktop"]
 }

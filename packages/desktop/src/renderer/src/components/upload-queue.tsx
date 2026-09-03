@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RATING_LABEL, RATINGS, type Rating } from '@web/lib/search'
+import { RATING_LABEL, RATINGS, type Rating } from '@common/search'
 import { GripIcon, TrashIcon } from './icons'
 import { ImageViewer } from './image-viewer'
 import { EMPTY_TAGS, TagField, tagsToInput, type TagFieldValue } from './tag-field'
@@ -369,10 +369,23 @@ export function UploadQueue({ status }: { status: AppStatus }) {
             </div>
 
             <p className="text-xs text-muted">
-              Posts are created top to bottom — drag a row by its handle to reorder.
+              Posts are created in queue order, left to right — drag a card by its handle
+              to reorder.
             </p>
 
-            <ul className="flex flex-col gap-3">
+            {/*
+              A grid, not a list. A row was the full width of the window with a 128px
+              thumbnail in the corner of it: too little picture to tell two pages of the
+              same set apart, and the space beside the fields went to nothing. The queue
+              is the only thing on this screen, so the width is free.
+
+              `auto-fill` with a 19rem floor rather than breakpoints — the column count
+              follows the window, three at the default size down to one at the minimum,
+              and a card never gets narrower than its tag field needs. `auto-rows-fr`
+              makes every card the height of the tallest, so a card carrying six tags
+              doesn't leave the one beside it a stub.
+            */}
+            <ul className="grid auto-rows-fr grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-3">
               {items.map((item, index) => (
                 <li
                   key={item.file.path}
@@ -397,33 +410,62 @@ export function UploadQueue({ status }: { status: AppStatus }) {
                     setDragPath(null)
                     setGrabbed(null)
                   }}
-                  className={`flex flex-col gap-3 rounded-lg border bg-surface p-3 sm:flex-row ${
+                  className={`flex h-full flex-col gap-3 rounded-lg border bg-surface p-3 ${
                     item.status === 'error' ? 'border-red-500/40' : 'border-border'
                   } ${dragPath === item.file.path ? 'opacity-40' : ''}`}
                 >
-                  {/* Grab handle. Draggability is switched on by pressing it and off again
-                    when the drag ends, so the rest of the row stays ordinary: a row that
-                    is always draggable can't have text selected in the fields inside it. */}
-                  <button
-                    type="button"
-                    onPointerDown={() => !busy && setGrabbed(item.file.path)}
-                    onPointerUp={() => setGrabbed(null)}
-                    disabled={busy}
-                    title="Drag to reorder"
-                    aria-label={`Reorder ${item.file.name} — currently ${index + 1} of ${items.length}`}
-                    className="flex min-h-9 w-full shrink-0 cursor-grab items-center justify-center rounded-lg border border-border text-muted hover:text-foreground active:cursor-grabbing disabled:cursor-default disabled:opacity-50 sm:min-h-0 sm:w-8 sm:self-stretch"
-                  >
-                    <GripIcon />
-                  </button>
+                  {/* Handle, name and remove on one line above the picture. In a column
+                    the handle can't run down the side of the card any more, and the top
+                    edge is where a card gets grabbed anyway. */}
+                  <div className="flex items-start gap-2">
+                    {/* Grab handle. Draggability is switched on by pressing it and off
+                      again when the drag ends, so the rest of the card stays ordinary: a
+                      card that is always draggable can't have text selected in the fields
+                      inside it. */}
+                    <button
+                      type="button"
+                      onPointerDown={() => !busy && setGrabbed(item.file.path)}
+                      onPointerUp={() => setGrabbed(null)}
+                      disabled={busy}
+                      title="Drag to reorder"
+                      aria-label={`Reorder ${item.file.name} — currently ${index + 1} of ${items.length}`}
+                      className="flex min-h-9 w-8 shrink-0 cursor-grab items-center justify-center rounded-lg border border-border text-muted hover:text-foreground active:cursor-grabbing disabled:cursor-default disabled:opacity-50"
+                    >
+                      <GripIcon />
+                    </button>
 
-                  {/* The thumbnail is the button: 200px is enough to tell files apart and
-                    not enough to check one, so clicking the picture opens it full-window. */}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium" title={item.file.path}>
+                        {item.file.name}
+                      </p>
+                      <p className="text-xs text-muted">
+                        {formatSize(item.file.size)} · {item.file.width}×{item.file.height}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => drop(item.file.path)}
+                      disabled={busy}
+                      title="Remove from queue"
+                      aria-label={`Remove ${item.file.name} from the queue`}
+                      className="flex min-h-9 w-11 shrink-0 items-center justify-center rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+
+                  {/* The thumbnail is the button. It spans the card now, which is enough
+                    to recognise a page by but still not enough to read one, so clicking
+                    it opens the picture full-window as before. `object-contain` on a
+                    fixed height: cropping to fill would hide exactly the edges that tell
+                    two variants of the same image apart. */}
                   <button
                     type="button"
                     onClick={() => setViewing(item.file.path)}
                     title="Open a bigger preview"
                     aria-label={`Open a bigger preview of ${item.file.name}`}
-                    className="h-40 w-full shrink-0 overflow-hidden rounded-lg bg-background ring-border hover:ring-2 sm:h-32 sm:w-32"
+                    className="h-52 w-full shrink-0 overflow-hidden rounded-lg bg-background ring-border hover:ring-2"
                   >
                     <img
                       src={item.file.preview}
@@ -433,27 +475,6 @@ export function UploadQueue({ status }: { status: AppStatus }) {
                   </button>
 
                   <div className="flex min-w-0 flex-1 flex-col gap-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium" title={item.file.path}>
-                          {item.file.name}
-                        </p>
-                        <p className="text-xs text-muted">
-                          {formatSize(item.file.size)} · {item.file.width}×{item.file.height}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => drop(item.file.path)}
-                        disabled={busy}
-                        title="Remove from queue"
-                        aria-label={`Remove ${item.file.name} from the queue`}
-                        className="flex min-h-9 w-11 shrink-0 items-center justify-center rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 disabled:opacity-50"
-                      >
-                        <TrashIcon />
-                      </button>
-                    </div>
-
                     {item.status === 'ok' ? (
                       <p className="text-sm">
                         <PostLink
@@ -471,39 +492,40 @@ export function UploadQueue({ status }: { status: AppStatus }) {
                           disabled={busy}
                         />
 
-                        <div className="flex flex-col gap-3 sm:flex-row">
-                          <label className="flex flex-col gap-1.5 text-sm sm:w-44">
-                            Rating
-                            <select
-                              value={item.rating}
-                              disabled={busy}
-                              onChange={(event) =>
-                                patch(item.file.path, { rating: event.target.value as Rating })
-                              }
-                              className="min-h-11 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
-                            >
-                              {RATINGS.map((rating) => (
-                                <option key={rating} value={rating}>
-                                  {RATING_LABEL[rating]}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
+                        {/* Stacked, not side by side: a card is one column of the grid
+                          now, and a rating select beside a URL field inside one leaves
+                          both too narrow to read. */}
+                        <label className="flex flex-col gap-1.5 text-sm">
+                          Rating
+                          <select
+                            value={item.rating}
+                            disabled={busy}
+                            onChange={(event) =>
+                              patch(item.file.path, { rating: event.target.value as Rating })
+                            }
+                            className="min-h-11 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
+                          >
+                            {RATINGS.map((rating) => (
+                              <option key={rating} value={rating}>
+                                {RATING_LABEL[rating]}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
 
-                          <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-sm">
-                            Source URL (optional)
-                            <input
-                              type="url"
-                              value={item.sourceUrl}
-                              disabled={busy}
-                              onChange={(event) =>
-                                patch(item.file.path, { sourceUrl: event.target.value })
-                              }
-                              placeholder="https://…"
-                              className="min-h-11 rounded-lg border border-border bg-background px-3 font-mono text-xs outline-none focus:border-accent"
-                            />
-                          </label>
-                        </div>
+                        <label className="flex min-w-0 flex-col gap-1.5 text-sm">
+                          Source URL (optional)
+                          <input
+                            type="url"
+                            value={item.sourceUrl}
+                            disabled={busy}
+                            onChange={(event) =>
+                              patch(item.file.path, { sourceUrl: event.target.value })
+                            }
+                            placeholder="https://…"
+                            className="min-h-11 rounded-lg border border-border bg-background px-3 font-mono text-xs outline-none focus:border-accent"
+                          />
+                        </label>
 
                         {item.status === 'uploading' && (
                           <p className="text-xs text-muted">Compressing and uploading…</p>

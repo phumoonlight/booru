@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { NavProgress } from '@/components/nav-progress'
-import { CATEGORY_COLOR, CATEGORY_LABEL, TAG_CATEGORIES, type Tag } from '@/lib/tags'
-import { parseSearchQuery, searchHref, tagLabel, withTag, withoutTag } from '@/lib/search'
+import { CATEGORY_COLOR, CATEGORY_LABEL, TAG_CATEGORIES, type Tag } from '@common/tags'
+import { parseSearchQuery, searchHref, tagLabel, withTag, withoutTag } from '@common/search'
 
 
 /**

@@ -21,7 +21,7 @@ import { readFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import os from 'node:os'
 import sharp from 'sharp'
-import { compressImgForPost } from '../../src/lib/imgcmp/for-post.ts'
+import { compressImgForPost } from '../../packages/common/src/imgcmp/for-post.ts'
 
 const SAMPLE = 'tests/static/example.jpg'
 const EFFORTS = [9, 7, 6, 5, 4, 3]

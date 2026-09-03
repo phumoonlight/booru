@@ -8,7 +8,7 @@ import {
   parseBlurred,
   serializeBlurred,
 } from '@/lib/rating-blur'
-import { RATING_COLOR, RATING_LABEL, RATINGS, type Rating } from '@/lib/search'
+import { RATING_COLOR, RATING_LABEL, RATINGS, type Rating } from '@common/search'
 
 // A module-level store rather than component state: TagDrawer renders the sidebar twice
 // (desktop column + mobile sheet), and both panels have to agree on what's checked.

@@ -2,7 +2,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import type { Post } from '@/lib/data/posts'
 import { StartHereBadge } from '@/components/start-here'
-import { thumbnailUrl } from '@/lib/storage'
+import { thumbnailUrl } from '@common/storage'
 import { BLUR_DATA_URL } from '@/lib/blur'
 
 /** `query` is the search the card is being shown under — what the 🔖 badge adds its

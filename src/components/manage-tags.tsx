@@ -13,10 +13,10 @@ import {
   type RenameTagState,
   type TagCategoryState,
 } from '@/lib/actions/tags'
-import { parseTagInput, TAG_CATEGORIES, type Tag, type TagCategory } from '@/lib/tags'
+import { parseTagInput, TAG_CATEGORIES, type Tag, type TagCategory } from '@common/tags'
 import { CATEGORY_COLOR, CATEGORY_LABEL } from '@/components/tag-list'
 import { PencilIcon, TrashIcon } from '@/components/icons'
-import { tagLabel } from '@/lib/search'
+import { tagLabel } from '@common/search'
 
 const FIELD =
   'min-h-9 rounded-lg border border-border bg-surface px-2 text-sm outline-none focus:border-accent disabled:opacity-50'

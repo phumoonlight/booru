@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { suggestTags, type TagSuggestion } from '@/lib/actions/tags'
 import { CATEGORY_COLOR } from '@/components/tag-list'
-import type { TagCategory } from '@/lib/tags'
+import type { TagCategory } from '@common/tags'
 
 export type TagSeed = { name: string; category: TagCategory }
 

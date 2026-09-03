@@ -4,7 +4,7 @@
   // config and a web config, joined by project references) needs `composite`, and
   // `composite` insists every file in the program sit under this directory — which
   // the whole design rules out: the pipeline, the write path and the compressors are
-  // compiled out of ../../src. So: one config, DOM included, and `@supabase/auth-js`
+  // compiled out of ../common. So: one config, DOM included, and `@supabase/auth-js`
   // gets the `Storage` type its session adapter is declared against.
   "compilerOptions": {
     "target": "ES2022",
@@ -21,12 +21,15 @@
     "isolatedModules": true,
     // No `baseUrl`: it is deprecated in TypeScript 6, and these mappings never needed
     // it — without one, `paths` resolves relative to this file, which is what the
-    // `../../` below already assumes.
+    // `../` below already assumes.
     "paths": {
-      // The website's src/. `@web/*` is how this app spells it; `@/*` is how the
-      // files over there spell each other, and both have to resolve.
-      "@web/*": ["../../src/*"],
-      "@/*": ["../../src/*"]
+      // The shared package, and the only thing outside this directory that this app
+      // compiles. It used to be the website's own src/, under two aliases — `@web/*`
+      // for the imports written here and `@/*` because the files over there spelled
+      // each other that way, which meant the desktop build inherited the Next app's
+      // internal convention. One name now, pointing at code that belongs to neither
+      // front end.
+      "@common/*": ["../common/src/*"]
     }
   },
   "include": ["electron.vite.config.ts", "src/**/*.ts", "src/**/*.tsx"]

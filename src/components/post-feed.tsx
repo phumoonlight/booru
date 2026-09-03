@@ -6,7 +6,7 @@ import type { Post } from '@/lib/data/posts'
 import { PostGrid, PostGridSkeleton } from '@/components/post-grid'
 import { NavProgress } from '@/components/nav-progress'
 import { loadMorePosts } from '@/lib/actions/search'
-import { searchHref, withStart } from '@/lib/search'
+import { searchHref, withStart } from '@common/search'
 
 /**
  * How close to the sentinel the viewport gets before the next chunk is asked for.

@@ -1,4 +1,4 @@
-import { RATINGS, type Rating } from '@/lib/search'
+import { RATINGS, type Rating } from '@common/search'
 
 /**
  * Which ratings arrive blurred. The adult tail is covered by default; everything

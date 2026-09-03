@@ -4,8 +4,8 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { suggestTags } from '@/lib/actions/search'
 import { NavProgressBar } from '@/components/nav-progress'
-import type { Tag } from '@/lib/tags'
-import { queryTokens, searchHref, SEARCH_PARAM, tagLabel, withoutTag } from '@/lib/search'
+import type { Tag } from '@common/tags'
+import { queryTokens, searchHref, SEARCH_PARAM, tagLabel, withoutTag } from '@common/search'
 
 const DEBOUNCE_MS = 200
 

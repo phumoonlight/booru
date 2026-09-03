@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { NavProgress } from '@/components/nav-progress'
-import { searchHref, startToken, withStart } from '@/lib/search'
+import { searchHref, startToken, withStart } from '@common/search'
 
 /**
  * "Start here" — the badge over a thumbnail. It doesn't save anything: it rewrites the

@@ -4,15 +4,19 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 /**
- * `@web` — and `@`, because the web's own files import each other that way — point at
- * the website's `src/`. That is not a copy: the upload pipeline, the post write path,
- * the image compressors and the pure helpers are compiled straight out of the Next app
- * next door, so there is one definition of what a post is and one of how an image is
- * squeezed. See `src/lib/upload/pipeline.ts` for what that split looks like from the
+ * `@common` is packages/common — the upload pipeline, the post write path, the image
+ * compressors and the pure helpers, compiled straight out of source. That is not a
+ * copy: there is one definition of what a post is and one of how an image is squeezed,
+ * and both front ends compile the same files.
+ *
+ * It used to point at the website's `src/` under two names, `@web` and `@` — the second
+ * only because the Next app's own files spell each other that way. The code both apps
+ * need now lives somewhere that belongs to neither of them, so there is one alias and
+ * the desktop build no longer reaches into the website at all. See
+ * `packages/common/src/upload/pipeline.ts` for what the split looks like from the
  * other side.
  */
-const web = resolve(__dirname, '../../src')
-const alias = { '@web': web, '@': web }
+const alias = { '@common': resolve(__dirname, '../common/src') }
 
 /** The repo root, where the website's own environment file already lives. */
 const envDir = resolve(__dirname, '../..')

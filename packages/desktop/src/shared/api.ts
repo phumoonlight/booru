@@ -1,6 +1,6 @@
-import type { Rating } from '@web/lib/search'
-import type { Tag, TagCategory } from '@web/lib/tags'
-import type { UploadResult } from '@web/lib/upload/pipeline'
+import type { Rating } from '@common/search'
+import type { Tag, TagCategory } from '@common/tags'
+import type { UploadResult } from '@common/upload/pipeline'
 
 /**
  * The whole surface between the window and the process that does the work. The renderer
@@ -133,4 +133,4 @@ export type PostAppApi = {
   openDataFolder: () => Promise<void>
 }
 
-export type { UploadResult } from '@web/lib/upload/pipeline'
+export type { UploadResult } from '@common/upload/pipeline'

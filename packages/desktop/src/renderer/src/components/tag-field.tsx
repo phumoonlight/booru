@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
-import { CATEGORY_COLOR, type TagCategory } from '@web/lib/tags'
+import { CATEGORY_COLOR, type TagCategory } from '@common/tags'
 import type { TagSuggestion } from '../../../shared/api'
 
 export type TagSeed = { name: string; category: TagCategory }
@@ -29,7 +29,7 @@ const STRIP = /[^a-z0-9_().\-\s]+/g
  *
  * The only difference from the web's is where the suggestions come from: a server action
  * there, the preload bridge here. The query behind both is the same function
- * (`searchTags` in lib/data/shared.ts).
+ * (`searchTags` in `@common/data/shared`).
  */
 export function TagField({
   value,

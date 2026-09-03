@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { searchHref } from '@web/lib/search'
+import { searchHref } from '@common/search'
 import { About } from './components/about'
 import { AccountMenu } from './components/account-menu'
 import { Login } from './components/login'
@@ -188,7 +188,7 @@ export function App() {
             className={
               over
                 ? 'hidden'
-                : 'mx-auto flex min-h-full w-full max-w-3xl flex-col px-4 py-4'
+                : 'mx-auto flex min-h-full w-full max-w-6xl flex-col px-4 py-4'
             }
           >
             {/* The empty drop zone is the whole screen's content, so it sits in the

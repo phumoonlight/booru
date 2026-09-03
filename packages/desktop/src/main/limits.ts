@@ -1,7 +1,7 @@
-import type { UploadLimits } from '@web/lib/upload/pipeline'
+import type { UploadLimits } from '@common/upload/pipeline'
 
 /**
- * The desktop uploader's ceilings. Both numbers in the web's `lib/upload-limits.ts` are
+ * The desktop uploader's ceilings. Both numbers in the web's `src/lib/upload-limits.ts` are
  * Vercel's, not the pipeline's: 4MB because a serverless request body is capped at
  * 4.5MB, and 20MP because lossless AVIF costs ~0.17s/MP and the function dies at 10s.
  * Neither applies to a process on your own machine writing straight to Supabase

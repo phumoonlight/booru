@@ -24,7 +24,8 @@ shade smaller. The measurements are in [`src/main/cpu.ts`](src/main/cpu.ts).
 
 Everything else is identical, because it is literally the same code: the upload pipeline,
 the post write path, the tag queries and both image compressors are compiled straight out
-of `../../src` through the `@web` alias. There is no second definition of what a post is.
+of `../common/src` through the `@common` alias. There is no second definition of what a
+post is.
 
 ## Running it
 

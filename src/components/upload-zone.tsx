@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { uploadPost, type UploadResult } from '@/lib/actions/upload'
 import { TrashIcon } from '@/components/icons'
 import { EMPTY_TAGS, TagField, tagsToInput, type TagFieldValue } from '@/components/tag-field'
-import { RATING_LABEL, RATINGS, type Rating } from '@/lib/search'
+import { RATING_LABEL, RATINGS, type Rating } from '@common/search'
 import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL } from '@/lib/upload-limits'
 
 type Status = 'ready' | 'uploading' | 'ok' | 'error'

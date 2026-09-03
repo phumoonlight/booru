@@ -15,7 +15,7 @@ import { RatingDisplayOptions } from '@/components/rating-display-options'
 import { SetupNotice } from '@/components/setup-notice'
 import { getCurrentProfile } from '@/lib/data/profiles'
 import { isSupabaseConfigured } from '@/lib/env'
-import { parseSearchQuery, searchHref, SEARCH_PARAM, splitQuery } from '@/lib/search'
+import { parseSearchQuery, searchHref, SEARCH_PARAM, splitQuery } from '@common/search'
 import { SITE_DESCRIPTION, SITE_NAME } from '@/lib/site'
 
 /** The whole address of a listing is one string — tags, ratings and the `start:`

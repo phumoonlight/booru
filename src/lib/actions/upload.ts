@@ -4,11 +4,11 @@ import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createPostFromImage, parsePostMetadata } from '@/lib/upload/pipeline'
+import { createPostFromImage, parsePostMetadata } from '@common/upload/pipeline'
 import { WEB_UPLOAD_LIMITS } from '@/lib/upload-limits'
 
-export type { UploadResult } from '@/lib/upload/pipeline'
-import type { UploadResult } from '@/lib/upload/pipeline'
+export type { UploadResult } from '@common/upload/pipeline'
+import type { UploadResult } from '@common/upload/pipeline'
 
 /**
  * Creates one post from one staged file. The uploader reviews and tags each image
@@ -18,7 +18,7 @@ import type { UploadResult } from '@/lib/upload/pipeline'
  * One file per call: each image is its own post, its own failure, and its own row
  * in the queue's progress list.
  *
- * Everything past getting the bytes out of the request is `lib/upload/pipeline.ts`,
+ * Everything past getting the bytes out of the request is `packages/common/src/upload/pipeline.ts`,
  * which the desktop uploader in `packages/desktop` runs too — same compression, same
  * dedupe, same rollback. What is left here is what only exists on the web: the session,
  * the multipart body, and the cache to revalidate.

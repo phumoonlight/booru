@@ -6,6 +6,9 @@ A booru-style image board (Danbooru is the reference): tag-centric gallery, mult
 search with negation, post detail pages, uploads by any signed-in user. Fullstack
 Next.js 16 App Router + Supabase (Postgres, Storage, Auth), Tailwind v4, mobile-first.
 
+Three parts: the website in `src/`, an Electron uploader in `packages/desktop`, and
+`packages/common` — the code both of them compile.
+
 ## Replies
 
 - Be extremely concise. Lead directly with the result or fix.
@@ -23,12 +26,12 @@ Next.js 16 App Router + Supabase (Postgres, Storage, Auth), Tailwind v4, mobile-
 | `npm run db:push` / `db:push:dry` | apply migrations to the linked Supabase project |
 | `npm run db:list` / `db:reset` / `db:reset:remote` | migration status / local reset / reset the linked project |
 | `npm run desktop:dev` / `desktop:package` | the desktop uploader — window, or installer. Both need the four env values |
-| `npm run typecheck -w desktop` | the only check the Electron app has; the root `tsc` excludes `packages/` |
+| `npm run typecheck -w desktop` | the only check the Electron app has; the root `tsc` covers `src/` and `packages/common`, not the desktop |
 | `npm run bench:avif` | sweeps sharp's AVIF `effort` over `tests/static/` — sizes and encode times |
 
 Ad-hoc checks (query parser, rating resolution) have been run as throwaway scripts in
 the scratchpad, never committed. `tests/` is not a suite and there is no runner — it is
-the AVIF bench and its sample image, kept only because the numbers behind `lib/imgcmp/`
+the AVIF bench and its sample image, kept only because the numbers behind `@common/imgcmp/`
 are worth being able to re-measure. Keep it that way unless asked for a test setup.
 
 ## Git
@@ -49,40 +52,64 @@ Commit only when asked. Never push unless asked.
 - **Writes:** `'use server'` actions in `src/lib/actions/*` → `requireUser()` first →
   zod parse → `src/lib/data/*`. RLS (`auth.uid() is not null`) is the real guard;
   `requireUser()` exists to fail loudly rather than update zero rows.
-- **Pure helpers** (`lib/search.ts`, `lib/tags.ts`, `lib/storage.ts`, `lib/site.ts`)
-  import nothing server-side, so client components can share them.
+- **Pure helpers** (`@common/search`, `@common/tags`, `@common/storage`, and the web's
+  own `lib/site.ts`) import nothing server-side, so client components can share them.
 - Query logic stays in `lib/data/` and out of actions/pages so the deferred public API
   can reuse it verbatim (docs/future.md §2).
-- **Anything two front ends share takes its clients as arguments.** `lib/data/shared.ts`
-  (post write path, `ensureTagIds`, tag-name search), `lib/data/counters.ts` and
-  `lib/upload/pipeline.ts` never call `createClient()` — the caller passes
-  `(supabase, admin)`. That is what lets `packages/desktop` run them: `supabase/server.ts`
-  imports `next/headers` and `admin.ts` is `server-only`, so a module that builds its own
-  client can only run inside Next. `lib/data/posts.ts` and `tags.ts` wrap them with the
-  request-scoped clients, so no call site in `src/` sees the difference. Don't "simplify"
-  a client parameter away.
+- **Anything two front ends share lives in `packages/common` and takes its clients as
+  arguments.** `@common/data/shared` (post write path, `ensureTagIds`, tag-name search),
+  `@common/data/counters` and `@common/upload/pipeline` never call `createClient()` —
+  the caller passes `(supabase, admin)`. That is what lets `packages/desktop` run them:
+  `supabase/server.ts` imports `next/headers` and `admin.ts` is `server-only`, so a
+  module that builds its own client can only run inside Next. `lib/data/posts.ts` and
+  `tags.ts` wrap them with the request-scoped clients, so no call site in `src/` sees
+  the difference. Don't "simplify" a client parameter away.
 - Four Supabase clients, each with one job: `server.ts` (cookies, request-scoped),
   `client.ts` (browser), `anon.ts` (cookie-less, for cacheable routes like the sitemap),
   `admin.ts` (service role — never reaches the browser; storage writes/deletes,
   `incrementPostView()` — the one row write an anonymous visitor is allowed to cause —
-  and the counter syncs in `lib/data/counters.ts`, whose rows no user session may set).
+  and the counter syncs in `@common/data/counters`, whose rows no user session may set).
+
+## The shared package (`packages/common`)
+
+Everything the website and the desktop uploader both compile: the upload pipeline, the
+post write path, the counters, both image encoders, and the pure helpers — the search
+grammar, the tag rules, the storage paths, `BooruClient`. See
+[packages/common/README.md](packages/common/README.md).
+
+- **`@common/*` in both programs**, a tsconfig `paths` mapping to `packages/common/src`.
+  No build step, nothing published, and the files in there import each other by
+  `@common/…` too, so a module reads the same wherever it is compiled. The web gets the
+  mapping from the root `tsconfig.json` (Next reads `paths` itself); the desktop needs
+  it twice — `packages/desktop/tsconfig.json` for the type checker and a Vite alias in
+  `electron.vite.config.ts` for the bundler.
+- **It was the web's `src/`, reached through an `@web` alias** (and `@/` as well, only
+  because the Next app's files spell each other that way). Same one-definition property,
+  but it made the website's internal layout part of the desktop build, and "is this file
+  shared?" was a question you answered by grepping. Where the file sits answers it now.
+- **What may not go in there**: anything importing `next/*`, `server-only` or React —
+  Electron's main process compiles these files. No environment reads, and no limits:
+  ceilings belong to where the code runs (`src/lib/upload-limits.ts` is Vercel's,
+  `packages/desktop/src/main/limits.ts` is the app's) and `createPostFromImage` takes
+  them as an argument.
+- **Tailwind classes in here need an `@source` line.** Tailwind finds class names by
+  *reading files*, and the desktop renderer scans only its own tree, so `CATEGORY_COLOR`
+  in `@common/tags` is named explicitly in `packages/desktop/src/renderer/src/styles.css`.
+  Put classes in another shared module and it needs the same line, or the colour silently
+  compiles to nothing.
 
 ## The desktop uploader (`packages/desktop`)
 
-The repo is an npm workspace and Electron is the only member. It is the upload page as a
-desktop app, and it exists because compression is CPU work a free serverless tier is bad
-at — see [packages/desktop/README.md](packages/desktop/README.md).
+It is the upload page as a desktop app, and it exists because compression is CPU work a
+free serverless tier is bad at — see [packages/desktop/README.md](packages/desktop/README.md).
 
-- **It imports the web's `src/`, it does not copy it** (`@web/*` → `../../src/*`, and
-  `@/*` too because the files over there spell each other that way). The pipeline, the
-  write path, both compressors and the pure helpers are one definition. One catch, in
-  `renderer/src/styles.css`: Tailwind finds class names by *reading files*, and the
-  renderer scans only its own tree, so a web module that holds classes — `CATEGORY_COLOR`
-  in `lib/tags.ts` — has to be named in an `@source` there or it compiles to nothing and
-  the colour silently disappears. Import a web module with classes in it, add the
-  `@source` line.
+- **It imports `packages/common`, it does not copy it, and it does not reach into the
+  website at all** — the pipeline, the write path, both compressors and the pure helpers
+  are one definition, compiled out of `../common/src` through `@common/*`. Nothing in
+  `src/` is on its import graph any more.
 - **Its limits are its own** (`src/main/limits.ts`, 50MB / 100MP). `MAX_FILE_SIZE` and
-  `MAX_PIXELS` in `lib/upload-limits.ts` are Vercel's numbers and stay Vercel's.
+  `MAX_PIXELS` in the web's `src/lib/upload-limits.ts` are Vercel's numbers and stay
+  Vercel's.
 - Session client writes the post row, service role does storage and the counters — the
   same split as the web, spelled in `createPostFromImage`'s signature.
 - The renderer has no keys, no Node and no network: every capability is one
@@ -137,7 +164,7 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
   version is this" is a fair question before signing in, and it carries the versions
   `app:status` reports: the renderer has no `process`, and a packaged app ships no
   manifest it could read. Tags is not an exception — it reads the board, so it sits behind
-  the session with the queue, runs `listTags` from `lib/data/shared.ts` (the web's /tags
+  the session with the queue, runs `listTags` from `@common/data/shared` (the web's /tags
   page runs the same one) and opens a tag on the board rather than here, there being no
   gallery in this window to show it in. Its list is **cached in a module-level `let`**
   rather than in state, because the view is unmounted whenever something is in front of
@@ -187,7 +214,7 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
   definer-rights is reachable over `/rest/v1/rpc`. Don't add RPCs back without a reason
   PostgREST genuinely can't meet.
 - Denormalized counters (`tags.post_count`, `rating_counts.post_count`) are maintained by
-  `lib/data/counters.ts`, not by triggers. They **recompute** — PostgREST can't increment,
+  `@common/data/counters`, not by triggers. They **recompute** — PostgREST can't increment,
   and an increment that loses a race is wrong for good — so every write must call
   `syncTagPostCounts` / `syncRatingCounts` with the tags and ratings it moved. They write
   on the service role (`rating_counts` has no write policy at all — the guard is the
@@ -208,10 +235,10 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
   entry point on every page advertises the one thing this deployment does badly. Uploading
   is the desktop app's job. Don't put the link back without a runtime that can hold it.
 - **The gallery is `/posts`, not `/`** — `/` is a landing page (wordmark, search box,
-  emoji post count). `searchHref()` in `lib/search.ts` is the only place that spells the
+  emoji post count). `searchHref()` in `@common/search` is the only place that spells the
   listing's path, so tag links, facets and the feed's own links all derive from it;
   `/?query=` redirects there for old links.
-- **`?query=` is the only param the listing has** (`SEARCH_PARAM` in `lib/search.ts`),
+- **`?query=` is the only param the listing has** (`SEARCH_PARAM` in `@common/search`),
   space-separated, `-tag` excludes. Ratings and the feed's cursor ride in the same
   string as `rating:e3` and `start:900` metatags — nothing outside `splitQuery` and
   `resolveRatings` needs to know they exist, and the search bar renders every one of
@@ -239,8 +266,14 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
   row height, so height is the bound that matters), the post image is lossless AVIF only
   when it beats the uploaded bytes, otherwise the original byte-for-byte. Paths derive
   from md5, never stored.
+- **The stored post image is bounded to 2048 on both sides** (`POST_MAX_DIMENSION` in
+  `@common/imgcmp/for-post`). Above it the lossless AVIF is not competing on bytes any
+  more — it is the only version inside the cap, so it is kept however it measures, and
+  the row records the *stored* size rather than the uploaded one. An animation is the
+  one thing that can still exceed it: the encoder declines rather than flatten it to
+  frame 1, so an oversized GIF is stored at its uploaded size.
 - **MD5 is the dedup key on purpose** — collision resistance is not what it's for.
-- **The two encoders live in `lib/imgcmp/`, not in the upload action.** `for-post.ts` and
+- **The two encoders live in `@common/imgcmp/`, not in the upload action.** `for-post.ts` and
   `for-thumbnail.ts` take a buffer and hand back a candidate, so the upload action, the
   pipeline and the desktop app share one encode. The constants in there are measured, not
   chosen — re-measure with `npm run bench:avif` before changing one.
@@ -279,7 +312,8 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
 ## Docs
 
 `architecture.md`, `database-schema.md` and `future.md`, plus `design/` (one screenshot
-of the interface as drawn). There is no status page and no runbook: a live project needs
+of the interface as drawn). Each package has a README of its own —
+`packages/common` for what is shared and why, `packages/desktop` for the app. There is no status page and no runbook: a live project needs
 `.env.local` and `npm run db:push`, and the reasoning behind a decision lives in this
 file and in the comment beside the code it explains.
 

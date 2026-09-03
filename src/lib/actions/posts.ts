@@ -4,8 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { requireUser } from '@/lib/auth'
-import { parseTagInput } from '@/lib/tags'
-import { RATINGS } from '@/lib/search'
+import { parseTagInput } from '@common/tags'
+import { RATINGS } from '@common/search'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { deletePostRow, getPost, incrementPostView, updatePostWithTags } from '@/lib/data/posts'
@@ -14,7 +14,7 @@ import {
   THUMBNAILS_BUCKET,
   postImagePath,
   thumbnailPath,
-} from '@/lib/storage'
+} from '@common/storage'
 
 export async function deletePost(formData: FormData) {
   await requireUser()

@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron'
 import { z } from 'zod'
-import { listTags, searchTags } from '@web/lib/data/shared'
-import { createPostFromImage, parsePostMetadata } from '@web/lib/upload/pipeline'
+import { listTags, searchTags } from '@common/data/shared'
+import { createPostFromImage, parsePostMetadata } from '@common/upload/pipeline'
 import { DESKTOP_UPLOAD_LIMITS } from './limits'
 import { CPU_COUNT, DEFAULT_ENCODE_PRIORITY, DEFAULT_ENCODE_THREADS } from './cpu'
 import { loadConfig, revealSaveFile } from './config'
@@ -13,8 +13,8 @@ import { downloadImages } from './download'
 import { setQueueState } from './queue-guard'
 import { adminClient, currentUser, signIn, signOut, userClient } from './supabase'
 import type { AppStatus, Outcome, PreferencesInput, SavedLogin, TagSuggestion } from '../shared/api'
-import type { Tag } from '@web/lib/tags'
-import type { UploadResult } from '@web/lib/upload/pipeline'
+import type { Tag } from '@common/tags'
+import type { UploadResult } from '@common/upload/pipeline'
 
 /**
  * Every channel the window can reach. Each one is small on purpose: the renderer holds

@@ -11,7 +11,7 @@
 | Database | Supabase Postgres | Schema in `supabase/migrations/`, RLS enabled on all tables |
 | File storage | Supabase Storage | Two buckets: `posts`, `post-thumbnails` (both public-read) |
 | Auth | Supabase Auth | Email/password to start; any signed-in user can upload and manage posts |
-| Image processing | `sharp` (server-side) | Both AVIF encoders live in `lib/imgcmp/`, shared with the desktop uploader |
+| Image processing | `sharp` (server-side) | Both AVIF encoders live in `packages/common/src/imgcmp/`, shared with the desktop uploader |
 | Deployment | Vercel + Supabase cloud | |
 
 ## Folder structure (target)
@@ -61,9 +61,11 @@ booru/
 1. Client posts `FormData` (file + tags + rating + source) to the upload action.
 2. Action: verify session → compute MD5 → reject if a post with that hash exists (dedup)
    → read dimensions with sharp → encode a lossy AVIF thumbnail (400px tall, width
-   capped at 800 for panoramas) and try a lossless AVIF of the image itself
+   capped at 800 for panoramas) and try a lossless AVIF of the image itself, bounded
+   to 2048 on both sides
    → upload the image to `posts/{md5}.{ext}`, keeping the uploaded bytes byte-for-byte
-   when the AVIF didn't beat them, and the thumb to `post-thumbnails/{md5}.avif`
+   when the AVIF didn't beat them and nothing had to be downscaled, and the thumb to
+   `post-thumbnails/{md5}.avif`
    → `createPostWithTags()` inserts the `posts` row, upserts the tags and links them
    (see database-schema.md) → `revalidatePath('/')`.
 3. `MAX_FILE_SIZE` keeps uploads under Vercel's server action body limit. The desktop
@@ -84,7 +86,7 @@ booru/
 
 ### Ratings and SEO (Phase 5 detail)
 - Ratings are **metatags inside the same query string**: `rating:general`,
-  `-rating:e3`. `lib/search.ts` parses the string once, `splitRatings()` peels the
+  `-rating:e3`. `packages/common/src/search.ts` parses the string once, `splitRatings()` peels the
   metatags off the tag names and `resolveRatings()` turns them into the whitelist
   `searchPosts()` filters `rating` against. Nothing else — chips, tag links,
   autocomplete, listing hrefs — needs to know they exist.

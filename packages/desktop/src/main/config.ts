@@ -79,7 +79,7 @@ export function revealSaveFile(): void {
 }
 
 /**
- * `lib/storage.ts` builds public image URLs from `NEXT_PUBLIC_SUPABASE_URL`, and it is
+ * `@common/storage` builds public image URLs from `NEXT_PUBLIC_SUPABASE_URL`, and it is
  * shared verbatim with the web rather than reimplemented. Setting the variable it reads
  * is cheaper than threading a base URL through a module that only ever has one.
  */

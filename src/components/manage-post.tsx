@@ -4,7 +4,7 @@ import { startTransition, useActionState, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { deletePost, updatePost, type EditPostState } from '@/lib/actions/posts'
 import { TagField, type TagSeed } from '@/components/tag-field'
-import { RATING_LABEL, RATINGS } from '@/lib/search'
+import { RATING_LABEL, RATINGS } from '@common/search'
 
 /**
  * Admin controls inlined on the post page — editing happens where the post is,

@@ -7,7 +7,7 @@ import { SetupNotice } from '@/components/setup-notice'
 import { getPostCount } from '@/lib/data/posts'
 import { isSupabaseConfigured } from '@/lib/env'
 import { emojiNumber } from '@/lib/emoji-number'
-import { searchHref, SEARCH_PARAM } from '@/lib/search'
+import { searchHref, SEARCH_PARAM } from '@common/search'
 import { SITE_DESCRIPTION, SITE_NAME } from '@/lib/site'
 
 export const metadata: Metadata = {

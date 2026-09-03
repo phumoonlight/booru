@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next'
-import { SEARCH_PARAM } from '@/lib/search'
+import { SEARCH_PARAM } from '@common/search'
 import { siteUrl } from '@/lib/site'
 
 /**

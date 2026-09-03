@@ -1,20 +1,20 @@
 import { createHash } from 'node:crypto'
 import sharp, { type Metadata } from 'sharp'
 import { z } from 'zod'
-import { compressImgForPost } from '@/lib/imgcmp/for-post'
-import { compressImgForThumbnail } from '@/lib/imgcmp/for-thumbnail'
-import { createPostWithTags, findPostIdByMd5 } from '@/lib/data/shared'
-import { POSTS_BUCKET, THUMBNAILS_BUCKET, postImagePath, thumbnailPath } from '@/lib/storage'
-import { RATINGS, type Rating } from '@/lib/search'
-import { parseTagInput } from '@/lib/tags'
-import type { BooruClient } from '@/lib/supabase/types'
+import { POST_MAX_DIMENSION, compressImgForPost } from '@common/imgcmp/for-post'
+import { compressImgForThumbnail } from '@common/imgcmp/for-thumbnail'
+import { createPostWithTags, findPostIdByMd5 } from '@common/data/shared'
+import { POSTS_BUCKET, THUMBNAILS_BUCKET, postImagePath, thumbnailPath } from '@common/storage'
+import { RATINGS, type Rating } from '@common/search'
+import { parseTagInput } from '@common/tags'
+import type { BooruClient } from '@common/supabase/types'
 
 /**
  * One image in, one post out: validate, compress, store, insert, and unwind the whole
  * thing if any of that fails.
  *
  * This is the half of the upload that has nothing to do with how the bytes arrived. The
- * web hands it a server action's `FormData` file (`lib/actions/upload.ts`); the desktop
+ * web hands it a server action's `FormData` file (`src/lib/actions/upload.ts`); the desktop
  * uploader hands it a file read off disk (`packages/desktop`), because the compression
  * below is the CPU work that a free serverless tier is worst at. Neither owns it, so
  * neither can drift from the other on what a post is.
@@ -54,7 +54,7 @@ export type UploadResult =
 
 /**
  * Where the ceilings come from is the caller's business. The web's are Vercel's — a
- * 4.5MB request body and a 10s function timeout (`lib/upload-limits.ts`) — and the
+ * 4.5MB request body and a 10s function timeout (`src/lib/upload-limits.ts`) — and the
  * desktop uploader's are Supabase Storage's and its own patience
  * (`packages/desktop/src/main/limits.ts`). Nothing in here has an opinion about either.
  */
@@ -177,21 +177,34 @@ export async function createPostFromImage(
   // Post image: the lossless AVIF candidate is kept only when it actually comes out
   // smaller than the uploaded bytes, which for JPEG and flat-colour PNG it usually
   // does not. A failed encode is not fatal — the upload itself is always storable.
+  //
+  // Oversized is the exception: past POST_MAX_DIMENSION the candidate is not competing
+  // on bytes at all, it is the only version inside the cap, so it is kept however it
+  // measures. The one input that can still land over the cap is an animation, which
+  // the encoder declines rather than flatten to frame 1.
   let postBuffer: Buffer = bytes
   let postExt = ext
+  let postWidth = width
+  let postHeight = height
+  const oversized = width > POST_MAX_DIMENSION || height > POST_MAX_DIMENSION
   const startedAt = Date.now()
   const postResult = await compressImgForPost(meta, bytes)
   if (postResult.buffer) {
     const avif = postResult.buffer
-    const won = avif.length < postBuffer.length
+    const won = oversized || avif.length < postBuffer.length
+    const outWidth = postResult.width ?? width
+    const outHeight = postResult.height ?? height
     console.log(
-      `[upload ${md5.slice(0, 8)}] lossless avif: ${ext} ${kb(bytes.length)} -> ` +
-        `avif ${kb(avif.length)} (${pct(avif.length, bytes.length)}, ` +
-        `${width}x${height}, ${Date.now() - startedAt}ms) — ${won ? 'kept' : 'discarded'}`
+      `[upload ${md5.slice(0, 8)}] lossless avif: ${ext} ${kb(bytes.length)} ${width}x${height}` +
+        ` -> avif ${kb(avif.length)} ${outWidth}x${outHeight} ` +
+        `(${pct(avif.length, bytes.length)}, ${Date.now() - startedAt}ms) — ` +
+        `${won ? (oversized ? 'kept, over cap' : 'kept') : 'discarded'}`
     )
     if (won) {
       postBuffer = avif
       postExt = 'avif'
+      postWidth = outWidth
+      postHeight = outHeight
     }
   } else if (!postResult.ok) {
     console.log(
@@ -279,8 +292,8 @@ export async function createPostFromImage(
       md5,
       file_ext: postExt,
       file_size: postBuffer.length,
-      width,
-      height,
+      width: postWidth,
+      height: postHeight,
       rating: metadata.rating,
       source_url: metadata.sourceUrl,
       tags: metadata.tags,

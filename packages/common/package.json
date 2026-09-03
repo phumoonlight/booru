@@ -1,0 +1,7 @@
+{
+  "name": "common",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The code the website and the desktop uploader both compile.",
+  "type": "module"
+}

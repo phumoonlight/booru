@@ -1,7 +1,7 @@
 // Pure helpers for saved queries — no browser and no server, so the store, the sidebar
 // and the search bar all share one definition of what a saved query is.
 
-import { withoutStart } from '@/lib/search'
+import { withoutStart } from '@common/search'
 
 /**
  * A saved query is the listing's whole address: tags, rating metatags, and — when you

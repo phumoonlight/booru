@@ -1,4 +1,4 @@
-import type { BooruClient } from '@/lib/supabase/types'
+import type { BooruClient } from '@common/supabase/types'
 
 /**
  * The denormalized counters — `tags.post_count` and `rating_counts.post_count`.

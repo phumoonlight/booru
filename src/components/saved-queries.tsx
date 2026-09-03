@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { NavProgress } from '@/components/nav-progress'
 import { findSaved, type SavedQuery } from '@/lib/saved-queries'
 import { removeQuery, saveQuery, updateQuery, useSavedQueries } from '@/lib/use-saved-queries'
-import { searchHref, startOf, tagLabel, withoutStart } from '@/lib/search'
+import { searchHref, startOf, tagLabel, withoutStart } from '@common/search'
 
 /** Relative and coarse — a saved query is "where I was", and the hour is noise. */
 function ago(at: number): string {

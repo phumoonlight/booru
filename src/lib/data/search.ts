@@ -1,7 +1,7 @@
 import { createClient, type ServerClient } from '@/lib/supabase/server'
 import { POST_COLUMNS, type Post, type PostPage } from '@/lib/data/posts'
-import type { Tag } from '@/lib/tags'
-import { parseSearchQuery, RATINGS, resolveRatings, splitQuery, type Rating } from '@/lib/search'
+import type { Tag } from '@common/tags'
+import { parseSearchQuery, RATINGS, resolveRatings, splitQuery, type Rating } from '@common/search'
 
 /**
  * The opening screenful, and the default read size for anything that doesn't say
@@ -258,7 +258,7 @@ export async function getTagsForPosts(postIds: number[]): Promise<{ tag: Tag; co
  * Site-wide post count per rating — the whole gallery, not the page on screen, so the
  * rating facet reads like a tag's `post_count`: a fixed scale whose numbers stay put as
  * you page through or narrow the search. `rating_counts` is a denormalized counter row
- * per tier, recomputed by the write path (lib/data/counters.ts), so this is a six-row
+ * per tier, recomputed by the write path (`@common/data/counters`), so this is a six-row
  * read, not six `count(*)` scans.
  */
 export async function getRatingCounts(): Promise<Record<Rating, number>> {

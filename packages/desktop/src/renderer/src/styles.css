@@ -5,14 +5,14 @@
 @source './**/*.{ts,tsx}';
 @source '../index.html';
 
-/* The one exception, and it has to be named: `CATEGORY_COLOR` in the web's tags.ts is
-   Tailwind classes, and the tag index and the tag field both wear it. Class names are
-   only ever found by reading files, so a map imported from outside the scanned tree
-   compiles to nothing at all — the categories came out plain grey rather than wrong,
-   which is the kind of miss no type checker can catch. One file, not the whole of
-   `src/lib`, so this stays a list of what is genuinely shared rather than a second
-   `source(…)` by the back door. */
-@source '../../../../../src/lib/tags.ts';
+/* The one exception, and it has to be named: `CATEGORY_COLOR` in the shared package's
+   tags.ts is Tailwind classes, and the tag index and the tag field both wear it. Class
+   names are only ever found by reading files, so a map imported from outside the
+   scanned tree compiles to nothing at all — the categories came out plain grey rather
+   than wrong, which is the kind of miss no type checker can catch. One file, not the
+   whole of `packages/common`, so this stays a list of what is genuinely shared rather
+   than a second `source(…)` by the back door. */
+@source '../../../../common/src/tags.ts';
 
 /* The web's palette, verbatim from src/app/globals.css. Kept in step by hand rather than
    imported: that file also carries the rating blur and the scrollbar rules for a page

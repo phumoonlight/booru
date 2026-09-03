@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { CATEGORY_COLOR, CATEGORY_LABEL, TAG_CATEGORIES, type Tag } from '@web/lib/tags'
-import { tagLabel } from '@web/lib/search'
+import { CATEGORY_COLOR, CATEGORY_LABEL, TAG_CATEGORIES, type Tag } from '@common/tags'
+import { tagLabel } from '@common/search'
 
 /**
  * The last index read, kept outside React on purpose. This screen is unmounted whenever
@@ -27,7 +27,7 @@ export function invalidateTags(): void {
  * The board's tags, as the website's /tags page draws them: grouped by category in
  * artist → copyright → character → general → meta order, A–Z inside each group, with the
  * post count in a fixed slot on the right. Same read, same cap — `listTags` in
- * `lib/data/shared.ts` backs both.
+ * `@common/data/shared` backs both.
  *
  * It is here because the uploader's real question is "does this tag already exist, and
  * under what spelling" — the autocomplete answers that one tag at a time, and there was

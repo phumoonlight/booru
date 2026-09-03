@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { requireUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { addTagToTaggedPosts, searchTags } from '@/lib/data/tags'
-import { parseTagInput, TAG_CATEGORIES, type TagCategory } from '@/lib/tags'
+import { parseTagInput, TAG_CATEGORIES, type TagCategory } from '@common/tags'
 
 // Postgres' unique_violation. `tags.name` is the only unique column on the table, so
 // this always means "that name is already a tag" — the one failure both the create and

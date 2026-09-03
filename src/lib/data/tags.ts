@@ -1,9 +1,9 @@
 import 'server-only'
 import { createClient, type ServerClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { ensureTagIds, listTags, searchTags as sharedSearchTags } from '@/lib/data/shared'
-import { syncTagPostCounts } from '@/lib/data/counters'
-import { TAG_CATEGORIES, type Tag, type TagCategory } from '@/lib/tags'
+import { ensureTagIds, listTags, searchTags as sharedSearchTags } from '@common/data/shared'
+import { syncTagPostCounts } from '@common/data/counters'
+import { TAG_CATEGORIES, type Tag, type TagCategory } from '@common/tags'
 
 export async function getTagByName(name: string): Promise<Tag | null> {
   const supabase = await createClient()
@@ -39,7 +39,8 @@ export function groupByCategory(tags: Tag[]): [TagCategory, Tag[]][] {
   ).filter(([, group]) => group.length > 0)
 }
 
-/** Tag autocomplete — the query is in lib/data/shared.ts, which the desktop uploader also runs. */
+/** Tag autocomplete — the query is in `@common/data/shared`, which the desktop uploader
+ * also runs. */
 export async function searchTags(query: string, limit = 8): Promise<Tag[]> {
   return sharedSearchTags(await createClient(), query, limit)
 }
@@ -140,6 +141,6 @@ export async function addTagToTaggedPosts(
   return { target, condition, added: missing.length, already: matched.length - missing.length }
 }
 
-// ensureTagIds, the tag-name search and the tag index moved to lib/data/shared.ts — they are part of
-// the post write path and the tag field, and that file takes its client so the desktop
-// uploader (packages/desktop) can run them too.
+// ensureTagIds, the tag-name search and the tag index moved to `@common/data/shared` —
+// they are part of the post write path and the tag field, and that file takes its client
+// so the desktop uploader (packages/desktop) can run them too.

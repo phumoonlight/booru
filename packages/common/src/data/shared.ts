@@ -1,14 +1,14 @@
-import type { BooruClient } from '@/lib/supabase/types'
-import { syncRatingCounts, syncTagPostCounts } from '@/lib/data/counters'
-import type { Rating } from '@/lib/search'
-import type { Tag } from '@/lib/tags'
+import type { BooruClient } from '@common/supabase/types'
+import { syncRatingCounts, syncTagPostCounts } from '@common/data/counters'
+import type { Rating } from '@common/search'
+import type { Tag } from '@common/tags'
 
 // The query logic two front ends run: the web's server actions and the desktop
 // uploader in packages/desktop. Everything here takes its clients rather than
 // building them, which is the whole point — `server.ts` reaches for `next/headers`
 // and `admin.ts` is `server-only`, so a file that calls either can only run inside
-// Next. `posts.ts` and `tags.ts` wrap these with the request-scoped clients the web
-// has, so no call site in `src/` changed when they moved.
+// Next. The web's `src/lib/data/posts.ts` and `tags.ts` wrap these with its
+// request-scoped clients, so nothing in a page or an action sees the difference.
 //
 // The post write path. These replace the create_post_with_tags / update_post_with_tags
 // SQL functions. Each step is now a request you can see, log and re-run on its own; what
@@ -16,9 +16,8 @@ import type { Tag } from '@/lib/tags'
 // own work (see below) and every failure carries the message of the step that produced it.
 //
 // That includes the counters: `tags.post_count` and `rating_counts` were kept by triggers
-// on the rows these functions write, and are recomputed here instead
-// (lib/data/counters.ts). Every write below is followed by a sync naming exactly the tags
-// and ratings it moved.
+// on the rows these functions write, and are recomputed here instead (./counters.ts).
+// Every write below is followed by a sync naming exactly the tags and ratings it moved.
 //
 // Every function takes its clients rather than building them, for two reasons. `admin` is
 // the service-role client and `supabase` is the caller's session, so the split that used

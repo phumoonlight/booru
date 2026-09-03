@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import type { Post } from '@/lib/data/posts'
 import { PostCard } from '@/components/post-card'
-import { startOf } from '@/lib/search'
+import { startOf } from '@common/search'
 
 /**
  * Justified rows, the way Google Photos lays a gallery out: every row spans the full
@@ -26,7 +26,7 @@ const MIN_ROW = 0.75
 // past the pixels the thumbnail actually has.
 const MAX_ROW = 1.25
 
-/** Thumbnails are bounded to 800×400 (`lib/imgcmp/for-thumbnail.ts`), so a panorama's
+/** Thumbnails are bounded to 800×400 (`@common/imgcmp/for-thumbnail`), so a panorama's
     thumb is at most 2:1 however wide the post is. Laying it out at the post's ratio
     would reserve width the image can't fill. */
 const MAX_RATIO = 2

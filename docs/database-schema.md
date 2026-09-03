@@ -77,7 +77,7 @@ Index both directions: PK covers `(post_id, tag_id)`; add index on `(tag_id, pos
 On insert into `auth.users`, create a `profiles` row (username from email prefix).
 There is no role column — every signed-in user may upload and manage posts.
 
-### Counters — `src/lib/data/counters.ts`
+### Counters — `packages/common/src/data/counters.ts`
 
 `tags.post_count` and `rating_counts.post_count` were kept by triggers (`tag_post_count`
 on `post_tags`, three `posts_rating_count` triggers on `posts`) until they moved into TypeScript.
