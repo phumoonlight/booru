@@ -27,6 +27,66 @@ const EXT_FOR_TYPE: Record<string, string> = {
   'image/avif': '.avif',
 }
 
+/**
+ * The user agent to ask with, and why it is not Electron's own.
+ *
+ * Electron advertises `… Chrome/140.0.0.0 Pubooru/1.0.4 Electron/44.0.0 Safari/537.36`,
+ * and those two extra tokens are exactly what a hotlink or bot filter matches on: a board
+ * that serves the image to the browser it was dragged out of resets the connection for
+ * this, which surfaces as a failure with no HTTP status at all. Removing the tokens
+ * leaves the genuine Chromium string for the version actually running — truer than a
+ * pinned literal here, which would go stale against the runtime a version later.
+ */
+let browserAgent: string | undefined
+
+function userAgent(): string {
+  if (!browserAgent) {
+    const own = app.getName().toLowerCase()
+    browserAgent = app.userAgentFallback
+      .split(' ')
+      .filter((token) => {
+        const product = token.split('/')[0].toLowerCase()
+        return product !== 'electron' && product !== own
+      })
+      .join(' ')
+  }
+  return browserAgent
+}
+
+/**
+ * Why the request never produced a response.
+ *
+ * Chromium puts a `net::ERR_…` code on the error it throws, and the codes are the
+ * difference between two problems with nothing in common: a board refusing anything that
+ * doesn't look like a browser, and a machine that cannot resolve the host at all — the
+ * second being what a browser hides by resolving over DNS-over-HTTPS while this app uses
+ * the OS resolver. One flat message made those indistinguishable. Anything unmatched
+ * keeps its code, which is at least searchable.
+ */
+const FETCH_FAILURES: [RegExp, string][] = [
+  [
+    /ERR_NAME_NOT_RESOLVED|ERR_NAME_RESOLUTION_FAILED/,
+    'That host could not be resolved — your browser may reach it over a DNS this app does not use',
+  ],
+  [/ERR_INTERNET_DISCONNECTED|ERR_NETWORK_CHANGED/, 'No network connection'],
+  [/ERR_(?:CONNECTION_)?TIMED_OUT/, 'The server did not answer in time'],
+  [
+    /ERR_CONNECTION_(?:RESET|CLOSED|ABORTED|REFUSED|FAILED)|ERR_EMPTY_RESPONSE/,
+    'The server closed the connection — it may be refusing anything but a browser',
+  ],
+  [/ERR_CERT|ERR_SSL|ERR_TLS/, "That site's certificate was rejected"],
+  [/ERR_BLOCKED_BY/, 'Something on this machine blocked the request'],
+]
+
+function describeFailure(cause: unknown): string {
+  const parts: string[] = []
+  for (let error = cause; error instanceof Error; error = error.cause) parts.push(error.message)
+  const text = parts.join(' ')
+  for (const [pattern, message] of FETCH_FAILURES) if (pattern.test(text)) return message
+  const code = /net::[A-Z_]+/.exec(text)?.[0]
+  return code ? `Could not reach that link (${code})` : 'Could not reach that link'
+}
+
 let root: string | undefined
 
 /** One directory per run of the app, emptied on quit. */
@@ -85,9 +145,18 @@ async function downloadOne(address: string): Promise<StageOutcome> {
   try {
     // Electron's net, not the global fetch: it goes through the app's session, so a
     // system proxy and the OS certificate store both apply.
-    response = await net.fetch(url.toString())
-  } catch {
-    return { ok: false, path: address, name, error: 'Could not reach that link' }
+    response = await net.fetch(url.toString(), {
+      headers: {
+        'user-agent': userAgent(),
+        // The image's own origin as the referer — a hotlink check wants to see the page
+        // the image belongs to, and that is the honest answer when a drag is all we have
+        // of where it came from. A host that doesn't check ignores it.
+        referer: url.origin + '/',
+        accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+      },
+    })
+  } catch (cause) {
+    return { ok: false, path: address, name, error: describeFailure(cause) }
   }
   if (!response.ok) {
     return { ok: false, path: address, name, error: `The server answered ${response.status}` }
