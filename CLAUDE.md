@@ -153,6 +153,12 @@ at — see [packages/desktop/README.md](packages/desktop/README.md).
   provider speaks DoH, which is never true on the networks this is for. It reaches only
   Chromium's stack (the drag downloads); Supabase goes over Node's `fetch` and the OS
   resolver, which is what makes a DoH-only setting safe to make.
+- **Closing the window asks, if the queue holds anything** (`main/queue-guard.ts`). A
+  staged row is hand-typed tags that exist nowhere else, and an uploaded one is the only
+  copy of the post number just made, so both count and only an empty queue closes in
+  silence. The renderer pushes its counts on every change rather than main asking at
+  close time: a `close` handler vetoes synchronously or not at all, so it cancels the
+  close outright and re-issues it as `destroy()` if the answer is yes.
 - **`signOut({ scope: 'local' })`, here and in `lib/actions/auth.ts`.** The default is
   `'global'`, which revokes every refresh token the account holds — logging out of the
   uploader signed out the browser too, and the other way round. Logging out of one place

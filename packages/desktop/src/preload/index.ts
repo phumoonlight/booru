@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { PostAppApi, PreferencesInput, UploadRequest } from '../shared/api'
+import type { PostAppApi, PreferencesInput, QueueState, UploadRequest } from '../shared/api'
 
 /**
  * The bridge. Nothing but these functions crosses into the page — no `ipcRenderer`, no
@@ -25,6 +25,9 @@ const api: PostAppApi = {
   listTags: () => ipcRenderer.invoke('tags:list'),
   suggestTags: (query) => ipcRenderer.invoke('tags:suggest', query),
   uploadPost: (request: UploadRequest) => ipcRenderer.invoke('post:upload', request),
+  // The one channel with nothing to answer: main only reads it when the window closes,
+  // and the renderer pushes on every queue change, so a reply would be noise.
+  reportQueue: (state: QueueState) => ipcRenderer.send('queue:state', state),
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   openDataFolder: () => ipcRenderer.invoke('shell:open-data-folder'),
 }

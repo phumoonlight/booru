@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { RATING_LABEL, RATINGS, type Rating } from '@web/lib/search'
 import { GripIcon, TrashIcon } from './icons'
 import { ImageViewer } from './image-viewer'
@@ -239,6 +239,19 @@ export function UploadQueue({ status }: { status: AppStatus }) {
 
   const pending = items.filter((item) => item.status !== 'ok').length
   const uploaded = items.filter((item) => item.status === 'ok')
+
+  // Main can't ask the window what it is holding from inside a `close` handler, so the
+  // window tells it as it goes. Uploaded rows count: they carry the post numbers this
+  // run made, and closing is what loses them (`main/queue-guard.ts`).
+  useEffect(() => {
+    window.api.reportQueue({ pending, uploaded: uploaded.length, busy })
+  }, [pending, uploaded.length, busy])
+
+  // Logging out is the one thing that takes this component away rather than hiding it,
+  // and a count left behind would have main guarding a queue that no longer exists.
+  useEffect(() => {
+    return () => window.api.reportQueue({ pending: 0, uploaded: 0, busy: false })
+  }, [])
   const working = busy || staging !== null
   const viewed = items.find((item) => item.file.path === viewing)
 

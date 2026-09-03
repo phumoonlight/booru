@@ -10,6 +10,7 @@ import { loadPreferences, savePreferences } from './preferences'
 import { readCredentials, saveCredentials } from './credentials'
 import { previewFile, stageFiles } from './staging'
 import { downloadImages } from './download'
+import { setQueueState } from './queue-guard'
 import { adminClient, currentUser, signIn, signOut, userClient } from './supabase'
 import type { AppStatus, Outcome, PreferencesInput, SavedLogin, TagSuggestion } from '../shared/api'
 import type { Tag } from '@web/lib/tags'
@@ -38,6 +39,12 @@ const preferencesSchema = z.object({
 const loginSchema = z.object({
   email: z.email('Enter a valid email'),
   password: z.string().min(1, 'Password is required'),
+})
+
+const queueStateSchema = z.object({
+  pending: z.number().int().nonnegative(),
+  uploaded: z.number().int().nonnegative(),
+  busy: z.boolean(),
 })
 
 const uploadSchema = z.object({
@@ -231,6 +238,16 @@ export function registerIpc(): void {
       metadata.metadata,
       DESKTOP_UPLOAD_LIMITS
     )
+  })
+
+  /**
+   * The queue's size, pushed on every change. `on`, not `handle`: nothing is returned and
+   * nothing waits for it. Parsed like everything else here, and a message that doesn't fit
+   * the shape is dropped rather than left to make the close dialog lie about the count.
+   */
+  ipcMain.on('queue:state', (_event, state: unknown) => {
+    const parsed = queueStateSchema.safeParse(state)
+    if (parsed.success) setQueueState(parsed.data)
   })
 
   /** Shows `save.json` in Explorer/Finder — the settings screen's "where is this?". */

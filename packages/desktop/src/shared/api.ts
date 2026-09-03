@@ -82,6 +82,20 @@ export type UploadRequest = {
   sourceUrl: string
 }
 
+/**
+ * What the window has staged, pushed to main whenever it changes. Closing the window is
+ * the only thing that reads it — `main/queue-guard.ts` has why it is pushed rather than
+ * asked for.
+ */
+export type QueueState = {
+  /** Rows not uploaded yet: the ones carrying tags typed by hand and nothing else. */
+  pending: number
+  /** Rows that finished, still listed with their post numbers. */
+  uploaded: number
+  /** Whether a run is in flight right now. */
+  busy: boolean
+}
+
 export type Outcome = { ok: true } | { ok: false; error: string }
 
 /** What "Remember me" kept from the last login, for the form to come back filled in. */
@@ -112,6 +126,8 @@ export type PostAppApi = {
   listTags: () => Promise<Tag[]>
   suggestTags: (query: string) => Promise<TagSuggestion[]>
   uploadPost: (request: UploadRequest) => Promise<UploadResult>
+  /** Tells main what the queue holds, so closing the window can ask before dropping it. */
+  reportQueue: (state: QueueState) => void
   openExternal: (url: string) => Promise<void>
   /** Reveals `save.json` — session and preferences — in the OS file manager. */
   openDataFolder: () => Promise<void>

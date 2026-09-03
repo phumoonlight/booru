@@ -4,6 +4,7 @@ import { registerIpc } from './ipc'
 import { cleanupDownloads } from './download'
 import { dropStoredConfig } from './config'
 import { configureDns } from './dns'
+import { confirmClose, queueIsWorthKeeping } from './queue-guard'
 import { applyPreferences, loadPreferences } from './preferences'
 
 /**
@@ -59,6 +60,30 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
+
+  /**
+   * Closing with images still staged asks first (`main/queue-guard.ts`). The veto has to
+   * be synchronous — a `close` handler that awaits has already let the window go — so the
+   * close is cancelled outright and re-issued, as a `destroy`, only if the answer is yes.
+   * `asking` is what stops a second × while the dialog is up from stacking another.
+   */
+  let asking = false
+  mainWindow.on('close', (event) => {
+    const window = mainWindow
+    if (!window || !queueIsWorthKeeping()) return
+    event.preventDefault()
+    if (asking) return
+    asking = true
+    void confirmClose(window)
+      .then((confirmed) => {
+        // Destroy, not close: this is past the question, and going through `close` again
+        // would only ask it a second time.
+        if (confirmed) window.destroy()
+      })
+      .finally(() => {
+        asking = false
+      })
+  })
 
   mainWindow.on('closed', () => {
     mainWindow = null
