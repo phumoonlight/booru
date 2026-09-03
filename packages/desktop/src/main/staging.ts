@@ -19,7 +19,29 @@ import type { StageOutcome } from '../shared/api'
  * `file://` access and no custom protocol: the renderer only ever sees a small data URL.
  */
 
-const PREVIEW_HEIGHT = 200
+/**
+ * The row preview's bounds, set against the box the queue draws it in: 768px tall and
+ * the width of the window (`h-192` on a one-column grid). The old 200px was a 4x upscale
+ * there — visibly soft, which is no use for a picture whose whole job is letting you tell
+ * two pages of a set apart before you tag them.
+ *
+ * Not quite the 2x a HiDPI screen would want, which would be 1536. Stopping at 1024 is
+ * the payload talking: every staged row holds its preview as base64 in the window for as
+ * long as it is queued, ~190kB a row at this size against the 13kB it was, so a queue of
+ * forty is around 7MB and 1536 would be nearer 15MB. This is the expensive constant in
+ * the app and the number to cut first if a long queue ever feels heavy.
+ *
+ * Height is the bound that matters, the same way it is for the real thumbnail: the box is
+ * far wider than it is tall, so everything but a panorama is height-bound when it fits.
+ * The width cap is for the panorama, which would otherwise encode thousands of pixels
+ * across — `fit: 'inside'` falls back to it, and the short height that yields is what the
+ * card shows anyway.
+ *
+ * Changing `h-192` in upload-queue.tsx without changing these is what makes it blurry
+ * again.
+ */
+const PREVIEW_HEIGHT = 1024
+const PREVIEW_WIDTH = 1600
 
 /**
  * The bound on the one image the queue blows up when a row is clicked. Big enough to fill
@@ -72,7 +94,12 @@ async function stageOne(path: string): Promise<StageOutcome> {
   try {
     const thumb = await sharp(path)
       .rotate()
-      .resize({ height: PREVIEW_HEIGHT, fit: 'inside', withoutEnlargement: true })
+      .resize({
+        fit: 'inside',
+        withoutEnlargement: true,
+        height: PREVIEW_HEIGHT,
+        width: PREVIEW_WIDTH,
+      })
       .webp({ quality: 70 })
       .toBuffer()
     preview = `data:image/webp;base64,${thumb.toString('base64')}`

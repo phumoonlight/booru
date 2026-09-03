@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RATING_LABEL, RATINGS, type Rating } from '@common/search'
-import { GripIcon, TrashIcon } from './icons'
+import { ArrowDownIcon, ArrowUpIcon, TrashIcon } from './icons'
 import { ImageViewer } from './image-viewer'
 import { EMPTY_TAGS, TagField, tagsToInput, type TagFieldValue } from './tag-field'
 import { invalidateTags } from './tag-index'
@@ -18,17 +18,6 @@ type Staged = {
   postId?: number
 }
 
-/**
- * The flavour a row's own drag carries. The drop zone wraps the queue, so every reorder
- * drag passes through its handlers on the way; this is what lets it tell "a row of mine
- * is moving" from "files are arriving" and keep its hands off the former. A drag from
- * outside can't set it, and `dataTransfer.types` is readable during dragover, where the
- * data itself is not.
- */
-const ROW_MIME = 'application/x-pubooru-row'
-
-const isRowDrag = (transfer: DataTransfer) => transfer.types.includes(ROW_MIME)
-
 function formatSize(bytes: number): string {
   const mb = bytes / 1024 / 1024
   return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
@@ -41,10 +30,10 @@ function formatSize(bytes: number): string {
  * writes the same fields across every staged file at once, for the common case of a set
  * that shares an artist and a rating.
  *
- * Uploads run one at a time, top row first, and the list is draggable by the ⠿ handle so
- * that order is the author's to choose: post ids come out in the order the queue is in,
- * and a set whose pages or panels arrived in whatever order the file picker sorted them
- * would otherwise be numbered that way for good. Each file is its own bridge call, its
+ * Uploads run one at a time, top card first, and ↑/↓ on each card move it, so that
+ * order is the author's to choose: post ids come out in the order the queue is in, and a
+ * set whose pages or panels arrived in whatever order the file picker sorted them would
+ * otherwise be numbered that way for good. Each file is its own bridge call, its
  * own row in the list, and its own failure. A failed row stays staged and editable so
  * pressing Upload again retries just that one.
  *
@@ -72,13 +61,6 @@ export function UploadQueue({ status }: { status: AppStatus }) {
   // The row whose picture is open full-window, held by path so a re-render of the queue
   // can't leave the viewer showing a stale copy of a row that has since been edited.
   const [viewing, setViewing] = useState<string | null>(null)
-  // Reordering, in two parts. `grabbed` is the row whose handle is under the pointer:
-  // only that row is `draggable`, because a permanently draggable row swallows the
-  // click-and-sweep that selects text in the tag and source fields inside it. `dragPath`
-  // is the row actually in flight, which is what greys it out and what a row dragged
-  // over reorders against.
-  const [grabbed, setGrabbed] = useState<string | null>(null)
-  const [dragPath, setDragPath] = useState<string | null>(null)
 
   /**
    * Files never reach the queue unless they can actually be uploaded. The main process
@@ -159,20 +141,20 @@ export function UploadQueue({ status }: { status: AppStatus }) {
   }, [])
 
   /**
-   * Lifts one row out and puts it where another one sits. Called from the *hovered*
-   * row's dragenter rather than from a drop, so the list settles under the pointer as
-   * it moves and the arrangement you see while dragging is the one you get. There is no
-   * separate drop-target state to keep in step, and letting go anywhere — including
-   * outside the window — simply leaves the queue as it already looks.
+   * Swaps one card with its neighbour. Addressed by path rather than by index because
+   * the button that calls it renders from a list that may have been reordered since:
+   * the position is looked up at the moment of the press, not captured in the handler.
+   * Out of range is a no-op rather than a wrap, so holding ↑ on the first card does
+   * nothing instead of sending it to the bottom.
    */
-  const moveTo = useCallback((from: string, to: string) => {
-    if (from === to) return
+  const move = useCallback((path: string, delta: number) => {
     setItems((prev) => {
-      const at = prev.findIndex((item) => item.file.path === from)
-      const target = prev.findIndex((item) => item.file.path === to)
-      if (at < 0 || target < 0) return prev
+      const at = prev.findIndex((item) => item.file.path === path)
+      const to = at + delta
+      if (at < 0 || to < 0 || to >= prev.length) return prev
       const next = [...prev]
-      next.splice(target, 0, ...next.splice(at, 1))
+      const [row] = next.splice(at, 1)
+      next.splice(to, 0, row)
       return next
     })
   }, [])
@@ -259,9 +241,6 @@ export function UploadQueue({ status }: { status: AppStatus }) {
     <>
       <div
         onDragOver={(event) => {
-          // A row being reordered is not an arrival: no highlight, and no preventDefault,
-          // which would claim the drop for the zone and read no files out of it.
-          if (isRowDrag(event.dataTransfer)) return
           event.preventDefault()
           // Without an explicit copy effect some sources treat the drop as refused
           event.dataTransfer.dropEffect = 'copy'
@@ -269,7 +248,6 @@ export function UploadQueue({ status }: { status: AppStatus }) {
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={(event) => {
-          if (isRowDrag(event.dataTransfer)) return
           event.preventDefault()
           setDragging(false)
 
@@ -369,74 +347,64 @@ export function UploadQueue({ status }: { status: AppStatus }) {
             </div>
 
             <p className="text-xs text-muted">
-              Posts are created in queue order, left to right — drag a card by its handle
-              to reorder.
+              Posts are created top to bottom — ↑ and ↓ on a card move it.
             </p>
 
             {/*
-              A grid, not a list. A row was the full width of the window with a 128px
-              thumbnail in the corner of it: too little picture to tell two pages of the
-              same set apart, and the space beside the fields went to nothing. The queue
-              is the only thing on this screen, so the width is free.
+              One card per row, the picture across the whole of it. It was a list with a
+              128px thumbnail in the corner, then a two-column grid; both were a
+              compromise with a preview whose only job is letting you tell two pages of a
+              set apart before you tag them, and neither was big enough to do it.
 
-              `auto-fill` with a 19rem floor rather than breakpoints — the column count
-              follows the window, three at the default size down to one at the minimum,
-              and a card never gets narrower than its tag field needs. `auto-rows-fr`
-              makes every card the height of the tallest, so a card carrying six tags
-              doesn't leave the one beside it a stub.
+              Still a grid rather than a flex column, for `auto-rows-fr`: every card comes
+              out the height of the tallest, so a card carrying six tags doesn't sit next
+              to a stub.
             */}
-            <ul className="grid auto-rows-fr grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-3">
+            <ul className="grid auto-rows-fr grid-cols-1 gap-3">
               {items.map((item, index) => (
                 <li
                   key={item.file.path}
-                  draggable={grabbed === item.file.path}
-                  onDragStart={(event) => {
-                    event.dataTransfer.effectAllowed = 'move'
-                    event.dataTransfer.setData(ROW_MIME, item.file.path)
-                    setDragPath(item.file.path)
-                  }}
-                  onDragEnter={() => {
-                    if (dragPath) moveTo(dragPath, item.file.path)
-                  }}
-                  onDragOver={(event) => {
-                    if (!dragPath) return
-                    event.preventDefault()
-                    event.dataTransfer.dropEffect = 'move'
-                  }}
-                  onDrop={(event) => {
-                    if (dragPath) event.preventDefault()
-                  }}
-                  onDragEnd={() => {
-                    setDragPath(null)
-                    setGrabbed(null)
-                  }}
                   className={`flex h-full flex-col gap-3 rounded-lg border bg-surface p-3 ${
                     item.status === 'error' ? 'border-red-500/40' : 'border-border'
-                  } ${dragPath === item.file.path ? 'opacity-40' : ''}`}
+                  }`}
                 >
-                  {/* Handle, name and remove on one line above the picture. In a column
-                    the handle can't run down the side of the card any more, and the top
-                    edge is where a card gets grabbed anyway. */}
+                  {/* Order, name and remove on one line above the picture. */}
                   <div className="flex items-start gap-2">
-                    {/* Grab handle. Draggability is switched on by pressing it and off
-                      again when the drag ends, so the rest of the card stays ordinary: a
-                      card that is always draggable can't have text selected in the fields
-                      inside it. */}
-                    <button
-                      type="button"
-                      onPointerDown={() => !busy && setGrabbed(item.file.path)}
-                      onPointerUp={() => setGrabbed(null)}
-                      disabled={busy}
-                      title="Drag to reorder"
-                      aria-label={`Reorder ${item.file.name} — currently ${index + 1} of ${items.length}`}
-                      className="flex min-h-9 w-8 shrink-0 cursor-grab items-center justify-center rounded-lg border border-border text-muted hover:text-foreground active:cursor-grabbing disabled:cursor-default disabled:opacity-50"
-                    >
-                      <GripIcon />
-                    </button>
+                    {/*
+                      Reordering is two buttons, not a drag. Dragging a card meant holding
+                      a handle while the list rearranged under the pointer, which is fine
+                      for a short list of small rows and awkward once a card is most of
+                      the window: the target is off-screen as often as not, and the drag
+                      had to be kept clear of the drop zone's own handlers and of text
+                      selection inside the fields. A press per position is duller and
+                      always works.
+                    */}
+                    <div className="flex shrink-0 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => move(item.file.path, -1)}
+                        disabled={busy || index === 0}
+                        title="Move up"
+                        aria-label={`Move ${item.file.name} up — currently ${index + 1} of ${items.length}`}
+                        className="flex min-h-9 w-8 items-center justify-center rounded-lg border border-border text-muted hover:text-foreground disabled:opacity-30"
+                      >
+                        <ArrowUpIcon />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => move(item.file.path, 1)}
+                        disabled={busy || index === items.length - 1}
+                        title="Move down"
+                        aria-label={`Move ${item.file.name} down — currently ${index + 1} of ${items.length}`}
+                        className="flex min-h-9 w-8 items-center justify-center rounded-lg border border-border text-muted hover:text-foreground disabled:opacity-30"
+                      >
+                        <ArrowDownIcon />
+                      </button>
+                    </div>
 
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium" title={item.file.path}>
-                        {item.file.name}
+                        <span className="text-muted">{index + 1}.</span> {item.file.name}
                       </p>
                       <p className="text-xs text-muted">
                         {formatSize(item.file.size)} · {item.file.width}×{item.file.height}
@@ -455,17 +423,19 @@ export function UploadQueue({ status }: { status: AppStatus }) {
                     </button>
                   </div>
 
-                  {/* The thumbnail is the button. It spans the card now, which is enough
-                    to recognise a page by but still not enough to read one, so clicking
-                    it opens the picture full-window as before. `object-contain` on a
-                    fixed height: cropping to fill would hide exactly the edges that tell
-                    two variants of the same image apart. */}
+                  {/* The thumbnail is the button. `object-contain` on a fixed height:
+                    cropping to fill would hide exactly the edges that tell two variants
+                    of the same image apart. Clicking still opens the full-window viewer,
+                    which is now the difference between a good look and the actual file
+                    rather than between a stamp and a look. Raise `h-192` and
+                    `PREVIEW_HEIGHT` in `main/staging.ts` moves with it, or the picture
+                    goes soft. */}
                   <button
                     type="button"
                     onClick={() => setViewing(item.file.path)}
                     title="Open a bigger preview"
                     aria-label={`Open a bigger preview of ${item.file.name}`}
-                    className="h-52 w-full shrink-0 overflow-hidden rounded-lg bg-background ring-border hover:ring-2"
+                    className="h-192 w-full shrink-0 overflow-hidden rounded-lg bg-background ring-border hover:ring-2"
                   >
                     <img
                       src={item.file.preview}
@@ -492,40 +462,39 @@ export function UploadQueue({ status }: { status: AppStatus }) {
                           disabled={busy}
                         />
 
-                        {/* Stacked, not side by side: a card is one column of the grid
-                          now, and a rating select beside a URL field inside one leaves
-                          both too narrow to read. */}
-                        <label className="flex flex-col gap-1.5 text-sm">
-                          Rating
-                          <select
-                            value={item.rating}
-                            disabled={busy}
-                            onChange={(event) =>
-                              patch(item.file.path, { rating: event.target.value as Rating })
-                            }
-                            className="min-h-11 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
-                          >
-                            {RATINGS.map((rating) => (
-                              <option key={rating} value={rating}>
-                                {RATING_LABEL[rating]}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                          <label className="flex flex-col gap-1.5 text-sm sm:w-44">
+                            Rating
+                            <select
+                              value={item.rating}
+                              disabled={busy}
+                              onChange={(event) =>
+                                patch(item.file.path, { rating: event.target.value as Rating })
+                              }
+                              className="min-h-11 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
+                            >
+                              {RATINGS.map((rating) => (
+                                <option key={rating} value={rating}>
+                                  {RATING_LABEL[rating]}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
 
-                        <label className="flex min-w-0 flex-col gap-1.5 text-sm">
-                          Source URL (optional)
-                          <input
-                            type="url"
-                            value={item.sourceUrl}
-                            disabled={busy}
-                            onChange={(event) =>
-                              patch(item.file.path, { sourceUrl: event.target.value })
-                            }
-                            placeholder="https://…"
-                            className="min-h-11 rounded-lg border border-border bg-background px-3 font-mono text-xs outline-none focus:border-accent"
-                          />
-                        </label>
+                          <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-sm">
+                            Source URL (optional)
+                            <input
+                              type="url"
+                              value={item.sourceUrl}
+                              disabled={busy}
+                              onChange={(event) =>
+                                patch(item.file.path, { sourceUrl: event.target.value })
+                              }
+                              placeholder="https://…"
+                              className="min-h-11 rounded-lg border border-border bg-background px-3 font-mono text-xs outline-none focus:border-accent"
+                            />
+                          </label>
+                        </div>
 
                         {item.status === 'uploading' && (
                           <p className="text-xs text-muted">Compressing and uploading…</p>
@@ -582,11 +551,7 @@ export function UploadQueue({ status }: { status: AppStatus }) {
       {/* Outside the drop zone on purpose: a full-window overlay sitting inside it would
         answer the drag handlers with its own hit box while it is up. */}
       {viewed && (
-        <ImageViewer
-          key={viewed.file.path}
-          file={viewed.file}
-          onClose={() => setViewing(null)}
-        />
+        <ImageViewer key={viewed.file.path} file={viewed.file} onClose={() => setViewing(null)} />
       )}
     </>
   )
