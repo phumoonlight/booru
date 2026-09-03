@@ -2,10 +2,12 @@
 
 import { startTransition, useActionState, useState, useTransition } from 'react'
 import {
+  applyTagToTagged,
   createTag,
   deleteTag,
   renameTag,
   updateTagCategory,
+  type ApplyTagState,
   type CreateTagState,
   type DeleteTagState,
   type RenameTagState,
@@ -110,6 +112,141 @@ function NewTag({ tags }: { tags: Tag[] }) {
         <p className="text-xs text-muted">Created {tagLabel(state.name)}.</p>
       ) : null}
     </form>
+  )
+}
+
+/**
+ * Apply one tag to every post that already carries another — `swimsuit` to everything
+ * tagged `bikini`, an artist's `series` to everything tagged with the artist. Retagging
+ * that by hand is opening every post in the search and typing the same word into each.
+ *
+ * It asks before it writes, which the two fields alone would not: nothing on screen
+ * distinguishes an apply across four posts from one across four hundred, and the second
+ * is tedious to undo one post at a time. The confirmation is where the number goes, and
+ * the number is free — the tag list this page already has carries every `post_count`.
+ *
+ * Nothing here checks whether the condition tag exists. The list is capped at the 500
+ * most-used tags, so "not in the list" and "not a tag" are different claims and only the
+ * server can tell them apart; guessing would refuse a real, rarely-used tag. The count
+ * line simply goes quiet when it has nothing to say.
+ */
+function ApplyToTagged({ tags }: { tags: Tag[] }) {
+  const [pending, startApply] = useTransition()
+  const [state, setState] = useState<ApplyTagState>(null)
+  const [target, setTarget] = useState('')
+  const [condition, setCondition] = useState('')
+  const [confirming, setConfirming] = useState(false)
+
+  const [targetName] = parseTagInput(target).tags
+  const [conditionName] = parseTagInput(condition).tags
+  const known = tags.find((tag) => tag.name === conditionName)
+  const ready =
+    targetName !== undefined && conditionName !== undefined && targetName !== conditionName
+
+  const apply = () => {
+    const data = new FormData()
+    data.set('tag', target)
+    data.set('exist', condition)
+    startApply(async () => {
+      const result = await applyTagToTagged(null, data)
+      setState(result)
+      setConfirming(false)
+      if (result?.ok) {
+        setTarget('')
+        setCondition('')
+      }
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-2">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-muted">Add</span>
+        <input
+          value={target}
+          onChange={(event) => {
+            setTarget(asTagName(event.target.value))
+            setConfirming(false)
+          }}
+          placeholder="tag_to_add"
+          aria-label="Tag to add"
+          maxLength={64}
+          autoCapitalize="none"
+          spellCheck={false}
+          className={`min-w-32 flex-1 ${FIELD}`}
+        />
+        <span className="text-muted">to posts tagged</span>
+        <input
+          value={condition}
+          onChange={(event) => {
+            setCondition(asTagName(event.target.value))
+            setConfirming(false)
+          }}
+          placeholder="existing_tag"
+          aria-label="Posts must already have this tag"
+          maxLength={64}
+          autoCapitalize="none"
+          spellCheck={false}
+          className={`min-w-32 flex-1 ${FIELD} ${known ? CATEGORY_COLOR[known.category] : ''}`}
+        />
+        <button
+          type="button"
+          onClick={() => {
+            setState(null)
+            setConfirming((armed) => !armed)
+          }}
+          disabled={pending || !ready}
+          aria-expanded={confirming}
+          className="flex min-h-9 items-center gap-1.5 px-1 text-sm text-accent hover:underline disabled:opacity-50 disabled:no-underline"
+        >
+          <span aria-hidden>🏷️</span>
+          {pending ? 'Applying…' : 'Apply'}
+        </button>
+      </div>
+
+      {confirming && ready && (
+        <div className="flex flex-col gap-2 rounded-lg border border-accent/40 bg-accent/10 p-2 text-sm">
+          <p>
+            Add {tagLabel(targetName)} to{' '}
+            {known
+              ? `the ${known.post_count} post${known.post_count === 1 ? '' : 's'} tagged`
+              : 'every post tagged'}{' '}
+            {tagLabel(conditionName)}?
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              className="min-h-9 flex-1 rounded-lg border border-border"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={apply}
+              disabled={pending}
+              className="min-h-9 flex-1 rounded-lg bg-accent font-medium text-background disabled:opacity-50"
+            >
+              {pending ? 'Applying…' : 'Apply'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {targetName !== undefined && targetName === conditionName ? (
+        <p className="text-xs text-muted">Those are the same tag.</p>
+      ) : state?.error ? (
+        <p className="text-xs text-red-400">{state.error}</p>
+      ) : state?.ok ? (
+        <p className="text-xs text-muted">
+          {state.added === 0
+            ? `Every post tagged ${tagLabel(state.condition)} already had ${tagLabel(state.target)}.`
+            : `Added ${tagLabel(state.target)} to ${state.added} post${
+                state.added === 1 ? '' : 's'
+              }${state.already > 0 ? `; ${state.already} already had it` : ''}.`}
+        </p>
+      ) : null}
+    </div>
   )
 }
 
@@ -345,6 +482,7 @@ export function ManageTags({ tags }: { tags: Tag[] }) {
   return (
     <div className="flex flex-col gap-3">
       <NewTag tags={tags} />
+      <ApplyToTagged tags={tags} />
 
       <input
         type="search"

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { requireUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { searchTags } from '@/lib/data/tags'
+import { addTagToTaggedPosts, searchTags } from '@/lib/data/tags'
 import { parseTagInput, TAG_CATEGORIES, type TagCategory } from '@/lib/tags'
 
 // Postgres' unique_violation. `tags.name` is the only unique column on the table, so
@@ -32,9 +32,7 @@ function readTagName(raw: FormDataEntryValue | null): { name: string } | { error
 }
 
 export type CreateTagState =
-  | { error: string; ok?: never; name?: never }
-  | { ok: true; name: string; error?: never }
-  | null
+  { error: string; ok?: never; name?: never } | { ok: true; name: string; error?: never } | null
 
 /**
  * Add a tag nobody has used yet. Uploads create tags as a side effect of applying them,
@@ -55,9 +53,7 @@ export async function createTag(
   if (!category.success) return { error: 'Pick a category.' }
 
   const supabase = await createClient()
-  const { error } = await supabase
-    .from('tags')
-    .insert({ name: name.name, category: category.data })
+  const { error } = await supabase.from('tags').insert({ name: name.name, category: category.data })
   if (error) {
     if (error.code === UNIQUE_VIOLATION) return { error: `${name.name} already exists.` }
     return { error: `Could not create the tag: ${error.message}` }
@@ -67,12 +63,60 @@ export async function createTag(
   return { ok: true, name: name.name }
 }
 
+export type ApplyTagState =
+  | { error: string; ok?: never }
+  | { ok: true; target: string; condition: string; added: number; already: number; error?: never }
+  | null
+
+/**
+ * Apply one tag to every post that already carries another — the bulk edit behind the
+ * "Apply by tag" panel on /tags/manage.
+ *
+ * Both names go through `readTagName`, so this rejects the same input the tag box does
+ * and for the same reasons. Applying a tag to the posts that already have it is refused
+ * rather than treated as a no-op: it can only be a mistake, and the result it would
+ * report ("0 added, 812 already had it") reads like a failure anyway.
+ *
+ * The work is in lib/data/tags.ts and the failures come back as messages rather than a
+ * thrown error, because every one of them is something the typist can fix in the field
+ * still on screen — an unknown condition tag, most of all.
+ */
+export async function applyTagToTagged(
+  _prevState: ApplyTagState,
+  formData: FormData
+): Promise<ApplyTagState> {
+  await requireUser()
+
+  const target = readTagName(formData.get('tag'))
+  if ('error' in target) return { error: target.error }
+  const condition = readTagName(formData.get('exist'))
+  if ('error' in condition) return { error: condition.error }
+  if (target.name === condition.name) {
+    return { error: 'Those are the same tag — every matching post already has it.' }
+  }
+
+  let result
+  try {
+    result = await addTagToTaggedPosts(target.name, condition.name)
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Could not apply the tag.' }
+  }
+
+  // Post counts, the tag colours and the tag lists on every post that just changed
+  revalidatePath('/', 'layout')
+  return {
+    ok: true,
+    target: target.name,
+    condition: condition.name,
+    added: result.added,
+    already: result.already,
+  }
+}
+
 const renameSchema = z.object({ id: z.coerce.number().int() })
 
 export type RenameTagState =
-  | { error: string; ok?: never; name?: never }
-  | { ok: true; name: string; error?: never }
-  | null
+  { error: string; ok?: never; name?: never } | { ok: true; name: string; error?: never } | null
 
 /**
  * Rename a tag in place. The row keeps its id, so every `post_tags` link and every
