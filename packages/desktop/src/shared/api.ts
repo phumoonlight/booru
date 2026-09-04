@@ -1,6 +1,8 @@
 import type { Rating } from '@common/search'
 import type { Tag, TagCategory } from '@common/tags'
 import type { UploadResult } from '@common/upload/pipeline'
+import type { ImplicationRules } from './implications'
+import type { RecommendationRules } from './recommendations'
 
 /**
  * The whole surface between the window and the process that does the work. The renderer
@@ -51,6 +53,8 @@ export type AppStatus = {
   /** What the About screen shows, and what a bug report needs: the app and the runtime under it. */
   versions: { app: string; electron: string; chrome: string }
   limits: { maxFileSize: number; maxFileSizeLabel: string; maxPixels: number }
+  /** The cached tag index behind autocomplete: how many names, and when they were read. */
+  tagCache: { count: number; at: number | null }
   /** What the machine has, and what the encoder is currently running with. */
   cpu: { count: number; threads: number; priority: EncodePriority }
 }
@@ -125,6 +129,15 @@ export type PostAppApi = {
   /** The board's tag index, most used first — what the Tags screen paints. */
   listTags: () => Promise<Tag[]>
   suggestTags: (query: string) => Promise<TagSuggestion[]>
+  /** Throws away the cached tag index; the next lookup reads the board again. */
+  clearTagCache: () => Promise<void>
+  /** This machine's tag implication rules — `shared/implications.ts` has what they are. */
+  listImplications: () => Promise<ImplicationRules>
+  /** Writes the whole rule set, answering with what was stored after normalising. */
+  saveImplications: (rules: ImplicationRules) => Promise<ImplicationRules>
+  /** The rules that are offered rather than applied — `shared/recommendations.ts`. */
+  listRecommendations: () => Promise<RecommendationRules>
+  saveRecommendations: (rules: RecommendationRules) => Promise<RecommendationRules>
   uploadPost: (request: UploadRequest) => Promise<UploadResult>
   /** Tells main what the queue holds, so closing the window can ask before dropping it. */
   reportQueue: (state: QueueState) => void

@@ -24,6 +24,11 @@ const api: PostAppApi = {
   pathForFile: (file: File) => webUtils.getPathForFile(file),
   listTags: () => ipcRenderer.invoke('tags:list'),
   suggestTags: (query) => ipcRenderer.invoke('tags:suggest', query),
+  clearTagCache: () => ipcRenderer.invoke('tags:clear-cache'),
+  listImplications: () => ipcRenderer.invoke('implications:list'),
+  saveImplications: (rules) => ipcRenderer.invoke('implications:save', rules),
+  listRecommendations: () => ipcRenderer.invoke('recommendations:list'),
+  saveRecommendations: (rules) => ipcRenderer.invoke('recommendations:save', rules),
   uploadPost: (request: UploadRequest) => ipcRenderer.invoke('post:upload', request),
   // The one channel with nothing to answer: main only reads it when the window closes,
   // and the renderer pushes on every queue change, so a reply would be noise.

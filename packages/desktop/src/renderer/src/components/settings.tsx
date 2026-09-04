@@ -13,7 +13,7 @@ const PRIORITIES: { value: EncodePriority; label: string }[] = [
 ]
 
 /**
- * Two things, and only one of them is a setting.
+ * Three things, and only two of them are settings.
  *
  * **Connection** is a readout. Which board this copy uploads to was decided when it was
  * built — the project URL, both keys and the site address are compiled into the bundle
@@ -27,6 +27,11 @@ const PRIORITIES: { value: EncodePriority; label: string }[] = [
  *
  * **Compression** is the real settings, and they are about this machine rather than the
  * board: how many cores an upload may take and how hard it argues for them.
+ *
+ * **Tag cache** is a readout with a button under it. Nothing about it is configurable —
+ * a day is a day — but a cache is the one thing in the app that can be wrong while
+ * everything else is right, so there is a way to throw it away without hunting for the
+ * file.
  */
 export function Settings({ status, onChanged }: { status: AppStatus; onChanged: () => void }) {
   // Seeded from what the main process is actually running with, which is also what it
@@ -70,7 +75,7 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
           </h1>
           <p className="mt-1 text-sm text-muted">
             Set when this copy was built, and not editable here. To point at another board, build
-            the app again with that project's values in the repo's environment file.
+            the app again with that project&rsquo;s values in the repo&rsquo;s environment file.
           </p>
         </div>
 
@@ -147,6 +152,44 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
             'queue compete like anything else you are running.'
           }
         />
+      </div>
+
+      {/* Not a setting — a readout and an escape hatch. */}
+      <div className="flex flex-col gap-4">
+        <div>
+          <h2 className="flex gap-1 text-lg font-bold tracking-tight">
+            <span aria-hidden>🗂️</span>
+            Tag cache
+          </h2>
+          <p className="mt-1 text-sm text-muted">
+            The board&rsquo;s tag list, kept for a day so typing a tag doesn&rsquo;t ask the
+            server on every keystroke. It refreshes itself when it expires, and it is dropped
+            the moment an upload finishes — a new post is what makes it wrong.
+          </p>
+        </div>
+
+        <Readout
+          label="Held"
+          value={
+            status.tagCache.at === null
+              ? ''
+              : `${status.tagCache.count} tags, read ${new Date(status.tagCache.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`
+          }
+        />
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void window.api.clearTagCache().then(onChanged)}
+            disabled={status.tagCache.at === null}
+            className="min-h-11 rounded-lg border border-border px-4 text-sm font-medium hover:border-accent disabled:opacity-50"
+          >
+            Clear cache
+          </button>
+          <span className="text-xs text-muted">
+            Nothing is lost — the next tag you type reads the board again.
+          </span>
+        </div>
       </div>
     </div>
   )

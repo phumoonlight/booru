@@ -7,12 +7,23 @@ import { DESKTOP_UPLOAD_LIMITS } from './limits'
 import { CPU_COUNT, DEFAULT_ENCODE_PRIORITY, DEFAULT_ENCODE_THREADS } from './cpu'
 import { loadConfig, revealSaveFile } from './config'
 import { loadPreferences, savePreferences } from './preferences'
+import { loadImplications, saveImplications } from './implications'
+import { loadRecommendations, saveRecommendations } from './recommendations'
 import { readCredentials, saveCredentials } from './credentials'
 import { previewFile, stageFiles } from './staging'
 import { downloadImages } from './download'
 import { setQueueState } from './queue-guard'
+import {
+  cachedIndex,
+  cachedSuggestions,
+  clearTagCache,
+  tagCacheStatus,
+  TAG_INDEX_LIMIT,
+} from './tag-cache'
 import { adminClient, currentUser, signIn, signOut, userClient } from './supabase'
 import type { AppStatus, Outcome, PreferencesInput, SavedLogin, TagSuggestion } from '../shared/api'
+import type { ImplicationRules } from '../shared/implications'
+import type { RecommendationRules } from '../shared/recommendations'
 import type { Tag } from '@common/tags'
 import type { UploadResult } from '@common/upload/pipeline'
 
@@ -54,10 +65,6 @@ const uploadSchema = z.object({
   sourceUrl: z.string(),
 })
 
-/** What the web's /tags page reads, and for the same reason: an index nobody scrolls
- *  past is not worth the round trip, and the tags past it have a post or two each. */
-const TAG_INDEX_LIMIT = 500
-
 /** Only http(s) is ever handed to the OS — see the `shell:open-external` handler. */
 function isWebUrl(url: string): boolean {
   try {
@@ -85,6 +92,7 @@ export function registerIpc(): void {
         chrome: process.versions.chrome,
       },
       limits: DESKTOP_UPLOAD_LIMITS,
+      tagCache: tagCacheStatus(),
       // The settings screen needs the machine's core count to bound the field it offers,
       // and what is actually in effect to show before anything has been saved.
       cpu: {
@@ -179,22 +187,72 @@ export function registerIpc(): void {
    * handler's: the cap is decided by post count and the display order isn't.
    */
   ipcMain.handle('tags:list', async (): Promise<Tag[]> => {
+    // The cache is the same read, kept for a day — `main/tag-cache.ts`. It falls through
+    // to the board only when there is nothing cached and nothing it could fill from.
+    const cached = await cachedIndex()
+    if (cached) return cached
+
     const supabase = userClient()
     if (!supabase) return []
     if (!(await currentUser())) return []
     return listTags(supabase, TAG_INDEX_LIMIT)
   })
 
-  /** Autocomplete for the tag field, on the same query the web's `suggestTags` action runs. */
+  /**
+   * Autocomplete for the tag field. Answered from the day-old copy of the index whenever
+   * there is one, which is nearly always and costs nothing; the query behind the fallback
+   * is the same one the web's `suggestTags` action runs.
+   */
   ipcMain.handle('tags:suggest', async (_event, query: unknown): Promise<TagSuggestion[]> => {
     const parsed = z.string().max(64).safeParse(query)
-    const supabase = userClient()
-    if (!parsed.success || !supabase) return []
-    if (!(await currentUser())) return []
+    if (!parsed.success) return []
 
-    const tags = await searchTags(supabase, parsed.data)
-    return tags.map(({ name, category, post_count }) => ({ name, category, post_count }))
+    const suggest = (tags: Tag[]): TagSuggestion[] =>
+      tags.map(({ name, category, post_count }) => ({ name, category, post_count }))
+
+    const cached = await cachedSuggestions(parsed.data)
+    if (cached) return suggest(cached)
+
+    const supabase = userClient()
+    if (!supabase) return []
+    if (!(await currentUser())) return []
+    return suggest(await searchTags(supabase, parsed.data))
   })
+
+  /**
+   * Throws the cached index away, for when it has somehow gone wrong — a tag renamed on
+   * the board, a machine whose clock jumped. The next lookup reads the board again, so
+   * there is nothing to confirm and nothing to wait for.
+   */
+  ipcMain.handle('tags:clear-cache', async (): Promise<void> => clearTagCache())
+
+  /**
+   * The tag implication rules, which are this machine's and not the board's — no session
+   * is needed to read or write them, and nothing here reaches Supabase.
+   *
+   * `saveImplications` is the whole rule set every time rather than one rule at a time.
+   * The set is small, the file is rewritten either way, and a screen that sends what it
+   * is showing cannot drift from what is stored.
+   */
+  ipcMain.handle('implications:list', async (): Promise<ImplicationRules> => loadImplications())
+
+  // No zod here: `normalizeRules` inside is the parse, and a stricter one — it holds
+  // every name to the board's own `TAG_PATTERN`, which a schema of this shape would not.
+  ipcMain.handle(
+    'implications:save',
+    async (_event, raw: unknown): Promise<ImplicationRules> => saveImplications(raw)
+  )
+
+  /** The same two channels for the rules that are offered rather than applied. */
+  ipcMain.handle(
+    'recommendations:list',
+    async (): Promise<RecommendationRules> => loadRecommendations()
+  )
+
+  ipcMain.handle(
+    'recommendations:save',
+    async (_event, raw: unknown): Promise<RecommendationRules> => saveRecommendations(raw)
+  )
 
   /**
    * One file, one post — the same one-call-per-image shape the web queue uses, so each
@@ -230,7 +288,7 @@ export function registerIpc(): void {
       return { ok: false, error: 'Could not read the file — has it moved?' }
     }
 
-    return createPostFromImage(
+    const result = await createPostFromImage(
       supabase,
       admin,
       uploader.id,
@@ -238,6 +296,10 @@ export function registerIpc(): void {
       metadata.metadata,
       DESKTOP_UPLOAD_LIMITS
     )
+    // A post creates tags and moves counts, so the cached index is now wrong in exactly
+    // the way that matters: the tag just coined is the one you are about to type again.
+    if (result.ok) clearTagCache()
+    return result
   })
 
   /**

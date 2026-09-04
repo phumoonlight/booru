@@ -4,6 +4,13 @@ import { ArrowDownIcon, ArrowUpIcon, TrashIcon } from './icons'
 import { ImageViewer } from './image-viewer'
 import { EMPTY_TAGS, TagField, tagsToInput, type TagFieldValue } from './tag-field'
 import { invalidateTags } from './tag-index'
+import {
+  impliedRating,
+  raisedRating,
+  type ImplicationRules,
+  type ImpliedRating,
+} from '../../../shared/implications'
+import { useImplications } from '../implications'
 import type { AppStatus, StagedFile, StageOutcome, UploadResult } from '../../../shared/api'
 
 type Status = 'ready' | 'uploading' | 'ok' | 'error'
@@ -16,6 +23,39 @@ type Staged = {
   status: Status
   message?: string
   postId?: number
+}
+
+/**
+ * The rule that has something to say about this row's rating, or null. Shared by the
+ * floor and by the note under the select, so the card can never obey one rule and blame
+ * another. The draft counts, because `tagsToInput` counts it.
+ */
+function ratingRule(tags: TagFieldValue, rules: ImplicationRules): ImpliedRating | null {
+  const names = [...tags.tags.map((tag) => tag.name), tags.draft.trim()].filter(Boolean)
+  return impliedRating(names, rules)
+}
+
+/**
+ * Why the rating on this card is what it is. A rating that moves on its own is the one
+ * change in the queue nobody watched happen — the tag box is where you were looking —
+ * so the card names the rule rather than leaving you to guess which of eight tags did
+ * it, or whether the app simply lost your rating.
+ *
+ * Worded as what the rule *asks for*, which stays true whether the row is sitting on
+ * that floor or above it: the alternative was claiming to have raised a rating that may
+ * well have been set by hand.
+ */
+function RatingNote({ rule }: { rule: ImpliedRating | null }) {
+  if (!rule) return null
+  return (
+    <p className="flex items-baseline gap-1.5 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-muted">
+      <span aria-hidden>⬆</span>
+      <span>
+        Your rule on <span className="font-mono text-foreground">{rule.from}</span> asks for at
+        least <span className="font-mono text-foreground">{RATING_LABEL[rule.rating]}</span>.
+      </span>
+    </p>
+  )
 }
 
 function formatSize(bytes: number): string {
@@ -61,6 +101,9 @@ export function UploadQueue({ status }: { status: AppStatus }) {
   // The row whose picture is open full-window, held by path so a re-render of the queue
   // can't leave the viewer showing a stale copy of a row that has since been edited.
   const [viewing, setViewing] = useState<string | null>(null)
+  // Read here rather than in the field, because this is where a post is made: the fields
+  // only show what the rules imply, and `tagsToInput` is what puts it on the upload.
+  const rules = useImplications()
 
   /**
    * Files never reach the queue unless they can actually be uploaded. The main process
@@ -127,6 +170,20 @@ export function UploadQueue({ status }: { status: AppStatus }) {
     [absorb]
   )
 
+  /**
+   * The rating a row keeps once its tags have changed. Raise only — `raisedRating` has
+   * why — so a rule can lift a row nobody rated and can never undo a rating that was
+   * set by hand or earned by a stronger tag.
+   *
+   * The draft counts, because `tagsToInput` counts it: a word still being typed is a tag
+   * as far as the upload is concerned, and it should be one here too.
+   */
+  const ratingFor = useCallback(
+    (tags: TagFieldValue, current: Rating): Rating =>
+      raisedRating(current, ratingRule(tags, rules)),
+    [rules]
+  )
+
   const patch = useCallback((path: string, changes: Partial<Staged>) => {
     setItems((prev) =>
       prev.map((item) => (item.file.path === path ? { ...item, ...changes } : item))
@@ -171,10 +228,14 @@ export function UploadQueue({ status }: { status: AppStatus }) {
         for (const tag of extra) {
           if (!tags.some((t) => t.name === tag.name)) tags.push(tag)
         }
+        const merged = { ...item.tags, tags }
         return {
           ...item,
-          tags: { ...item.tags, tags },
-          rating: bulkRating || item.rating,
+          tags: merged,
+          // The floor is applied after the bulk rating, not before: choosing E1 for a
+          // whole set is a decision about the set, and a tag on one image that is worth
+          // more than that still speaks for that image.
+          rating: ratingFor(merged, bulkRating || item.rating),
         }
       })
     )
@@ -194,7 +255,7 @@ export function UploadQueue({ status }: { status: AppStatus }) {
       try {
         result = await window.api.uploadPost({
           path: item.file.path,
-          tags: tagsToInput(item.tags),
+          tags: tagsToInput(item.tags, rules),
           rating: item.rating,
           sourceUrl: item.sourceUrl,
         })
@@ -457,7 +518,12 @@ export function UploadQueue({ status }: { status: AppStatus }) {
                       <>
                         <TagField
                           value={item.tags}
-                          onChange={(tags) => patch(item.file.path, { tags })}
+                          onChange={(tags) =>
+                            patch(item.file.path, {
+                              tags,
+                              rating: ratingFor(tags, item.rating),
+                            })
+                          }
                           hint={false}
                           disabled={busy}
                         />
@@ -495,6 +561,8 @@ export function UploadQueue({ status }: { status: AppStatus }) {
                             />
                           </label>
                         </div>
+
+                        <RatingNote rule={ratingRule(item.tags, rules)} />
 
                         {item.status === 'uploading' && (
                           <p className="text-xs text-muted">Compressing and uploading…</p>

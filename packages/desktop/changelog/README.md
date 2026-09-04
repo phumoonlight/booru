@@ -11,6 +11,7 @@ together or the app lies about itself.
 Entries are grouped **Added** / **Changed** / **Fixed**, and say what someone using the
 app would notice.
 
+- [1.1.0](1.1.0.md) — 2026-09-04 — tag rules: a tag can add or offer other tags.
 - [1.0.7](1.0.7.md) — 2026-09-04 — one big card per queue row; images capped at 2048px.
 - [1.0.6](1.0.6.md) — 2026-09-03 — reorder the queue by dragging; closing asks first.
 - [1.0.5](1.0.5.md) — 2026-09-03 — dragged images fetch the way the browser would.

@@ -40,14 +40,16 @@ export function invalidateTags(): void {
 export function TagIndex({ siteUrl }: { siteUrl: string }) {
   const [tags, setTags] = useState<Tag[] | null>(cached?.tags ?? null)
   const [fetchedAt, setFetchedAt] = useState<number | null>(cached?.at ?? null)
-  const [loading, setLoading] = useState(false)
+  // Starts true when there is nothing cached, because the effect below is about to read
+  // and this render is already the loading one. Setting it from inside the effect said
+  // the same thing one render later, which is a cascading render React now lints for.
+  const [loading, setLoading] = useState(cached === null)
 
   // Only when there is nothing to show. Coming back to this screen paints the list it
   // painted last time, and the 🔄 beside the title is how you ask for a new one.
   useEffect(() => {
     if (cached) return
     let alive = true
-    setLoading(true)
     void window.api.listTags().then((next) => {
       cached = { tags: next, at: Date.now() }
       if (!alive) return
@@ -62,6 +64,10 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
 
   async function refresh() {
     setLoading(true)
+    // Both copies, or the button lies: main keeps the index for a day (`main/tag-cache.ts`)
+    // and would hand back the same list this screen is already showing. 🔄 means "read the
+    // board", which is a thing only main can do.
+    await window.api.clearTagCache()
     const next = await window.api.listTags()
     cached = { tags: next, at: Date.now() }
     setTags(next)

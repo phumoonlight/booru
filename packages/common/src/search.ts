@@ -166,7 +166,12 @@ export function ratingToken(rating: Rating): string {
   return `${RATING_PREFIX}${rating}`
 }
 
-function asRating(token: string): Rating | null {
+/**
+ * `rating:` on a token, or null if it isn't one. Exported because the desktop uploader's
+ * implication rules spell an implied rating with the same token in the same list as the
+ * implied tags — one grammar for "a rating written among tags", not two.
+ */
+export function asRating(token: string): Rating | null {
   if (!token.startsWith(RATING_PREFIX)) return null
   const value = token.slice(RATING_PREFIX.length)
   return (RATINGS as readonly string[]).includes(value) ? (value as Rating) : null

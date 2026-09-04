@@ -94,9 +94,11 @@ grammar, the tag rules, the storage paths, `BooruClient`. See
   them as an argument.
 - **Tailwind classes in here need an `@source` line.** Tailwind finds class names by
   *reading files*, and the desktop renderer scans only its own tree, so `CATEGORY_COLOR`
-  in `@common/tags` is named explicitly in `packages/desktop/src/renderer/src/styles.css`.
-  Put classes in another shared module and it needs the same line, or the colour silently
-  compiles to nothing.
+  in `@common/tags` and `RATING_COLOR` in `@common/search` are both named explicitly in
+  `packages/desktop/src/renderer/src/styles.css`. Put classes in another shared module and
+  it needs the same line, or the colour silently compiles to nothing — and the failure can
+  be *partial*: four of the six rating colours share a hex value with a category colour,
+  so the tags.ts line was generating them and only E4 and E5 came out plain.
 
 ## The desktop uploader (`packages/desktop`)
 
@@ -136,7 +138,7 @@ free serverless tier is bad at — see [packages/desktop/README.md](packages/des
   cost was a service-role key in a plain file on every machine that ran the app, and an
   installer nobody could tell the target of — `dropStoredConfig()` deletes that stored
   copy on startup. A build is now made *for* a board and asks only for a login.
-- **`save.json` holds preferences, session and credentials.** `main/save-file.ts` keeps
+- **`save.json` holds preferences, session, credentials and both sets of tag rules.** `main/save-file.ts` keeps
   everything the app remembers in one readable file in the app's userData. It was three
   files sealed with Electron's `safeStorage`; the encryption was dropped deliberately, in
   exchange for a file that can be read, hand-edited and copied — the remembered password
@@ -146,21 +148,25 @@ free serverless tier is bad at — see [packages/desktop/README.md](packages/des
   packaged, `pubooru-desktop-dev` in a checkout, so `npm run desktop:dev` can't sign out
   the copy you actually use (and the split lock lets both run at once). A file that won't
   parse is treated as absent, costing a re-login and never a crash.
-- **The settings screen is a readout plus two settings.** Connection shows the project
+- **The settings screen is a readout, two settings and a cache.** Connection shows the project
   and board URLs the build carries — never the keys, which are neither editable nor worth
   the risk on screen — and says so. Compression is the only editable part: encoder threads
   as a `<Field />` you type into, priority as a `<Choice />` with no Edit step since the
   options are already on screen. `main/preferences.ts` owns that `preferences` section and
-  applies as it writes, so a change takes the next image rather than the next launch.
+  applies as it writes, so a change takes the next image rather than the next launch. Tag
+  cache configures nothing — a day is a day — but a cache is the one thing that can be
+  wrong while everything else is right, so it says what it holds and how old it is, and
+  offers the button that drops it.
   Unconfigured — which the build refuses to produce — the same screen is forced open and
   names the four missing variables instead of letting a Supabase call fail opaquely.
-- **Four views, one of them always mounted** — plus one header item that is not a view.
-  `App.tsx` holds `'upload' | 'tags' | 'settings' | 'about'` and the header switches
-  those, with the login form in front until there is a session (and settings in front of
-  that only for a bundle built with no project). **Posts** is the item that is not a
-  view: it opens the board's gallery in the browser — `searchHref('')`, since that helper
-  is the only thing allowed to spell the listing's path — and is never drawn active,
-  because it goes somewhere else. About is the exception to the screen order, since "what
+- **Five views, one of them always mounted** — plus one header item that is not a view.
+  `App.tsx` holds `'upload' | 'tags' | 'rules' | 'settings' | 'about'` and the
+  header switches those, with the login form in front until there is a session (and settings in front of
+  that only for a bundle built with no project). **Open site** is the item that is not a
+  view: it sits alone in the corner the web's wordmark occupies and opens the board in the
+  browser — `searchHref('')`, since that helper is the only thing allowed to spell the
+  listing's path — and is never drawn active, because it goes somewhere else. Upload is a
+  nav item like the rest, first in the right-hand row. About is the exception to the screen order, since "what
   version is this" is a fair question before signing in, and it carries the versions
   `app:status` reports: the renderer has no `process`, and a packaged app ships no
   manifest it could read. Tags is not an exception — it reads the board, so it sits behind
@@ -169,10 +175,64 @@ free serverless tier is bad at — see [packages/desktop/README.md](packages/des
   gallery in this window to show it in. Its list is **cached in a module-level `let`**
   rather than in state, because the view is unmounted whenever something is in front of
   it and every glance was re-reading every tag on the board: 🔄 by the title re-reads on
-  request, the time of the last read sits beside it, and `invalidateTags()` drops the copy
-  when an upload lands — the one moment it is certainly wrong. The queue is **hidden, not
-  unmounted**, when another view is in front: glancing at About used to throw away a
-  staged, half-tagged queue and orphan an upload already in flight.
+  request (clearing main's copy first, or it would hand back the same list), the time of
+  the last read sits beside it, and `invalidateTags()` drops the copy
+  when an upload lands — the one moment it is certainly wrong. Tag rules sits behind the
+  session for a weaker reason: the rules are local, but every box on it is a `TagField`
+  and autocompletes against the board. The queue is **hidden, not unmounted**, when another
+  view is in front: glancing at About used to throw away a staged, half-tagged queue and
+  orphan an upload already in flight.
+- **Two kinds of tag rule, both the app's and neither the board's** — implications, which
+  are applied, and recommendations, which are only offered. One screen (`tag-rules.tsx`,
+  the `'rules'` view) holds both editors, because they are one habit with two answers to
+  "this tag is on the post, what else should be?", and two nav items for that would be two
+  places to look for a rule you half-remember writing. Both are `{ tag: [name, …] }` in
+  their own section of `save.json`, both are parsed by a `normalize…` that doubles as the
+  IPC validation, and both reach the window through one module-level store
+  (`renderer/src/rule-store.ts`, made twice) rather than through React state — the tag
+  field consults them on every keystroke, and a round trip per keystroke would be a file
+  read per keystroke.
+- **Implications** (`shared/implications.ts`, `main/implications.ts`). `white_bra → bra`: the specific tag is the one you remember to
+  type and the broad one is the one that gets forgotten, so the post never comes back for
+  the search anyone would run. There is no table for them — the rules live in the
+  `implications` section of `save.json` as `{ tag: [implied, …] }`, which is the shape
+  worth hand-editing once there are a hundred, and `normalizeRules` is both the parse of
+  that file and the validation for the IPC channel (stricter than a zod schema of the same
+  shape, since every name must match `TAG_PATTERN`). **A rule may imply a rating**, spelled
+  `rating:e2` in that same list — the board's own grammar for a rating written among tags,
+  which is why `asRating` is exported from `@common/search` rather than written twice. It
+  is a **floor**: `raisedRating` only ever lifts a row, so the tag whose rule fired last
+  can't talk an E5 post back down, and the queue applies it wherever tags change. The **tag field shows** what they
+  imply, under the box rather than in it — a tag nobody typed looked exactly like one that
+  was, and the box is the record of what was done by hand — and the implied line is
+  derived on every render, never state. `tagsToInput(value, rules)` is the one place the
+  two lists join, called at submit in `upload-queue.tsx`, so a post still gets both.
+  Expansion is transitive and cycle-safe. The Implications screen's own two boxes pass
+  `applyImplications={false}`: a name typed there is the name itself, not a post carrying
+  it.
+- **Recommendations** (`shared/recommendations.ts`, `main/recommendations.ts`).
+  `panties → black_panties bow_panties`: what *usually* goes with a tag, which is a
+  question only the person looking at the picture can answer, so these are chips under the
+  box with a `+` on them and nothing happens until one is pressed. **One level deep**,
+  unlike implications — a chain of maybes is how a three-tag post ends up under thirty
+  chips nobody reads, and pressing a chip brings its own recommendations on the next
+  render, so the chain is walked by choosing. Anything already typed or implied is left
+  out, a chip that adds nothing being a press wasted. No rating: a rating is not a chip you
+  press, and `TAG_PATTERN` drops the token on its colon for free.
+- **The tag index is cached on disk for a day** (`main/tag-cache.ts`), and both `tags:list`
+  and `tags:suggest` are served from it. Autocomplete was a query per pause in typing and
+  *three* round trips at that — the handler's `currentUser()` is `auth.getUser()` plus a
+  profiles read before the tags query it wanted — which over a set of twenty images is
+  hundreds of requests asking a question whose answer moves only when someone uploads. A
+  whole board of names and counts is a few hundred kilobytes, so it is read once and
+  prefix-matched in memory with the ordering the SQL used (`post_count desc`, ties by
+  name). Its own file, not `save.json`: that one is settings, hand-editable and worth
+  keeping small, while this is derived data that can be dropped at any moment. It *is*
+  dropped after every successful upload — a post coins the tag you are about to type
+  again — and by the settings screen's Clear cache button and the Tags screen's 🔄. A
+  failed refill keeps serving the stale copy rather than nothing, and a read that comes
+  back at `CACHE_LIMIT` is treated as "there may be more", so suggestions fall back to
+  querying.
 - **It resolves like a browser, not like the host** (`main/dns.ts`). Every open-web fetch
   it makes is an address dragged out of a browser, and a browser on DoH will happily show
   an image the machine's own resolver answers NXDOMAIN for. `configureHostResolver` names

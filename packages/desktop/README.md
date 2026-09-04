@@ -53,8 +53,10 @@ project it was built for as a readout. Earlier versions asked for those four val
 first launch and kept them in `save.json`, which put a service-role key on every machine
 that ran the app — a copy this version deletes on startup if it finds one.
 
-What is still in `save.json` is the session, the "remember me" credentials and the
-compression preferences, as plain readable text. `desktop:dev` uses a folder of its own
+What is still in `save.json` is the session, the "remember me" credentials, the
+compression preferences and the two sets of tag rules, as plain readable text — the rules
+in particular are a `{ tag: [name, …] }` object worth opening the file for once there are
+more of them than you want to type in one at a time. `desktop:dev` uses a folder of its own
 (`pubooru-desktop-dev` beside `pubooru-desktop`), so working on the app never disturbs
 the copy you use, and both can be open at once.
 
@@ -67,8 +69,10 @@ website.
 |---|---|
 | `src/main` | the process that does the work — clients, config, staging, the IPC handlers |
 | `src/preload` | the bridge; the only thing the window can reach |
-| `src/renderer` | the React window: settings, login, the upload queue |
+| `src/renderer` | the React window: settings, login, the upload queue, tags and tag rules |
 | `src/shared/api.ts` | the types across the bridge, imported by all three |
+| `src/shared/implications.ts` | rules the app applies: what they are, and the pure code that applies them |
+| `src/shared/recommendations.ts` | rules the app only offers, same shape |
 
 The renderer holds no keys, no file access and no network. Every capability it has is one
 `ipcMain.handle` in [`src/main/ipc.ts`](src/main/ipc.ts) — including reading the file it
@@ -80,6 +84,9 @@ objects and the denormalized counters — the rows no user session is allowed to
 
 ## Notes
 
+- Tag autocomplete does not query per keystroke: `src/main/tag-cache.ts` keeps the board's
+  tag list in `tag-cache.json` for a day and prefix-matches it in memory. It is dropped
+  after every upload, by 🔄 on the Tags screen, and by Clear cache in settings.
 - `npm run typecheck -w desktop` checks all three sides. The root `tsconfig.json`
   excludes `packages/`, so `npx tsc` at the root does not.
 - `sharp` is a native module and is unpacked from the asar at package time. Its prebuilds

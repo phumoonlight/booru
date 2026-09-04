@@ -1,5 +1,9 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { CATEGORY_COLOR, type TagCategory } from '@common/tags'
+import { impliedTags, type ImplicationRules } from '../../../shared/implications'
+import { recommendedTags } from '../../../shared/recommendations'
+import { useImplications } from '../implications'
+import { useRecommendations } from '../recommendations'
 import type { TagSuggestion } from '../../../shared/api'
 
 export type TagSeed = { name: string; category: TagCategory }
@@ -13,9 +17,28 @@ export type TagFieldValue = { tags: TagSeed[]; draft: string }
 
 export const EMPTY_TAGS: TagFieldValue = { tags: [], draft: '' }
 
-/** The value as the upload pipeline reads it: one space-separated `tags` string. */
-export function tagsToInput({ tags, draft }: TagFieldValue): string {
-  return [...tags.map((tag) => tag.name), draft.trim()].filter(Boolean).join(' ')
+/**
+ * The value as the upload pipeline reads it: one space-separated `tags` string.
+ *
+ * With `rules`, what they imply is appended — the implied tags are shown beside the
+ * field rather than inside it, so this is the one place they join the list the post is
+ * actually made with. Without them it is exactly what was typed, which is what the
+ * Implications screen's own boxes want.
+ */
+export function tagsToInput({ tags, draft }: TagFieldValue, rules?: ImplicationRules): string {
+  const typed = [...tags.map((tag) => tag.name), draft.trim()].filter(Boolean)
+  return [...typed, ...(rules ? impliedTags(typed, rules) : [])].join(' ')
+}
+
+/**
+ * The committed chips plus the half-typed word, which is a whole tag as far as a form
+ * that is about to be submitted is concerned. What `tagsToInput` joins, as a list.
+ */
+export function namesOf({ tags, draft }: TagFieldValue): string[] {
+  const typed = draft.trim()
+  const names = tags.map((tag) => tag.name)
+  if (typed && !names.includes(typed)) names.push(typed)
+  return names
 }
 
 /** Anything a tag name can't hold is dropped as it's typed — whitespace survives to split on. */
@@ -30,6 +53,15 @@ const STRIP = /[^a-z0-9_().\-\s]+/g
  * The only difference from the web's is where the suggestions come from: a server action
  * there, the preload bridge here. The query behind both is the same function
  * (`searchTags` in `@common/data/shared`).
+ *
+ * The two things it does that the web's doesn't are both the tag rules, and they sit
+ * under the box rather than in it — the box stays exactly what you typed, and everything
+ * a rule had a hand in reads as a consequence of that rather than as something you did.
+ * **Implied** is what is going up whether or not you look: `white_bra` lists `bra`,
+ * because the broad tag is the one that gets forgotten, and `tagsToInput` appends them at
+ * submit, which is the only place the two lists meet. **Recommended** is the other kind — the
+ * tags that usually go with these, one button each, nothing added until pressed. Both
+ * rule sets are per machine and edited on the Tag rules screen.
  */
 export function TagField({
   value,
@@ -38,6 +70,7 @@ export function TagField({
   hint = true,
   disabled = false,
   placeholder,
+  applyRules = true,
 }: {
   value: TagFieldValue
   onChange: (next: TagFieldValue) => void
@@ -45,6 +78,13 @@ export function TagField({
   hint?: boolean
   disabled?: boolean
   placeholder?: string
+  /**
+   * Off for the boxes on the Tag rules screen, which is where the rules are written:
+   * typing `white_bra` there means the name itself, not a post that has it, and a field
+   * that answered by listing what it implies — or offering what usually goes with it —
+   * would be applying the rules to the rule being written.
+   */
+  applyRules?: boolean
 }) {
   // Results carry the word they answer, so the list can tell "nothing matches" from
   // "the lookup for what you have typed hasn't come back yet" — the two used to look
@@ -57,6 +97,8 @@ export function TagField({
   const [dismissed, setDismissed] = useState(false)
   const [active, setActive] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
+  const rules = useImplications()
+  const recommendations = useRecommendations()
   const id = useId()
   const listId = `${id}-list`
 
@@ -85,6 +127,20 @@ export function TagField({
     }
   }, [draft])
 
+  // Derived, never state: the rules are the truth about what follows from what is typed,
+  // so there is nothing here to fall out of step with the chips above it. The draft counts
+  // because `tagsToInput` counts it — a queue submitted mid-word uploads that word.
+  const named = [...tags.map((tag) => tag.name), ...(draft.trim() ? [draft.trim()] : [])]
+  const implied = applyRules ? impliedTags(named, rules) : []
+
+  // Offered, not applied: these are the tags that usually go *with* what is already on
+  // the post, and only the person looking at the picture knows which of them do. Anything
+  // the post is already getting — typed or implied — is left out, since a chip that adds
+  // nothing is a chip that wastes a press.
+  const offered = applyRules
+    ? recommendedTags(named, recommendations, [...named, ...implied])
+    : []
+
   const chosen = new Set(tags.map((tag) => tag.name))
   const typed = draft.trim()
   const open = typed.length > 0 && !dismissed
@@ -107,6 +163,7 @@ export function TagField({
   /** A name typed freehand is new until proven otherwise, and new tags start out general. */
   const categoryOf = (tagName: string): TagCategory =>
     suggestions.find((option) => option.name === tagName)?.category ?? 'general'
+
 
   function accept(entry: TagSeed) {
     onChange({ tags: merged([entry]), draft: '' })
@@ -147,9 +204,10 @@ export function TagField({
         setDismissed(true)
         setActive(-1)
         break
-      case 'Backspace':
-        if (draft === '') onChange({ tags: tags.slice(0, -1), draft })
-        break
+      // Backspace on an empty box used to eat the last chip. It is the key you hit to
+      // fix a typo, and with the word already gone the next press took a tag that was
+      // right — silently, above the cursor, while you were looking at what you were
+      // typing. Chips come off by their own ✕ and nothing else.
     }
   }
 
@@ -241,6 +299,52 @@ export function TagField({
           )}
         </div>
       </div>
+
+      {/*
+        What the rules add, outside the box on purpose: inside it, a tag nobody typed
+        looked exactly like one that was, and the box is the record of what you did by
+        hand. Read-only for the same reason — these follow from the tags above it and from
+        the Implications screen, so the way to change one is to change the tag or the rule.
+        They are uploaded with the rest; `tagsToInput` is where the two lists join.
+      */}
+      {implied.length > 0 && (
+        <div className="flex flex-wrap items-baseline gap-1">
+          <span className="mr-0.5 text-xs text-muted">Implied</span>
+          {implied.map((name) => (
+            <span
+              key={name}
+              title="Added by a rule on the Tag rules screen"
+              className="rounded bg-background px-2 py-0.5 font-mono text-xs text-muted"
+            >
+              {name}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/*
+        What usually goes with what is already on the post — a press each, and nothing
+        happens to the ones you don't press. The line above is what the rules did; this
+        one is what they are asking about, which is why they are buttons and the implied
+        chips are not.
+      */}
+      {offered.length > 0 && (
+        <div className="flex flex-wrap items-baseline gap-1">
+          <span className="mr-0.5 text-xs text-muted">Recommended</span>
+          {offered.map((name) => (
+            <button
+              key={name}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange({ tags: merged([{ name, category: categoryOf(name) }]), draft })}
+              title="Recommended by a rule on the Tag rules screen"
+              className="rounded border border-border px-2 py-0.5 font-mono text-xs text-muted transition-colors hover:border-accent hover:text-foreground disabled:opacity-50"
+            >
+              + {name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {hint && (
         <p className="text-xs text-muted">Space or Enter adds a tag, ↑↓ picks a suggestion.</p>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { searchHref } from '@common/search'
 import { About } from './components/about'
 import { AccountMenu } from './components/account-menu'
+import { TagRules } from './components/tag-rules'
 import { Login } from './components/login'
 import { Settings } from './components/settings'
 import { TagIndex } from './components/tag-index'
@@ -18,11 +19,14 @@ import type { AppStatus } from '../../shared/api'
  * About is the exception to that order: it answers "what am I running", which is a fair
  * question before the app is set up at all, so it is the one view allowed to sit in
  * front of an unconfigured window. Tags is not — it reads the board, so it sits behind
- * the session with the queue.
+ * the session with the queue, and Tag rules sits there with it: the rules are local and
+ * need no session, but every box on that screen autocompletes against the board.
  */
 export function App() {
   const [status, setStatus] = useState<AppStatus | null>(null)
-  const [view, setView] = useState<'upload' | 'tags' | 'settings' | 'about'>('upload')
+  const [view, setView] = useState<'upload' | 'tags' | 'rules' | 'settings' | 'about'>(
+    'upload'
+  )
 
   const refresh = useCallback(async () => {
     setStatus(await window.api.getStatus())
@@ -74,47 +78,45 @@ export function App() {
       <Login onSignedIn={refresh} />
     ) : view === 'tags' ? (
       <TagIndex siteUrl={status.siteUrl} />
+    ) : view === 'rules' ? (
+      <TagRules siteUrl={status.siteUrl} />
     ) : null
 
   return (
     <div className="flex h-screen flex-col">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2">
         {/*
-          The OS titlebar already says Pubooru Desktop, so repeating it here was the name
-          twice over. It names the screen instead — the app's only page — and doubles as
-          the way back from settings, the way the web's wordmark returns you to the board.
-          Signed out there is no such screen to name, and the corner opposite says Log in
-          instead; an empty slot is left rather than a link to a queue you cannot reach.
+          The board itself, in the corner the web's wordmark occupies — this window is a
+          way of putting things on that site, and the site is the thing it belongs to.
+          Never drawn active: it opens in the browser, so a tab bar under it would claim
+          you were somewhere this window cannot be. `searchHref('')` rather than a literal
+          '/posts', which is the web's own rule about which file spells that path. An
+          empty slot when the build carries no site URL, rather than a dead heading.
         */}
-        {status.user ? (
+        {status.siteUrl ? (
           <button
             type="button"
-            onClick={() => setView('upload')}
-            className={`text-sm font-bold tracking-tight transition-colors ${
-              view === 'upload' ? ACTIVE_BAR : 'text-muted hover:text-foreground'
-            }`}
+            onClick={() => void window.api.openExternal(`${status.siteUrl}${searchHref('')}`)}
+            title="Open the board in your browser"
+            className="flex items-center gap-1.5 text-sm font-bold tracking-tight text-muted transition-colors hover:text-foreground"
           >
-            Upload
+            <span aria-hidden>🖼️</span>
+            Open site
           </button>
         ) : (
           <span />
         )}
         <div className="flex items-center gap-2">
-          {/* The gallery this app uploads into, opened in the browser — there is no
-              grid in this window, and following a post from the queue already works
-              that way. Never marked active: it is a link out, not a view, so the tab
-              bar under the others would be a lie about where you are. `searchHref('')`
-              rather than a literal '/posts', which is the web's own rule about which
-              file is allowed to spell that path. */}
-          {status.siteUrl && (
+          {/* The queue, and the way back to it from every other screen — the one item
+              here that is the app's actual job, so it leads the row. */}
+          {status.user && (
             <button
               type="button"
-              onClick={() => void window.api.openExternal(`${status.siteUrl}${searchHref('')}`)}
-              title="Open the board's gallery in your browser"
-              className={navClass(false)}
+              onClick={() => setView('upload')}
+              className={navClass(view === 'upload')}
             >
-              <span aria-hidden>🖼️</span>
-              Posts
+              <span aria-hidden>📤</span>
+              Upload
             </button>
           )}
           {status.user && (
@@ -125,6 +127,20 @@ export function App() {
             >
               <span aria-hidden>🏷️</span>
               Tags
+            </button>
+          )}
+          {/* Beside Tags because it is about tags, and because the two answer the same
+              question from opposite ends: what does the board call this, and what should
+              this one drag in with it. */}
+          {status.user && (
+            <button
+              type="button"
+              onClick={() => setView((current) => (current === 'rules' ? 'upload' : 'rules'))}
+              title="Tags that bring other tags with them"
+              className={navClass(view === 'rules')}
+            >
+              <span aria-hidden>🔗</span>
+              Tag rules
             </button>
           )}
           <button

@@ -14,16 +14,25 @@ import { app } from 'electron'
  * and the account password too if the login screen was told to remember it. It is
  * written 0600 so it is at least the user's own; on Windows that is advisory.
  *
- * Three sections: the compression preferences, the signed-in session, and the
- * remembered credentials. They share a file so there is one thing to look at, back up
- * or delete. `config` is a fourth name this type still knows, and only so the keys an
- * older version wrote there can be deleted — see `dropStoredConfig()`. Which board the
- * app talks to is compiled into the build now and never written here.
+ * Five sections: the compression preferences, the signed-in session, the remembered
+ * credentials, and the two sets of tag rules — `implications`, which the app applies, and
+ * `recommendations`, which it only offers. They share a file so there is one thing to look
+ * at, back up or delete, and the two rule sections are the ones most worth opening the
+ * file for, being lists you may well want to paste a hundred rules into at once. `config`
+ * is a sixth name this type still knows, and only so the keys an older version wrote
+ * there can be deleted — see `dropStoredConfig()`. Which board the app talks to is
+ * compiled into the build now and never written here.
  */
 
 const SAVE_FILE = 'save.json'
 
-export type Section = 'preferences' | 'session' | 'credentials' | 'config'
+export type Section =
+  | 'preferences'
+  | 'session'
+  | 'credentials'
+  | 'implications'
+  | 'recommendations'
+  | 'config'
 
 /** Where the save file lives. Exported so the settings screen can point at it. */
 export function savePath(): string {
