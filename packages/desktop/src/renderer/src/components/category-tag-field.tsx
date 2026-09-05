@@ -121,6 +121,9 @@ export function CategoryTagField({
 
   const names = value.map((tag) => tag.name)
   const rows = categoryOrder(value.map((tag) => tag.category))
+  // Once for the field: the chips already on the post are dotted from the same list the
+  // picker splits by, so a tag looks the same before and after it is chosen.
+  const colors = useMemo(() => colorWords(all), [all])
 
   // Derived every render, never state: the rules are the truth about what follows from
   // what is on the post, so there is nothing here to fall out of step with the rows.
@@ -153,8 +156,9 @@ export function CategoryTagField({
               .map((tag) => (
                 <span
                   key={tag.name}
-                  className={`flex items-center rounded bg-surface pl-2 font-mono text-xs ${categoryColor(category)}`}
+                  className={`flex items-center gap-1.5 rounded bg-surface pl-2 font-mono text-xs ${categoryColor(category)}`}
                 >
+                  <ColorDot name={tag.name} category={category} colors={colors} />
                   {tag.name}
                   <button
                     type="button"
@@ -191,6 +195,7 @@ export function CategoryTagField({
             <TagPicker
               category={category}
               all={all}
+              colors={colors}
               exclude={names}
               onPick={add}
               onClose={() => setAdding(null)}
@@ -292,6 +297,34 @@ function colorWords(all: Tag[] | null): string[] {
   return [...words].sort((a, b) => b.length - a.length)
 }
 
+/**
+ * The colour a tag names, painted, or nothing. Drawn on the chips a post already carries
+ * as well as the ones offered, so a tag looks the same before and after it is picked — and
+ * on the row where it landed, which is the only place a mis-picked colour is ever noticed.
+ */
+function ColorDot({
+  name,
+  category,
+  colors,
+}: {
+  name: string
+  category: string
+  colors: string[]
+}) {
+  // Not inside the Color row: there the tag *is* the colour, and a dot beside a word that
+  // says the same thing is decoration.
+  const split = category === 'color' ? null : splitColor(name, colors)
+  if (!split) return null
+
+  return (
+    <span
+      aria-hidden
+      style={{ background: colorSwatch(split.color) }}
+      className="size-3 shrink-0 rounded-full border border-border"
+    />
+  )
+}
+
 /** A tag's colour prefix, or null. */
 function splitColor(name: string, colors: string[]): { color: string; rest: string } | null {
   for (const color of colors) {
@@ -306,12 +339,14 @@ type ColorOption = { tag: Tag; color: string; rest: string }
 function TagPicker({
   category,
   all,
+  colors,
   exclude,
   onPick,
   onClose,
 }: {
   category: string
   all: Tag[] | null
+  colors: string[]
   exclude: string[]
   onPick: (tag: TagSeed) => void
   onClose: () => void
@@ -332,8 +367,6 @@ function TagPicker({
     // off another would only claim `light_blue` is a kind of `light`.
     if (category === 'color') return { plain: options, colored: [] as ColorOption[] }
 
-    const colors = colorWords(all)
-
     const plain: Tag[] = []
     const colored: ColorOption[] = []
     for (const tag of options) {
@@ -347,7 +380,7 @@ function TagPicker({
     colored.sort((a, b) => a.rest.localeCompare(b.rest) || a.color.localeCompare(b.color))
 
     return { plain, colored }
-  }, [all, category, exclude, typed])
+  }, [all, category, colors, exclude, typed])
 
   /** A pick clears the filter and hands focus back, so the next tag is typed rather than
    *  clicked into. Leaving the word there would leave the list showing the one thing it
@@ -397,7 +430,7 @@ function TagPicker({
             <div
               className={`flex flex-wrap gap-1 ${plain.length > 0 ? 'border-t border-border pt-2' : ''}`}
             >
-              {colored.map(({ tag, color }) => (
+              {colored.map(({ tag }) => (
                 <button
                   key={tag.id}
                   type="button"
@@ -406,14 +439,8 @@ function TagPicker({
                 >
                   {/* The colour itself, painted, rather than a second word colour in the
                       text — these chips belong to the category they are in, and a dot is
-                      read before the name is, which is the order you pick one in. The
-                      border keeps white and black from disappearing into the two grounds
-                      they would otherwise match. */}
-                  <span
-                    aria-hidden
-                    style={{ background: colorSwatch(color) }}
-                    className="size-3 shrink-0 rounded-full border border-border"
-                  />
+                      read before the name is, which is the order you pick one in. */}
+                  <ColorDot name={tag.name} category={category} colors={colors} />
                   {tag.name}
                 </button>
               ))}
