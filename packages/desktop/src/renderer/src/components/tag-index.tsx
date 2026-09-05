@@ -287,14 +287,18 @@ function CategoryField({
   disabled?: boolean
 }) {
   return (
+    // Coloured closed and open, the way the rating select is: the colour is how a category
+    // is recognised everywhere else on this screen — the tag rows, the section headings,
+    // the chips on a post — so the one place you *choose* one was the only place it was
+    // just a word.
     <select
       value={value}
       onChange={(event) => onChange(event.target.value)}
       disabled={disabled}
-      className={FIELD}
+      className={`${FIELD} ${categoryColor(value)}`}
     >
       {TAG_CATEGORIES.map((option) => (
-        <option key={option} value={option}>
+        <option key={option} value={option} className={`bg-background ${categoryColor(option)}`}>
           {categoryLabel(option)}
         </option>
       ))}
