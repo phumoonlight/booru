@@ -65,7 +65,7 @@ export function TagDrawer({ children, label }: { children: ReactNode; label: str
                 covering the results it is meant to narrow. The facets are a list of tags:
                 a tall narrow column fits far more of them on screen at once than a band
                 across the bottom did, and leaves the grid visible beside it. */}
-            <div className="drawer-panel flex h-full w-full max-w-sm flex-col overflow-y-auto border-r border-border bg-surface p-4">
+            <div className="drawer-panel flex h-full w-full max-w-sm flex-col overflow-y-auto border-r border-border bg-surface px-4 pt-4 pb-24">
               <div className="-mr-2 -mt-2 mb-1 flex items-center justify-end">
                 {/* Just the ❌: a close control in the top corner of a panel needs no
                     word for it. Emoji ignore `color`, so it rests desaturated and
@@ -87,7 +87,7 @@ export function TagDrawer({ children, label }: { children: ReactNode; label: str
               type="button"
               aria-label="Close tags"
               onClick={() => setOpen(false)}
-              className="drawer-scrim flex-1 bg-black/60"
+              className="drawer-scrim flex-1 bg-black/60 cursor-auto!"
             />
           </div>,
           document.body
