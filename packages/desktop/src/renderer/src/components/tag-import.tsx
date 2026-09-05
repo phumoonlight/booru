@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { RATING_COLOR, RATING_LABEL } from '@common/search'
+import { RATING_COLOR, RATING_LABEL, tagLabel } from '@common/search'
 import { categoryColor } from '@common/tags'
 import type { Post } from '@common/data/posts'
 import { readPosts, thumbnailFor } from './browse'
@@ -155,7 +155,7 @@ export function TagImport({
                   key={tag.name}
                   className={`rounded bg-background px-2 py-0.5 font-mono text-xs ${categoryColor(tag.category)}`}
                 >
-                  {tag.name}
+                  {tagLabel(tag.name)}
                 </span>
               ))}
             </div>

@@ -64,7 +64,46 @@ export type Tag = {
   id: number
   name: string
   category: TagCategory
+  /**
+   * A finer grouping inside the category, or null — `tags.category2`, whose migration has
+   * why it exists. Optional rather than required because most reads do not ask for the
+   * column: only `listTags` selects it, since the desktop app's tag picker is the only
+   * thing that draws it, and a type that promised it everywhere would be a lie about the
+   * post page's own tag list.
+   */
+  category2?: Subcategory
   post_count: number
+}
+
+/** A subgroup name, or nothing. Any string, the way `TagCategory` is any string. */
+export type Subcategory = string | null
+
+/**
+ * A typed-in subgroup as it is stored: trimmed, its inner runs of space collapsed, and
+ * lowercased, with an empty one becoming null.
+ *
+ * Lowercased for the same reason tag names are — `Dress Color` and `dress color` are one
+ * subgroup typed twice, and two blocks in the picker with the same heading is exactly the
+ * failure this column is meant to fix. Unlike a tag name it may hold spaces: it is a
+ * heading a person reads, not a name anything searches for, so nothing here has to match
+ * `TAG_PATTERN`.
+ */
+export function normalizeSubcategory(raw: string): Subcategory {
+  const value = raw.trim().replace(/\s+/g, ' ').toLowerCase()
+  return value === '' ? null : value
+}
+
+/** What a person reads above a subgroup's block. Capitalized, as with an unknown category. */
+export function subcategoryLabel(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+/**
+ * The subgroups present in a category, A–Z. The ungrouped tags are not one of these —
+ * they are the block above them, which is why null is dropped rather than sorted first.
+ */
+export function subcategoryOrder(values: Iterable<Subcategory | undefined>): string[] {
+  return [...new Set([...values].filter((value): value is string => !!value))].sort()
 }
 
 export const TAG_PATTERN = /^[a-z0-9_().-]+$/

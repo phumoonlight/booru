@@ -65,6 +65,11 @@ function readFile(): CacheFile | null {
     // A cache that won't parse is a cache that isn't there. Nothing here is worth a
     // crash, and the fix is one read from the board.
     if (typeof at !== 'number' || !Array.isArray(tags)) return null
+    // A copy written before `category2` existed has no such key, and serving it would
+    // draw every tag ungrouped in the picker for up to a day with nothing to explain it.
+    // The column is on the row it belongs to, so an entry that never carried it is not a
+    // tag "with no subgroup" — it is a cache from a different version of this file.
+    if (tags.length > 0 && !('category2' in tags[0])) return null
     return { at, tags }
   } catch {
     return null

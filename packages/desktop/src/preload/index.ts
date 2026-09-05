@@ -31,9 +31,12 @@ const api: PostAppApi = {
   savePost: (request) => ipcRenderer.invoke('posts:save', request),
   deletePost: (id) => ipcRenderer.invoke('posts:delete', id),
   postThumbnail: (fileName) => ipcRenderer.invoke('posts:thumbnail', fileName),
-  createTag: (name, category) => ipcRenderer.invoke('tags:create', name, category),
+  createTag: (name, category, subcategory) =>
+    ipcRenderer.invoke('tags:create', name, category, subcategory),
   renameTag: (id, name) => ipcRenderer.invoke('tags:rename', id, name),
   setTagCategory: (id, category) => ipcRenderer.invoke('tags:set-category', id, category),
+  setTagSubcategory: (id, subcategory) =>
+    ipcRenderer.invoke('tags:set-category2', id, subcategory),
   deleteTag: (id) => ipcRenderer.invoke('tags:delete', id),
   applyTagToTagged: (target, condition) => ipcRenderer.invoke('tags:apply', target, condition),
   // The one channel with nothing to answer: main only reads it when the window closes,

@@ -396,6 +396,16 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   already says.
 - No component library. Plain Tailwind against the CSS variables in `globals.css`
   (`background`, `surface`, `border`, `muted`, `accent`). Dark theme only.
+- **Prefer an emoji to a drawn icon**, and pick a fancy one where a fancy one fits — 🔄,
+  ➕, 🧩, 📋, ✅, 🗑️, 🖼️. They cost no SVG, no component and no import, they carry colour
+  the palette otherwise has none of, and a control that is one glyph beside its own words
+  is read faster than a line drawing. Always `aria-hidden` with the real label in text or
+  in `aria-label` — an emoji is decoration, and a screen reader announcing "package" for
+  Import is worse than silence.
+  The exception is a control drawn *only* as a glyph and repeated down a list, where a
+  stroked icon at a known size is steadier than a font the OS chooses: that is what
+  `renderer/src/components/icons.tsx` is for (the queue's bin and its two reorder arrows),
+  and it stays a small file. If a new one is not one of those, it is an emoji.
 - Mobile-first: design at 375px, scale up with `sm:`/`md:`/`lg:`. 44px tap targets.
 
 ## History

@@ -267,7 +267,10 @@ export async function searchTags(
 export async function listTags(client: BooruClient, limit = 200): Promise<Tag[]> {
   const { data } = await client
     .from('tags')
-    .select('id, name, category, post_count')
+    // The one read that asks for `category2`, because the desktop app's tag picker is the
+    // one thing that groups by it and this is the read behind it. Autocomplete and the
+    // post page's tag list leave the column alone rather than carry a field they never draw.
+    .select('id, name, category, category2, post_count')
     .order('post_count', { ascending: false })
     .order('name')
     .limit(limit)

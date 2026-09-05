@@ -182,9 +182,12 @@ export type PostAppApi = {
    * `self` and `data:` and nothing else, which is a rule worth an IPC hop to keep.
    */
   postThumbnail: (fileName: string) => Promise<string>
-  createTag: (name: string, category: TagCategory) => Promise<NamedOutcome>
+  /** `subcategory` is free text — '' for none. See `tags.category2`'s migration. */
+  createTag: (name: string, category: TagCategory, subcategory: string) => Promise<NamedOutcome>
   renameTag: (id: number, name: string) => Promise<NamedOutcome>
   setTagCategory: (id: number, category: TagCategory) => Promise<Outcome>
+  /** Moves a tag into a subgroup of its category, or out of one with ''. */
+  setTagSubcategory: (id: number, subcategory: string) => Promise<Outcome>
   deleteTag: (id: number) => Promise<Outcome>
   /** Adds one tag to every post already carrying another. */
   applyTagToTagged: (target: string, condition: string) => Promise<ApplyTagOutcome>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RATING_COLOR, RATING_LABEL, RATINGS, type Rating } from '@common/search'
+import { RATING_COLOR, RATING_LABEL, RATINGS, tagLabel, type Rating } from '@common/search'
 import { ArrowDownIcon, ArrowUpIcon, TrashIcon } from './icons'
 import { ImageViewer } from './image-viewer'
 import { categoryColor } from '@common/tags'
@@ -678,25 +678,6 @@ export function UploadQueue({
                         </p>
                       </div>
 
-                      {/* A mark and nothing else: it uploads the same, sorts the same and
-                        is not sent anywhere. What it is for is the pass you are in the
-                        middle of — twenty cards, and no other way to tell the ones you
-                        have already looked at from the ones you have not. */}
-                      <button
-                        type="button"
-                        onClick={() => toggleDone(item.file.path)}
-                        aria-pressed={item.done ?? false}
-                        title={item.done ? 'Not done after all' : 'Mark as done'}
-                        aria-label={`Mark ${item.file.name} as done`}
-                        className={`flex min-h-9 w-11 shrink-0 items-center justify-center rounded-lg border text-sm ${
-                          item.done
-                            ? 'border-green-500 bg-green-500/10 text-green-400'
-                            : 'border-border text-muted hover:text-foreground'
-                        }`}
-                      >
-                        <span aria-hidden>{item.done ? '✅' : '☐'}</span>
-                      </button>
-
                       <button
                         type="button"
                         onClick={() => requestDrop(item)}
@@ -776,21 +757,6 @@ export function UploadQueue({
                         />
                       ) : (
                         <>
-                          {/* Above the rows rather than inside them: it fills the whole
-                            field at once, from a post that is already tagged the way this
-                            one wants to be. */}
-                          <div className="flex">
-                            <button
-                              type="button"
-                              onClick={() => setImportingFor(item.file.path)}
-                              disabled={busy}
-                              title="Copy the tags from a post on the board"
-                              className="min-h-9 rounded-lg border border-border px-3 text-xs text-muted transition-colors hover:border-accent hover:text-foreground disabled:opacity-50"
-                            >
-                              <span aria-hidden>📋</span> Import tags from a post
-                            </button>
-                          </div>
-
                           <CategoryTagField
                             value={item.tags}
                             onChange={(tags) =>
@@ -798,6 +764,49 @@ export function UploadQueue({
                                 tags,
                                 rating: ratingFor(tags, item.rating),
                               })
+                            }
+                            actions={
+                              <>
+                                {/* On the TAGS line rather than in a row of its own: it
+                                  fills that whole field at once, from a post already
+                                  tagged the way this one wants to be, so it belongs to the
+                                  heading it acts on. Unbordered — a bordered button above
+                                  a field of bordered chips read as one of them. */}
+                                <button
+                                  type="button"
+                                  onClick={() => setImportingFor(item.file.path)}
+                                  disabled={busy}
+                                  title="Copy the tags from a post on the board"
+                                  className="flex min-h-7 items-center rounded px-1 text-xs text-muted transition-colors hover:text-foreground disabled:opacity-50"
+                                >
+                                  <span aria-hidden>📋</span>&nbsp;Import tags from a post
+                                </button>
+
+                                {/* A mark and nothing else: it uploads the same, sorts the
+                                  same and is not sent anywhere. What it is for is the pass
+                                  you are in the middle of — twenty cards, and no other way
+                                  to tell the ones you have already looked at from the ones
+                                  you have not. Right end of the same line, and unbordered:
+                                  beside the bin's own border it drew a second edge a pixel
+                                  away from the first. */}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleDone(item.file.path)}
+                                  aria-pressed={item.done ?? false}
+                                  title={item.done ? 'Not done after all' : 'Mark as done'}
+                                  aria-label={`Mark ${item.file.name} as done`}
+                                  className={`ml-auto flex min-h-7 items-center gap-1.5 rounded px-1 text-xs uppercase tracking-wide transition-colors ${
+                                    item.done
+                                      ? 'text-green-400'
+                                      : 'text-muted hover:text-foreground'
+                                  }`}
+                                >
+                                  <span aria-hidden className="text-sm">
+                                    {item.done ? '✅' : '☐'}
+                                  </span>
+                                  Done
+                                </button>
+                              </>
                             }
                             disabled={busy}
                             imply
@@ -1032,7 +1041,7 @@ function Uploaded({
               key={tag.name}
               className={`rounded bg-surface px-2 py-0.5 font-mono text-xs ${categoryColor(tag.category)}`}
             >
-              {tag.name}
+              {tagLabel(tag.name)}
             </span>
           ))}
         </div>

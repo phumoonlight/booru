@@ -6,8 +6,11 @@ import {
   categoryLabel,
   categoryOrder,
   colorSwatch,
+  subcategoryLabel,
+  subcategoryOrder,
   type Tag,
 } from '@common/tags'
+import { tagLabel } from '@common/search'
 import { impliedTags, type ImplicationRules } from '../../../shared/implications'
 import { recommendedTags } from '../../../shared/recommendations'
 import { useImplications } from '../implications'
@@ -23,7 +26,7 @@ import type { TagSeed } from './tag-field'
  * new tag was coined as General whatever it actually was, and `blue_hair` ended up on the
  * board twice in two categories. Choosing from the Color row cannot be wrong.
  *
- * Every category gets a row, the empty ones included: that row's ＋ is the only way to put
+ * Every category gets a row, the empty ones included: that row's ➕ is the only way to put
  * a first tag in it, and the categories a post has nothing in are exactly the ones worth
  * being reminded of while tagging.
  */
@@ -98,6 +101,7 @@ export function CategoryTagField({
   value,
   onChange,
   label = 'Tags',
+  actions,
   disabled = false,
   imply = false,
   recommend = false,
@@ -105,6 +109,12 @@ export function CategoryTagField({
   value: TagSeed[]
   onChange: (next: TagSeed[]) => void
   label?: string
+  /**
+   * What the caller puts on the heading row, beside the label. It is the one line on this
+   * field that is not a category, so it is where the controls that are about the whole
+   * field belong — anything given `ml-auto` sits at the right end of it.
+   */
+  actions?: React.ReactNode
   disabled?: boolean
   /**
    * Show what the implication rules add. On for the queue, where `seedsToInput` appends
@@ -141,7 +151,10 @@ export function CategoryTagField({
 
   return (
     <section className={`flex flex-col gap-1 ${disabled ? 'opacity-50' : ''}`}>
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</h2>
+      <div className="flex min-h-7 items-center gap-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</h2>
+        {actions}
+      </div>
 
       {rows.map((category) => (
         <div key={category} className="flex flex-col">
@@ -159,16 +172,20 @@ export function CategoryTagField({
                 .map((tag) => (
                   <span
                     key={tag.name}
-                    className={`flex items-center gap-1.5 rounded bg-surface pl-2 font-mono text-xs ${categoryColor(category)}`}
+                    // A bordered pill, the way the tags offered in the picker are: the
+                    // chosen ones sat on a fill with no edge, so a row of them read as one
+                    // band of surface rather than as several tags. Rounded fully to keep
+                    // the two apart all the same — offered is square, chosen is a pill.
+                    className={`flex items-center gap-1.5 rounded-full border border-border bg-surface pl-2.5 font-mono text-xs ${categoryColor(category)}`}
                   >
                     <TagMarks name={tag.name} />
-                    {tag.name}
+                    {tagLabel(tag.name)}
                     <button
                       type="button"
                       disabled={disabled}
                       onClick={() => onChange(value.filter((t) => t.name !== tag.name))}
-                      aria-label={`Remove ${tag.name}`}
-                      className="flex min-h-7 items-center px-1.5 text-muted hover:text-[#ff5d5f]"
+                      aria-label={`Remove ${tagLabel(tag.name)}`}
+                      className="flex min-h-7 items-center rounded-r-full pr-2.5 pl-1 text-muted hover:text-[#ff5d5f]"
                     >
                       ✕
                     </button>
@@ -180,13 +197,13 @@ export function CategoryTagField({
                 onClick={() => setAdding(adding === category ? null : category)}
                 aria-label={`Add a ${categoryLabel(category)} tag`}
                 title={`Add a ${categoryLabel(category)} tag`}
-                className={`flex min-h-7 items-center rounded border px-2 text-xs transition-colors ${
+                className={`flex min-h-7 items-center rounded-full border px-2 text-xs transition-colors ${
                   adding === category
                     ? 'border-accent text-accent'
                     : 'border-border text-muted hover:border-accent hover:text-foreground'
                 }`}
               >
-                ＋
+                <span aria-hidden>➕</span>
               </button>
             </div>
           </div>
@@ -229,7 +246,7 @@ export function CategoryTagField({
                 title="Added by a rule on the Tag rules screen"
                 className="rounded bg-background px-2 py-0.5 font-mono text-xs text-muted"
               >
-                {name}
+                {tagLabel(name)}
               </span>
             ))}
           </div>
@@ -256,7 +273,7 @@ export function CategoryTagField({
                 title="Recommended by a rule on the Tag rules screen"
                 className="rounded border border-border px-2 py-0.5 font-mono text-xs text-muted transition-colors hover:border-accent hover:text-foreground disabled:opacity-50"
               >
-                + {name}
+                + {tagLabel(name)}
               </button>
             ))}
           </div>
@@ -281,11 +298,20 @@ export function CategoryTagField({
  * `twin_tails`. Naming one is the Tags screen's job, where the whole list is in front of
  * you and a near-duplicate is visible before you make it.
  *
- * **Colour variants sit in a row of their own.** `white_underwear` and `pink_underwear`
- * are the same garment answered twice, and mixed in among `bikini` and `dress` they
- * tripled the length of a list whose useful part is the garments. Below the rule they are
- * grouped by what they are and sorted by colour, so choosing one is finding the thing and
- * then reading across. `COLOR_PREFIXES` is what counts as a colour.
+ * **Subgroups split the list up**, each behind a rule and under its own heading —
+ * `tags.category2`, set per tag on the Tags screen. Clothes on a real board is two hundred
+ * names in one wrapped block whose useful part is the garments; `dress` and `uniform`
+ * above a rule, then "dress color", then "underwear", is that block made readable. A tag
+ * with no subgroup sits in the first block, which is where most tags belong, and a
+ * category with no subgroups at all looks exactly as it did.
+ *
+ * It used to guess this from the name instead: a tag starting with a colour word went
+ * below the rule. That worked for `blue_dress` and for nothing else — `bra` and `panties`
+ * belong together and share no prefix, and `blonde_hair` was filed as a variant of `hair`
+ * when it is the only spelling that tag has. Grouping is a judgement about the vocabulary,
+ * so it is stored beside the vocabulary rather than re-derived here. The colour *dot* is
+ * unchanged: reading a colour off a name is a fine thing to guess, and painting the wrong
+ * one costs nothing.
  */
 
 /**
@@ -340,8 +366,6 @@ function splitColor(name: string, colors: string[]): { color: string; rest: stri
   }
   return null
 }
-type ColorOption = { tag: Tag; color: string; rest: string }
-
 function TagPicker({
   category,
   all,
@@ -358,28 +382,35 @@ function TagPicker({
   const [filter, setFilter] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const typed = filter.trim().toLowerCase()
+  // Matched against the stored name, so a space typed where the chips show one is an
+  // underscore here. Filtering on what is drawn rather than on what is stored would be the
+  // same thing said twice; this way the box takes either spelling.
+  const typed = filter.trim().toLowerCase().replace(/ /g, '_')
 
-  const { plain, colored } = useMemo(() => {
+  const { loose, grouped } = useMemo(() => {
     const taken = new Set(exclude)
     const options = (all ?? [])
       .filter((tag) => tag.category === category && !taken.has(tag.name))
       .filter((tag) => (typed ? tag.name.includes(typed) : true))
       .slice(0, 60)
 
-    const plain: Tag[] = []
-    const colored: ColorOption[] = []
-    for (const tag of options) {
-      const split = splitColor(tag.name, COLOR_PREFIXES)
-      if (split) colored.push({ tag, ...split })
-      else plain.push(tag)
-    }
+    // The index's own order — most used first — for the block that is most of the picking.
+    const loose = options.filter((tag) => !tag.category2)
 
-    // By the thing first and the colour second — the two orders a row of variants is read
-    // in, and the one that puts every underwear together rather than every white thing.
-    colored.sort((a, b) => a.rest.localeCompare(b.rest) || a.color.localeCompare(b.color))
+    // A-Z inside a subgroup, where the index order is the wrong one: a subgroup is a set of
+    // answers to one question, and `black_dress`, `blue_dress`, `red_dress` is read across
+    // rather than searched, which popularity order would scramble for no gain.
+    const grouped = subcategoryOrder(options.map((tag) => tag.category2)).map(
+      (name) =>
+        [
+          name,
+          options
+            .filter((tag) => tag.category2 === name)
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        ] as [string, Tag[]]
+    )
 
-    return { plain, colored }
+    return { loose, grouped }
   }, [all, category, exclude, typed])
 
   /** A pick clears the filter and hands focus back, so the next tag is typed rather than
@@ -393,7 +424,7 @@ function TagPicker({
 
   return (
     <div className="mb-2 ml-32 flex flex-col gap-2 rounded-lg border border-border bg-surface p-2">
-      {/* No Close button: the ＋ that opened this closes it, and it is drawn active while
+      {/* No Close button: the ➕ that opened this closes it, and it is drawn active while
           the picker is up. A second way out earns its place only where the first is hard
           to find, and that one is directly above. Escape works too. */}
       <input
@@ -411,43 +442,38 @@ function TagPicker({
         <p className="px-1 py-2 text-xs text-muted">Reading tags…</p>
       ) : (
         <div className="flex max-h-48 flex-col gap-2 overflow-y-auto">
-          {plain.length > 0 && (
+          {/* The ungrouped tags, under no heading of their own: they are the category, whose
+              name is already on the row that opened this, and a second label would only push
+              the tags a line further down. */}
+          {loose.length > 0 && (
             <div className="flex flex-wrap gap-1">
-              {plain.map((tag) => (
-                <button
-                  key={tag.id}
-                  type="button"
-                  onClick={() => pick({ name: tag.name, category: tag.category })}
-                  className={`flex min-h-7 items-center rounded border border-border px-2 font-mono text-xs transition-colors hover:border-accent ${categoryColor(category)}`}
-                >
-                  {tag.name}
-                </button>
+              {loose.map((tag) => (
+                <TagOption key={tag.id} tag={tag} category={category} onPick={pick} />
               ))}
             </div>
           )}
 
-          {colored.length > 0 && (
+          {grouped.map(([name, group], at) => (
             <div
-              className={`flex flex-wrap gap-1 ${plain.length > 0 ? 'border-t border-border pt-2' : ''}`}
+              key={name}
+              // Ruled off from whatever is above — the ungrouped block, or the subgroup
+              // before this one — except when this is the first thing in the picker.
+              className={`flex flex-col gap-1 ${
+                loose.length > 0 || at > 0 ? 'border-t border-border pt-2' : ''
+              }`}
             >
-              {colored.map(({ tag }) => (
-                <button
-                  key={tag.id}
-                  type="button"
-                  onClick={() => pick({ name: tag.name, category: tag.category })}
-                  className={`flex min-h-7 items-center gap-1.5 rounded border border-border px-2 font-mono text-xs transition-colors hover:border-accent ${categoryColor(category)}`}
-                >
-                  {/* The colour itself, painted, rather than a second word colour in the
-                      text — these chips belong to the category they are in, and a dot is
-                      read before the name is, which is the order you pick one in. */}
-                  <TagMarks name={tag.name} />
-                  {tag.name}
-                </button>
-              ))}
+              <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                {subcategoryLabel(name)}
+              </h3>
+              <div className="flex flex-wrap gap-1">
+                {group.map((tag) => (
+                  <TagOption key={tag.id} tag={tag} category={category} onPick={pick} />
+                ))}
+              </div>
             </div>
-          )}
+          ))}
 
-          {plain.length === 0 && colored.length === 0 && (
+          {loose.length === 0 && grouped.length === 0 && (
             <p className="px-1 py-2 text-xs text-muted">
               {typed
                 ? 'No tag in this category matches — new ones are named on the Tags screen.'
@@ -457,5 +483,31 @@ function TagPicker({
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * One offered tag. The same chip wherever it lands, marks included — a tag drawn one way
+ * above a rule and another way below it read as two kinds of thing, and it is one tag
+ * either way. The colour dot is still `TagMarks`, read off the name.
+ */
+function TagOption({
+  tag,
+  category,
+  onPick,
+}: {
+  tag: Tag
+  category: string
+  onPick: (tag: TagSeed) => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onPick({ name: tag.name, category: tag.category })}
+      className={`flex min-h-7 items-center gap-1.5 rounded border border-border px-2 font-mono text-xs transition-colors hover:border-accent ${categoryColor(category)}`}
+    >
+      <TagMarks name={tag.name} />
+      {tagLabel(tag.name)}
+    </button>
   )
 }

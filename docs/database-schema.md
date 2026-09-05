@@ -54,13 +54,15 @@ served by the primary key, which Postgres reads backwards as cheaply as forwards
 
 ## `tags`
 
-`supabase/migrations/20260826100200_tags.sql`
+`supabase/migrations/20260826100200_tags.sql`, plus
+`supabase/migrations/20260905120000_tags_category2.sql`
 
 | column | type | notes |
 | --- | --- | --- |
 | `id` | `bigint` PK identity | `/tags/[id]` is addressed by this, so a rename never breaks a link |
 | `name` | `text unique not null` | `check (name ~ '^[a-z0-9_().-]+$')` — lowercase `snake_case` |
 | `category` | `text not null default 'general'` | free-form; `TAG_CATEGORIES` in `@common/tags` is the ten the app writes, each with a colour and a place in the order |
+| `category2` | `text` (nullable) | a finer grouping *within* the category, free-form and usually null — read by the desktop tag picker and by nothing else |
 | `post_count` | `int not null default 0` | denormalized, see [Counters](#counters) |
 | `created_at` | `timestamptz not null default now()` | |
 
@@ -79,6 +81,11 @@ lookup); `tags_name_prefix_idx (name text_pattern_ops)` for autocomplete;
   grouped list (`categoryOrder`) — reads never assume the list. Writes do:
   `z.enum(TAG_CATEGORIES)` guards the two IPC channels that set this column, so one can
   only arrive by hand-editing the table.
+- `category2` is cosmetic and local: `listTags` is the only read that selects it, the
+  desktop app's tag picker is the only thing that draws it, and nothing about search,
+  storage or a post's own page knows it exists. There is no list of valid values —
+  `normalizeSubcategory` in `@common/tags` lowercases and space-collapses what is typed so
+  that a subgroup has one spelling, and `''` clears the column back to null.
 
 ## `post_tags`
 

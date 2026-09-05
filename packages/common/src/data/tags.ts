@@ -1,7 +1,13 @@
 import type { BooruClient } from '@common/supabase/types'
 import { syncTagPostCounts } from '@common/data/counters'
 import { ensureTagIds } from '@common/data/shared'
-import { parseTagInput, type Tag, type TagCategory } from '@common/tags'
+import {
+  normalizeSubcategory,
+  parseTagInput,
+  type Subcategory,
+  type Tag,
+  type TagCategory,
+} from '@common/tags'
 
 /**
  * Tag management: create, apply-by-tag, rename, recategorize, delete.
@@ -70,12 +76,15 @@ export async function getTagById(client: BooruClient, id: number): Promise<Tag |
 export async function createTag(
   client: BooruClient,
   rawName: string,
-  category: TagCategory
+  category: TagCategory,
+  rawSubcategory = ''
 ): Promise<TagOutcome<{ name: string }>> {
   const parsed = readTagName(rawName)
   if ('error' in parsed) return { ok: false, error: parsed.error }
 
-  const { error } = await client.from('tags').insert({ name: parsed.name, category })
+  const { error } = await client
+    .from('tags')
+    .insert({ name: parsed.name, category, category2: normalizeSubcategory(rawSubcategory) })
   if (error) {
     if (error.code === UNIQUE_VIOLATION) return { ok: false, error: `${parsed.name} already exists.` }
     return { ok: false, error: `Could not create the tag: ${error.message}` }
@@ -123,6 +132,30 @@ export async function setTagCategory(
   const { error } = await client.from('tags').update({ category }).eq('id', id)
   if (error) return { ok: false, error: `Update failed: ${error.message}` }
   return { ok: true }
+}
+
+/**
+ * Move a tag into a subgroup of its category, or out of one — `tags.category2`.
+ *
+ * Cosmetic in exactly the way the category is, and a little less than that: nothing but
+ * the desktop app's tag picker reads this column, so a wrong value costs a block heading
+ * and never a post, a link or a search. It is normalized rather than validated for the
+ * same reason — there is no list of subgroups to be outside of, only a spelling to keep
+ * to, which is what `normalizeSubcategory` is.
+ */
+export async function setTagSubcategory(
+  client: BooruClient,
+  id: number,
+  rawSubcategory: string
+): Promise<TagOutcome<{ category2: Subcategory }>> {
+  if (rawSubcategory.length > 64) {
+    return { ok: false, error: 'That subgroup name is too long — 64 characters at most.' }
+  }
+
+  const category2 = normalizeSubcategory(rawSubcategory)
+  const { error } = await client.from('tags').update({ category2 }).eq('id', id)
+  if (error) return { ok: false, error: `Update failed: ${error.message}` }
+  return { ok: true, category2 }
 }
 
 /**

@@ -66,6 +66,9 @@ const savePostSchema = z.object({
 })
 
 const tagNameSchema = z.string().max(64)
+// Free text, not an enum: there is no list of subgroups — see `tags.category2`'s
+// migration. `setTagSubcategory` normalizes what gets through, and '' clears the column.
+const subcategorySchema = z.string().max(64)
 // The known list, which is also the only list with a colour and a place in the display
 // order. A category outside it can only arrive by hand-editing the table.
 const categorySchema = z.enum(TAG_CATEGORIES)
@@ -340,18 +343,26 @@ export function registerIpc(): void {
   // Every one of them drops the cached index: a rename, a delete or a category change
   // makes the copy on disk wrong about a name the field is about to offer.
 
-  ipcMain.handle('tags:create', async (_event, name: unknown, category: unknown) => {
-    const supabase = boardClient()
-    if (!supabase) return { ok: false as const, error: 'Not set up yet' }
-    const parsedName = tagNameSchema.safeParse(name)
-    const parsedCategory = categorySchema.safeParse(category)
-    if (!parsedName.success) return { ok: false as const, error: 'Type a tag name.' }
-    if (!parsedCategory.success) return { ok: false as const, error: 'Pick a category.' }
+  ipcMain.handle(
+    'tags:create',
+    async (_event, name: unknown, category: unknown, subcategory: unknown) => {
+      const supabase = boardClient()
+      if (!supabase) return { ok: false as const, error: 'Not set up yet' }
+      const parsedName = tagNameSchema.safeParse(name)
+      const parsedCategory = categorySchema.safeParse(category)
+      if (!parsedName.success) return { ok: false as const, error: 'Type a tag name.' }
+      if (!parsedCategory.success) return { ok: false as const, error: 'Pick a category.' }
 
-    const result = await manageTags.createTag(supabase, parsedName.data, parsedCategory.data)
-    if (result.ok) clearTagCache()
-    return result
-  })
+      const result = await manageTags.createTag(
+        supabase,
+        parsedName.data,
+        parsedCategory.data,
+        subcategorySchema.safeParse(subcategory).data ?? ''
+      )
+      if (result.ok) clearTagCache()
+      return result
+    }
+  )
 
   ipcMain.handle('tags:rename', async (_event, id: unknown, name: unknown) => {
     const supabase = boardClient()
@@ -375,6 +386,24 @@ export function registerIpc(): void {
     if (!parsedCategory.success) return { ok: false as const, error: 'Pick a category.' }
 
     const result = await manageTags.setTagCategory(supabase, parsedId.data, parsedCategory.data)
+    if (result.ok) clearTagCache()
+    return result
+  })
+
+  /**
+   * The subgroup a tag sits in inside its category. Its own channel rather than a field on
+   * `tags:set-category`, because the two move independently: recategorizing a tag is a
+   * claim about what it is, and this is only about where it is drawn in the picker.
+   */
+  ipcMain.handle('tags:set-category2', async (_event, id: unknown, subcategory: unknown) => {
+    const supabase = boardClient()
+    if (!supabase) return { ok: false as const, error: 'Not set up yet' }
+    const parsedId = postIdSchema.safeParse(id)
+    const parsed = subcategorySchema.safeParse(subcategory)
+    if (!parsedId.success) return { ok: false as const, error: 'No such tag' }
+    if (!parsed.success) return { ok: false as const, error: 'That subgroup name is too long.' }
+
+    const result = await manageTags.setTagSubcategory(supabase, parsedId.data, parsed.data)
     if (result.ok) clearTagCache()
     return result
   })

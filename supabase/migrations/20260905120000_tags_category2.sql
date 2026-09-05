@@ -1,0 +1,23 @@
+-- `tags.category2` — a second, finer grouping *within* a category.
+
+-- A category answers "what kind of thing is this tag", and eleven of them is the right
+-- number for that question. It is the wrong number for a picker: Clothes on a real board
+-- is two hundred names in one wrapped block, and the useful ones — the garments — are
+-- buried among every colour variant of every garment. This column is what lets that block
+-- be read as `dress`, `uniform`, then a rule, then "dress color", then a rule, then
+-- "underwear".
+--
+-- It replaced a rule that guessed the same thing from the name: a tag starting with a
+-- colour word went into a second block. That worked for `blue_dress` and for nothing else
+-- — `bra` and `panties` belong together and share no prefix, and `blonde_hair` was filed
+-- as a colour variant of `hair` when it is the only spelling that tag has. A grouping is
+-- a judgement about the vocabulary, so it is stored beside the vocabulary.
+--
+-- Nullable, and null is the common case: a tag with nothing here sits in its category's
+-- first block, which is where most tags belong. Free-form text like `category` above it,
+-- for the same reason — the subgroups are one board's own habits, and a list of them in
+-- code would be a migration every time somebody had a new one.
+--
+-- Only the desktop app's tag picker reads it. The website groups by category alone, and
+-- nothing about search, storage or a post's own page knows this column exists.
+alter table public.tags add column category2 text;

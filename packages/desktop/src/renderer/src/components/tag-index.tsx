@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import {
   TAG_CATEGORIES,
   categoryColor,
   categoryLabel,
   categoryOrder,
+  subcategoryLabel,
+  subcategoryOrder,
   type Tag,
   type TagCategory,
 } from '@common/tags'
@@ -94,6 +96,15 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
     setLoading(false)
   }
 
+  /**
+   * The subgroups already in use in a category — what the two forms offer while you type
+   * one. A subgroup only does its job when every tag in it spells it the same way, and the
+   * list of them exists nowhere but in the tags themselves, so the field that sets one has
+   * to show what is already there or it is a free-text box inviting a near-duplicate.
+   */
+  const subcategoriesIn = (category: TagCategory): string[] =>
+    subcategoryOrder((tags ?? []).filter((tag) => tag.category === category).map((t) => t.category2))
+
   const groups = categoryOrder((tags ?? []).map((tag) => tag.category))
     .map(
       (category) =>
@@ -157,7 +168,9 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
         </button>
       </div>
 
-      {panel === 'create' && <CreateTag onDone={() => void refresh()} />}
+      {panel === 'create' && (
+        <CreateTag subcategoriesIn={subcategoriesIn} onDone={() => void refresh()} />
+      )}
       {panel === 'apply' && <ApplyTag onDone={() => void refresh()} />}
 
       {editing && (
@@ -167,6 +180,7 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
           key={editing.id}
           tag={editing}
           siteUrl={siteUrl}
+          subcategoriesIn={subcategoriesIn}
           onClose={() => setEditing(null)}
           onDone={() => void refresh()}
         />
@@ -181,38 +195,97 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
           No tags yet — they are created by uploads.
         </p>
       ) : (
-        groups.map(([category, group]) => (
-          <section key={category}>
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-              {categoryLabel(category)} ({group.length})
-            </h2>
-            {/* Ruled like a table, the same way the web page is: a count sitting in open
-                space reads as close to the next column's name as to its own. Each cell
-                carries its own right/bottom rule and is pulled a pixel over its
-                neighbour so shared edges stay hairlines. */}
-            <ul className="grid grid-cols-2 overflow-hidden rounded-lg border border-border sm:grid-cols-3 lg:grid-cols-4">
-              {group.map((tag) => (
-                <li key={tag.id} className="-mb-px -mr-px border-b border-r border-border">
-                  <button
-                    type="button"
-                    onClick={() => setEditing(tag)}
-                    title={`Manage ${tagLabel(tag.name)}`}
-                    className={`flex min-h-9 w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface ${
-                      editing?.id === tag.id ? 'bg-surface' : ''
-                    } ${categoryColor(category)}`}
-                  >
-                    <span className="min-w-0 flex-1 truncate">{tagLabel(tag.name)}</span>
-                    <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted">
-                      {tag.post_count}
-                    </span>
-                  </button>
-                </li>
+        groups.map(([category, group]) => {
+          // Split the same way the tag picker splits it, because this is where the split is
+          // decided: a subgroup that is a near-duplicate of another, or a tag left out of
+          // the one it belongs to, is only visible with the whole category laid out. A
+          // category with no subgroups renders exactly the one grid it always did.
+          const loose = group.filter((tag) => !tag.category2)
+          const subgroups = subcategoryOrder(group.map((tag) => tag.category2)).map(
+            (name) =>
+              [name, group.filter((tag) => tag.category2 === name)] as [string, Tag[]]
+          )
+
+          return (
+            <section key={category} className="flex flex-col gap-2">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
+                {categoryLabel(category)} ({group.length})
+              </h2>
+              {loose.length > 0 && (
+                <TagGrid
+                  tags={loose}
+                  category={category}
+                  editingId={editing?.id ?? null}
+                  onSelect={setEditing}
+                />
+              )}
+              {subgroups.map(([name, list]) => (
+                <div
+                  key={name}
+                  // Inset on the left, and quieter than the category above it — a subgroup
+                  // is a division inside that heading, not a sibling of it, and the grid
+                  // stepping in is what says so at a glance. Only the left: the right edge
+                  // lines up with every other grid on the screen, so the step reads as an
+                  // indent rather than as a narrower table.
+                  className="flex flex-col gap-1 pl-3"
+                >
+                  <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                    {subcategoryLabel(name)} ({list.length})
+                  </h3>
+                  <TagGrid
+                    tags={list}
+                    category={category}
+                    editingId={editing?.id ?? null}
+                    onSelect={setEditing}
+                  />
+                </div>
               ))}
-            </ul>
-          </section>
-        ))
+            </section>
+          )
+        })
       )}
     </div>
+  )
+}
+
+/**
+ * One block of tags: the whole of a category, or one subgroup of it.
+ *
+ * Ruled like a table, the same way the web page is: a count sitting in open space reads as
+ * close to the next column's name as to its own. Each cell carries its own right/bottom
+ * rule and is pulled a pixel over its neighbour so shared edges stay hairlines.
+ */
+function TagGrid({
+  tags,
+  category,
+  editingId,
+  onSelect,
+}: {
+  tags: Tag[]
+  category: TagCategory
+  editingId: number | null
+  onSelect: (tag: Tag) => void
+}) {
+  return (
+    <ul className="grid grid-cols-2 overflow-hidden rounded-lg border border-border sm:grid-cols-3 lg:grid-cols-4">
+      {tags.map((tag) => (
+        <li key={tag.id} className="-mb-px -mr-px border-b border-r border-border">
+          <button
+            type="button"
+            onClick={() => onSelect(tag)}
+            title={`Manage ${tagLabel(tag.name)}`}
+            className={`flex min-h-9 w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface ${
+              editingId === tag.id ? 'bg-surface' : ''
+            } ${categoryColor(category)}`}
+          >
+            <span className="min-w-0 flex-1 truncate">{tagLabel(tag.name)}</span>
+            <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted">
+              {tag.post_count}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -310,19 +383,72 @@ function CategoryField({
 }
 
 /**
+ * The subgroup, inside the category — `tags.category2`, whose migration has why it exists.
+ *
+ * Free text where the category is a menu, because there is no list to choose from: a
+ * subgroup is one board's own habit about its own vocabulary, and a fixed list of them
+ * would be a code change every time somebody had a new one. What keeps it from being a
+ * near-duplicate factory is the datalist: the subgroups this category already uses are
+ * offered as you type, so "dress color" is picked rather than typed a second way.
+ *
+ * Empty means none, which is what most tags are. Nothing validates the text — it is
+ * lowercased and space-collapsed on the way in (`normalizeSubcategory`) and drawn as a
+ * heading in the desktop picker, and nowhere else at all.
+ */
+function SubcategoryField({
+  value,
+  onChange,
+  options,
+  disabled = false,
+}: {
+  value: string
+  onChange: (next: string) => void
+  options: string[]
+  disabled?: boolean
+}) {
+  const listId = useId()
+
+  return (
+    <>
+      <input
+        list={listId}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        placeholder="subgroup (optional)"
+        spellCheck={false}
+        className={`${FIELD} min-w-32 flex-1`}
+      />
+      <datalist id={listId}>
+        {options.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
+    </>
+  )
+}
+
+/**
  * Name a tag before anything carries it — an artist or a series, with the category
  * already right. Uploads coin tags as a side effect of applying them, so this is only
  * ever the other order, and the tag starts on no posts.
  */
-function CreateTag({ onDone }: { onDone: () => void }) {
+function CreateTag({
+  subcategoriesIn,
+  onDone,
+}: {
+  subcategoriesIn: (category: TagCategory) => string[]
+  onDone: () => void
+}) {
   const [name, setName] = useState('')
   const [category, setCategory] = useState<TagCategory>('general')
+  const [subcategory, setSubcategory] = useState('')
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
 
   async function submit() {
     setBusy(true)
-    const result = await window.api.createTag(name, category)
+    const result = await window.api.createTag(name, category, subcategory)
     setBusy(false)
     if (result.ok) {
       setMessage({ ok: true, text: `Created ${tagLabel(result.name)}.` })
@@ -344,6 +470,13 @@ function CreateTag({ onDone }: { onDone: () => void }) {
           className={`${FIELD} min-w-40 flex-1 font-mono`}
         />
         <CategoryField value={category} onChange={setCategory} />
+        {/* Kept when the name is cleared below: naming five underwear tags in a row is what
+            this form is for, and re-typing the subgroup each time is the thing it saves. */}
+        <SubcategoryField
+          value={subcategory}
+          onChange={setSubcategory}
+          options={subcategoriesIn(category)}
+        />
         <button
           type="button"
           onClick={() => void submit()}
@@ -434,16 +567,19 @@ function ApplyTag({ onDone }: { onDone: () => void }) {
 function EditTag({
   tag,
   siteUrl,
+  subcategoriesIn,
   onClose,
   onDone,
 }: {
   tag: Tag
   siteUrl: string
+  subcategoriesIn: (category: TagCategory) => string[]
   onClose: () => void
   onDone: () => void
 }) {
   const [name, setName] = useState(tag.name)
   const [category, setCategory] = useState<TagCategory>(tag.category)
+  const [subcategory, setSubcategory] = useState(tag.category2 ?? '')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -467,6 +603,14 @@ function EditTag({
         return
       }
     }
+    if (subcategory !== (tag.category2 ?? '')) {
+      const regrouped = await window.api.setTagSubcategory(tag.id, subcategory)
+      if (!regrouped.ok) {
+        setBusy(false)
+        setError(regrouped.error)
+        return
+      }
+    }
     setBusy(false)
     onDone()
   }
@@ -483,7 +627,8 @@ function EditTag({
     onDone()
   }
 
-  const changed = name !== tag.name || category !== tag.category
+  const changed =
+    name !== tag.name || category !== tag.category || subcategory !== (tag.category2 ?? '')
 
   return (
     <Panel
@@ -526,6 +671,14 @@ function EditTag({
           className={`${FIELD} min-w-40 flex-1 font-mono`}
         />
         <CategoryField value={category} onChange={setCategory} disabled={busy} />
+        {/* Offered from the category as currently selected, not as stored: moving a tag to
+            another category and into one of *that* category's subgroups is one edit. */}
+        <SubcategoryField
+          value={subcategory}
+          onChange={setSubcategory}
+          options={subcategoriesIn(category)}
+          disabled={busy}
+        />
         <button
           type="button"
           onClick={() => void save()}
