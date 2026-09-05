@@ -95,13 +95,15 @@ export function parseTagInput(input: string): {
 // imports no Next component (packages/desktop).
 // One hue each, spread around the wheel rather than shaded off one another: the whole
 // point is telling two rows apart at a glance in a list that is otherwise one column of
-// lowercase words.
+// lowercase words. Body is the exception and on purpose — a skin tone, because what it
+// files is skin — so it is told from Head's orange by being far softer rather than by
+// hue.
 const KNOWN_COLOR: Record<KnownCategory, string> = {
   artist: 'text-[#ff8a8b]',
   copyright: 'text-[#c797ff]',
   character: 'text-[#35c64a]',
   head: 'text-[#ff9f43]',
-  body: 'text-[#8b9cff]',
+  body: 'text-[#e3ad8a]',
   clothes: 'text-[#45c8c0]',
   exposure: 'text-[#ff87c8]',
   posture: 'text-[#b6d94c]',
