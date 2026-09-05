@@ -32,6 +32,8 @@ export function PostEditor({
   onSaved,
   onDeleted,
   onClose,
+  onPrev = null,
+  onNext = null,
 }: {
   postId: number
   siteUrl: string
@@ -39,6 +41,13 @@ export function PostEditor({
   onSaved: () => void
   onDeleted: () => void
   onClose: () => void
+  /**
+   * The neighbouring posts in the grid this was opened from, or null at either end.
+   * Correcting a run of ratings is the common job here and it used to cost a trip back
+   * to the grid per post, which re-read nothing but still lost your place on the screen.
+   */
+  onPrev?: (() => void) | null
+  onNext?: (() => void) | null
 }) {
   const [post, setPost] = useState<Post | null>(null)
   const [thumb, setThumb] = useState('')
@@ -82,6 +91,32 @@ export function PostEditor({
       alive = false
     }
   }, [postId])
+
+  /**
+   * ← and → walk the grid. On `window`, because there is nothing on this screen that
+   * would sensibly hold focus for it — but a text field is exactly where an arrow key
+   * means "move the caret", so the two typed fields opt out by being the focused element.
+   */
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) {
+        return
+      }
+      if (event.key === 'ArrowLeft' && onPrev) {
+        event.preventDefault()
+        onPrev()
+      } else if (event.key === 'ArrowRight' && onNext) {
+        event.preventDefault()
+        onNext()
+      }
+    }
+
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onPrev, onNext])
 
   async function commit(next: typeof value) {
     const previous = value
@@ -146,6 +181,13 @@ export function PostEditor({
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-4">
       <div className="flex items-baseline justify-between gap-2">
         <div className="flex items-baseline gap-2">
+          {/* Beside the number rather than under the picture: it is the number that
+              changes when one is pressed. Both stay on screen at the ends of the grid,
+              disabled — a control that disappears is one you have to look for. */}
+          <div className="flex items-center gap-1">
+            <NavButton label="Previous post (←)" glyph="‹" onClick={onPrev} />
+            <NavButton label="Next post (→)" glyph="›" onClick={onNext} />
+          </div>
           <h1 className="text-lg font-bold tracking-tight">Post #{postId}</h1>
           {/* Everything here writes as it is used, so this line is the whole feedback the
               screen gives: what happened to the last edit, and nothing else. */}
@@ -240,6 +282,31 @@ export function PostEditor({
         </>
       )}
     </div>
+  )
+}
+
+/** One step through the grid. Null means there is nothing that way, which is a reason
+ *  to be on screen and unpressable rather than to be absent. */
+function NavButton({
+  label,
+  glyph,
+  onClick,
+}: {
+  label: string
+  glyph: string
+  onClick: (() => void) | null
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onClick?.()}
+      disabled={onClick === null}
+      title={label}
+      aria-label={label}
+      className="flex h-7 w-7 items-center justify-center rounded border border-border text-sm text-muted transition-colors enabled:hover:border-accent enabled:hover:text-foreground disabled:opacity-30"
+    >
+      <span aria-hidden>{glyph}</span>
+    </button>
   )
 }
 

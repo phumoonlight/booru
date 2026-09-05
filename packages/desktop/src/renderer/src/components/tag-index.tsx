@@ -110,18 +110,6 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-4">
       <div className="flex items-baseline gap-2">
         <h1 className="text-lg font-bold tracking-tight">Tags</h1>
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          disabled={loading}
-          title="Read the tag index again"
-          aria-label="Refresh tags"
-          className="min-h-9 text-sm text-muted transition-colors hover:text-foreground disabled:text-border"
-        >
-          <span aria-hidden className={loading ? 'inline-block animate-spin' : undefined}>
-            🔄
-          </span>
-        </button>
         {/* What a cache owes you: how old it is. Time only — a list from an hour ago and
             one from Tuesday both just say "not now", and the date is never the answer to
             "should I press refresh". */}
@@ -130,6 +118,21 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
             as of {new Date(fetchedAt).toLocaleTimeString([], { timeStyle: 'short' })}
           </span>
         )}
+        {/* Browse's Refresh, spelled the same way and in the same corner: both screens
+            paint a remembered list, so the way to ask for a fresh one should not be a
+            labelled button on one and a bare glyph on the other. */}
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          disabled={loading}
+          title="Read the tag index again"
+          className="ml-auto min-h-9 rounded-lg border border-border px-3 text-sm transition-colors hover:bg-surface disabled:text-border"
+        >
+          <span aria-hidden className={loading ? 'inline-block animate-spin' : undefined}>
+            🔄
+          </span>{' '}
+          Refresh
+        </button>
       </div>
 
       <div className="flex gap-2">

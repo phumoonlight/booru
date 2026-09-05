@@ -78,10 +78,20 @@ export type StagedFile = {
   height: number
   /** A `data:` URL small enough to hand straight to an `<img>`, or '' if the preview failed. */
   preview: string
+  /**
+   * The md5 of the bytes, which is what the post would be named — so it is also the
+   * question "is this already up?", asked at staging rather than at upload.
+   */
+  md5: string
 }
 
 export type StageOutcome =
-  ({ ok: true } & StagedFile) | { ok: false; path: string; name: string; error: string }
+  | ({ ok: true } & StagedFile & {
+        /** The post already holding these bytes, or null — including when the board could
+         *  not be reached, since that is not the same as knowing it is new. */
+        duplicateOf: number | null
+      })
+  | { ok: false; path: string; name: string; error: string }
 
 export type TagSuggestion = { name: string; category: TagCategory; post_count: number }
 

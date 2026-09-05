@@ -11,7 +11,7 @@ together or the app lies about itself.
 Entries are grouped **Added** / **Changed** / **Fixed**, and say what someone using the
 app would notice.
 
-- [2.2.0](2.2.0.md) — 2026-09-05 — choose which browser links open in.
+- [2.2.0](2.2.0.md) — 2026-09-05 — pick the browser links open in; Browse remembers and refreshes; queue cards fold, mark done and import tags.
 - [2.1.0](2.1.0.md) — 2026-09-05 — the post editor rebuilt: image on top, tags by category, no Save button.
 - [2.0.3](2.0.3.md) — 2026-09-05 — five more tag categories; the category field is a menu again.
 - [2.0.2](2.0.2.md) — 2026-09-05 — a tag's category is free text, with suggestions.

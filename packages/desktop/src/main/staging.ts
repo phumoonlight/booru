@@ -1,7 +1,12 @@
 import { basename } from 'node:path'
+import { createHash } from 'node:crypto'
+import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
+import { pipeline } from 'node:stream/promises'
 import sharp, { type Metadata } from 'sharp'
+import { findPostIdsByFileNames } from '@common/data/shared'
 import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL, MAX_PIXELS } from './limits'
+import { boardClient } from './supabase'
 import type { StageOutcome } from '../shared/api'
 
 /**
@@ -49,6 +54,18 @@ const PREVIEW_WIDTH = 1600
  * not the file, and every pixel past the screen is base64 crossing the bridge for nothing.
  */
 const FULL_PREVIEW_EDGE = 1600
+
+/**
+ * The md5 of the file as it sits on disk — the same hash `createPostFromImage` takes of
+ * the bytes it is handed, which is what makes it `posts.file_name` and so the answer to
+ * "is this already on the board". Streamed rather than read: a 50MB file has no reason to
+ * be in memory to be hashed, and staging is already the slow step.
+ */
+async function md5Of(path: string): Promise<string> {
+  const hash = createHash('md5')
+  await pipeline(createReadStream(path), hash)
+  return hash.digest('hex')
+}
 
 async function stageOne(path: string): Promise<StageOutcome> {
   const name = basename(path)
@@ -108,7 +125,14 @@ async function stageOne(path: string): Promise<StageOutcome> {
     // by the pipeline, from the file rather than from this.
   }
 
-  return { ok: true, path, name, size, width, height, preview }
+  let md5: string
+  try {
+    md5 = await md5Of(path)
+  } catch {
+    return { ok: false, path, name, error: 'Could not read this file' }
+  }
+
+  return { ok: true, path, name, size, width, height, preview, md5, duplicateOf: null }
 }
 
 /**
@@ -121,7 +145,40 @@ export async function stageFiles(paths: string[]): Promise<StageOutcome[]> {
   for (const path of paths) {
     outcomes.push(await stageOne(path))
   }
-  return outcomes
+  return markDuplicates(outcomes)
+}
+
+/**
+ * Which of these are already on the board, asked once for the whole batch and answered
+ * before a row is tagged. The pipeline refuses a duplicate anyway, but it refuses it
+ * after the tags have been typed and the queue has been left to run — the file is what is
+ * duplicated, and the file is known now.
+ *
+ * A failed query leaves every row a normal one: being unable to reach the board is not
+ * evidence that a post is new, and the upload's own check is still there to say so.
+ */
+async function markDuplicates(outcomes: StageOutcome[]): Promise<StageOutcome[]> {
+  const staged = outcomes.filter((outcome) => outcome.ok)
+  if (staged.length === 0) return outcomes
+
+  // A build with no project can still stage and preview files; it just cannot ask.
+  const client = boardClient()
+  if (!client) return outcomes
+
+  let existing: Map<string, number>
+  try {
+    existing = await findPostIdsByFileNames(
+      client,
+      staged.map((outcome) => outcome.md5)
+    )
+  } catch (error) {
+    console.error('Could not check for duplicates:', error instanceof Error ? error.message : error)
+    return outcomes
+  }
+
+  return outcomes.map((outcome) =>
+    outcome.ok ? { ...outcome, duplicateOf: existing.get(outcome.md5) ?? null } : outcome
+  )
 }
 
 /**

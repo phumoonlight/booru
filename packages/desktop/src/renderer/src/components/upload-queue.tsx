@@ -6,6 +6,9 @@ import { categoryColor } from '@common/tags'
 import { CategoryTagField, seedsToInput } from './category-tag-field'
 import type { TagSeed } from './tag-field'
 import { invalidateTags } from './tag-index'
+import { invalidateBrowse } from './browse'
+import { TagImport } from './tag-import'
+import { RatingGuide } from './rating-guide'
 import {
   impliedRating,
   raisedRating,
@@ -15,7 +18,7 @@ import {
 import { useImplications } from '../implications'
 import type { AppStatus, StagedFile, StageOutcome, UploadResult } from '../../../shared/api'
 
-type Status = 'ready' | 'uploading' | 'ok' | 'error'
+type Status = 'ready' | 'uploading' | 'ok' | 'error' | 'duplicate'
 
 type Staged = {
   file: StagedFile
@@ -32,6 +35,18 @@ type Staged = {
    * checked, which a copy of the request could not do.
    */
   postTags?: TagSeed[]
+  /**
+   * The post already holding these bytes, found when the file was staged rather than when
+   * it was uploaded. A row like this is a notice: there is no post to make from it, so
+   * there is nothing to tag it with either.
+   */
+  duplicateOf?: number
+  /**
+   * Ticked by hand, and read by nothing but the card it is on. Tagging a long queue is
+   * done in passes — rate everything, then name the characters — and the thing a pass
+   * needs is somewhere to put "this one is finished" that is not the upload itself.
+   */
+  done?: boolean
 }
 
 /**
@@ -114,6 +129,25 @@ export function UploadQueue({
   const [items, setItems] = useState<Staged[]>([])
   const [bulkTags, setBulkTags] = useState<TagSeed[]>([])
   const [bulkRating, setBulkRating] = useState<Rating | ''>('')
+  // Closed until asked for. Eleven category rows of nothing is most of a screen between
+  // the drop zone and the first card, and applying one set of tags across the whole queue
+  // is the exception — a queue is usually pages of different things. Open it and it stays
+  // open for the rest of the session, which is what a run of sets from one artist wants.
+  const [bulkOpen, setBulkOpen] = useState(false)
+  // Rows folded away by hand, by path — a card is most of a screen, and a queue of twenty
+  // is twenty screens to scroll past the one you are looking for. Path rather than index,
+  // like everything else here, so reordering cannot fold the wrong card.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  // The row whose tag import is open, or null.
+  const [importingFor, setImportingFor] = useState<string | null>(null)
+  // The row whose ✕ is waiting for a yes. What a staged card holds was typed into it and
+  // is held nowhere else — the file is still on disk, the tags are not — so the one press
+  // that throws it away asks first. A card with nothing typed into it goes on the first
+  // press, as it always did: there is nothing there to confirm.
+  const [confirmingDrop, setConfirmingDrop] = useState<string | null>(null)
+  // The rating guide, which is reference rather than a setting — open while tagging, shut
+  // the rest of the time.
+  const [ratingGuide, setRatingGuide] = useState(false)
   // Files the last pick or drop turned away, with the reason main gave for each
   const [refused, setRefused] = useState<string[]>([])
   // The row whose picture is open full-window, held by path so a re-render of the queue
@@ -133,6 +167,7 @@ export function UploadQueue({
     const turnedAway: string[] = []
     setItems((prev) => {
       const seen = new Set(prev.map((item) => item.file.path))
+      const staged = new Map(prev.map((item) => [item.file.md5, item.file.name]))
       const added: Staged[] = []
       for (const outcome of outcomes) {
         if (!outcome.ok) {
@@ -141,6 +176,11 @@ export function UploadQueue({
         }
         if (seen.has(outcome.path)) continue
         seen.add(outcome.path)
+        // Two different paths can hold the same bytes — a folder copied twice, a download
+        // saved again — and the second one becomes a duplicate the moment the first is
+        // uploaded. Cheaper to say so now than to have the run say it halfway through.
+        const twin = staged.get(outcome.md5)
+        staged.set(outcome.md5, outcome.name)
         added.push({
           file: {
             path: outcome.path,
@@ -149,11 +189,17 @@ export function UploadQueue({
             width: outcome.width,
             height: outcome.height,
             preview: outcome.preview,
+            md5: outcome.md5,
           },
           tags: [],
           rating: 'g',
           sourceUrl: '',
-          status: 'ready',
+          status: outcome.duplicateOf !== null || twin !== undefined ? 'duplicate' : 'ready',
+          duplicateOf: outcome.duplicateOf ?? undefined,
+          message:
+            twin !== undefined && outcome.duplicateOf === null
+              ? `The same image as ${twin}, already in this queue`
+              : undefined,
         })
       }
       return added.length > 0 ? [...prev, ...added] : prev
@@ -204,8 +250,24 @@ export function UploadQueue({
     )
   }, [])
 
+  /** Folds one card away, or opens it again. */
+  const toggleCollapsed = useCallback((path: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(path)) next.add(path)
+      return next
+    })
+  }, [])
+
+  const toggleDone = useCallback((path: string) => {
+    setItems((prev) =>
+      prev.map((item) => (item.file.path === path ? { ...item, done: !item.done } : item))
+    )
+  }, [])
+
   const drop = useCallback((path: string) => {
     setItems((prev) => prev.filter((item) => item.file.path !== path))
+    setConfirmingDrop((current) => (current === path ? null : current))
     // Clearing uploaded rows behind an open viewer would leave it showing a file the
     // queue no longer has.
     setViewing((current) => (current === path ? null : current))
@@ -230,11 +292,33 @@ export function UploadQueue({
     })
   }, [])
 
+  /**
+   * Copies a post's tags onto one row, merged rather than substituted — the card may
+   * already carry what is different about this image, and the import is what it has in
+   * common with another. The rating floor is re-applied for the same reason the tag field
+   * applies it: an imported tag can ask for a rating just as a typed one can.
+   */
+  const importTags = useCallback(
+    (path: string, tags: TagSeed[]) => {
+      setItems((prev) =>
+        prev.map((item) => {
+          if (item.file.path !== path) return item
+          const merged = [...item.tags]
+          for (const tag of tags) {
+            if (!merged.some((t) => t.name === tag.name)) merged.push(tag)
+          }
+          return { ...item, tags: merged, rating: ratingFor(merged, item.rating) }
+        })
+      )
+    },
+    [ratingFor]
+  )
+
   /** Merges the bulk tags into every staged row and, if one is chosen, sets the rating. */
   function applyToAll() {
     setItems((prev) =>
       prev.map((item) => {
-        if (item.status === 'ok') return item
+        if (item.status === 'ok' || item.status === 'duplicate') return item
         const merged = [...item.tags]
         for (const tag of bulkTags) {
           if (!merged.some((t) => t.name === tag.name)) merged.push(tag)
@@ -253,7 +337,7 @@ export function UploadQueue({
   }
 
   async function submit() {
-    const queue = items.filter((item) => item.status !== 'ok')
+    const queue = items.filter((item) => item.status !== 'ok' && item.status !== 'duplicate')
     if (queue.length === 0) return
 
     setBusy(true)
@@ -277,8 +361,10 @@ export function UploadQueue({
         const postId = result.postId
         patch(item.file.path, { status: 'ok', postId })
         // The post just created tags and moved counts, so the Tags screen's remembered
-        // index is out of date. Dropped rather than re-read: it may never be looked at.
+        // index is out of date, and Browse's grid is missing a post. Dropped rather than
+        // re-read: they may never be looked at.
         invalidateTags()
+        invalidateBrowse()
         // Not awaited: the next upload in the run must not wait on a read that only fills
         // in a row already marked done.
         void window.api.getPost(postId).then((loaded) => {
@@ -300,7 +386,17 @@ export function UploadQueue({
     setBusy(false)
   }
 
-  const pending = items.filter((item) => item.status !== 'ok').length
+  // What the collapsed bulk bar has waiting in it, or ''.
+  const bulkSummary = [
+    bulkTags.length > 0 ? `${bulkTags.length} tag${bulkTags.length === 1 ? '' : 's'}` : '',
+    bulkRating ? RATING_LABEL[bulkRating] : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  // Duplicates are not pending anything: there is no post to make from one, and nothing
+  // typed into it to lose, so neither the Upload button nor the close guard counts it.
+  const pending = items.filter((item) => item.status !== 'ok' && item.status !== 'duplicate').length
   const uploaded = items.filter((item) => item.status === 'ok')
 
   // Main can't ask the window what it is holding from inside a `close` handler, so the
@@ -317,6 +413,27 @@ export function UploadQueue({
   }, [])
   const working = busy || staging !== null
   const viewed = items.find((item) => item.file.path === viewing)
+  const importing = items.find((item) => item.file.path === importingFor)
+
+  /**
+   * What a press of ✕ costs, in the words of what would be lost. Uploaded rows are left
+   * out: their tags are on the board, and dropping the row only stops listing a post that
+   * exists — which is what Clear uploaded does to all of them at once.
+   */
+  function typedWork(item: Staged): string {
+    if (item.status === 'ok') return ''
+    const typed = [
+      item.tags.length > 0 ? `${item.tags.length} ${item.tags.length === 1 ? 'tag' : 'tags'}` : '',
+      item.sourceUrl.trim() !== '' ? 'a source' : '',
+    ].filter(Boolean)
+    return typed.join(' and ')
+  }
+
+  /** Drops the row, or asks first if there is anything on it to lose. */
+  function requestDrop(item: Staged) {
+    if (typedWork(item) === '') drop(item.file.path)
+    else setConfirmingDrop(item.file.path)
+  }
 
   return (
     <>
@@ -348,6 +465,21 @@ export function UploadQueue({
         }}
         className="flex flex-col gap-4"
       >
+        {/* The only thing above the drop zone: the rating is the field on a card whose
+            consequences are not on this screen — two of the four tiers decide whether the
+            post is in the board's listing at all — so the explanation is one press away
+            from where the choice is made. */}
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setRatingGuide(true)}
+            title="What the four ratings mean, and what choosing one does"
+            className="min-h-9 rounded-lg border border-border px-3 text-xs text-muted transition-colors hover:border-accent hover:text-foreground"
+          >
+            <span aria-hidden>ℹ️</span> About rating
+          </button>
+        </div>
+
         {/*
         The drop area shrinks to a strip once there's a queue below it to keep room for.
         The whole thing is the button, not just the label inside it: a dashed rectangle
@@ -388,48 +520,67 @@ export function UploadQueue({
           <>
             {/* Bulk bar: one set of fields written across the whole queue on demand */}
             <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3">
-              <p className="text-sm font-semibold">Apply to all {pending} staged</p>
-              {/* No implied line and no recommendations on the bulk bar: it writes into
+              <button
+                type="button"
+                onClick={() => setBulkOpen((open) => !open)}
+                aria-expanded={bulkOpen}
+                className="flex min-h-9 items-center gap-2 text-left text-sm font-semibold"
+              >
+                <span aria-hidden className="text-muted">
+                  {bulkOpen ? '▾' : '▸'}
+                </span>
+                Apply to all {pending} staged
+                {/* Closed with something in it looks like an empty bar, and the fields
+                    survive the collapse — so the header says what is waiting in there. */}
+                {!bulkOpen && bulkSummary && (
+                  <span className="text-xs font-normal text-muted">{bulkSummary}</span>
+                )}
+              </button>
+              {bulkOpen && (
+                <>
+                  {/* No implied line and no recommendations on the bulk bar: it writes into
                   rows rather than being one, and both of those are about what a post
                   carries. Each row shows them for itself once the tags land. */}
-              <CategoryTagField
-                value={bulkTags}
-                onChange={setBulkTags}
-                label="Tags to add to every staged post"
-                disabled={busy}
-              />
-              <div className="flex flex-wrap items-end gap-2">
-                <label className="flex flex-1 flex-col gap-1.5 text-sm">
-                  Rating
-                  <select
-                    value={bulkRating}
+                  <CategoryTagField
+                    value={bulkTags}
+                    onChange={setBulkTags}
+                    label="Tags to add to every staged post"
                     disabled={busy}
-                    onChange={(event) => setBulkRating(event.target.value as Rating | '')}
-                    className={`min-h-11 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent ${
-                      bulkRating ? RATING_COLOR[bulkRating] : ''
-                    }`}
-                  >
-                    <option value="">Leave as is</option>
-                    {RATINGS.map((rating) => (
-                      <option
-                        key={rating}
-                        value={rating}
-                        className={`bg-background ${RATING_COLOR[rating]}`}
+                  />
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="flex flex-1 flex-col gap-1.5 text-sm">
+                      Rating
+                      <select
+                        value={bulkRating}
+                        disabled={busy}
+                        onChange={(event) => setBulkRating(event.target.value as Rating | '')}
+                        className={`min-h-11 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent ${
+                          bulkRating ? RATING_COLOR[bulkRating] : ''
+                        }`}
                       >
-                        {RATING_LABEL[rating]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  onClick={applyToAll}
-                  disabled={busy || (bulkTags.length === 0 && !bulkRating)}
-                  className="min-h-11 rounded-lg border border-border px-4 text-sm font-medium disabled:opacity-50"
-                >
-                  Apply
-                </button>
-              </div>
+                        <option value="">Leave as is</option>
+                        {RATINGS.map((rating) => (
+                          <option
+                            key={rating}
+                            value={rating}
+                            className={`bg-background ${RATING_COLOR[rating]}`}
+                          >
+                            {RATING_LABEL[rating]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={applyToAll}
+                      disabled={busy || (bulkTags.length === 0 && !bulkRating)}
+                      className="min-h-11 rounded-lg border border-border px-4 text-sm font-medium disabled:opacity-50"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
 
             <p className="text-xs text-muted">
@@ -442,21 +593,30 @@ export function UploadQueue({
               compromise with a preview whose only job is letting you tell two pages of a
               set apart before you tag them, and neither was big enough to do it.
 
-              Still a grid rather than a flex column, for `auto-rows-fr`: every card comes
-              out the height of the tallest, so a card carrying six tags doesn't sit next
-              to a stub.
+              Each card is its own height. It used to be `auto-rows-fr`, from when this
+              was two columns and a card carrying six tags would sit beside a stub; in one
+              column that only pads the short ones — and a folded card that still took a
+              screenful would be no fold at all.
             */}
-            <ul className="grid auto-rows-fr grid-cols-1 gap-3">
-              {items.map((item, index) => (
-                <li
-                  key={item.file.path}
-                  className={`flex h-full flex-col gap-3 rounded-lg border bg-surface p-3 ${
-                    item.status === 'error' ? 'border-red-500/40' : 'border-border'
-                  }`}
-                >
-                  {/* Order, name and remove on one line above the picture. */}
-                  <div className="flex items-start gap-2">
-                    {/*
+            <ul className="grid grid-cols-1 gap-3">
+              {items.map((item, index) => {
+                const folded = collapsed.has(item.file.path)
+                return (
+                  <li
+                    key={item.file.path}
+                    className={`flex flex-col gap-3 rounded-lg border bg-surface p-3 ${
+                      item.status === 'error'
+                        ? 'border-red-500/40'
+                        : item.status === 'duplicate'
+                          ? 'border-yellow-500/40'
+                          : item.done
+                            ? 'border-green-500/50'
+                            : 'border-border'
+                    }`}
+                  >
+                    {/* Order, name and remove on one line above the picture. */}
+                    <div className="flex items-start gap-2">
+                      {/*
                       Reordering is two buttons, not a drag. Dragging a card meant holding
                       a handle while the list rearranged under the pointer, which is fine
                       for a short list of small rows and awkward once a card is most of
@@ -465,159 +625,251 @@ export function UploadQueue({
                       selection inside the fields. A press per position is duller and
                       always works.
                     */}
-                    <div className="flex shrink-0 gap-1">
                       <button
                         type="button"
-                        onClick={() => move(item.file.path, -1)}
-                        disabled={busy || index === 0}
-                        title="Move up"
-                        aria-label={`Move ${item.file.name} up — currently ${index + 1} of ${items.length}`}
-                        className="flex min-h-9 w-8 items-center justify-center rounded-lg border border-border text-muted hover:text-foreground disabled:opacity-30"
+                        onClick={() => toggleCollapsed(item.file.path)}
+                        aria-expanded={!folded}
+                        title={folded ? 'Open this card' : 'Fold this card away'}
+                        aria-label={`${folded ? 'Open' : 'Fold'} ${item.file.name}`}
+                        className="flex min-h-9 w-6 shrink-0 items-center justify-center text-muted hover:text-foreground"
                       >
-                        <ArrowUpIcon />
+                        <span aria-hidden>{folded ? '▸' : '▾'}</span>
                       </button>
+
+                      <div className="flex shrink-0 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => move(item.file.path, -1)}
+                          disabled={busy || index === 0}
+                          title="Move up"
+                          aria-label={`Move ${item.file.name} up — currently ${index + 1} of ${items.length}`}
+                          className="flex min-h-9 w-8 items-center justify-center rounded-lg border border-border text-muted hover:text-foreground disabled:opacity-30"
+                        >
+                          <ArrowUpIcon />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => move(item.file.path, 1)}
+                          disabled={busy || index === items.length - 1}
+                          title="Move down"
+                          aria-label={`Move ${item.file.name} down — currently ${index + 1} of ${items.length}`}
+                          className="flex min-h-9 w-8 items-center justify-center rounded-lg border border-border text-muted hover:text-foreground disabled:opacity-30"
+                        >
+                          <ArrowDownIcon />
+                        </button>
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium" title={item.file.path}>
+                          <span className="text-muted">{index + 1}.</span> {item.file.name}
+                        </p>
+                        <p className="text-xs text-muted">
+                          {formatSize(item.file.size)} · {item.file.width}×{item.file.height}
+                          {folded && item.status !== 'duplicate' && (
+                            <>
+                              {' · '}
+                              {item.tags.length} {item.tags.length === 1 ? 'tag' : 'tags'}
+                              {' · '}
+                              <span className={RATING_COLOR[item.rating]}>
+                                {RATING_LABEL[item.rating]}
+                              </span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+
+                      {/* A mark and nothing else: it uploads the same, sorts the same and
+                        is not sent anywhere. What it is for is the pass you are in the
+                        middle of — twenty cards, and no other way to tell the ones you
+                        have already looked at from the ones you have not. */}
                       <button
                         type="button"
-                        onClick={() => move(item.file.path, 1)}
-                        disabled={busy || index === items.length - 1}
-                        title="Move down"
-                        aria-label={`Move ${item.file.name} down — currently ${index + 1} of ${items.length}`}
-                        className="flex min-h-9 w-8 items-center justify-center rounded-lg border border-border text-muted hover:text-foreground disabled:opacity-30"
+                        onClick={() => toggleDone(item.file.path)}
+                        aria-pressed={item.done ?? false}
+                        title={item.done ? 'Not done after all' : 'Mark as done'}
+                        aria-label={`Mark ${item.file.name} as done`}
+                        className={`flex min-h-9 w-11 shrink-0 items-center justify-center rounded-lg border text-sm ${
+                          item.done
+                            ? 'border-green-500 bg-green-500/10 text-green-400'
+                            : 'border-border text-muted hover:text-foreground'
+                        }`}
                       >
-                        <ArrowDownIcon />
+                        <span aria-hidden>{item.done ? '✅' : '☐'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => requestDrop(item)}
+                        disabled={busy}
+                        title="Remove from queue"
+                        aria-label={`Remove ${item.file.name} from the queue`}
+                        className="flex min-h-9 w-11 shrink-0 items-center justify-center rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+                      >
+                        <TrashIcon />
                       </button>
                     </div>
 
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium" title={item.file.path}>
-                        <span className="text-muted">{index + 1}.</span> {item.file.name}
-                      </p>
-                      <p className="text-xs text-muted">
-                        {formatSize(item.file.size)} · {item.file.width}×{item.file.height}
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => drop(item.file.path)}
-                      disabled={busy}
-                      title="Remove from queue"
-                      aria-label={`Remove ${item.file.name} from the queue`}
-                      className="flex min-h-9 w-11 shrink-0 items-center justify-center rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 disabled:opacity-50"
-                    >
-                      <TrashIcon />
-                    </button>
-                  </div>
-
-                  {/* The thumbnail is the button. `object-contain` on a fixed height:
+                    {/* The thumbnail is the button. `object-contain` on a fixed height:
                     cropping to fill would hide exactly the edges that tell two variants
                     of the same image apart. Clicking still opens the full-window viewer,
                     which is now the difference between a good look and the actual file
                     rather than between a stamp and a look. Raise `h-192` and
                     `PREVIEW_HEIGHT` in `main/staging.ts` moves with it, or the picture
                     goes soft. */}
-                  <button
-                    type="button"
-                    onClick={() => setViewing(item.file.path)}
-                    title="Open a bigger preview"
-                    aria-label={`Open a bigger preview of ${item.file.name}`}
-                    className="h-96 w-full shrink-0 overflow-hidden rounded-lg bg-background ring-border hover:ring-2"
-                  >
-                    <img
-                      src={item.file.preview}
-                      alt={item.file.name}
-                      className="h-full w-full object-contain"
-                    />
-                  </button>
-
-                  <div className="flex min-w-0 flex-1 flex-col gap-3">
-                    {item.status === 'ok' ? (
-                      <Uploaded
-                        siteUrl={status.siteUrl}
-                        postId={item.postId}
-                        tags={item.postTags}
-                        onReview={onReview}
-                      />
-                    ) : (
-                      <>
-                        <CategoryTagField
-                          value={item.tags}
-                          onChange={(tags) =>
-                            patch(item.file.path, {
-                              tags,
-                              rating: ratingFor(tags, item.rating),
-                            })
-                          }
-                          disabled={busy}
-                          imply
-                          recommend
-                        />
-
-                        <div className="flex flex-col gap-3 sm:flex-row">
-                          <label className="flex flex-col gap-1.5 text-sm sm:w-44">
-                            Rating
-                            {/* Coloured closed and open, the same four colours the grid,
-                                the board and the post editor use for the scale. */}
-                            <select
-                              value={item.rating}
-                              disabled={busy}
-                              onChange={(event) =>
-                                patch(item.file.path, { rating: event.target.value as Rating })
-                              }
-                              className={`min-h-11 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent ${RATING_COLOR[item.rating]}`}
-                            >
-                              {RATINGS.map((rating) => (
-                                <option
-                                  key={rating}
-                                  value={rating}
-                                  className={`bg-background ${RATING_COLOR[rating]}`}
-                                >
-                                  {RATING_LABEL[rating]}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-
-                          <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-sm">
-                            Source URL (optional)
-                            <input
-                              type="url"
-                              value={item.sourceUrl}
-                              disabled={busy}
-                              onChange={(event) =>
-                                patch(item.file.path, { sourceUrl: event.target.value })
-                              }
-                              placeholder="https://…"
-                              className="min-h-11 rounded-lg border border-border bg-background px-3 font-mono text-xs outline-none focus:border-accent"
-                            />
-                          </label>
-                        </div>
-
-                        <RatingNote rule={ratingRule(item.tags, rules)} />
-
-                        {item.status === 'uploading' && (
-                          <p className="text-xs text-muted">Compressing and uploading…</p>
-                        )}
-                        {item.status === 'error' && (
-                          <p className="text-xs text-red-400">
-                            {item.message}
-                            {item.postId !== undefined && (
-                              <>
-                                {' — '}
-                                <PostLink
-                                  siteUrl={status.siteUrl}
-                                  postId={item.postId}
-                                  label={`post #${item.postId}`}
-                                />
-                              </>
-                            )}
-                          </p>
-                        )}
-                      </>
+                    {/* Under the header, so it is where the ✕ that raised it is — and
+                        shown whether the card is folded or open, a folded card being
+                        exactly the one whose tags you cannot see. */}
+                    {confirmingDrop === item.file.path && (
+                      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
+                        <span className="flex-1 text-xs text-red-400">
+                          Remove this card? {typedWork(item)} were typed here and are held nowhere
+                          else.
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => drop(item.file.path)}
+                          className="min-h-9 rounded-lg border border-red-500/40 px-3 text-xs text-red-400 hover:bg-red-500/10"
+                        >
+                          Remove
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmingDrop(null)}
+                          className="min-h-9 rounded-lg border border-border px-3 text-xs hover:bg-background"
+                        >
+                          Keep
+                        </button>
+                      </div>
                     )}
-                  </div>
-                </li>
-              ))}
+
+                    {!folded && item.status !== 'duplicate' && (
+                      <button
+                        type="button"
+                        onClick={() => setViewing(item.file.path)}
+                        title="Open a bigger preview"
+                        aria-label={`Open a bigger preview of ${item.file.name}`}
+                        className="h-96 w-full shrink-0 overflow-hidden rounded-lg bg-background ring-border hover:ring-2"
+                      >
+                        <img
+                          src={item.file.preview}
+                          alt={item.file.name}
+                          className="h-full w-full object-contain"
+                        />
+                      </button>
+                    )}
+
+                    <div className={`flex min-w-0 flex-1 flex-col gap-3 ${folded ? 'hidden' : ''}`}>
+                      {item.status === 'duplicate' ? (
+                        <Duplicate
+                          siteUrl={status.siteUrl}
+                          postId={item.duplicateOf}
+                          message={item.message}
+                          onReview={onReview}
+                          onRemove={() => drop(item.file.path)}
+                        />
+                      ) : item.status === 'ok' ? (
+                        <Uploaded
+                          siteUrl={status.siteUrl}
+                          postId={item.postId}
+                          tags={item.postTags}
+                          onReview={onReview}
+                        />
+                      ) : (
+                        <>
+                          {/* Above the rows rather than inside them: it fills the whole
+                            field at once, from a post that is already tagged the way this
+                            one wants to be. */}
+                          <div className="flex">
+                            <button
+                              type="button"
+                              onClick={() => setImportingFor(item.file.path)}
+                              disabled={busy}
+                              title="Copy the tags from a post on the board"
+                              className="min-h-9 rounded-lg border border-border px-3 text-xs text-muted transition-colors hover:border-accent hover:text-foreground disabled:opacity-50"
+                            >
+                              <span aria-hidden>📋</span> Import tags from a post
+                            </button>
+                          </div>
+
+                          <CategoryTagField
+                            value={item.tags}
+                            onChange={(tags) =>
+                              patch(item.file.path, {
+                                tags,
+                                rating: ratingFor(tags, item.rating),
+                              })
+                            }
+                            disabled={busy}
+                            imply
+                            recommend
+                          />
+
+                          <div className="flex flex-col gap-3 sm:flex-row">
+                            <label className="flex flex-col gap-1.5 text-sm sm:w-44">
+                              Rating
+                              {/* Coloured closed and open, the same four colours the grid,
+                                the board and the post editor use for the scale. */}
+                              <select
+                                value={item.rating}
+                                disabled={busy}
+                                onChange={(event) =>
+                                  patch(item.file.path, { rating: event.target.value as Rating })
+                                }
+                                className={`min-h-11 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent ${RATING_COLOR[item.rating]}`}
+                              >
+                                {RATINGS.map((rating) => (
+                                  <option
+                                    key={rating}
+                                    value={rating}
+                                    className={`bg-background ${RATING_COLOR[rating]}`}
+                                  >
+                                    {RATING_LABEL[rating]}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+
+                            <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-sm">
+                              Source URL (optional)
+                              <input
+                                type="url"
+                                value={item.sourceUrl}
+                                disabled={busy}
+                                onChange={(event) =>
+                                  patch(item.file.path, { sourceUrl: event.target.value })
+                                }
+                                placeholder="https://…"
+                                className="min-h-11 rounded-lg border border-border bg-background px-3 font-mono text-xs outline-none focus:border-accent"
+                              />
+                            </label>
+                          </div>
+
+                          <RatingNote rule={ratingRule(item.tags, rules)} />
+
+                          {item.status === 'uploading' && (
+                            <p className="text-xs text-muted">Compressing and uploading…</p>
+                          )}
+                          {item.status === 'error' && (
+                            <p className="text-xs text-red-400">
+                              {item.message}
+                              {item.postId !== undefined && (
+                                <>
+                                  {' — '}
+                                  <PostLink
+                                    siteUrl={status.siteUrl}
+                                    postId={item.postId}
+                                    label={`post #${item.postId}`}
+                                  />
+                                </>
+                              )}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
 
             <div className="sticky bottom-0 flex items-center gap-2 border-t border-border bg-background py-3">
@@ -652,7 +904,80 @@ export function UploadQueue({
       {viewed && (
         <ImageViewer key={viewed.file.path} file={viewed.file} onClose={() => setViewing(null)} />
       )}
+
+      {ratingGuide && <RatingGuide onClose={() => setRatingGuide(false)} />}
+
+      {importing && (
+        <TagImport
+          onImport={(tags) => {
+            importTags(importing.file.path, tags)
+            setImportingFor(null)
+          }}
+          onClose={() => setImportingFor(null)}
+        />
+      )}
     </>
+  )
+}
+
+/**
+ * A row that is already on the board. The file's md5 is settled at staging (`main/staging.ts`),
+ * so this is known before anything is typed — which is the point of checking there rather
+ * than letting the upload find out: tagging a post that cannot be made is the only work
+ * this screen can waste.
+ *
+ * No form, then, and no picture either: what is left to decide is whether to look at the
+ * post that already exists, and whether to keep the row around. `message` carries the
+ * other case, where the twin is not on the board but three rows up in this same queue.
+ */
+function Duplicate({
+  siteUrl,
+  postId,
+  message,
+  onReview,
+  onRemove,
+}: {
+  siteUrl: string
+  postId: number | undefined
+  message: string | undefined
+  onReview: (postId: number) => void
+  onRemove: () => void
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2">
+      <p className="flex flex-wrap items-baseline gap-3 text-sm text-yellow-300">
+        <span>
+          <span aria-hidden>⚠ </span>
+          {postId !== undefined ? `Already on the board as post #${postId}` : message}
+        </span>
+        {postId !== undefined && (
+          <>
+            <PostLink siteUrl={siteUrl} postId={postId} label="Open on the board" />
+            <button
+              type="button"
+              onClick={() => onReview(postId)}
+              title="Open that post in the editor"
+              className="text-xs text-muted underline-offset-2 transition-colors hover:text-foreground hover:underline"
+            >
+              ✏️ Review tags
+            </button>
+          </>
+        )}
+      </p>
+      <p className="text-xs text-muted">
+        The same bytes are the same post — nothing here can be uploaded, so this row is skipped
+        whatever else the queue does.
+      </p>
+      <div className="flex">
+        <button
+          type="button"
+          onClick={onRemove}
+          className="min-h-9 rounded-lg border border-border px-3 text-xs transition-colors hover:bg-background"
+        >
+          Remove from queue
+        </button>
+      </div>
+    </div>
   )
 }
 

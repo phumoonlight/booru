@@ -145,44 +145,50 @@ export function CategoryTagField({
 
       {rows.map((category) => (
         <div key={category} className="flex flex-col">
-          <div className="flex flex-wrap items-center gap-1 py-0.5">
+          <div className="flex items-baseline gap-1 py-0.5">
             <span className="w-32 shrink-0 text-xs uppercase tracking-wide text-muted">
               {categoryLabel(category)}
             </span>
-            {value
-              .filter((tag) => tag.category === category)
-              .map((tag) => (
-                <span
-                  key={tag.name}
-                  className={`flex items-center gap-1.5 rounded bg-surface pl-2 font-mono text-xs ${categoryColor(category)}`}
-                >
-                  <TagMarks name={tag.name} />
-                  {tag.name}
-                  <button
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => onChange(value.filter((t) => t.name !== tag.name))}
-                    aria-label={`Remove ${tag.name}`}
-                    className="flex min-h-7 items-center px-1.5 text-muted hover:text-[#ff5d5f]"
+            {/* Its own wrapping box, so a second line of tags starts where the first one
+                did rather than under the label. Baseline against the label, not centre:
+                what should line up is the two lots of text, and a chip is taller than its
+                own text by the remove button inside it. */}
+            <div className="flex flex-1 flex-wrap items-center gap-1">
+              {value
+                .filter((tag) => tag.category === category)
+                .map((tag) => (
+                  <span
+                    key={tag.name}
+                    className={`flex items-center gap-1.5 rounded bg-surface pl-2 font-mono text-xs ${categoryColor(category)}`}
                   >
-                    ✕
-                  </button>
-                </span>
-              ))}
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => setAdding(adding === category ? null : category)}
-              aria-label={`Add a ${categoryLabel(category)} tag`}
-              title={`Add a ${categoryLabel(category)} tag`}
-              className={`flex min-h-7 items-center rounded border px-2 text-xs transition-colors ${
-                adding === category
-                  ? 'border-accent text-accent'
-                  : 'border-border text-muted hover:border-accent hover:text-foreground'
-              }`}
-            >
-              ＋
-            </button>
+                    <TagMarks name={tag.name} />
+                    {tag.name}
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => onChange(value.filter((t) => t.name !== tag.name))}
+                      aria-label={`Remove ${tag.name}`}
+                      className="flex min-h-7 items-center px-1.5 text-muted hover:text-[#ff5d5f]"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => setAdding(adding === category ? null : category)}
+                aria-label={`Add a ${categoryLabel(category)} tag`}
+                title={`Add a ${categoryLabel(category)} tag`}
+                className={`flex min-h-7 items-center rounded border px-2 text-xs transition-colors ${
+                  adding === category
+                    ? 'border-accent text-accent'
+                    : 'border-border text-muted hover:border-accent hover:text-foreground'
+                }`}
+              >
+                ＋
+              </button>
+            </div>
           </div>
 
           {/* Left open on purpose: tagging is done in runs — a post gets three colours or
@@ -209,22 +215,24 @@ export function CategoryTagField({
         rule. `seedsToInput` is where the two lists join.
       */}
       {implied.length > 0 && (
-        <div className="flex flex-wrap items-baseline gap-1 pt-1">
+        <div className="flex items-baseline gap-1 pt-1">
           {/* Accent, where every category label is grey: these two rows are the only ones
               on the field that something other than you put there, and a rule that goes
               unnoticed is a rule you stop trusting. */}
           <span className="w-32 shrink-0 text-xs font-semibold uppercase tracking-wide text-accent">
             Implied
           </span>
-          {implied.map((name) => (
-            <span
-              key={name}
-              title="Added by a rule on the Tag rules screen"
-              className="rounded bg-background px-2 py-0.5 font-mono text-xs text-muted"
-            >
-              {name}
-            </span>
-          ))}
+          <div className="flex flex-1 flex-wrap items-baseline gap-1">
+            {implied.map((name) => (
+              <span
+                key={name}
+                title="Added by a rule on the Tag rules screen"
+                className="rounded bg-background px-2 py-0.5 font-mono text-xs text-muted"
+              >
+                {name}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
@@ -234,22 +242,24 @@ export function CategoryTagField({
         is what they are asking about, which is why these are buttons and those are not.
       */}
       {offered.length > 0 && (
-        <div className="flex flex-wrap items-baseline gap-1 pt-1">
+        <div className="flex items-baseline gap-1 pt-1">
           <span className="w-32 shrink-0 text-xs font-semibold uppercase tracking-wide text-accent">
             Recommended
           </span>
-          {offered.map((name) => (
-            <button
-              key={name}
-              type="button"
-              disabled={disabled}
-              onClick={() => add({ name, category: categoryOf(name) })}
-              title="Recommended by a rule on the Tag rules screen"
-              className="rounded border border-border px-2 py-0.5 font-mono text-xs text-muted transition-colors hover:border-accent hover:text-foreground disabled:opacity-50"
-            >
-              + {name}
-            </button>
-          ))}
+          <div className="flex flex-1 flex-wrap items-baseline gap-1">
+            {offered.map((name) => (
+              <button
+                key={name}
+                type="button"
+                disabled={disabled}
+                onClick={() => add({ name, category: categoryOf(name) })}
+                title="Recommended by a rule on the Tag rules screen"
+                className="rounded border border-border px-2 py-0.5 font-mono text-xs text-muted transition-colors hover:border-accent hover:text-foreground disabled:opacity-50"
+              >
+                + {name}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </section>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { RATING_COLOR, RATING_LABEL } from '@common/search'
 import type { Post } from '@common/data/posts'
 import { PostEditor } from './post-editor'
@@ -25,6 +25,57 @@ import { PostEditor } from './post-editor'
  *  it, and coming back to an empty box after finding a post is a search typed twice. */
 let lastQuery = ''
 
+/**
+ * And what it was looking *at*: the rows already read for `lastQuery`, chunks from Load
+ * more included. Same reasoning as the box, one step further — this screen is unmounted
+ * whenever another view is in front of it, so opening Settings and coming back used to
+ * re-run the search and re-fetch every thumbnail to arrive at the grid that was already
+ * on screen a second ago. The board does not change while you are reading About.
+ *
+ * A cache that can go stale needs a way to say so, which is the 🔄 beside the title, and
+ * `invalidateBrowse()` for the one moment the app knows it is wrong.
+ */
+let cached: { query: string; posts: Post[]; hasMore: boolean; at: number } | null = null
+
+function remember(query: string, posts: Post[], hasMore: boolean): void {
+  // `at` is the last read, Load more included: what the line beside the title answers is
+  // "how old is what I am looking at", and a chunk that landed a second ago is part of it.
+  cached = { query, posts, hasMore, at: Date.now() }
+}
+
+/**
+ * Drops the remembered grid without reading anything, so the next visit asks the board.
+ * Called when an upload lands — the one change this window makes that the grid cannot
+ * see, an edit being something it walked into the editor to do.
+ */
+export function invalidateBrowse(): void {
+  cached = null
+}
+
+/**
+ * Thumbnails already across the bridge, by file name. `main/manage.ts` caches the bytes
+ * on its side, so this saves the IPC round trip and the re-decode rather than the
+ * download — enough to make a returning grid paint in one frame instead of filling in
+ * tile by tile. Never invalidated: the name is the file's md5, so a name that comes back
+ * is the same image by definition.
+ */
+const thumbnails = new Map<string, string>()
+
+/**
+ * A post's thumbnail, from that cache or from the bridge. Exported because the upload
+ * screen's tag import draws the same grid of posts, and a second copy of every image in
+ * the window is the one thing this cache exists to avoid.
+ */
+export async function thumbnailFor(fileName: string): Promise<string> {
+  const held = thumbnails.get(fileName)
+  if (held !== undefined) return held
+
+  const url = await window.api.postThumbnail(fileName)
+  // A failed fetch answers '' — not remembered, so asking again re-asks the board.
+  if (url) thumbnails.set(fileName, url)
+  return url
+}
+
 const CHUNK = 24
 
 /**
@@ -44,8 +95,14 @@ function asPostId(query: string): number | null {
   return /^\d+$/.test(query.trim()) && Number.isSafeInteger(value) && value > 0 ? value : null
 }
 
-/** One post, shaped like a page, so the id lookup and the search return the same thing. */
-async function readPosts(query: string): Promise<{ posts: Post[]; hasMore: boolean }> {
+/**
+ * One post, shaped like a page, so the id lookup and the search return the same thing.
+ *
+ * Exported for the upload screen's tag import, which is this box in a dialog: typing a
+ * post number there means the same thing it means here, and a second implementation of
+ * that convenience would be a second place for it to disagree.
+ */
+export async function readPosts(query: string): Promise<{ posts: Post[]; hasMore: boolean }> {
   const id = asPostId(query)
   if (id !== null) {
     const loaded = await window.api.getPost(id)
@@ -67,11 +124,17 @@ export function Browse({
    */
   initialEdit?: number | null
 }) {
+  // The cache is only ever held for `lastQuery`, which is where the box below starts,
+  // so the two agree by construction — checked rather than assumed, since a grid seeded
+  // with rows that answer another query is the one way this could lie.
+  const seed = cached?.query === lastQuery ? cached : null
+
   const [query, setQuery] = useState(lastQuery)
   const [submitted, setSubmitted] = useState(lastQuery)
-  const [posts, setPosts] = useState<Post[]>([])
-  const [hasMore, setHasMore] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [posts, setPosts] = useState<Post[]>(seed?.posts ?? [])
+  const [hasMore, setHasMore] = useState(seed?.hasMore ?? false)
+  const [fetchedAt, setFetchedAt] = useState<number | null>(seed?.at ?? null)
+  const [loading, setLoading] = useState(seed === null)
   const [editing, setEditing] = useState<number | null>(initialEdit)
   // A save leaves the grid's copy of that row stale. It is not re-read then — the editor
   // is still the screen in front, and swapping it out was the old behaviour this replaced
@@ -87,12 +150,23 @@ export function Browse({
   // rows again, and a dependency that compares equal never fires.
   const [nonce, setNonce] = useState(0)
 
+  // True for exactly one render: the mount that was seeded from the cache. The effect
+  // below runs on mount whatever state was seeded with, and this is what stops it turning
+  // the seed into the read it was meant to save.
+  const seeded = useRef(seed !== null)
+
   useEffect(() => {
+    if (seeded.current) {
+      seeded.current = false
+      return
+    }
     let alive = true
     void readPosts(submitted).then((page) => {
+      remember(submitted, page.posts, page.hasMore)
       if (!alive) return
       setPosts(page.posts)
       setHasMore(page.hasMore)
+      setFetchedAt(cached?.at ?? null)
       setLoading(false)
     })
     return () => {
@@ -100,19 +174,38 @@ export function Browse({
     }
   }, [submitted, nonce])
 
-  async function loadMore() {
+  /** Answers with what it appended, so the editor's → can step straight into it. */
+  async function loadMore(): Promise<Post[]> {
     const last = posts[posts.length - 1]
-    if (!last) return
+    if (!last) return []
     setLoading(true)
     const page = await window.api.searchPosts({ query: submitted, after: last.id })
     // Appended, never replaced: a chunk landing must not reflow rows already scrolled past.
-    setPosts((current) => [...current, ...page.posts])
+    setPosts((current) => {
+      const next = [...current, ...page.posts]
+      // Remembered here too, or coming back would drop every chunk but the first and
+      // leave you scrolling the same rows a second time.
+      remember(submitted, next, page.hasMore)
+      return next
+    })
     setHasMore(page.hasMore)
+    setFetchedAt(cached?.at ?? null)
     setLoading(false)
+    return page.posts
+  }
+
+  /** What the cache costs: one button that says the grid may be old and reads it again. */
+  function refresh() {
+    invalidateBrowse()
+    setLoading(true)
+    setNonce((n) => n + 1)
   }
 
   function submit(next: string) {
     lastQuery = next
+    // The remembered rows answer the old query and would otherwise sit under the new one
+    // until the read lands.
+    invalidateBrowse()
     setLoading(true)
     setSubmitted(next)
     setNonce((n) => n + 1)
@@ -123,6 +216,7 @@ export function Browse({
   const closeAndReload = useCallback(() => {
     setEditing(null)
     setStale(false)
+    invalidateBrowse()
     setLoading(true)
     setNonce((n) => n + 1)
   }, [])
@@ -137,13 +231,37 @@ export function Browse({
   }, [stale, closeAndReload])
 
   if (editing !== null) {
+    // Where the open post sits in the grid, and so what ← and → mean. -1 when it was
+    // opened from somewhere the grid has no row for — the queue's Review after an upload
+    // — where both arrows are simply dead.
+    const at = posts.findIndex((post) => post.id === editing)
+    const previous = at > 0 ? posts[at - 1] : null
+    const next = at >= 0 ? (posts[at + 1] ?? null) : null
+
     return (
       <PostEditor
+        // Keyed, so stepping to another post mounts a fresh screen rather than leaving
+        // the last one's tags and picture up until the read lands.
+        key={editing}
         postId={editing}
         siteUrl={siteUrl}
         onSaved={() => setStale(true)}
         onDeleted={closeAndReload}
         onClose={close}
+        onPrev={previous ? () => setEditing(previous.id) : null}
+        onNext={
+          next
+            ? () => setEditing(next.id)
+            : // The end of what has been read is not the end of the search: → reads the
+              // next chunk and steps into it, the same thing Load more does behind here.
+              at >= 0 && hasMore
+              ? () => {
+                  void loadMore().then((more) => {
+                    if (more[0]) setEditing(more[0].id)
+                  })
+                }
+              : null
+        }
       />
     )
   }
@@ -155,6 +273,24 @@ export function Browse({
         <span className="text-xs text-muted">
           {loading ? 'reading…' : `${posts.length} post${posts.length === 1 ? '' : 's'}`}
         </span>
+        {/* What a cache owes you, same as the Tags screen: how old the grid is, in time
+            only — the date is never the answer to "should I press refresh". */}
+        {fetchedAt !== null && (
+          <span className="text-xs text-muted">
+            as of {new Date(fetchedAt).toLocaleTimeString([], { timeStyle: 'short' })}
+          </span>
+        )}
+        {/* Right of the row, away from Search: this one asks the same question again
+            rather than a new one. */}
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={loading}
+          title="Read these posts again"
+          className="ml-auto min-h-9 rounded-lg border border-border px-3 text-sm transition-colors hover:bg-surface disabled:text-border"
+        >
+          <span aria-hidden>🔄</span> Refresh
+        </button>
       </div>
 
       <form
@@ -226,11 +362,12 @@ export function Browse({
  * stall the first screenful behind the last.
  */
 function Card({ post, onOpen }: { post: Post; onOpen: () => void }) {
-  const [src, setSrc] = useState('')
+  const [src, setSrc] = useState(thumbnails.get(post.file_name) ?? '')
 
   useEffect(() => {
+    if (thumbnails.has(post.file_name)) return
     let alive = true
-    void window.api.postThumbnail(post.file_name).then((url) => {
+    void thumbnailFor(post.file_name).then((url) => {
       if (alive) setSrc(url)
     })
     return () => {

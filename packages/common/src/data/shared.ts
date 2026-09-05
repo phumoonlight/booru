@@ -56,6 +56,27 @@ export async function findPostIdByFileName(
 }
 
 /**
+ * Which of these file names are already posts, as a name → id map. The batch form of
+ * `findPostIdByFileName`, for the desktop app's staging step: a folder dropped on the
+ * queue is checked against the board before anything is uploaded, and asking forty times
+ * one at a time is the same answer four hundred milliseconds later.
+ *
+ * A name that is not a post is simply absent from the map — the caller asked about files
+ * it has, not about rows.
+ */
+export async function findPostIdsByFileNames(
+  client: BooruClient,
+  fileNames: string[]
+): Promise<Map<string, number>> {
+  const found = new Map<string, number>()
+  if (fileNames.length === 0) return found
+
+  const { data } = await client.from('posts').select('id, file_name').in('file_name', fileNames)
+  for (const row of data ?? []) found.set(row.file_name, row.id)
+  return found
+}
+
+/**
  * Inserts a post and its tag links, returning the new id.
  *
  * If tagging fails the post is deleted again rather than left half-tagged, counters
