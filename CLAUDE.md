@@ -222,15 +222,27 @@ behind a session, because there is none.
 - **Browse** is the website's gallery, moved here. It runs `@common/data/search`, so a
   query means the same thing in both windows. Its query lives in a module-level `let` —
   coming back to an empty box after finding a post is a search typed twice.
+- **`CategoryTagField` is the one tag editor**, on the queue card, the Apply-to-all bar
+  and the post editor: staging a post and editing one differ in when the write happens,
+  not in what a tag is. It replaced a free-text box that had to guess a category and so
+  coined every new tag as general. Every category gets a row including the empty ones —
+  that row's ＋ is the only way to put a first tag in it — and the picker offers only that
+  category's tags, plus a create row for a name that matches nothing. It holds the board's
+  names in a module-level cache shared by every field on screen, separate from the Tags
+  screen's: that one carries `post_count` and is dropped on every post save, this one
+  holds names and categories, which no post write can change. `TagField` (free text) is
+  now the Tag rules screen's and nothing else — what is typed there is a rule, not a
+  post's tag.
+- **The rules apply where a post is made.** `seedsToInput` appends implications at upload,
+  which is the only place the two lists meet; the queue card shows them under the rows and
+  names the rule that lifted a rating. The post editor takes recommendations (a press
+  commits) but not implications, since nothing there would be writing them.
 - **The post editor (`post-editor.tsx`) has no Save button.** Every control writes on use
   and puts the old value back if the write fails; `writeId` is a ref, not state, because
   clicks outrun round trips and an earlier failure must not roll back a later success.
   The screen stays open — Back is the way out, and the grid's stale row is re-read then
   rather than on the save, so correcting a rating twice is two clicks and not two
-  searches. Delete is the exception: nothing is left to look at. Tags are grouped by
-  category with a ＋ per row, **including the empty rows**, and the picker offers only
-  that category's tags — a tag's category belongs to the tag, so adding from the row is
-  the one way it cannot be coined wrong.
+  searches. Delete is the exception: nothing is left to look at.
 - **Tags** lists and manages: click a row for rename / recategorize / delete, with New tag
   and Apply by tag above the list, those being the two operations not about a row you are
   pointing at. The category menu is `TAG_CATEGORIES` — **adding one is a line there plus

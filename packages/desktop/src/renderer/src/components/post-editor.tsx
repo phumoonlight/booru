@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { RATING_COLOR, RATING_LABEL, RATINGS, type Rating } from '@common/search'
-import { TAG_PATTERN, categoryColor, categoryLabel, categoryOrder, type Tag } from '@common/tags'
 import type { Post } from '@common/data/posts'
+import { CategoryTagField } from './category-tag-field'
 import type { TagSeed } from './tag-field'
 import { invalidateTags } from './tag-index'
 
@@ -20,12 +20,11 @@ import { invalidateTags } from './tag-index'
  * A write that fails puts the old value back and says why, which is the only reason the
  * previous one is kept at all.
  *
- * Tags are grouped by category, the way the website's post page draws them, and every
- * category is listed whether or not the post has one — the ＋ at the end of a row is how
- * you add to it, and the empty rows are precisely the ones the button is needed for.
- * Picking from that row's own tags is the point: a tag's category belongs to the tag, so
- * choosing `blue_hair` from the Color row is a category that cannot be wrong, where a
- * free-text box that coined `blue_hair` as general left the board holding two of it.
+ * Tags are `CategoryTagField`, the same editor the upload queue uses — staging a post and
+ * editing one differ in when the write happens, not in what a tag is. Recommendations are
+ * on here and implications are not: a recommended tag is a chip you press, which commits
+ * like every other control, while an implied one is only ever appended at upload, and a
+ * line of tags that were *not* being written would be the one lie on the screen.
  */
 export function PostEditor({
   postId,
@@ -54,7 +53,6 @@ export function PostEditor({
   })
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [error, setError] = useState('')
-  const [adding, setAdding] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -144,12 +142,6 @@ export function PostEditor({
     )
   }
 
-  const names = value.tags.map((tag) => tag.name)
-  // Every category gets a row, the empty ones included — that row's ＋ is the only way to
-  // put a first tag in it. `categoryOrder` keeps a category the app no longer knows about
-  // on screen rather than dropping the tags that carry it.
-  const rows = categoryOrder(value.tags.map((tag) => tag.category))
-
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-4">
       <div className="flex items-baseline justify-between gap-2">
@@ -208,67 +200,11 @@ export function PostEditor({
             </p>
           )}
 
-          <section className="flex flex-col gap-1">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Tags</h2>
-            {rows.map((category) => (
-              <div key={category} className="flex flex-col">
-                <div className="flex flex-wrap items-center gap-1 py-0.5">
-                  <span className="w-32 shrink-0 text-xs uppercase tracking-wide text-muted">
-                    {categoryLabel(category)}
-                  </span>
-                  {value.tags
-                    .filter((tag) => tag.category === category)
-                    .map((tag) => (
-                      <span
-                        key={tag.name}
-                        className={`flex items-center rounded bg-surface pl-2 font-mono text-xs ${categoryColor(category)}`}
-                      >
-                        {tag.name}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void commit({
-                              ...value,
-                              tags: value.tags.filter((t) => t.name !== tag.name),
-                            })
-                          }
-                          aria-label={`Remove ${tag.name}`}
-                          className="flex min-h-7 items-center px-1.5 text-muted hover:text-[#ff5d5f]"
-                        >
-                          ✕
-                        </button>
-                      </span>
-                    ))}
-                  <button
-                    type="button"
-                    onClick={() => setAdding(adding === category ? null : category)}
-                    aria-label={`Add a ${categoryLabel(category)} tag`}
-                    title={`Add a ${categoryLabel(category)} tag`}
-                    className={`flex min-h-7 items-center rounded border px-2 text-xs transition-colors ${
-                      adding === category
-                        ? 'border-accent text-accent'
-                        : 'border-border text-muted hover:border-accent hover:text-foreground'
-                    }`}
-                  >
-                    ＋
-                  </button>
-                </div>
-
-                {/* Left open on purpose: tagging is done in runs — a post gets three
-                    colours or four pieces of clothing at once — and a picker that closed
-                    on each pick charged a click to reopen for every tag after the first.
-                    Close and Escape are the way out. */}
-                {adding === category && (
-                  <TagPicker
-                    category={category}
-                    exclude={names}
-                    onPick={(tag) => void commit({ ...value, tags: [...value.tags, tag] })}
-                    onClose={() => setAdding(null)}
-                  />
-                )}
-              </div>
-            ))}
-          </section>
+          <CategoryTagField
+            value={value.tags}
+            onChange={(tags) => void commit({ ...value, tags })}
+            recommend
+          />
 
           <label className="flex flex-col gap-1">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted">Rating</span>
@@ -311,158 +247,6 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-}
-
-/**
- * The tags of one category, to pick from.
- *
- * It reads the whole index rather than querying per keystroke — that is `main/tag-cache.ts`,
- * a day-old copy of every name and count on the board, which is what makes narrowing a
- * category to a substring a local operation instead of a request per letter. The counts
- * are not drawn: they order the list, most used first, and that ordering is the answer to
- * the question a number beside each name was being read for.
- *
- * Coining a tag is still possible and still deliberate: a name matching nothing offers a
- * create row, and the tag it creates belongs to *this* category, which is the whole reason
- * to add tags from here rather than from a box that has to guess.
- */
-function TagPicker({
-  category,
-  exclude,
-  onPick,
-  onClose,
-}: {
-  category: string
-  exclude: string[]
-  onPick: (tag: TagSeed) => void
-  onClose: () => void
-}) {
-  const [all, setAll] = useState<Tag[] | null>(null)
-  const [filter, setFilter] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    let alive = true
-    void window.api
-      .listTags()
-      .catch(() => [])
-      .then((tags) => {
-        if (alive) setAll(tags)
-      })
-    return () => {
-      alive = false
-    }
-  }, [])
-
-  /** Only after coining one — the effect above is the first read, and this is the only
-   *  thing that can change the board's index while the picker is open. */
-  async function reread() {
-    setAll(await window.api.listTags().catch(() => []))
-  }
-
-  /** A pick clears the filter and hands focus back, so the next tag is typed, not clicked
-   *  into. Leaving the word there would leave the list showing the one thing it can no
-   *  longer offer — the tag just added. */
-  function pick(tag: TagSeed) {
-    setFilter('')
-    inputRef.current?.focus()
-    onPick(tag)
-  }
-
-  const typed = filter.trim().toLowerCase()
-  const options = useMemo(() => {
-    const taken = new Set(exclude)
-    return (all ?? [])
-      .filter((tag) => tag.category === category && !taken.has(tag.name))
-      .filter((tag) => (typed ? tag.name.includes(typed) : true))
-      .slice(0, 60)
-  }, [all, category, exclude, typed])
-
-  // Offered only when it is a name and nothing already answers to it — a create row beside
-  // an exact match is how a board ends up holding the same tag twice.
-  const coinable =
-    typed.length > 0 &&
-    TAG_PATTERN.test(typed) &&
-    !exclude.includes(typed) &&
-    !(all ?? []).some((tag) => tag.name === typed)
-
-  async function coin() {
-    setBusy(true)
-    setError('')
-    const result = await window.api.createTag(typed, category)
-    setBusy(false)
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    // Main dropped its cached index when the tag was created, so this re-read is what
-    // puts the new name in the list the picker is still showing.
-    void reread()
-    pick({ name: result.name, category })
-  }
-
-  return (
-    <div className="mb-2 ml-32 flex flex-col gap-2 rounded-lg border border-border bg-surface p-2">
-      <div className="flex items-center gap-2">
-        <input
-          autoFocus
-          ref={inputRef}
-          value={filter}
-          onChange={(event) => setFilter(event.target.value.toLowerCase())}
-          onKeyDown={(event) => event.key === 'Escape' && onClose()}
-          placeholder={`filter ${categoryLabel(category).toLowerCase()} tags`}
-          spellCheck={false}
-          className="min-h-8 flex-1 rounded-lg border border-border bg-background px-2 font-mono text-xs outline-none focus:border-accent"
-        />
-        <button
-          type="button"
-          onClick={onClose}
-          className="min-h-8 px-2 text-xs text-muted hover:text-foreground"
-        >
-          Close
-        </button>
-      </div>
-
-      {error && <p className="text-xs text-[#ff5d5f]">{error}</p>}
-
-      {all === null ? (
-        <p className="px-1 py-2 text-xs text-muted">Reading tags…</p>
-      ) : (
-        <div className="flex max-h-48 flex-wrap gap-1 overflow-y-auto">
-          {options.map((tag) => (
-            <button
-              key={tag.id}
-              type="button"
-              onClick={() => pick({ name: tag.name, category: tag.category })}
-              className={`flex min-h-7 items-center rounded border border-border px-2 font-mono text-xs transition-colors hover:border-accent ${categoryColor(category)}`}
-            >
-              {tag.name}
-            </button>
-          ))}
-
-          {options.length === 0 && !coinable && (
-            <p className="px-1 py-2 text-xs text-muted">
-              {typed ? 'No tag in this category matches.' : 'No tags in this category yet.'}
-            </p>
-          )}
-
-          {coinable && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void coin()}
-              title={`Create ${typed} as a ${categoryLabel(category)} tag`}
-              className="flex min-h-7 items-center rounded border border-accent px-2 font-mono text-xs text-accent transition-colors hover:bg-background disabled:opacity-50"
-            >
-              ＋ {typed}
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  )
 }
 
 /**

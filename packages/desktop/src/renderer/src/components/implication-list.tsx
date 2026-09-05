@@ -107,7 +107,6 @@ export function ImplicationList({ siteUrl }: { siteUrl: string }) {
           label="When I add"
           hint={false}
           placeholder="white_bra black_bra"
-          applyRules={false}
         />
         <TagField
           value={add}
@@ -118,7 +117,6 @@ export function ImplicationList({ siteUrl }: { siteUrl: string }) {
           label="Also add"
           hint={false}
           placeholder="bra underwear"
-          applyRules={false}
         />
         {/* A floor, not a setting: it lifts an image that is rated lower and leaves a
             higher one alone, which is `raisedRating` and is said here rather than left

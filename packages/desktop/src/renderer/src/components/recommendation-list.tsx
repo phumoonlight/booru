@@ -79,7 +79,6 @@ export function RecommendationList({ siteUrl }: { siteUrl: string }) {
           label="When an image has"
           hint={false}
           placeholder="panties"
-          applyRules={false}
         />
         <TagField
           value={add}
@@ -90,7 +89,6 @@ export function RecommendationList({ siteUrl }: { siteUrl: string }) {
           label="Offer me"
           hint={false}
           placeholder="black_panties bow_panties"
-          applyRules={false}
         />
         <div className="flex items-center gap-3">
           <button

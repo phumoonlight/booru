@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { RATING_LABEL, RATINGS, type Rating } from '@common/search'
 import { ArrowDownIcon, ArrowUpIcon, TrashIcon } from './icons'
 import { ImageViewer } from './image-viewer'
-import { EMPTY_TAGS, TagField, tagsToInput, type TagFieldValue } from './tag-field'
+import { CategoryTagField, seedsToInput } from './category-tag-field'
+import type { TagSeed } from './tag-field'
 import { invalidateTags } from './tag-index'
 import {
   impliedRating,
@@ -17,7 +18,7 @@ type Status = 'ready' | 'uploading' | 'ok' | 'error'
 
 type Staged = {
   file: StagedFile
-  tags: TagFieldValue
+  tags: TagSeed[]
   rating: Rating
   sourceUrl: string
   status: Status
@@ -28,11 +29,10 @@ type Staged = {
 /**
  * The rule that has something to say about this row's rating, or null. Shared by the
  * floor and by the note under the select, so the card can never obey one rule and blame
- * another. The draft counts, because `tagsToInput` counts it.
+ * another.
  */
-function ratingRule(tags: TagFieldValue, rules: ImplicationRules): ImpliedRating | null {
-  const names = [...tags.tags.map((tag) => tag.name), tags.draft.trim()].filter(Boolean)
-  return impliedRating(names, rules)
+function ratingRule(tags: TagSeed[], rules: ImplicationRules): ImpliedRating | null {
+  return impliedRating(tags.map((tag) => tag.name), rules)
 }
 
 /**
@@ -94,7 +94,7 @@ export function UploadQueue({ status }: { status: AppStatus }) {
   // that failed a previous run are already 'error' before this run reaches them.
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [items, setItems] = useState<Staged[]>([])
-  const [bulkTags, setBulkTags] = useState<TagFieldValue>(EMPTY_TAGS)
+  const [bulkTags, setBulkTags] = useState<TagSeed[]>([])
   const [bulkRating, setBulkRating] = useState<Rating | ''>('')
   // Files the last pick or drop turned away, with the reason main gave for each
   const [refused, setRefused] = useState<string[]>([])
@@ -102,7 +102,7 @@ export function UploadQueue({ status }: { status: AppStatus }) {
   // can't leave the viewer showing a stale copy of a row that has since been edited.
   const [viewing, setViewing] = useState<string | null>(null)
   // Read here rather than in the field, because this is where a post is made: the fields
-  // only show what the rules imply, and `tagsToInput` is what puts it on the upload.
+  // only show what the rules imply, and `seedsToInput` is what puts it on the upload.
   const rules = useImplications()
 
   /**
@@ -132,7 +132,7 @@ export function UploadQueue({ status }: { status: AppStatus }) {
             height: outcome.height,
             preview: outcome.preview,
           },
-          tags: EMPTY_TAGS,
+          tags: [],
           rating: 'g',
           sourceUrl: '',
           status: 'ready',
@@ -174,12 +174,9 @@ export function UploadQueue({ status }: { status: AppStatus }) {
    * The rating a row keeps once its tags have changed. Raise only — `raisedRating` has
    * why — so a rule can lift a row nobody rated and can never undo a rating that was
    * set by hand or earned by a stronger tag.
-   *
-   * The draft counts, because `tagsToInput` counts it: a word still being typed is a tag
-   * as far as the upload is concerned, and it should be one here too.
    */
   const ratingFor = useCallback(
-    (tags: TagFieldValue, current: Rating): Rating =>
+    (tags: TagSeed[], current: Rating): Rating =>
       raisedRating(current, ratingRule(tags, rules)),
     [rules]
   )
@@ -218,17 +215,13 @@ export function UploadQueue({ status }: { status: AppStatus }) {
 
   /** Merges the bulk tags into every staged row and, if one is chosen, sets the rating. */
   function applyToAll() {
-    const extra = bulkTags.draft.trim()
-      ? [...bulkTags.tags, { name: bulkTags.draft.trim(), category: 'general' as const }]
-      : bulkTags.tags
     setItems((prev) =>
       prev.map((item) => {
         if (item.status === 'ok') return item
-        const tags = [...item.tags.tags]
-        for (const tag of extra) {
-          if (!tags.some((t) => t.name === tag.name)) tags.push(tag)
+        const merged = [...item.tags]
+        for (const tag of bulkTags) {
+          if (!merged.some((t) => t.name === tag.name)) merged.push(tag)
         }
-        const merged = { ...item.tags, tags }
         return {
           ...item,
           tags: merged,
@@ -239,7 +232,7 @@ export function UploadQueue({ status }: { status: AppStatus }) {
         }
       })
     )
-    setBulkTags(EMPTY_TAGS)
+    setBulkTags([])
   }
 
   async function submit() {
@@ -255,7 +248,7 @@ export function UploadQueue({ status }: { status: AppStatus }) {
       try {
         result = await window.api.uploadPost({
           path: item.file.path,
-          tags: tagsToInput(item.tags, rules),
+          tags: seedsToInput(item.tags, rules),
           rating: item.rating,
           sourceUrl: item.sourceUrl,
         })
@@ -369,13 +362,14 @@ export function UploadQueue({ status }: { status: AppStatus }) {
             {/* Bulk bar: one set of fields written across the whole queue on demand */}
             <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3">
               <p className="text-sm font-semibold">Apply to all {pending} staged</p>
-              <TagField
+              {/* No implied line and no recommendations on the bulk bar: it writes into
+                  rows rather than being one, and both of those are about what a post
+                  carries. Each row shows them for itself once the tags land. */}
+              <CategoryTagField
                 value={bulkTags}
                 onChange={setBulkTags}
-                label="Tags to add"
-                hint={false}
+                label="Tags to add to every staged post"
                 disabled={busy}
-                placeholder="shared tags"
               />
               <div className="flex flex-wrap items-end gap-2">
                 <label className="flex flex-1 flex-col gap-1.5 text-sm">
@@ -398,7 +392,7 @@ export function UploadQueue({ status }: { status: AppStatus }) {
                   type="button"
                   onClick={applyToAll}
                   disabled={
-                    busy || (bulkTags.tags.length === 0 && !bulkTags.draft.trim() && !bulkRating)
+                    busy || (bulkTags.length === 0 && !bulkRating)
                   }
                   className="min-h-11 rounded-lg border border-border px-4 text-sm font-medium disabled:opacity-50"
                 >
@@ -516,7 +510,7 @@ export function UploadQueue({ status }: { status: AppStatus }) {
                       </p>
                     ) : (
                       <>
-                        <TagField
+                        <CategoryTagField
                           value={item.tags}
                           onChange={(tags) =>
                             patch(item.file.path, {
@@ -524,8 +518,9 @@ export function UploadQueue({ status }: { status: AppStatus }) {
                               rating: ratingFor(tags, item.rating),
                             })
                           }
-                          hint={false}
                           disabled={busy}
+                          imply
+                          recommend
                         />
 
                         <div className="flex flex-col gap-3 sm:flex-row">
