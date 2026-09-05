@@ -27,7 +27,7 @@ export function RestrictedNotice() {
         width={473}
         height={456}
         priority
-        className="h-auto w-56 max-w-full rounded-lg"
+        className="h-auto w-70 max-w-full rounded-lg"
       />
 
       <div className="flex flex-col gap-2">
