@@ -234,15 +234,23 @@ function Panel({
    */
   pinned?: boolean
 }) {
-  return (
-    <section
-      className={`flex flex-col gap-2 rounded-lg border border-border bg-surface px-3 py-3 ${
-        pinned ? 'sticky top-0 z-10 shadow-lg shadow-background/80' : ''
-      }`}
-    >
+  const card = (
+    <section className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-3 py-3">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h2>
       {children}
     </section>
+  )
+
+  if (!pinned) return card
+
+  // The gap above the card is part of what sticks, so the list scrolls *under* a strip of
+  // page rather than up against the header. `-mt-4` and `pt-4` are the parent's own
+  // `gap-4` taken back and reinstated as padding: at rest the spacing is unchanged, and
+  // pinned it is an opaque band nothing can show through.
+  return (
+    <div className="sticky top-0 z-10 -mt-4 bg-background pt-4 shadow-lg shadow-background/80">
+      {card}
+    </div>
   )
 }
 
