@@ -219,13 +219,18 @@ behind a session, because there is none.
   via `searchHref('')` and is never drawn active, because it goes somewhere else.
 - **The queue is hidden, not unmounted**, when another view is in front. Glancing at
   About used to throw away a staged, half-tagged queue and orphan an upload in flight.
-- **Browse** is the website's gallery and edit panel, moved here. It runs
-  `@common/data/search`, so a query means the same thing in both windows. Its query lives
-  in a module-level `let` — coming back to an empty box after finding a post is a search
-  typed twice. **Save keeps the post in front of you** and Back is the only way out; the
-  grid's stale row is re-read on the way out rather than on the save, so correcting a
-  rating twice is two clicks and not two searches. Delete is the exception — there is
-  nothing left to look at.
+- **Browse** is the website's gallery, moved here. It runs `@common/data/search`, so a
+  query means the same thing in both windows. Its query lives in a module-level `let` —
+  coming back to an empty box after finding a post is a search typed twice.
+- **The post editor (`post-editor.tsx`) has no Save button.** Every control writes on use
+  and puts the old value back if the write fails; `writeId` is a ref, not state, because
+  clicks outrun round trips and an earlier failure must not roll back a later success.
+  The screen stays open — Back is the way out, and the grid's stale row is re-read then
+  rather than on the save, so correcting a rating twice is two clicks and not two
+  searches. Delete is the exception: nothing is left to look at. Tags are grouped by
+  category with a ＋ per row, **including the empty rows**, and the picker offers only
+  that category's tags — a tag's category belongs to the tag, so adding from the row is
+  the one way it cannot be coined wrong.
 - **Tags** lists and manages: click a row for rename / recategorize / delete, with New tag
   and Apply by tag above the list, those being the two operations not about a row you are
   pointing at. The category menu is `TAG_CATEGORIES` — **adding one is a line there plus
