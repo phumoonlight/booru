@@ -1,7 +1,11 @@
 appId: dev.pubooru.postapp
 productName: Pubooru
 directories:
-  output: dist
+  # The repo root's dist/, not this package's. An installer is the one thing this repo
+  # produces that a person goes looking for by hand, and three folders down beside the
+  # source it was built from is not where anyone looks — the root is. Relative to this
+  # file, which is why it climbs.
+  output: ../../dist
   buildResources: build
 
 # electron-vite writes main, preload and renderer into out/. Everything else the app

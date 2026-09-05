@@ -39,10 +39,13 @@ From the repo root:
 
 ```
 npm run desktop:dev        # opens the window with hot reload
-npm run desktop:package    # builds an installer into packages/desktop/dist
+npm run desktop:package    # builds an installer into the repo root's dist/
 ```
 
-`desktop:package` empties `dist/` and `out/` first. The installer is named for the
+The installer lands at the top of the repo rather than three folders down beside the
+source it was built from — it is the one thing here somebody goes looking for by hand.
+
+`desktop:package` empties that `dist/` and this package's `out/` first. The installer is named for the
 version, so without that the folder just accumulates one file per release you ever built
 and the newest is only obvious if you read the numbers.
 

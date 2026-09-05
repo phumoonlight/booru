@@ -20,6 +20,9 @@
 # production
 /build
 
+# the desktop installer — electron-builder writes here from packages/desktop
+/dist
+
 # misc
 .DS_Store
 *.pem

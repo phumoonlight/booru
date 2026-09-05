@@ -1,3 +1,5 @@
 out/
-dist/
 node_modules/
+# Nothing writes here any more — the installer goes to the repo root's dist/ — but a
+# checkout that packaged the app before that move still has one sitting here.
+dist/

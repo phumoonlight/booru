@@ -10,7 +10,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
-    "clean": "node -e \"for (const dir of ['dist', 'out']) require('node:fs').rmSync(dir, { recursive: true, force: true })\"",
+    "clean": "node -e \"for (const dir of ['../../dist', 'out']) require('node:fs').rmSync(dir, { recursive: true, force: true })\"",
     "package": "npm run clean && electron-vite build && electron-builder --win --config electron-builder.yml"
   },
   "dependencies": {
