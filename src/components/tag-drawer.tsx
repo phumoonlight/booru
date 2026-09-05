@@ -61,12 +61,23 @@ export function TagDrawer({ children, label }: { children: ReactNode; label: str
                 across the bottom did, and leaves the grid visible beside it. */}
             <div className="flex h-full w-full max-w-sm flex-col overflow-y-auto border-r border-border bg-surface p-4">
               <div className="mb-3 flex items-center justify-end">
+                {/* Emoji ignore `color`, so the ❌ is desaturated and brightened while
+                    resting — against this surface that lands it near `--muted`, where
+                    fading it with opacity would only sink it into the panel — and hover
+                    hands the glyph its own red back. The same trick the facet buttons
+                    use, for the same reason. */}
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="flex min-h-11 items-center px-3 text-sm text-muted"
+                  className="group/close flex min-h-11 items-center gap-1.5 px-3 text-sm text-muted transition-colors hover:text-foreground"
                 >
-                  Close ✕
+                  Close
+                  <span
+                    aria-hidden
+                    className="text-xs brightness-150 grayscale transition-[filter] group-hover/close:brightness-100 group-hover/close:grayscale-0"
+                  >
+                    ❌
+                  </span>
                 </button>
               </div>
               {children}
