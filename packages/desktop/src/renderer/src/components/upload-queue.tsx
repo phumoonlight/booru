@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RATING_LABEL, RATINGS, type Rating } from '@common/search'
+import { RATING_COLOR, RATING_LABEL, RATINGS, type Rating } from '@common/search'
 import { ArrowDownIcon, ArrowUpIcon, TrashIcon } from './icons'
 import { ImageViewer } from './image-viewer'
 import { CategoryTagField, seedsToInput } from './category-tag-field'
@@ -378,11 +378,13 @@ export function UploadQueue({ status }: { status: AppStatus }) {
                     value={bulkRating}
                     disabled={busy}
                     onChange={(event) => setBulkRating(event.target.value as Rating | '')}
-                    className="min-h-11 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
+                    className={`min-h-11 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent ${
+                      bulkRating ? RATING_COLOR[bulkRating] : ''
+                    }`}
                   >
                     <option value="">Leave as is</option>
                     {RATINGS.map((rating) => (
-                      <option key={rating} value={rating}>
+                      <option key={rating} value={rating} className={`bg-background ${RATING_COLOR[rating]}`}>
                         {RATING_LABEL[rating]}
                       </option>
                     ))}
@@ -526,16 +528,18 @@ export function UploadQueue({ status }: { status: AppStatus }) {
                         <div className="flex flex-col gap-3 sm:flex-row">
                           <label className="flex flex-col gap-1.5 text-sm sm:w-44">
                             Rating
+                            {/* Coloured closed and open, the same four colours the grid,
+                                the board and the post editor use for the scale. */}
                             <select
                               value={item.rating}
                               disabled={busy}
                               onChange={(event) =>
                                 patch(item.file.path, { rating: event.target.value as Rating })
                               }
-                              className="min-h-11 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
+                              className={`min-h-11 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent ${RATING_COLOR[item.rating]}`}
                             >
                               {RATINGS.map((rating) => (
-                                <option key={rating} value={rating}>
+                                <option key={rating} value={rating} className={`bg-background ${RATING_COLOR[rating]}`}>
                                   {RATING_LABEL[rating]}
                                 </option>
                               ))}
