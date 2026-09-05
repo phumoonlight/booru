@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { categoryColor, categoryLabel, categoryOrder, type Tag } from '@common/tags'
+import { COLOR_NAMES, categoryColor, categoryLabel, categoryOrder, type Tag } from '@common/tags'
 import { impliedTags, type ImplicationRules } from '../../../shared/implications'
 import { recommendedTags } from '../../../shared/recommendations'
 import { useImplications } from '../implications'
@@ -266,17 +266,26 @@ export function CategoryTagField({
  * are the same garment answered twice, and mixed in among `bikini` and `dress` they
  * tripled the length of a list whose useful part is the garments. Below the rule they are
  * grouped by what they are and sorted by colour, so choosing one is finding the thing and
- * then reading across.
+ * then reading across. `colorWords` is what counts as a colour.
  */
 
 /**
- * A tag's colour prefix, or null.
+ * Every colour this can recognise: the words in `COLOR_NAMES`, plus whatever the board
+ * happens to keep in a `color` category. Longest first, so `light_blue_dress` is a light
+ * blue dress rather than a blue one that starts with `light`.
  *
- * The board's own `color` category is the vocabulary — not a list written here, which
- * would be a second place to add `chartreuse` and a silent no-op when someone forgot.
- * Longest match wins, so `light_blue_dress` is a light blue dress rather than a blue one
- * that happens to start with `light`.
+ * It began as the board's tags alone, which could not work: `pink_underwear` only split
+ * once a bare `pink` tag existed, so a board that had never coined one — most of them —
+ * got no splitting and no reason why. The words come with the language; the board's own
+ * colours are added to them rather than replaced by them.
  */
+function colorWords(all: Tag[] | null): string[] {
+  const words = new Set<string>(COLOR_NAMES)
+  for (const tag of all ?? []) if (tag.category === 'color') words.add(tag.name)
+  return [...words].sort((a, b) => b.length - a.length)
+}
+
+/** A tag's colour prefix, or null. */
 function splitColor(name: string, colors: string[]): { color: string; rest: string } | null {
   for (const color of colors) {
     if (name.startsWith(`${color}_`) && name.length > color.length + 1) {
@@ -316,10 +325,7 @@ function TagPicker({
     // off another would only claim `light_blue` is a kind of `light`.
     if (category === 'color') return { plain: options, colored: [] as ColorOption[] }
 
-    const colors = (all ?? [])
-      .filter((tag) => tag.category === 'color')
-      .map((tag) => tag.name)
-      .sort((a, b) => b.length - a.length)
+    const colors = colorWords(all)
 
     const plain: Tag[] = []
     const colored: ColorOption[] = []

@@ -119,6 +119,56 @@ const KNOWN_LABEL: Record<KnownCategory, string> = {
 }
 
 /**
+ * Colour words, for splitting a tag like `white_underwear` into the colour and the thing.
+ *
+ * A list here rather than "whatever tags are in the Color category", which is what this
+ * started as and could not work: recognising `pink_underwear` then needed a `pink` tag to
+ * exist first, so a board that had never coined bare colours — most of them — got no
+ * splitting at all, silently. The colours a language has are not a property of one board's
+ * vocabulary, so they are not read from it.
+ *
+ * Longest match wins at the call site, which is why `light_blue` may sit beside `blue`.
+ * Adding one is a line here; it costs nothing and nothing depends on the order.
+ */
+export const COLOR_NAMES: readonly string[] = [
+  'aqua',
+  'beige',
+  'black',
+  'blonde',
+  'blue',
+  'brown',
+  'cyan',
+  'dark_blue',
+  'dark_brown',
+  'dark_green',
+  'dark_grey',
+  'gold',
+  'green',
+  'grey',
+  'gray',
+  'light_blue',
+  'light_brown',
+  'light_green',
+  'light_purple',
+  'lavender',
+  'magenta',
+  'maroon',
+  'navy',
+  'olive',
+  'orange',
+  'pink',
+  'purple',
+  'red',
+  'silver',
+  'tan',
+  'teal',
+  'turquoise',
+  'violet',
+  'white',
+  'yellow',
+]
+
+/**
  * The colour a category is drawn in. Functions rather than the two records they wrap,
  * because a category is any word now and an unknown one still has to be legible — it
  * gets the plain foreground rather than a colour of its own, which is also the honest
