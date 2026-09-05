@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Booru hover",
+  "version": "1.0.0",
+  "description": "Hover a booru thumbnail, see the full-size picture immediately. No permissions, no remote rules, no fetch.",
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.gelbooru.com/*",
+        "*://*.safebooru.org/*",
+        "*://*.rule34.xxx/*",
+        "*://*.xbooru.com/*",
+        "*://*.tbib.org/*",
+        "*://*.donmai.us/*",
+        "*://*.konachan.com/*",
+        "*://*.konachan.net/*"
+      ],
+      "js": ["src/content.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "chrome-extension",
+  "private": true,
+  "description": "Booru hover — the source board's thumbnail, full size, with no wait. Loaded unpacked; manifest.json holds the version.",
+  "type": "module"
+}
