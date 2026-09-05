@@ -53,6 +53,73 @@ function userAgent(): string {
   return browserAgent
 }
 
+const CH_PLATFORM: Record<string, string> = {
+  win32: 'Windows',
+  darwin: 'macOS',
+  linux: 'Linux',
+}
+
+/**
+ * Everything else a Chrome tab sends when it loads an image, and why all of it.
+ *
+ * A user agent alone is the shallow half of looking like a browser. The filters these
+ * boards sit behind — Cloudflare's especially — score the whole *set*: a request claiming
+ * Chrome 140 that carries no `accept-language`, no client hints and none of the
+ * `sec-fetch-` metadata every real Chromium subresource carries is a mismatch, and the
+ * answer is a flat 403 with nothing said about why. Chromium's own stack supplies the TLS
+ * and HTTP/2 fingerprint underneath, so the headers were the only part left wrong.
+ *
+ * `sec-fetch-dest: image` / `mode: no-cors` is the honest description of the request:
+ * bytes wanted for display, not an API call. Nothing is claimed here that the same drag
+ * out of the tab it came from would not have claimed.
+ */
+function browserHeaders(url: URL, referer: string | undefined): Record<string, string> {
+  const agent = userAgent()
+  const major = /Chrome\/(\d+)/.exec(agent)?.[1] ?? '140'
+  const headers: Record<string, string> = {
+    'user-agent': agent,
+    accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+    'accept-language': 'en-US,en;q=0.9',
+    'sec-ch-ua': `"Chromium";v="${major}", "Not=A?Brand";v="24", "Google Chrome";v="${major}"`,
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': `"${CH_PLATFORM[process.platform] ?? 'Windows'}"`,
+    'sec-fetch-dest': 'image',
+    'sec-fetch-mode': 'no-cors',
+    'sec-fetch-site': 'none',
+  }
+  if (referer) {
+    headers.referer = referer
+    headers['sec-fetch-site'] =
+      new URL(referer).origin === url.origin ? 'same-origin' : 'cross-site'
+  }
+  return headers
+}
+
+/**
+ * A refusal is worth exactly one more ask, with the one variable there is changed.
+ *
+ * The image's own origin as the referer is right for a hotlink check and wrong for the
+ * opposite policy — a CDN that serves anything with no referer and refuses one whose host
+ * isn't on its list. Which of the two a host runs is not knowable from here, so both get
+ * asked: the honest referer, then none. Only these statuses; a 404 is a 404.
+ */
+const RETRY_WITHOUT_REFERER = new Set([401, 403, 405, 429])
+
+/**
+ * A status the queue can act on. 403 and 429 are the two that mean "the host is fine, it
+ * just won't answer *us*", and what fixes them is not something the app can do — it is
+ * saving the image out of the browser it was dragged from and dropping the file. Saying
+ * so beats a bare number the reader has to go and look up.
+ */
+function refusal(status: number): string {
+  if (status === 401 || status === 403) {
+    return `The server refused the download (${status}) — that host serves images only to its own pages. Save it from your browser and drop the file instead`
+  }
+  if (status === 429) return 'That host is rate-limiting this address (429) — try again shortly'
+  if (status === 404 || status === 410) return `That link no longer points at an image (${status})`
+  return `The server answered ${status}`
+}
+
 /**
  * Why the request never produced a response.
  *
@@ -140,25 +207,23 @@ async function downloadOne(address: string): Promise<StageOutcome> {
     return { ok: false, path: address, name, error: 'Only http and https links can be fetched' }
   }
 
+  // The image's own origin as the referer — a hotlink check wants to see the page the
+  // image belongs to, and that is the honest answer when a drag is all we have of where
+  // it came from. A host that doesn't check ignores it; one that objects gets asked again
+  // with none.
   let response: Response
   try {
     // Electron's net, not the global fetch: it goes through the app's session, so a
     // system proxy and the OS certificate store both apply.
-    response = await net.fetch(url.toString(), {
-      headers: {
-        'user-agent': userAgent(),
-        // The image's own origin as the referer — a hotlink check wants to see the page
-        // the image belongs to, and that is the honest answer when a drag is all we have
-        // of where it came from. A host that doesn't check ignores it.
-        referer: url.origin + '/',
-        accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-      },
-    })
+    response = await net.fetch(url.toString(), { headers: browserHeaders(url, url.origin + '/') })
+    if (RETRY_WITHOUT_REFERER.has(response.status)) {
+      response = await net.fetch(url.toString(), { headers: browserHeaders(url, undefined) })
+    }
   } catch (cause) {
     return { ok: false, path: address, name, error: describeFailure(cause) }
   }
   if (!response.ok) {
-    return { ok: false, path: address, name, error: `The server answered ${response.status}` }
+    return { ok: false, path: address, name, error: refusal(response.status) }
   }
 
   // Cheap rejection: dragging a *link to a page* rather than the image itself is the
