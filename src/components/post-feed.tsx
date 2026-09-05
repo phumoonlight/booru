@@ -45,7 +45,7 @@ function ChunkDivider({ firstId }: { firstId: number }) {
  * `resumable` is the difference between the two listings that use this. The gallery is
  * addressable at any depth, so its "load more" is a real `<a href="?query=… start:N">` —
  * a chain a crawler and a JS-less browser can follow — and `replaceState` keeps the URL
- * on the chunk you reached, so a refresh doesn't drop you at the top. Ids being
+ * on the chunk you are *looking at*, so a refresh puts you back there. Ids being
  * integers, `start:` one below the oldest post shown is exactly "everything older".
  * The tag page is a sample rather than an address: it caps out and hands you a link into
  * the gallery, so there is nothing to keep in the URL and its control is a plain button.
@@ -88,6 +88,21 @@ export function PostFeed({
   // A ref, not `pending`: the observer can fire twice before a state update paints
   const busy = useRef(false)
 
+  // Which chunk the top of the viewport is sitting in — the value the URL follows.
+  //
+  // It used to follow the newest chunk *fetched*, written once as each one landed. That
+  // answered "how far did you get", so scrolling back up to look at something left the
+  // address bar pointing at the bottom of the feed, and a refresh threw away the place
+  // you had scrolled back to. This answers "what are you looking at", which is the thing
+  // a URL is for.
+  //
+  // The grids are watched rather than counted: `chunks` only ever grows, so an index is
+  // stable once assigned, and the map is keyed by the element so a callback can name its
+  // chunk without a scan.
+  const grids = useRef(new Map<HTMLUListElement, number>())
+  const passed = useRef(new Set<number>())
+  const [current, setCurrent] = useState(0)
+
   const loaded = chunks.reduce((count, chunk) => count + chunk.length, 0)
   const capped = limit !== undefined && loaded >= limit
   const oldest = chunks[chunks.length - 1]?.at(-1)
@@ -106,10 +121,6 @@ export function PostFeed({
       if (next.posts.length === 0) return
 
       setChunks((current) => [...current, next.posts])
-      // The URL claims the chunk that just landed, so a refresh resumes there
-      if (resumable) {
-        window.history.replaceState(null, '', searchHref(withStart(query, next.posts[0].id)))
-      }
     } catch {
       // Auto-loading stops here; the button stays and says so, so a dropped connection
       // costs a tap rather than the rest of the gallery.
@@ -118,7 +129,42 @@ export function PostFeed({
       busy.current = false
       setPending(false)
     }
-  }, [canLoad, oldest, perPage, query, resumable])
+  }, [canLoad, oldest, perPage, query])
+
+  useEffect(() => {
+    if (!resumable) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const index = grids.current.get(entry.target as HTMLUListElement)
+          if (index === undefined) continue
+          // Above the line or below it: the sign is the whole answer, and it is reported
+          // for every grid once at `observe()` as well as on each crossing, so scrolling
+          // in either direction and the initial position are all the same code path.
+          if (entry.boundingClientRect.top <= 0) passed.current.add(index)
+          else passed.current.delete(index)
+        }
+        setCurrent(passed.current.size > 0 ? Math.max(...passed.current) : 0)
+      },
+      // A root with no height, pinned to the top of the viewport. The deepest grid that
+      // has crossed it is the one being read.
+      { rootMargin: '0px 0px -100% 0px' }
+    )
+    for (const node of grids.current.keys()) observer.observe(node)
+    return () => observer.disconnect()
+  }, [resumable, chunks.length])
+
+  // `replaceState`, never `pushState`: a feed that pushed would make Back walk up through
+  // every chunk you scrolled past instead of leaving the gallery. Chunk zero restores the
+  // query as it arrived — writing `start:` the newest post would put a cursor in the URL
+  // of a listing nobody has scrolled yet.
+  useEffect(() => {
+    if (!resumable) return
+    const first = chunks[current]?.[0]
+    const at = current === 0 || !first ? query : withStart(query, first.id)
+    window.history.replaceState(null, '', searchHref(at))
+  }, [current, chunks, query, resumable])
 
   useEffect(() => {
     const node = sentinel.current
@@ -143,7 +189,17 @@ export function PostFeed({
       {chunks.map((posts, index) => (
         <Fragment key={posts[0]?.id ?? index}>
           {index > 0 && posts[0] && <ChunkDivider firstId={posts[0].id} />}
-          <PostGrid posts={posts} query={query} />
+          <PostGrid
+            posts={posts}
+            query={query}
+            ref={(node) => {
+              if (!node) return
+              grids.current.set(node, index)
+              return () => {
+                grids.current.delete(node)
+              }
+            }}
+          />
         </Fragment>
       ))}
       {pending && <PostGridSkeleton count={6} />}

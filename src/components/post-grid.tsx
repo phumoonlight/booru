@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import type { CSSProperties, Ref } from 'react'
 import type { Post } from '@/lib/data/posts'
 import { PostCard } from '@/components/post-card'
 import { startOf } from '@common/search'
@@ -43,12 +43,24 @@ function itemStyle(width: number, height: number): CSSProperties {
 }
 
 /** `query` rides along for the cards' 🔖 badge, which adds its cursor to whatever
-    search is on screen. Parsed once here rather than per card. */
-export function PostGrid({ posts, query = '' }: { posts: Post[]; query?: string }) {
+    search is on screen. Parsed once here rather than per card.
+
+    `ref` reaches the `<ul>` itself, which is how the feed watches a chunk cross the top
+    of the viewport. A wrapper around this would have been a second flex child in a
+    `gap-4` column, and so a gap of empty page above every chunk. */
+export function PostGrid({
+  posts,
+  query = '',
+  ref,
+}: {
+  posts: Post[]
+  query?: string
+  ref?: Ref<HTMLUListElement>
+}) {
   const start = startOf(query)
 
   return (
-    <ul className={ROW}>
+    <ul ref={ref} className={ROW}>
       {posts.map((post) => (
         <li key={post.id} className="min-w-0" style={itemStyle(post.width, post.height)}>
           <PostCard post={post} query={query} active={post.id === start} />
