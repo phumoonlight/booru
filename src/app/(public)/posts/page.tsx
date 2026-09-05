@@ -1,10 +1,5 @@
 import type { Metadata } from 'next'
-import {
-  searchPosts,
-  getTagsForPosts,
-  getRatingCounts,
-  FEED_CHUNK_SIZE,
-} from '@/lib/data/search'
+import { searchPosts, getTagsForPosts, FEED_CHUNK_SIZE } from '@/lib/data/search'
 import { PostFeed } from '@/components/post-feed'
 import { SavedQueries } from '@/components/saved-queries'
 import { SearchHeader } from '@/components/search-header'
@@ -13,7 +8,6 @@ import { GroupedTagList } from '@/components/tag-list'
 import { RatingList } from '@/components/rating-list'
 import { RatingDisplayOptions } from '@/components/rating-display-options'
 import { SetupNotice } from '@/components/setup-notice'
-import { getCurrentProfile } from '@/lib/data/profiles'
 import { isSupabaseConfigured } from '@/lib/env'
 import { parseSearchQuery, searchHref, SEARCH_PARAM, splitQuery } from '@common/search'
 import { SITE_DESCRIPTION, SITE_NAME } from '@/lib/site'
@@ -61,15 +55,9 @@ export default async function PostsPage({ searchParams }: PageProps<'/posts'>) {
     )
   }
 
-  const profile = await getCurrentProfile()
-  const canUpload = profile !== null
-
   const { posts, hasMore } = await searchPosts({ query })
-  // Which tags the facets list comes from the posts on screen; both counts are site-wide
-  const [tagEntries, ratingCounts] = await Promise.all([
-    getTagsForPosts(posts.map((p) => p.id)),
-    getRatingCounts(),
-  ])
+  // Which tags the facet lists comes from the posts on screen; their counts are site-wide
+  const tagEntries = await getTagsForPosts(posts.map((p) => p.id))
   const { include, exclude, ratings, excludeRatings } = splitQuery(parseSearchQuery(query))
 
   return (
@@ -87,7 +75,6 @@ export default async function PostsPage({ searchParams }: PageProps<'/posts'>) {
             <section className="border-t border-border pt-4">
               <RatingDisplayOptions />
               <RatingList
-                counts={ratingCounts}
                 currentQuery={query}
                 activeRatings={ratings}
                 excludedRatings={excludeRatings}
@@ -117,9 +104,7 @@ export default async function PostsPage({ searchParams }: PageProps<'/posts'>) {
             <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
               {query
                 ? 'No posts match that search.'
-                : canUpload
-                  ? 'No posts yet — the desktop uploader adds the first one.'
-                  : 'No posts yet — the first upload will show up here.'}
+                : 'No posts yet — the desktop app adds the first one.'}
             </p>
           ) : (
             <PostFeed

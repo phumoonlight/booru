@@ -13,16 +13,33 @@ import type { Metadata } from 'sharp'
 export const POST_MAX_DIMENSION = 2048
 
 /**
- * Re-encodes the stored post image as lossless AVIF, downscaled to fit
- * `POST_MAX_DIMENSION`, so the detail view never shows a degraded pixel. Below the cap
- * it only wins on some inputs — an already-lossy JPEG re-encodes several times larger,
- * and flat-colour PNG often beats it too — so this only offers a candidate; the caller
- * compares it against the uploaded bytes and keeps whichever is smaller. Above the cap
- * the caller has no such choice: this is the only version within bounds.
+ * Lossy, and deliberately so — see `compressImgForPost` below. Sharp's own default is
+ * also 50; it is spelled out here so the number is versioned with the code rather than
+ * inherited from whatever sharp ships next.
+ */
+export const POST_QUALITY = 50
+
+/**
+ * Re-encodes the stored post image as **lossy AVIF at quality 50**, downscaled to fit
+ * `POST_MAX_DIMENSION`. The caller compares it against the uploaded bytes and keeps
+ * whichever is smaller; above the cap it has no such choice, this being the only version
+ * within bounds.
+ *
+ * `quality` is written out rather than left to sharp's default, which is what it was for
+ * a long time — and the file said "lossless" while doing it, which is how nobody noticed
+ * the detail view was serving a re-encode. An implicit default is a number no one can
+ * see and no one is deciding.
+ *
+ * Lossless was measured and rejected: on a 1.9MB JPEG it produces 3.6MB, so the
+ * candidate loses the size comparison and the original is stored instead — correct, but
+ * it means the AVIF path only ever fires on inputs that were already cheap, and every
+ * photo keeps its uploaded bytes. Quality 50 is 215kB at 35dB; quality 80 is 548kB at
+ * 42dB if the softness ever becomes the complaint. Re-measure with
+ * `npm run bench:avif` before moving it.
  *
  * `mitchell` over the default `lanczos3` for the same measured reason as the thumbnail
- * (see for-thumbnail.ts): lanczos rings on hard edges, and the ringing is extra
- * high-frequency detail a lossless encode then has to store in full.
+ * (see for-thumbnail.ts): lanczos rings on hard edges, and that ringing is extra
+ * high-frequency detail the encoder then spends bits on.
  *
  * Animated inputs return no candidate at all: sharp would flatten them to frame 1. An
  * oversized animation is therefore stored at its uploaded size.
@@ -52,7 +69,7 @@ export const compressImgForPost = async (meta: Metadata, buffer: Buffer, effort 
         width: POST_MAX_DIMENSION,
         height: POST_MAX_DIMENSION,
       })
-      .avif({ effort })
+      .avif({ effort, quality: POST_QUALITY })
       .keepIccProfile()
       .toBuffer({ resolveWithObject: true })
     result.buffer = data

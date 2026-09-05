@@ -3,8 +3,6 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getPost, getPostNeighbours, getPostTags } from '@/lib/data/posts'
-import { getCurrentProfile } from '@/lib/data/profiles'
-import { ManagePost } from '@/components/manage-post'
 import { PostViewCounter } from '@/components/post-view-counter'
 import { PostNav } from '@/components/post-nav'
 import { StartHereLink } from '@/components/start-here'
@@ -54,13 +52,13 @@ export async function generateMetadata({ params }: PageProps<'/posts/[id]'>): Pr
       description,
       siteName: SITE_NAME,
       // The thumbnail is the only derived image the schema guarantees exists
-      images: [{ url: thumbnailUrl(post.md5), alt: title }],
+      images: [{ url: thumbnailUrl(post.file_name), alt: title }],
     },
     twitter: {
       card: 'summary_large_image',
       title,
       description,
-      images: [thumbnailUrl(post.md5)],
+      images: [thumbnailUrl(post.file_name)],
     },
   }
 }
@@ -81,19 +79,16 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
   const post = await getPost(postId)
   if (!post) notFound()
 
-  const [tags, { prevId, nextId }, profile] = await Promise.all([
+  const [tags, { prevId, nextId }] = await Promise.all([
     getPostTags(postId),
     getPostNeighbours(postId),
-    getCurrentProfile(),
   ])
 
-  const canManage = profile !== null
-
-  const fullSize = postImageUrl(post.md5, post.file_ext)
+  const fullSize = postImageUrl(post.file_name, post.file_ext)
 
   // `unoptimized` on purpose: the detail view shows the stored file byte-for-byte.
-  // That file is either the upload itself or a lossless AVIF of it, so it already is
-  // the best available quality.
+  // That file is either the upload itself or the AVIF the pipeline stored in its place,
+  // so it already is the best version this site holds.
   // Running it through the Next optimizer would re-encode it at quality 75 and strip
   // animation — compression belongs to the thumbnail, which the grid uses instead.
   const image = (
@@ -208,14 +203,8 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
             </dl>
           </section>
 
-          {canManage && (
-            <ManagePost
-              postId={post.id}
-              initialTags={tags.map(({ name, category }) => ({ name, category }))}
-              initialRating={post.rating}
-              initialSourceUrl={post.source_url ?? ''}
-            />
-          )}
+          {/* No edit panel. Rating, source and tags are changed in the desktop app,
+              which is the only thing holding a key that can write them. */}
         </div>
       </aside>
     </div>

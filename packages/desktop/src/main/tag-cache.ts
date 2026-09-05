@@ -3,16 +3,17 @@ import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import { listTags } from '@common/data/shared'
 import type { Tag } from '@common/tags'
-import { currentUser, userClient } from './supabase'
+import { boardClient } from './supabase'
 
 /**
  * The board's tag index, kept on disk for a day.
  *
  * Autocomplete used to be a query per pause in typing — and three round trips at that,
- * since the handler checked the session first, which is `auth.getUser()` plus a profiles
- * read before the tags query it actually wanted. Tagging a set of twenty images is
- * hundreds of those, all asking a question whose answer changes only when somebody
- * uploads.
+ * back when the handler checked the session first, which was `auth.getUser()` plus a
+ * profiles read before the tags query it actually wanted. Tagging a set of twenty images
+ * is hundreds of those, all asking a question whose answer changes only when somebody
+ * uploads. The session checks are gone with the login; the cache is what still makes it
+ * one read instead of a hundred.
  *
  * So the index is read once and filtered here. A whole board of tags is a few hundred
  * kilobytes of names and counts — small enough to hold, small enough to write out — and
@@ -95,10 +96,10 @@ async function ensureTags(): Promise<CacheFile | null> {
   if (filling) return filling
 
   filling = (async () => {
-    const supabase = userClient()
-    // Signed out there is nothing to read with, and an empty cache would then be written
-    // over a good one. The stale copy stands until someone signs in.
-    if (!supabase || !(await currentUser())) return memory ?? null
+    const supabase = boardClient()
+    // An unconfigured bundle has nothing to read with, and an empty cache would then be
+    // written over a good one. The stale copy stands.
+    if (!supabase) return memory ?? null
 
     try {
       const tags = await listTags(supabase, CACHE_LIMIT)

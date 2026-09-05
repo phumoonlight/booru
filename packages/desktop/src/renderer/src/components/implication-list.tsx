@@ -193,9 +193,9 @@ export function ImplicationList({ siteUrl }: { siteUrl: string }) {
                       taking the last one off already deletes it, and on a one-tag rule the
                       two controls sat side by side doing the same thing. */}
                   {rules[trigger].map((implied) => {
-                    // Shown as it is stored — it is what the file says, and `rating:e2`
-                    // is the board's own spelling — but coloured on the rating scale so
-                    // it doesn't read as a tag with a colon in it.
+                    // Shown as it is stored — it is what the file says, and
+                    // `rating:explicit` is the board's own query spelling — but coloured
+                    // on the rating scale so it doesn't read as a tag with a colon in it.
                     const rating = asRating(implied)
                     return (
                       <span

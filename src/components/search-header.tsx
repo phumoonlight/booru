@@ -1,9 +1,6 @@
 import Link from 'next/link'
 import { SearchBar } from '@/components/search-bar'
 import { NavProgress } from '@/components/nav-progress'
-import { AccountMenu } from '@/components/account-menu'
-import { getCurrentProfile } from '@/lib/data/profiles'
-import { isSupabaseConfigured } from '@/lib/env'
 import { SITE_NAME } from '@/lib/site'
 
 /**
@@ -11,24 +8,20 @@ import { SITE_NAME } from '@/lib/site'
  * since the bottom tab bar was dropped, the site's only navigation. Rendered per page
  * rather than in the layout because only pages can read searchParams, and the bar has
  * to reflect the active query.
- * No link to /upload. The page still works and still answers to its own address, but
- * offering it from every page advertises the one thing this deployment is bad at: the
- * compression an upload needs is seconds of CPU, and Vercel's free tier bills that by
- * the second and kills the function at ten, so anything but a small image fails after
- * the wait rather than before it. Uploading is the desktop app's job
- * (`packages/desktop`), which is why the entry point is gone instead of the page.
+ * Two links, and neither of them is an account: the site has no login, because it has
+ * nothing a visitor could do with one. Uploading, editing, deleting and the tag
+ * vocabulary all live in the desktop app (`packages/desktop`), which writes with a key
+ * compiled into its own bundle. What is left here is a gallery anyone can read.
  * `showSearch` drops the input for pages that are already one fixed listing (a tag's
  * own page) — the nav above it is the part every page still needs.
  */
-export async function SearchHeader({
+export function SearchHeader({
   query = '',
   showSearch = true,
 }: {
   query?: string
   showSearch?: boolean
 }) {
-  const profile = isSupabaseConfigured() ? await getCurrentProfile() : null
-
   return (
     <div className="sticky top-0 z-30 -mx-3 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
       <div className={`flex items-center justify-between gap-3 ${showSearch ? 'mb-2' : ''}`}>
@@ -44,14 +37,6 @@ export async function SearchHeader({
             🏷️ Tags
             <NavProgress />
           </Link>
-          {profile ? (
-            <AccountMenu username={profile.username} />
-          ) : (
-            <Link href="/login" className="text-sm text-muted hover:text-foreground">
-              🔑 Log in
-              <NavProgress />
-            </Link>
-          )}
         </nav>
       </div>
       {/* Keyed so navigation (back/forward, tag links) resets the input to the URL */}
@@ -73,7 +58,6 @@ export function SearchHeaderSkeleton() {
         <div className="h-7 w-32 animate-pulse rounded bg-surface sm:h-8" />
         <div className="flex items-center gap-3">
           <div className="h-5 w-14 animate-pulse rounded bg-surface" />
-          <div className="h-5 w-16 animate-pulse rounded bg-surface" />
         </div>
       </div>
       <div className="flex gap-2">

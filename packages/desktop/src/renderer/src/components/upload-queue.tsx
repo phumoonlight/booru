@@ -133,7 +133,7 @@ export function UploadQueue({ status }: { status: AppStatus }) {
             preview: outcome.preview,
           },
           tags: EMPTY_TAGS,
-          rating: 'general',
+          rating: 'g',
           sourceUrl: '',
           status: 'ready',
         })

@@ -5,11 +5,15 @@ import { RATINGS, type Rating } from '@common/search'
  * milder shows as-is. Visitors override this per browser from the sidebar's ⚙ panel —
  * it is a display preference, not access control, so it never leaves the client.
  */
-export const DEFAULT_BLURRED_RATINGS: readonly Rating[] = ['e4', 'e5']
+export const DEFAULT_BLURRED_RATINGS: readonly Rating[] = ['e']
 
 export const BLUR_STORAGE_KEY = 'blurred_ratings'
 
-/** Lives on <html>; CSS matches one tier with `[data-blur-ratings~='e5']`. */
+/**
+ * Lives on <html>; CSS matches one tier with `[data-blur-ratings~='e']`. The stored
+ * letter, not the query name: `data-rating` on a card is the column's own value, and the
+ * two attributes have to be comparable by a selector.
+ */
 export const BLUR_ATTR = 'data-blur-ratings'
 
 /** Space-separated and in RATINGS order, so the attribute reads the same every time. */

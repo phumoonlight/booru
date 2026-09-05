@@ -80,40 +80,64 @@ export function searchHref(query: string): string {
 }
 
 // ── Rating metatags ────────────────────────────────────────────────────────────
-// `rating:e4` narrows the search to that rating; `-rating:e4` drops it.
+// `rating:explicit` narrows the search to that rating; `-rating:explicit` drops it.
 // They travel in the same `?query=` string as ordinary tags (Danbooru convention),
 // so the search bar, chips and tag links need no special cases — only the data
 // layer splits them back out.
 
-export const RATINGS = ['general', 'e1', 'e2', 'e3', 'e4', 'e5'] as const
+/**
+ * **A rating is stored as one letter and written as a word.** `posts.rating` holds
+ * `g`, `s`, `q` or `e`; the chips and every link the app builds spell `rating:general`,
+ * and `asRating` / `ratingToken` are the only two places the two forms meet. A query
+ * typed by hand may use either — `asRating` reads both, `ratingToken` writes the name.
+ *
+ * The column is the reason. It is free-form text with no check constraint, repeated on
+ * every row and every index entry, and the word carries nothing the letter doesn't —
+ * `RATING_LABEL` is what a person actually reads, and it has never been the stored
+ * value. The URL is the opposite case: `?query=rating:e` is a query nobody can read
+ * back, and a saved query is a string somebody keeps.
+ *
+ * So `Rating` is the stored code everywhere in the code, and `RATING_NAME` is the one
+ * translation, used only at the edge of a query string.
+ */
+export const RATINGS = ['g', 's', 'q', 'e'] as const
 
 export type Rating = (typeof RATINGS)[number]
 
-/** Display form — the stored value is lowercase, the label is not. */
+/** How a rating is written in a query. `rating:g` is read too, but never written. */
+export const RATING_NAME: Record<Rating, string> = {
+  g: 'general',
+  s: 'sensitive',
+  q: 'questionable',
+  e: 'explicit',
+}
+
+/** The code a query name means, built from `RATING_NAME` so the two cannot drift. */
+const RATING_BY_NAME: Record<string, Rating> = Object.fromEntries(
+  RATINGS.map((rating) => [RATING_NAME[rating], rating])
+)
+
+/** Display form — what a person reads, on a facet or a post page. */
 export const RATING_LABEL: Record<Rating, string> = {
-  general: 'General',
-  e1: 'E1',
-  e2: 'E2',
-  e3: 'E3',
-  e4: 'E4',
-  e5: 'E5',
+  g: 'General',
+  s: 'Sensitive',
+  q: 'Questionable',
+  e: 'Explicit',
 }
 
 // Danbooru's traffic-light convention, tuned for the dark theme
 export const RATING_COLOR: Record<Rating, string> = {
-  general: 'text-[#35c64a]',
-  e1: 'text-[#4fa3e3]',
-  e2: 'text-[#ead084]',
-  e3: 'text-[#ff8a8b]',
-  e4: 'text-[#ff5d5f]',
-  e5: 'text-[#ff2e31]',
+  g: 'text-[#35c64a]',
+  s: 'text-[#4fa3e3]',
+  q: 'text-[#ead084]',
+  e: 'text-[#ff5d5f]',
 }
 
 /**
  * The adult tiers. Every visitor sees them on the site; this list only keeps them
  * out of the sitemap and out of search-engine results (`robots: noindex`).
  */
-export const RESTRICTED_RATINGS: readonly Rating[] = ['e3', 'e4', 'e5']
+export const RESTRICTED_RATINGS: readonly Rating[] = ['q', 'e']
 
 export function isRestricted(rating: Rating): boolean {
   return RESTRICTED_RATINGS.includes(rating)
@@ -163,7 +187,7 @@ function asStart(token: string): number | null {
 export const RATING_PREFIX = 'rating:'
 
 export function ratingToken(rating: Rating): string {
-  return `${RATING_PREFIX}${rating}`
+  return `${RATING_PREFIX}${RATING_NAME[rating]}`
 }
 
 /**
@@ -174,7 +198,11 @@ export function ratingToken(rating: Rating): string {
 export function asRating(token: string): Rating | null {
   if (!token.startsWith(RATING_PREFIX)) return null
   const value = token.slice(RATING_PREFIX.length)
-  return (RATINGS as readonly string[]).includes(value) ? (value as Rating) : null
+  // Both spellings are accepted: `rating:explicit` is what every link and chip the app
+  // builds says, and `rating:e` is what someone typing into the box will reach for once
+  // they have seen the column. Only the reading is loose — `ratingToken` still writes
+  // the name, so the two forms never both end up in a URL the app produced.
+  return RATING_BY_NAME[value] ?? ((RATINGS as readonly string[]).includes(value) ? (value as Rating) : null)
 }
 
 export type SplitQuery = ParsedQuery & {

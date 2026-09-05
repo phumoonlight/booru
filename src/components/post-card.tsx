@@ -38,7 +38,7 @@ export function PostCard({
             it hands down already carries the thumbnail's ratio */}
       {/*
         `unoptimized`, like the detail image and for the same reason: the thumbnail is
-        already the optimizer's output. Upload built it as a 400px-tall AVIF sized for
+        already the optimizer's output. Upload built it as a 384px-tall AVIF sized for
         this grid, so the only thing Next could add is a second lossy pass — a costly
         one, because it scales the requested quality by 50/80 for AVIF, turning the
         default 75 into an AVIF quality of 47 at effort 3. That re-encode was what
@@ -54,7 +54,7 @@ export function PostCard({
         that reserves grid space, and the thumbnail keeps the post's ratio.
       */}
         <Image
-          src={thumbnailUrl(post.md5)}
+          src={thumbnailUrl(post.file_name)}
           alt={`Post ${post.id}`}
           width={post.width}
           height={post.height}

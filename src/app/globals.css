@@ -108,12 +108,10 @@ select {
   transition: filter 150ms ease;
 }
 
-[data-blur-ratings~='general'] [data-rating='general'] img,
-[data-blur-ratings~='e1'] [data-rating='e1'] img,
-[data-blur-ratings~='e2'] [data-rating='e2'] img,
-[data-blur-ratings~='e3'] [data-rating='e3'] img,
-[data-blur-ratings~='e4'] [data-rating='e4'] img,
-[data-blur-ratings~='e5'] [data-rating='e5'] img {
+[data-blur-ratings~='g'] [data-rating='g'] img,
+[data-blur-ratings~='s'] [data-rating='s'] img,
+[data-blur-ratings~='q'] [data-rating='q'] img,
+[data-blur-ratings~='e'] [data-rating='e'] img {
   /* Scaled past the frame so the blur's soft edge never exposes a rim of the image */
   filter: blur(18px);
   transform: scale(1.2);

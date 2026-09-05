@@ -27,7 +27,7 @@ export function About({ status }: { status: AppStatus }) {
       </div>
 
       <p className="text-sm text-muted">
-        The board’s upload page, run locally. Compression is CPU work — a lossless AVIF
+        The board’s upload page, run locally. Compression is CPU work — a full-size AVIF
         for the post and a lossy one for the thumbnail — which is what a serverless tier
         is billed for by the second and killed at ten of them. Here it costs nothing, so
         this app takes files the website has to refuse. The images and rows land in the

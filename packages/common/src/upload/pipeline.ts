@@ -3,7 +3,7 @@ import sharp, { type Metadata } from 'sharp'
 import { z } from 'zod'
 import { POST_MAX_DIMENSION, compressImgForPost } from '@common/imgcmp/for-post'
 import { compressImgForThumbnail } from '@common/imgcmp/for-thumbnail'
-import { createPostWithTags, findPostIdByMd5 } from '@common/data/shared'
+import { createPostWithTags, findPostIdByFileName } from '@common/data/shared'
 import { POSTS_BUCKET, THUMBNAILS_BUCKET, postImagePath, thumbnailPath } from '@common/storage'
 import { RATINGS, type Rating } from '@common/search'
 import { parseTagInput } from '@common/tags'
@@ -109,16 +109,12 @@ export function parsePostMetadata(
 }
 
 /**
- * Creates one post from one image's bytes.
- *
- * `supabase` is the uploader's session — the row is written on it so RLS records who
- * uploaded. `admin` is the service role, for the storage writes and the counter
- * recounts, neither of which a user session is entitled to do.
+ * Creates one post from one image's bytes. One client, and it has to be the service
+ * role: no table in the schema has a write policy, so nothing else can write a row or
+ * store an object.
  */
 export async function createPostFromImage(
-  supabase: BooruClient,
-  admin: BooruClient,
-  uploaderId: string,
+  client: BooruClient,
   bytes: Buffer,
   metadata: PostMetadata,
   limits: UploadLimits
@@ -157,16 +153,18 @@ export async function createPostFromImage(
     }
   }
 
-  // md5 identifies the *uploaded* bytes, so dedupe stays stable no matter what
+  // The md5 of the *uploaded* bytes, which becomes `posts.file_name` and both stored
+  // files' names. Hashing what came in rather than what gets stored is what keeps dedupe
+  // stable no matter what
   // we re-encode below. Storage paths derive from it either way.
   const md5 = createHash('md5').update(bytes).digest('hex')
 
-  const existingPostId = await findPostIdByMd5(supabase, md5)
+  const existingPostId = await findPostIdByFileName(client, md5)
   if (existingPostId !== null) {
     return { ok: false, error: 'This image already exists', existingPostId }
   }
 
-  // Unlike the lossless attempts below there is no fallback here — a post with no
+  // Unlike the post image below there is no fallback here — a post with no
   // thumbnail has nothing to show in the grid — so a failure ends the upload with
   // the same error shape as everything else rather than throwing out of the caller.
   const thumbResult = await compressImgForThumbnail(bytes)
@@ -174,9 +172,10 @@ export async function createPostFromImage(
     return { ok: false, error: thumbResult.message }
   }
 
-  // Post image: the lossless AVIF candidate is kept only when it actually comes out
-  // smaller than the uploaded bytes, which for JPEG and flat-colour PNG it usually
-  // does not. A failed encode is not fatal — the upload itself is always storable.
+  // Post image: the AVIF candidate is kept only when it actually comes out smaller than
+  // the uploaded bytes. It is lossy (quality 50), so it usually does — the comparison
+  // earns its keep on inputs that were already small or already AVIF. A failed encode is
+  // not fatal: the upload itself is always storable.
   //
   // Oversized is the exception: past POST_MAX_DIMENSION the candidate is not competing
   // on bytes at all, it is the only version inside the cap, so it is kept however it
@@ -195,7 +194,7 @@ export async function createPostFromImage(
     const outWidth = postResult.width ?? width
     const outHeight = postResult.height ?? height
     console.log(
-      `[upload ${md5.slice(0, 8)}] lossless avif: ${ext} ${kb(bytes.length)} ${width}x${height}` +
+      `[upload ${md5.slice(0, 8)}] post avif: ${ext} ${kb(bytes.length)} ${width}x${height}` +
         ` -> avif ${kb(avif.length)} ${outWidth}x${outHeight} ` +
         `(${pct(avif.length, bytes.length)}, ${Date.now() - startedAt}ms) — ` +
         `${won ? (oversized ? 'kept, over cap' : 'kept') : 'discarded'}`
@@ -208,7 +207,7 @@ export async function createPostFromImage(
     }
   } else if (!postResult.ok) {
     console.log(
-      `[upload ${md5.slice(0, 8)}] lossless avif: encoder failed — ` +
+      `[upload ${md5.slice(0, 8)}] post avif: encoder failed — ` +
         `${postResult.error?.message ?? postResult.message}`
     )
   }
@@ -264,7 +263,7 @@ export async function createPostFromImage(
   )
 
   // Storage writes need the service-role client (RLS floor is signed-in-only anyway)
-  const storage = admin.storage
+  const storage = client.storage
   const postUpload = await storage
     .from(POSTS_BUCKET)
     .upload(postImagePath(md5, postExt), postBuffer, {
@@ -285,11 +284,10 @@ export async function createPostFromImage(
     return { ok: false, error: `Thumbnail upload failed: ${thumbUpload.error.message}` }
   }
 
-  // Written on the user's session, not the service role — the row records the uploader
   let postId: number
   try {
-    postId = await createPostWithTags(supabase, admin, uploaderId, {
-      md5,
+    postId = await createPostWithTags(client, {
+      file_name: md5,
       file_ext: postExt,
       file_size: postBuffer.length,
       width: postWidth,

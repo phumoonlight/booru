@@ -1,5 +1,6 @@
 import type { Rating } from '@common/search'
 import type { Tag, TagCategory } from '@common/tags'
+import type { Post, PostPage } from '@common/data/posts'
 import type { UploadResult } from '@common/upload/pipeline'
 import type { ImplicationRules } from './implications'
 import type { RecommendationRules } from './recommendations'
@@ -31,12 +32,6 @@ export type PreferencesInput = {
   encodePriority: EncodePriority
 }
 
-export type SignedInUser = {
-  id: string
-  username: string
-  email: string | null
-}
-
 export type AppStatus = {
   /**
    * False only if this build was made without the project's values, which the build
@@ -45,7 +40,6 @@ export type AppStatus = {
    * inside a Supabase call.
    */
   configured: boolean
-  user: SignedInUser | null
   /** Where a finished post can be opened. Compiled in, and shown on the settings screen. */
   siteUrl: string
   /** The project this build talks to. Shown on the settings screen; no key ever is. */
@@ -102,18 +96,22 @@ export type QueueState = {
 
 export type Outcome = { ok: true } | { ok: false; error: string }
 
-/** What "Remember me" kept from the last login, for the form to come back filled in. */
-export type SavedLogin = { email: string; password: string }
+/** A post the editor has open: the row, and its tags as the field wants them. */
+export type LoadedPost = { post: Post; tags: Tag[] }
+
+/** What `tags:apply` answers with — the counts are the point, not the ok. */
+export type ApplyTagOutcome =
+  | { ok: true; target: string; condition: string; added: number; already: number }
+  | { ok: false; error: string }
+
+/** A rename and a create both answer with the name as it was actually stored. */
+export type NamedOutcome = { ok: true; name: string } | { ok: false; error: string }
 
 export type PostAppApi = {
   getStatus: () => Promise<AppStatus>
   /** Writes and applies the compression preferences, answering with what was stored. */
   savePreferences: (preferences: PreferencesInput) => Promise<PreferencesInput>
   /** `remember` writes the credentials to the save file; false wipes what was there. */
-  logIn: (email: string, password: string, remember: boolean) => Promise<Outcome>
-  /** The remembered credentials, or null — the login form prefills itself from this. */
-  readSavedLogin: () => Promise<SavedLogin | null>
-  logOut: () => Promise<void>
   /** Opens the OS picker. Returns the paths chosen, empty if cancelled. */
   chooseFiles: () => Promise<string[]>
   stageFiles: (paths: string[]) => Promise<StageOutcome[]>
@@ -139,10 +137,38 @@ export type PostAppApi = {
   listRecommendations: () => Promise<RecommendationRules>
   saveRecommendations: (rules: RecommendationRules) => Promise<RecommendationRules>
   uploadPost: (request: UploadRequest) => Promise<UploadResult>
+  /**
+   * Browse the board. The same query grammar the website's search bar uses — one
+   * implementation, in `@common/data/search` — so a query means the same thing in both
+   * windows. `after` is the feed's cursor: strictly older than that post.
+   */
+  searchPosts: (options: { query?: string; after?: number }) => Promise<PostPage>
+  /** One post and its tags, for the editor. */
+  getPost: (id: number) => Promise<LoadedPost | null>
+  /** Rewrites a post's rating, source and whole tag set. */
+  savePost: (request: {
+    id: number
+    tags: string
+    rating: Rating
+    sourceUrl: string
+  }) => Promise<Outcome>
+  /** Removes the post row and both of its stored images. */
+  deletePost: (id: number) => Promise<Outcome>
+  /**
+   * A post's thumbnail as a `data:` URL. Fetched by main because the window's CSP allows
+   * `self` and `data:` and nothing else, which is a rule worth an IPC hop to keep.
+   */
+  postThumbnail: (fileName: string) => Promise<string>
+  createTag: (name: string, category: TagCategory) => Promise<NamedOutcome>
+  renameTag: (id: number, name: string) => Promise<NamedOutcome>
+  setTagCategory: (id: number, category: TagCategory) => Promise<Outcome>
+  deleteTag: (id: number) => Promise<Outcome>
+  /** Adds one tag to every post already carrying another. */
+  applyTagToTagged: (target: string, condition: string) => Promise<ApplyTagOutcome>
   /** Tells main what the queue holds, so closing the window can ask before dropping it. */
   reportQueue: (state: QueueState) => void
   openExternal: (url: string) => Promise<void>
-  /** Reveals `save.json` — session and preferences — in the OS file manager. */
+  /** Reveals `save.json` — preferences and tag rules — in the OS file manager. */
   openDataFolder: () => Promise<void>
 }
 

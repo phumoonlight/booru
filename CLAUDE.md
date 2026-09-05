@@ -3,11 +3,19 @@
 # Pubooru
 
 A booru-style image board (Danbooru is the reference): tag-centric gallery, multi-tag
-search with negation, post detail pages, uploads by any signed-in user. Fullstack
-Next.js 16 App Router + Supabase (Postgres, Storage, Auth), Tailwind v4, mobile-first.
+search with negation, post detail pages. Next.js 16 App Router + Supabase (Postgres,
+Storage), Tailwind v4, mobile-first.
 
-Three parts: the website in `src/`, an Electron uploader in `packages/desktop`, and
-`packages/common` — the code both of them compile.
+**The website is read-only and has no accounts.** Everything that changes the board —
+uploading, editing, deleting, the tag vocabulary — happens in the desktop app, which
+writes with a service-role key compiled into its own bundle. Most of the shape below
+follows from that one fact.
+
+| | | |
+|---|---|---|
+| `src/` | the website | Next.js on Vercel. Renders the gallery; reads only |
+| `packages/desktop` | the Electron app | Uploads, edits, deletes, manages tags |
+| `packages/common` | `@common/*` | What both compile: post shape, search grammar, write path, encoders |
 
 ## Replies
 
@@ -15,370 +23,367 @@ Three parts: the website in `src/`, an Electron uploader in `packages/desktop`, 
 - Omit all conversational preambles, narration, and filler phrases.
 - Do not explain code changes unless explicitly asked.
 - Link files (`[file.ts:42](src/file.ts#L42)`) instead of pasting code back.
-- Full length only for errors, failing output, security notes, and confirmations before
-  something destructive.
+
+**After making a change, say what changed in a sentence or two and stop.** No summary of
+the work, no per-file breakdown, no bold-headed sections, no restating reasoning that is
+already a comment in the code. The diff is visible; describing it back is the single
+biggest source of length here. "Done — `X` in [file.ts:42](src/file.ts#L42)" is a
+complete answer.
+
+Three things earn more room, and nothing else does: something failed, something is about
+to be destructive, or a question was asked. A question asked in one line does not get an
+essay either — answer it, then offer the detail rather than supplying it.
 
 ## Commands
 
 | | |
 |---|---|
 | `npm run dev` / `build` / `lint` | the only verification the repo has — there is no test runner |
-| `npm run db:push` / `db:push:dry` | apply migrations to the linked Supabase project |
-| `npm run db:list` / `db:reset` / `db:reset:remote` | migration status / local reset / reset the linked project |
-| `npm run desktop:dev` / `desktop:package` | the desktop uploader — window, or installer. Both need the four env values |
 | `npm run typecheck -w desktop` | the only check the Electron app has; the root `tsc` covers `src/` and `packages/common`, not the desktop |
-| `npm run bench:avif` | sweeps sharp's AVIF `effort` over `tests/static/` — sizes and encode times |
+| `npm run db:push` / `db:push:dry` | apply migrations to the linked project |
+| `npm run db:list` / `db:reset` / `db:reset:remote` | migration status / local reset / reset the linked project |
+| `npm run desktop:dev` / `desktop:package` | window, or installer. Both need the four env values |
+| `npm run bench:avif` | sweeps AVIF `effort` through both encoders over `tests/bench/example.jpg` |
 
-Ad-hoc checks (query parser, rating resolution) have been run as throwaway scripts in
-the scratchpad, never committed. `tests/` is not a suite and there is no runner — it is
-the AVIF bench and its sample image, kept only because the numbers behind `@common/imgcmp/`
-are worth being able to re-measure. Keep it that way unless asked for a test setup.
+`tests/` is not a suite and there is no runner — it is the AVIF bench and its sample
+image, kept because the numbers behind `@common/imgcmp/` are worth re-measuring. Ad-hoc
+checks belong in the scratchpad, uncommitted. Don't add a test setup unless asked.
 
 ## Git
 
-**Commit on `main`. Do not create a branch unless asked for one.** This is a solo repo
-with a linear history; a branch per change just adds a merge step the author then has
-to undo. When a branch is genuinely wanted, the author will say so.
+**Commit on `main`. Do not create a branch unless asked.** Solo repo, linear history; a
+branch per change adds a merge step the author then undoes.
 
 Commit only when asked. Never push unless asked.
 
-## Layering — do not cross these lines
+## Invariants
 
-- **Reads:** RSC → `src/lib/data/*` → Supabase server client (anon key, RLS enforced).
-  Never call Supabase from a page or component directly. The one read that isn't an RSC
-  is `loadMorePosts` in `lib/actions/search.ts` — the feed's next chunk, an action rather
-  than a route handler so `lib/data/search.ts` stays the only query surface. It takes no
-  `requireUser()`: it can return nothing a visitor couldn't reach by editing the URL.
-- **Writes:** `'use server'` actions in `src/lib/actions/*` → `requireUser()` first →
-  zod parse → `src/lib/data/*`. RLS (`auth.uid() is not null`) is the real guard;
-  `requireUser()` exists to fail loudly rather than update zero rows.
-- **Pure helpers** (`@common/search`, `@common/tags`, `@common/storage`, and the web's
-  own `lib/site.ts`) import nothing server-side, so client components can share them.
-- Query logic stays in `lib/data/` and out of actions/pages so the deferred public API
-  can reuse it verbatim (docs/future.md §2).
-- **Anything two front ends share lives in `packages/common` and takes its clients as
-  arguments.** `@common/data/shared` (post write path, `ensureTagIds`, tag-name search),
-  `@common/data/counters` and `@common/upload/pipeline` never call `createClient()` —
-  the caller passes `(supabase, admin)`. That is what lets `packages/desktop` run them:
-  `supabase/server.ts` imports `next/headers` and `admin.ts` is `server-only`, so a
-  module that builds its own client can only run inside Next. `lib/data/posts.ts` and
-  `tags.ts` wrap them with the request-scoped clients, so no call site in `src/` sees
-  the difference. Don't "simplify" a client parameter away.
-- Four Supabase clients, each with one job: `server.ts` (cookies, request-scoped),
-  `client.ts` (browser), `anon.ts` (cookie-less, for cacheable routes like the sitemap),
-  `admin.ts` (service role — never reaches the browser; storage writes/deletes,
-  `incrementPostView()` — the one row write an anonymous visitor is allowed to cause —
-  and the counter syncs in `@common/data/counters`, whose rows no user session may set).
+Break one of these and something fails silently. They are the reason for most of the
+structure further down.
 
-## The shared package (`packages/common`)
+1. **Never call Supabase from a page or component.** Reads go RSC → `src/lib/data/*` →
+   `@common/data/*`.
+2. **Never add a write to `src/`.** No table has an insert/update/delete policy, so the
+   anon key cannot write. Mutations belong in `packages/desktop`.
+3. **Nothing in `packages/common` builds a client** — the caller passes one. `admin.ts`
+   is `server-only`, so a module that built its own could not run in Electron.
+4. **Nothing in `packages/common` imports `next/*`, `server-only` or React**, reads the
+   environment, or hardcodes a limit. Electron's main process compiles these files.
+5. **Every write that moves tags must call `syncTagPostCounts`** with the tags it moved.
+   No trigger does it any more.
+6. **Preserve the unwind in `createPostWithTags()`** — there is no transaction; it
+   deletes the post it inserted if tagging fails.
+7. **A Tailwind class in `packages/common` needs an `@source` line** in
+   `packages/desktop/src/renderer/src/styles.css`, or it compiles to nothing in the
+   desktop build. Currently `CATEGORY_COLOR` (`@common/tags`) and `RATING_COLOR`
+   (`@common/search`). The failure can be *partial*, where a hex shared with another
+   scanned constant happens to survive.
+8. **`searchHref()` is the only thing that spells the listing's path.** Tag links,
+   facets and the feed all derive from it.
+9. **Re-measure with `npm run bench:avif` before changing a constant in
+   `@common/imgcmp/`.** Those numbers were measured, not chosen.
+10. **Bumping `packages/desktop/package.json` and writing
+    `packages/desktop/changelog/<version>.md` are one change.** About reads the version,
+    so drift makes the app lie about itself.
 
-Everything the website and the desktop uploader both compile: the upload pipeline, the
-post write path, the counters, both image encoders, and the pure helpers — the search
-grammar, the tag rules, the storage paths, `BooruClient`. See
+## Layering
+
+- **Reads:** RSC → `src/lib/data/*` → `@common/data/*` → the anon client. The one read
+  that isn't an RSC is `loadMorePosts` in `lib/actions/search.ts` — the feed's next
+  chunk, an action rather than a route handler so the data layer stays the only query
+  surface.
+- **The website's only write is `recordPostView`**, on `admin.ts`, because a visitor's
+  view still counts.
+- **Two Supabase clients:** `anon.ts` (cookie-less, every read) and `admin.ts` (service
+  role, `server-only`, the view counter and nothing else).
+- **Query logic lives in `lib/data/` and `@common/data/`**, never in actions or pages, so
+  a second caller can reuse it — which is how the desktop app browses the board.
+- **Pure helpers** (`@common/search`, `@common/tags`, `@common/storage`, the web's
+  `lib/site.ts`) import nothing server-side, so client components can share them.
+
+## `packages/common`
+
+The post write path, the search, the counters, both encoders, and the pure helpers. See
 [packages/common/README.md](packages/common/README.md).
 
-- **`@common/*` in both programs**, a tsconfig `paths` mapping to `packages/common/src`.
-  No build step, nothing published, and the files in there import each other by
-  `@common/…` too, so a module reads the same wherever it is compiled. The web gets the
-  mapping from the root `tsconfig.json` (Next reads `paths` itself); the desktop needs
-  it twice — `packages/desktop/tsconfig.json` for the type checker and a Vite alias in
-  `electron.vite.config.ts` for the bundler.
-- **It was the web's `src/`, reached through an `@web` alias** (and `@/` as well, only
-  because the Next app's files spell each other that way). Same one-definition property,
-  but it made the website's internal layout part of the desktop build, and "is this file
-  shared?" was a question you answered by grepping. Where the file sits answers it now.
-- **What may not go in there**: anything importing `next/*`, `server-only` or React —
-  Electron's main process compiles these files. No environment reads, and no limits:
-  ceilings belong to where the code runs (`src/lib/upload-limits.ts` is Vercel's,
-  `packages/desktop/src/main/limits.ts` is the app's) and `createPostFromImage` takes
-  them as an argument.
-- **Tailwind classes in here need an `@source` line.** Tailwind finds class names by
-  *reading files*, and the desktop renderer scans only its own tree, so `CATEGORY_COLOR`
-  in `@common/tags` and `RATING_COLOR` in `@common/search` are both named explicitly in
-  `packages/desktop/src/renderer/src/styles.css`. Put classes in another shared module and
-  it needs the same line, or the colour silently compiles to nothing — and the failure can
-  be *partial*: four of the six rating colours share a hex value with a category colour,
-  so the tags.ts line was generating them and only E4 and E5 came out plain.
+- **`@common/*` is a tsconfig `paths` mapping** to `packages/common/src`. No build step,
+  nothing published; files in there import each other by `@common/…` too, so a module
+  reads the same wherever it is compiled. The web gets the mapping from the root
+  `tsconfig.json`; the desktop needs it twice — `packages/desktop/tsconfig.json` for the
+  type checker and a Vite alias in `electron.vite.config.ts` for the bundler.
+- **One client argument, not two.** `@common/data/{posts,search,shared,tags,counters}`
+  and `@common/upload/pipeline` take a client and never build one. Don't simplify the
+  parameter away.
 
-## The desktop uploader (`packages/desktop`)
+## The website (`src/`)
 
-It is the upload page as a desktop app, and it exists because compression is CPU work a
-free serverless tier is bad at — see [packages/desktop/README.md](packages/desktop/README.md).
+- **Seven routes**, and none of them writes: `/`, `/posts`, `/posts/[id]`, `/tags`,
+  `/tags/[id]`, `robots.txt`, `sitemap.xml`. There is no `/upload`, `/login`, `/account`,
+  `/tags/manage` or `src/proxy.ts` (Next 16's `middleware.ts`) — see [History](#history).
+- **The gallery is `/posts`, not `/`.** `/` is a landing page: wordmark, search box,
+  emoji post count. `/?query=` redirects to the listing for old links.
+- **`?query=` is the only param the listing has** (`SEARCH_PARAM` in `@common/search`),
+  space-separated, `-tag` excludes. Ratings and the cursor ride in the same string as
+  `rating:explicit` and `start:900` metatags — nothing outside `splitQuery` and
+  `resolveRatings` needs to know they exist, and the search bar renders each as a
+  clearable chip. A saved query is therefore just that string.
+- **The listing is a feed with no page numbers.** `PostFeed` renders the server's
+  screenful, then appends chunks by cursor (`id < lastId`), never by offset, which slides
+  when an upload lands mid-scroll. Three things are load-bearing: "load more" is a real
+  `<a href="?query=… start:N">` with its click intercepted, so crawlers and a browser
+  without JS can still reach past the first chunk; each chunk keeps its own `<ul>` so a
+  landing chunk can't reflow rows already scrolled past; and `replaceState` keeps the
+  cursor in the URL so a refresh doesn't drop you at the top. Cards open in a **new tab**
+  for the same reason. `hasMore` is one row read past the chunk — nothing counts.
+- **`/tags/[id]` is a sample, not a listing** — ten posts, up to fifty, then a link into
+  the gallery. No search box, no facets, no cursor: browsing a tag to its end is what
+  `/posts?query=<tag>` is for.
+- **Nothing goes through the Next optimizer.** Both the grid thumb and the detail image
+  are `unoptimized`, so the stored file is served untouched — animation intact, no second
+  lossy pass. The grid used to be optimized and visibly softened thumbnails: Next scales
+  the requested quality by 50/80 for AVIF, so the default 75 became quality 47 at effort
+  3, for a resize its optimizer could not perform anyway (`withoutEnlargement`).
+- **Rating blur is a `data-blur-ratings` attribute on `<html>`**, set before first paint,
+  so the grid stays a plain server render (`lib/rating-blur.ts` + `globals.css`).
+- **Saved queries are `localStorage`**, so they need no account (`lib/saved-queries.ts`,
+  module store in `use-saved-queries.ts` — the sidebar renders twice and both copies must
+  agree). A row's identity is its tags, the query minus `start:`, which is what lets 💾
+  move a saved cursor without a second row or any selection state.
+- Pages fall back to `<SetupNotice />` when `isSupabaseConfigured()` is false, so the app
+  is browsable before the environment file has been filled in.
 
-- **It imports `packages/common`, it does not copy it, and it does not reach into the
-  website at all** — the pipeline, the write path, both compressors and the pure helpers
-  are one definition, compiled out of `../common/src` through `@common/*`. Nothing in
-  `src/` is on its import graph any more.
-- **Its limits are its own** (`src/main/limits.ts`, 50MB / 100MP). `MAX_FILE_SIZE` and
-  `MAX_PIXELS` in the web's `src/lib/upload-limits.ts` are Vercel's numbers and stay
-  Vercel's.
-- Session client writes the post row, service role does storage and the counters — the
-  same split as the web, spelled in `createPostFromImage`'s signature.
-- The renderer has no keys, no Node and no network: every capability is one
-  `ipcMain.handle` in `src/main/ipc.ts`, and the file's bytes are read on the main side.
-- **It is a good neighbour on purpose** (`main/cpu.ts`). libvips spreads one encode across
-  every core, so an upload used to pin a 16-core machine flat. Two settings now bound it:
-  `sharp.concurrency()` from `encodeThreads` (half the cores by default) and the process's
-  scheduling priority from `encodePriority` (below normal by default, `low`/`normal`
-  offered). Neither is `effort`: thread count, priority and compression settings are
-  independent, and the measured table in that file shows fewer threads coming out
-  *smaller* (fewer aom tiles), costing only wall time. Both are applied before the first
-  encode can start and re-applied on save, since both are process-wide — with one
-  exception noted there: a POSIX host won't let a niced-down process raise itself back,
-  so low → normal takes a restart. Windows, which this app is packaged for, will.
+## The desktop app (`packages/desktop`)
+
+The upload page as a desktop app, because compression is CPU work a free serverless tier
+is bad at — see [packages/desktop/README.md](packages/desktop/README.md). It imports
+`packages/common` and reaches into `src/` not at all.
+
+**Process split**
+
+- The renderer has no keys, no Node and no network. Every capability is one
+  `ipcMain.handle` in `src/main/ipc.ts`; the file's bytes are read on the main side.
+- **One Supabase client** (`main/supabase.ts`): the service role, from the key compiled
+  into the bundle. It signs in to nothing.
+- **Its limits are its own** (`main/limits.ts`, 50MB / 100MP) and now the only ones.
+- Renderer CSP is `img-src 'self' data:`. Browse's thumbnails cross the bridge as `data:`
+  URLs rather than being fetched by the page — a grid is not worth being the reason that
+  stops being true. `main/manage.ts` caches them by file name, which can never go stale.
+
+**Configuration**
+
 - **Which board it talks to is compiled in, not typed in.** `electron.vite.config.ts`
-  reads the repo's environment file at build time and `define`s the four values into the
-  main bundle — `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
-  `SUPABASE_SERVICE_ROLE_KEY` and `NEXT_PUBLIC_SITE_URL`, all four **required**, the
-  build throwing with the missing names rather than shipping an installer that reaches
-  nothing. The site URL is optional for the website (Vercel supplies a fallback) and is
-  not here: it is how a finished post gets opened. `main/config.ts` reads that one
-  `__BUILD_ENV__` and nothing else; only the main bundle gets the `define`, so no key is
-  ever compiled into a file the window loads. This replaced a four-box setup screen whose
-  cost was a service-role key in a plain file on every machine that ran the app, and an
-  installer nobody could tell the target of — `dropStoredConfig()` deletes that stored
-  copy on startup. A build is now made *for* a board and asks only for a login.
-- **`save.json` holds preferences, session, credentials and both sets of tag rules.** `main/save-file.ts` keeps
-  everything the app remembers in one readable file in the app's userData. It was three
-  files sealed with Electron's `safeStorage`; the encryption was dropped deliberately, in
-  exchange for a file that can be read, hand-edited and copied — the remembered password
-  and the session token are what plain text now costs, the service-role key having moved
-  into the bundle. `userData` is pinned in `main/index.ts` rather than defaulting to the
-  app's display name, so renaming the app doesn't move the settings — `pubooru-desktop`
-  packaged, `pubooru-desktop-dev` in a checkout, so `npm run desktop:dev` can't sign out
-  the copy you actually use (and the split lock lets both run at once). A file that won't
-  parse is treated as absent, costing a re-login and never a crash.
-- **The settings screen is a readout, two settings and a cache.** Connection shows the project
-  and board URLs the build carries — never the keys, which are neither editable nor worth
-  the risk on screen — and says so. Compression is the only editable part: encoder threads
-  as a `<Field />` you type into, priority as a `<Choice />` with no Edit step since the
-  options are already on screen. `main/preferences.ts` owns that `preferences` section and
-  applies as it writes, so a change takes the next image rather than the next launch. Tag
-  cache configures nothing — a day is a day — but a cache is the one thing that can be
-  wrong while everything else is right, so it says what it holds and how old it is, and
-  offers the button that drops it.
-  Unconfigured — which the build refuses to produce — the same screen is forced open and
-  names the four missing variables instead of letting a Supabase call fail opaquely.
-- **Five views, one of them always mounted** — plus one header item that is not a view.
-  `App.tsx` holds `'upload' | 'tags' | 'rules' | 'settings' | 'about'` and the
-  header switches those, with the login form in front until there is a session (and settings in front of
-  that only for a bundle built with no project). **Open site** is the item that is not a
-  view: it sits alone in the corner the web's wordmark occupies and opens the board in the
-  browser — `searchHref('')`, since that helper is the only thing allowed to spell the
-  listing's path — and is never drawn active, because it goes somewhere else. Upload is a
-  nav item like the rest, first in the right-hand row. About is the exception to the screen order, since "what
-  version is this" is a fair question before signing in, and it carries the versions
-  `app:status` reports: the renderer has no `process`, and a packaged app ships no
-  manifest it could read. Tags is not an exception — it reads the board, so it sits behind
-  the session with the queue, runs `listTags` from `@common/data/shared` (the web's /tags
-  page runs the same one) and opens a tag on the board rather than here, there being no
-  gallery in this window to show it in. Its list is **cached in a module-level `let`**
-  rather than in state, because the view is unmounted whenever something is in front of
-  it and every glance was re-reading every tag on the board: 🔄 by the title re-reads on
-  request (clearing main's copy first, or it would hand back the same list), the time of
-  the last read sits beside it, and `invalidateTags()` drops the copy
-  when an upload lands — the one moment it is certainly wrong. Tag rules sits behind the
-  session for a weaker reason: the rules are local, but every box on it is a `TagField`
-  and autocompletes against the board. The queue is **hidden, not unmounted**, when another
-  view is in front: glancing at About used to throw away a staged, half-tagged queue and
-  orphan an upload already in flight.
-- **Two kinds of tag rule, both the app's and neither the board's** — implications, which
-  are applied, and recommendations, which are only offered. One screen (`tag-rules.tsx`,
-  the `'rules'` view) holds both editors, because they are one habit with two answers to
-  "this tag is on the post, what else should be?", and two nav items for that would be two
-  places to look for a rule you half-remember writing. Both are `{ tag: [name, …] }` in
-  their own section of `save.json`, both are parsed by a `normalize…` that doubles as the
-  IPC validation, and both reach the window through one module-level store
-  (`renderer/src/rule-store.ts`, made twice) rather than through React state — the tag
-  field consults them on every keystroke, and a round trip per keystroke would be a file
-  read per keystroke.
-- **Implications** (`shared/implications.ts`, `main/implications.ts`). `white_bra → bra`: the specific tag is the one you remember to
-  type and the broad one is the one that gets forgotten, so the post never comes back for
-  the search anyone would run. There is no table for them — the rules live in the
-  `implications` section of `save.json` as `{ tag: [implied, …] }`, which is the shape
-  worth hand-editing once there are a hundred, and `normalizeRules` is both the parse of
-  that file and the validation for the IPC channel (stricter than a zod schema of the same
-  shape, since every name must match `TAG_PATTERN`). **A rule may imply a rating**, spelled
-  `rating:e2` in that same list — the board's own grammar for a rating written among tags,
-  which is why `asRating` is exported from `@common/search` rather than written twice. It
-  is a **floor**: `raisedRating` only ever lifts a row, so the tag whose rule fired last
-  can't talk an E5 post back down, and the queue applies it wherever tags change. The **tag field shows** what they
-  imply, under the box rather than in it — a tag nobody typed looked exactly like one that
-  was, and the box is the record of what was done by hand — and the implied line is
-  derived on every render, never state. `tagsToInput(value, rules)` is the one place the
-  two lists join, called at submit in `upload-queue.tsx`, so a post still gets both.
-  Expansion is transitive and cycle-safe. The Implications screen's own two boxes pass
-  `applyImplications={false}`: a name typed there is the name itself, not a post carrying
-  it.
-- **Recommendations** (`shared/recommendations.ts`, `main/recommendations.ts`).
-  `panties → black_panties bow_panties`: what *usually* goes with a tag, which is a
-  question only the person looking at the picture can answer, so these are chips under the
-  box with a `+` on them and nothing happens until one is pressed. **One level deep**,
-  unlike implications — a chain of maybes is how a three-tag post ends up under thirty
-  chips nobody reads, and pressing a chip brings its own recommendations on the next
-  render, so the chain is walked by choosing. Anything already typed or implied is left
-  out, a chip that adds nothing being a press wasted. No rating: a rating is not a chip you
-  press, and `TAG_PATTERN` drops the token on its colon for free.
-- **The tag index is cached on disk for a day** (`main/tag-cache.ts`), and both `tags:list`
-  and `tags:suggest` are served from it. Autocomplete was a query per pause in typing and
-  *three* round trips at that — the handler's `currentUser()` is `auth.getUser()` plus a
-  profiles read before the tags query it wanted — which over a set of twenty images is
-  hundreds of requests asking a question whose answer moves only when someone uploads. A
-  whole board of names and counts is a few hundred kilobytes, so it is read once and
-  prefix-matched in memory with the ordering the SQL used (`post_count desc`, ties by
-  name). Its own file, not `save.json`: that one is settings, hand-editable and worth
-  keeping small, while this is derived data that can be dropped at any moment. It *is*
-  dropped after every successful upload — a post coins the tag you are about to type
-  again — and by the settings screen's Clear cache button and the Tags screen's 🔄. A
-  failed refill keeps serving the stale copy rather than nothing, and a read that comes
-  back at `CACHE_LIMIT` is treated as "there may be more", so suggestions fall back to
-  querying.
-- **It resolves like a browser, not like the host** (`main/dns.ts`). Every open-web fetch
-  it makes is an address dragged out of a browser, and a browser on DoH will happily show
-  an image the machine's own resolver answers NXDOMAIN for. `configureHostResolver` names
-  Google and Cloudflare in `secure` mode — `automatic` only upgrades when the *system's*
-  provider speaks DoH, which is never true on the networks this is for. It reaches only
-  Chromium's stack (the drag downloads); Supabase goes over Node's `fetch` and the OS
-  resolver, which is what makes a DoH-only setting safe to make.
-- **Closing the window asks, if the queue holds anything** (`main/queue-guard.ts`). A
-  staged row is hand-typed tags that exist nowhere else, and an uploaded one is the only
-  copy of the post number just made, so both count and only an empty queue closes in
-  silence. The renderer pushes its counts on every change rather than main asking at
-  close time: a `close` handler vetoes synchronously or not at all, so it cancels the
-  close outright and re-issues it as `destroy()` if the answer is yes.
-- **`signOut({ scope: 'local' })`, here and in `lib/actions/auth.ts`.** The default is
-  `'global'`, which revokes every refresh token the account holds — logging out of the
-  uploader signed out the browser too, and the other way round. Logging out of one place
-  means one place.
-- **Releases are a file each in `packages/desktop/changelog/`, named for the version.**
-  Bumping `package.json` and writing that file are the same change — About reads the
-  version, so drift makes the app lie about itself. Keep entries **short**: a heading
-  line, then `### Added` / `### Changed` / `### Fixed` bullets of one or two lines each,
-  written as what a user of the app would notice. The reasoning belongs in the commit and
-  beside the code, not here — a changelog nobody can skim is one nobody reads.
+  reads the repo's environment file at build time and `define`s four values into the main
+  bundle — `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+  `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SITE_URL` — all **required**, the build
+  throwing with the missing names rather than shipping an installer that reaches nothing.
+  The site URL is optional for the website (Vercel supplies a fallback) and not here: it
+  is how a finished post gets opened. `main/config.ts` reads `__BUILD_ENV__` and nothing
+  else; only the main bundle gets the `define`, so no key is compiled into a file the
+  window loads.
+- **`save.json` holds preferences and both sets of tag rules, and nothing else**
+  (`main/save-file.ts`). Plain readable text on purpose: it can be inspected, hand-edited
+  and copied, and there is nothing secret left in it. `userData` is pinned in
+  `main/index.ts` rather than defaulting to the app's display name, so renaming the app
+  doesn't move the settings — `pubooru-desktop` packaged, `pubooru-desktop-dev` in a
+  checkout, so `desktop:dev` runs from its own rules and both can be open at once. A file
+  that won't parse is treated as absent, costing the settings and never a crash.
+- **The settings screen is a readout, two settings and a cache.** Connection shows the
+  project and board URLs, never the keys. Compression is the only editable part;
+  `main/preferences.ts` applies as it writes, so a change takes the next image rather than
+  the next launch. Tag cache configures nothing, but a cache is the one thing that can be
+  wrong while everything else is right, so it says what it holds and how old it is.
+
+**CPU manners** (`main/cpu.ts`)
+
+libvips spreads one encode across every core, so an upload used to pin a 16-core machine
+flat. Two settings bound it: `sharp.concurrency()` from `encodeThreads` (half the cores
+by default) and scheduling priority from `encodePriority` (below normal by default).
+Neither is `effort` — thread count, priority and compression are independent, and the
+measured table there shows fewer threads coming out *smaller* (fewer aom tiles), costing
+only wall time. Both are process-wide, applied before the first encode and re-applied on
+save. A POSIX host won't let a niced-down process raise itself back, so low → normal
+takes a restart; Windows, which this is packaged for, will.
+
+**Views** — `App.tsx` holds `'upload' | 'browse' | 'tags' | 'rules' | 'settings' |
+'about'`, with settings forced open only for a bundle built with no project. Nothing sits
+behind a session, because there is none.
+
+- **Open site** is the header item that is not a view: it opens the board in the browser
+  via `searchHref('')` and is never drawn active, because it goes somewhere else.
+- **The queue is hidden, not unmounted**, when another view is in front. Glancing at
+  About used to throw away a staged, half-tagged queue and orphan an upload in flight.
+- **Browse** is the website's gallery and edit panel, moved here. It runs
+  `@common/data/search`, so a query means the same thing in both windows. Its query lives
+  in a module-level `let` — coming back to an empty box after finding a post is a search
+  typed twice.
+- **Tags** lists and manages: click a row for rename / recategorize / delete, with New tag
+  and Apply by tag above the list, those being the two operations not about a row you are
+  pointing at. Each drops the cached index. Its list is cached in a module-level `let`
+  because the view unmounts whenever something is in front of it; 🔄 re-reads (clearing
+  main's copy first, or it hands back the same list) and `invalidateTags()` drops it when
+  an upload or edit lands.
+- **About** is the exception to the screen order — "what version is this" is fair to ask
+  of a copy that cannot reach its board. It carries what `app:status` reports, since the
+  renderer has no `process` and a packaged app ships no manifest.
+
+**Tag rules** — two kinds, both the app's and neither the board's, on one screen
+(`tag-rules.tsx`), because they are one habit with two answers to "this tag is on the
+post, what else should be?". Both are `{ tag: [name, …] }` sections of `save.json`, both
+parsed by a `normalize…` that doubles as the IPC validation (stricter than a zod schema
+of the same shape, since every name must match `TAG_PATTERN`), and both reach the window
+through one module-level store (`renderer/src/rule-store.ts`) rather than React state —
+the tag field consults them on every keystroke, and a round trip per keystroke would be a
+file read per keystroke.
+
+- **Implications are applied.** `white_bra → bra`: the specific tag is the one you
+  remember to type, the broad one is the one that gets forgotten, so the post never comes
+  back for the search anyone would run. Expansion is transitive and cycle-safe. **A rule
+  may imply a rating**, spelled `rating:explicit` in the same list — the board's own
+  grammar, which is why `asRating` is exported rather than written twice. It is a
+  **floor**: `raisedRating` only lifts a row, so a later rule can't talk an explicit post
+  back down. The tag field shows what they imply *under* the box, never in it — the box
+  is the record of what was typed by hand — and the implied line is derived every render,
+  never state. `tagsToInput(value, rules)` is the one place the two lists join. The rules
+  screen's own boxes pass `applyImplications={false}`: a name typed there is the name
+  itself, not a post carrying it.
+- **Recommendations are only offered.** `panties → black_panties bow_panties`: what
+  *usually* goes with a tag is a question only the person looking at the picture can
+  answer, so they are chips with a `+` and nothing happens until one is pressed. **One
+  level deep**, unlike implications — a chain of maybes is how a three-tag post ends up
+  under thirty chips nobody reads; pressing a chip brings its own on the next render, so
+  the chain is walked by choosing. Anything already typed or implied is left out. No
+  ratings: a rating is not a chip you press, and `TAG_PATTERN` drops the token on its
+  colon for free.
+
+**Tag index cache** (`main/tag-cache.ts`) — the board's tags on disk for a day, serving
+both `tags:list` and `tags:suggest`. Autocomplete was a query per pause in typing, which
+over twenty images is hundreds of requests asking a question whose answer moves only when
+someone uploads. A whole board of names and counts is a few hundred kilobytes, so it is
+read once and prefix-matched in memory with the ordering the SQL used (`post_count desc`,
+ties by name). Its own file, not `save.json`: that one is settings, this is derived data
+droppable at any moment. It *is* dropped after every upload and every tag edit, by the
+settings screen's Clear cache and by the Tags screen's 🔄. A failed refill keeps serving
+the stale copy rather than nothing, and a read that comes back at `CACHE_LIMIT` is
+treated as "there may be more", so suggestions fall back to querying.
+
+**DNS** (`main/dns.ts`) — it resolves like a browser, not like the host. Every open-web
+fetch it makes is an address dragged out of a browser, and a browser on DoH will happily
+show an image the machine's own resolver answers NXDOMAIN for. `configureHostResolver`
+names Google and Cloudflare in `secure` mode; `automatic` only upgrades when the
+*system's* provider speaks DoH, which is never true on the networks this is for. It
+reaches only Chromium's stack (the drag downloads) — Supabase goes over Node's `fetch`
+and the OS resolver, which is what makes a DoH-only setting safe.
+
+**Closing asks, if the queue holds anything** (`main/queue-guard.ts`). A staged row is
+hand-typed tags that exist nowhere else; an uploaded one is the only copy of the post
+number just made. The renderer pushes its counts on every change rather than main asking
+at close time: a `close` handler vetoes synchronously or not at all, so it cancels the
+close and re-issues it as `destroy()` if the answer is yes.
+
+**Changelog** — a file per version in `packages/desktop/changelog/`. Keep entries short:
+a heading, then `### Added` / `### Changed` / `### Fixed` bullets of a line or two,
+written as what a user would notice. Reasoning belongs in the commit and beside the code.
 
 ## Database
 
-- **The schema is six files: storage, then one per table.** `20260826090000_storage_buckets.sql`,
-  then `profiles` → `posts` → `tags` → `post_tags` → `rating_counts` in foreign-key
-  order. Each table's file holds its columns, indexes **and** RLS policies, so nothing
-  about a table is spread across migrations. The eighteen migrations from the build were
-  squashed into these before the first deployment. Schema changes from here are
-  **always** a new timestamped file, never a dashboard edit and never an edit to the
-  squashed six once they have been pushed anywhere real.
-- SQL functions holding query logic are gone: search, the post writes, the view counter
-  and the two counter triggers all moved into TypeScript, because a plpgsql body needs a
-  migration to edit and reports one opaque error, from inside a statement that was about
-  something else. What remains in SQL is `handle_new_user()`, which fires on
-  `auth.users`, and `EXECUTE` on it is revoked from `anon` and `authenticated` so nothing
-  definer-rights is reachable over `/rest/v1/rpc`. Don't add RPCs back without a reason
-  PostgREST genuinely can't meet.
-- Denormalized counters (`tags.post_count`, `rating_counts.post_count`) are maintained by
-  `@common/data/counters`, not by triggers. They **recompute** — PostgREST can't increment,
-  and an increment that loses a race is wrong for good — so every write must call
-  `syncTagPostCounts` / `syncRatingCounts` with the tags and ratings it moved. They write
-  on the service role (`rating_counts` has no write policy at all — the guard is the
-  action's `requireUser()`), and they log rather than throw: the post write has already
-  landed by then.
-- `createPostWithTags()` has no transaction — it deletes the post it just inserted if
-  tagging fails, via `deletePostRow()` (which reads the post's tag links before the
-  cascade eats them, so the counts come back down). Preserve that unwind if you touch
-  the write path.
+Full reference: [docs/database-schema.md](docs/database-schema.md).
 
-## Things the code decided that are easy to get wrong
+- **Four migrations: storage, then one per table** — `20260826090000_storage_buckets.sql`,
+  then `posts` → `tags` → `post_tags` in foreign-key order. Each table's file holds its
+  columns, indexes **and** RLS policies. Schema changes from here are **always** a new
+  timestamped file, never a dashboard edit and never an edit to the squashed four once
+  pushed anywhere real.
+- **`supabase/seed.sql` is data, not schema.** It runs on `db:reset` and
+  `db:reset:remote`, never on `db:push`, so nothing in it may be something the app needs
+  to exist. Tags only: a seeded post would name storage objects the file has no bytes for.
+- **No SQL functions and no triggers.** Search, the post writes, the view counter and the
+  counters all moved to TypeScript — a plpgsql body needs a migration to edit and reports
+  one opaque error from inside a statement that was about something else. Don't add RPCs
+  back without a reason PostgREST genuinely can't meet.
+- **One denormalized counter**, `tags.post_count`, in `@common/data/counters`. It
+  **recomputes** — PostgREST can't increment, and an increment that loses a race is wrong
+  for good. It logs rather than throws: the post write has already landed by then.
+- **RLS is select-only on every table.** Writes bypass it on the service role.
 
-- **`src/proxy.ts`, not `middleware.ts`** — Next 16 renamed the convention. It only
-  refreshes the session; it guards no routes. Pages check the session themselves.
-- **Nothing on the web links to `/upload` any more.** The page and the action still work
-  and the route still answers, but the header's link is gone: compression is seconds of
-  CPU, Vercel's free tier bills that by the second and kills the function at ten, so an
-  entry point on every page advertises the one thing this deployment does badly. Uploading
-  is the desktop app's job. Don't put the link back without a runtime that can hold it.
-- **The gallery is `/posts`, not `/`** — `/` is a landing page (wordmark, search box,
-  emoji post count). `searchHref()` in `@common/search` is the only place that spells the
-  listing's path, so tag links, facets and the feed's own links all derive from it;
-  `/?query=` redirects there for old links.
-- **`?query=` is the only param the listing has** (`SEARCH_PARAM` in `@common/search`),
-  space-separated, `-tag` excludes. Ratings and the feed's cursor ride in the same
-  string as `rating:e3` and `start:900` metatags — nothing outside `splitQuery` and
-  `resolveRatings` needs to know they exist, and the search bar renders every one of
-  them as a chip you can clear. A saved query is therefore just that string.
-- **The listing is a feed, and there are no page numbers.** `PostFeed` renders the
-  server's screenful, then appends chunks by cursor (`id < lastId`) — never by offset,
-  which slides when an upload lands mid-scroll. Three things about it are load-bearing:
-  the "load more" control is a real `<a href="?query=… start:N">` with its click
-  intercepted, because a feed that renders no link puts everything past the first chunk
-  out of reach of crawlers and of a browser whose JS hasn't arrived; each chunk keeps its
-  own `<ul>` so a landing chunk can't reflow rows you already scrolled past; and
-  `replaceState` keeps the cursor in the URL so a refresh doesn't drop you at the top.
-  Cards open in a **new tab** for the same reason — following one in place threw the
-  loaded chunks away. Nothing counts rows any more: `hasMore` is one row read past the
-  chunk, and `count: 'exact'` scanned the filtered set on every read to feed a page
-  number that no longer exists.
-- **`/tags/[id]` is a sample, not a listing** — ten posts, up to fifty, then a link into
-  the gallery. It has no search box, no facets and no cursor on purpose: browsing a tag
-  to its end is what `/posts?query=<tag>` is for, and that page has all three.
-- **Rating scale is `general, e1, e2, e3, e4, e5`.** `RESTRICTED_RATINGS` (e3–e5) means
-  "kept out of sitemap.xml and search results" only — nothing is hidden from a visitor.
-  Column is free-form text — no check constraint, so a new tier is a code change only.
-- **Buckets are `posts` and `post-thumbnails`**, both AVIF-era: thumbnails are lossy AVIF
-  (400px tall, width capped at 800 for panoramas, `mitchell` kernel — the grid scales by
-  row height, so height is the bound that matters), the post image is lossless AVIF only
-  when it beats the uploaded bytes, otherwise the original byte-for-byte. Paths derive
-  from md5, never stored.
-- **The stored post image is bounded to 2048 on both sides** (`POST_MAX_DIMENSION` in
-  `@common/imgcmp/for-post`). Above it the lossless AVIF is not competing on bytes any
-  more — it is the only version inside the cap, so it is kept however it measures, and
-  the row records the *stored* size rather than the uploaded one. An animation is the
-  one thing that can still exceed it: the encoder declines rather than flatten it to
-  frame 1, so an oversized GIF is stored at its uploaded size.
+## Ratings
+
+- **Stored as one letter, written as a word.** `posts.rating` holds `g`, `s`, `q` or `e`
+  — that is `RATINGS`, and what `Rating` means everywhere in the code, in `data-rating`,
+  `data-blur-ratings` and `blurred_ratings`. A query spells it out (`rating:explicit`);
+  `RATING_NAME` is the only translation; `RATING_LABEL` is the third form and the only one
+  a person reads.
+- **Reading is loose, writing is strict.** `asRating` accepts `rating:explicit` *and*
+  `rating:e`, because someone who has seen the column will type the letter.
+  `ratingToken` only ever writes the name, so every link, chip and saved query the app
+  produces has one spelling and a hand-typed URL still works.
+- **`RESTRICTED_RATINGS` (`q`, `e`) is a search-engine policy**, not a viewer one — out of
+  `sitemap.xml`, `noindex` on the page. Nothing is hidden from a visitor.
+- The column is free-form text with no check constraint, so a new tier is a code change
+  only.
+
+## Images
+
+- **Buckets are `posts` and `post-thumbnails`.** Paths derive from `posts.file_name`
+  (the md5 of the uploaded bytes), never stored.
+- **Both encoders are lossy AVIF at quality 50** (`@common/imgcmp/`). The thumbnail is
+  384px tall, width capped at 768 for panoramas, `mitchell` kernel — the grid scales by
+  row height, so height is the bound that matters. `THUMB_MAX_HEIGHT` and the grid's
+  `MAX_ROW × --row-h` are one decision and must move together. The post image is kept only when it
+  beats the uploaded bytes, otherwise the original is stored byte-for-byte. Lossless was
+  measured and rejected on size (3.6MB from a 1.9MB JPEG).
+- **The stored post image is bounded to 2048 on both sides** (`POST_MAX_DIMENSION`).
+  Above it the AVIF is not competing on bytes — it is the only version inside the cap, so
+  it is kept however it measures, and the row records the *stored* size, not the uploaded
+  one. An animation is the one thing that can still exceed it: the encoder declines rather
+  than flatten it to frame 1.
 - **MD5 is the dedup key on purpose** — collision resistance is not what it's for.
-- **The two encoders live in `@common/imgcmp/`, not in the upload action.** `for-post.ts` and
-  `for-thumbnail.ts` take a buffer and hand back a candidate, so the upload action, the
-  pipeline and the desktop app share one encode. The constants in there are measured, not
-  chosen — re-measure with `npm run bench:avif` before changing one.
-- **Nothing goes through the Next optimizer.** Both the grid thumb and the detail image
-  are `unoptimized`, so the stored file is served untouched (animation intact, no
-  re-encode). The grid used to be optimized and it was visibly softening thumbnails:
-  Next scales the requested quality by 50/80 for AVIF, so the default 75 became an AVIF
-  quality of 47 at effort 3 — a second lossy pass over an already-lossy thumbnail, for
-  a resize it could not perform anyway (its optimizer sets `withoutEnlargement`).
-- `view_count` is bumped only by the `recordPostView` action from the browser, never on a
-  read path — prefetches, `generateMetadata` and crawlers must not inflate it.
-- Rating blur is a `data-blur-ratings` attribute on `<html>` set before first paint, so
-  the grid stays a plain server render (`lib/rating-blur.ts` + `globals.css`).
-- Saved queries are `localStorage` too, so they need no account (`lib/saved-queries.ts`,
-  module store in `use-saved-queries.ts` — the sidebar renders twice and both copies have
-  to agree). A row's identity is its tags, the query minus `start:`, which is what lets
-  💾 move a saved cursor without a second row and without any selection state.
-- `MAX_FILE_SIZE` lives in `lib/upload-limits.ts` because three layers must agree:
-  the drop zone, the upload action, and `serverActions.bodySizeLimit` in `next.config.ts`.
-- Pages fall back to `<SetupNotice />` when `isSupabaseConfigured()` is false, so the app
-  is browsable before `.env.local` has been filled in.
+- `view_count` is bumped only by `recordPostView` from the browser, never on a read path,
+  so prefetches, `generateMetadata` and crawlers don't inflate it.
 
 ## Style
 
-- Prettier (`.prettierrc`): no semicolons, single quotes, 100 cols, 2 spaces. Run nothing —
-  match the surrounding file.
-- Comments explain *why*, in prose, and are common in this codebase — the measured
-  trade-off, the failure that motivated the choice. Match that register; don't narrate
-  what the code already says.
+- Prettier (`.prettierrc`): no semicolons, single quotes, 100 cols, 2 spaces. Run
+  nothing — match the surrounding file.
+- Comments explain *why*, in prose, and are common here — the measured trade-off, the
+  failure that motivated the choice. Match that register; don't narrate what the code
+  already says.
 - No component library. Plain Tailwind against the CSS variables in `globals.css`
   (`background`, `surface`, `border`, `muted`, `accent`). Dark theme only.
 - Mobile-first: design at 375px, scale up with `sm:`/`md:`/`lg:`. 44px tap targets.
-- No role tier exists — any signed-in account can upload, edit and delete. Public signup
-  therefore needs a privilege tier first (docs/future.md §1).
+
+## History
+
+Everything here is gone. Recorded so a change is not proposed twice; none of it is
+current.
+
+| removed | why |
+|---|---|
+| Supabase Auth, `profiles`, `handle_new_user()`, `src/proxy.ts`, the cookie-carrying and browser clients | Every account was one person's, nothing displayed who uploaded what, and the desktop bundle already carried the service-role key — the login guarded a door it was not the lock for |
+| `posts.uploader_id`, all write RLS policies | Went with the accounts |
+| `/upload`, `/login`, `/account`, `/tags/manage`, `src/lib/upload-limits.ts` | Uploading was already the desktop app's job; the rest went with the accounts |
+| The `(supabase, admin)` two-client parameter | With no session, a write is a write |
+| `rating_counts` and its three triggers | A table, a policy and a recount per write, for a number beside four fixed filters |
+| `search_posts`, `create_post_with_tags`, `update_post_with_tags`, `increment_post_view` | plpgsql is hard to edit and reports opaquely |
+| `docs/future.md` | A roadmap that had to be kept in step with a build that outgrew it |
+| The `@web` alias into the website's `src/` | Made the site's internal layout part of the desktop build; where a file sits answers "is this shared?" now |
+
+Two rewrites were run by hand against the live project rather than as migrations, the
+columns being free-form: the rating scale (`general, e1..e5` → four names → the letters)
+and `posts.md5` → `posts.file_name`. Saved queries and desktop tag rules holding an old
+spelling were left to rot on purpose — `asRating` returns null for one, so it degrades to
+a tag that matches nothing.
+
+There are no accounts and no role tier: anyone with a build of the desktop app can do
+everything, everyone else can read. Public accounts would mean re-adding Supabase Auth, a
+`profiles` table and write policies, in that order; git has all three.
 
 ## Docs
 
-`architecture.md`, `database-schema.md` and `future.md`, plus `design/` (one screenshot
-of the interface as drawn). Each package has a README of its own —
-`packages/common` for what is shared and why, `packages/desktop` for the app. There is no status page and no runbook: a live project needs
-`.env.local` and `npm run db:push`, and the reasoning behind a decision lives in this
-file and in the comment beside the code it explains.
+[docs/architecture.md](docs/architecture.md) and
+[docs/database-schema.md](docs/database-schema.md), plus `design/` (one screenshot of the
+interface as drawn). Each package has a README of its own. There is no roadmap, no status
+page and no runbook: a live project needs the environment file and `npm run db:push`, and
+the reasoning behind a decision lives in this file and beside the code it explains.
 
-They are written from the shape of the build and lag behind it — the relics that had
-piled up (shadcn/ui, WebP thumbs, `originals`/`thumbnails`, the old
-`general/sensitive/questionable/explicit` scale, `?tags=`) have been cleared out, but
-more will accumulate. When they disagree with `src/` or `supabase/migrations/`, the code
-wins — and fix the doc line you tripped over.
+Docs lag the build. When they disagree with `src/` or `supabase/migrations/`, the code
+wins — and fix the line you tripped over.

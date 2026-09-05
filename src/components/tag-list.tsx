@@ -14,7 +14,8 @@ export function FacetActions({
   plus,
   minus,
 }: {
-  count: number
+  /** Omitted by the rating facet, which has no counter table behind it — see rating-list. */
+  count?: number
   plus: { href: string; label: string; on: boolean }
   minus: { href: string; label: string; on: boolean }
 }) {
@@ -26,12 +27,25 @@ export function FacetActions({
       on ? '' : 'brightness-150 grayscale hover:brightness-100 hover:grayscale-0'
     }`
 
+  // With no count to sit behind, the buttons have nothing to reveal themselves from
+  // under, so they are simply always on screen rather than waiting for a hover that
+  // would leave the row looking empty until it came.
+  const bare = count === undefined
+
   return (
     <span className="pointer-fine:min-h-7 relative flex min-h-9 items-center justify-end">
-      <span className="pointer-coarse:opacity-100 text-xs tabular-nums text-muted transition-opacity group-focus-within:opacity-0 group-hover:opacity-0">
-        {count}
-      </span>
-      <span className="pointer-coarse:relative pointer-coarse:ml-1 pointer-coarse:opacity-100 absolute right-0 flex items-center opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+      {!bare && (
+        <span className="pointer-coarse:opacity-100 text-xs tabular-nums text-muted transition-opacity group-focus-within:opacity-0 group-hover:opacity-0">
+          {count}
+        </span>
+      )}
+      <span
+        className={
+          bare
+            ? 'ml-1 flex items-center'
+            : 'pointer-coarse:relative pointer-coarse:ml-1 pointer-coarse:opacity-100 absolute right-0 flex items-center opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100'
+        }
+      >
         <Link href={plus.href} aria-label={plus.label} className={button(plus.on)}>
           ➕
           <NavProgress />

@@ -22,11 +22,12 @@ import { startOf } from '@common/search'
  */
 const ROW = 'flex flex-wrap gap-1 [--row-h:15rem] sm:[--row-h:17.5rem] lg:[--row-h:20rem]'
 const MIN_ROW = 0.75
-// 1.25 × 20rem is 400px on desktop — exactly THUMB_MAX_HEIGHT, so a row never upscales
-// past the pixels the thumbnail actually has.
-const MAX_ROW = 1.25
+// 1.2 × 20rem is 384px on desktop — exactly THUMB_MAX_HEIGHT, so a row never upscales
+// past the pixels the thumbnail actually has. The two are one decision: raising either
+// without the other either blurs the grid or stores bytes nobody sees.
+const MAX_ROW = 1.2
 
-/** Thumbnails are bounded to 800×400 (`@common/imgcmp/for-thumbnail`), so a panorama's
+/** Thumbnails are bounded to 768×384 (`@common/imgcmp/for-thumbnail`), so a panorama's
     thumb is at most 2:1 however wide the post is. Laying it out at the post's ratio
     would reserve width the image can't fill. */
 const MAX_RATIO = 2

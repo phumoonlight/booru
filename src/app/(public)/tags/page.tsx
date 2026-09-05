@@ -2,7 +2,6 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { getTags } from '@/lib/data/tags'
 import { TAG_CATEGORIES, type TagCategory } from '@common/tags'
-import { getCurrentProfile } from '@/lib/data/profiles'
 import { CATEGORY_COLOR, CATEGORY_LABEL } from '@/components/tag-list'
 import { SearchHeader } from '@/components/search-header'
 import { NavProgress } from '@/components/nav-progress'
@@ -29,7 +28,7 @@ export default async function TagsPage() {
     )
   }
 
-  const [tags, profile] = await Promise.all([getTags(500), getCurrentProfile()])
+  const tags = await getTags(500)
 
   // A–Z within each category, like the facets and the manage screen. The read above
   // orders by post_count and that is what decides which tags the cap lets through, but
@@ -51,15 +50,8 @@ export default async function TagsPage() {
 
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg font-bold tracking-tight">Tags</h1>
-        {profile && (
-          <Link
-            href="/tags/manage"
-            title="Manage tags"
-            className="text-sm text-muted hover:text-foreground"
-          >
-            ⚙️ Manage
-          </Link>
-        )}
+        {/* No manage link: renaming, recategorizing and deleting tags are the desktop
+            app's, along with every other write. */}
       </div>
 
       {groups.length === 0 ? (

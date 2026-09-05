@@ -100,8 +100,8 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
         )}
 
         <div className="flex">
-          {/* The folder is a path nobody would guess. The file holds the session and the
-              two settings below it — no keys, not any more. */}
+          {/* The folder is a path nobody would guess. The file holds the two settings
+              below and the tag rules — no keys, and nothing secret at all now. */}
           <button
             type="button"
             onClick={() => void window.api.openDataFolder()}

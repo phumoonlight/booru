@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, shell } from 'electron'
 import { registerIpc } from './ipc'
 import { cleanupDownloads } from './download'
-import { dropStoredConfig } from './config'
+import { dropStoredConfig, dropStoredLogin } from './config'
 import { configureDns } from './dns'
 import { confirmClose, queueIsWorthKeeping } from './queue-guard'
 import { applyPreferences, loadPreferences } from './preferences'
@@ -10,7 +10,7 @@ import { applyPreferences, loadPreferences } from './preferences'
 /**
  * Pubooru's uploader, as a desktop window.
  *
- * It exists for one reason: the upload path spends most of its time in lossless AVIF and
+ * It exists for one reason: the upload path spends most of its time in AVIF encoding and
  * a lossy AVIF thumbnail, and that is CPU work a free serverless tier is billed for by
  * the second and killed at ten of them. Running it here, the 4MB/20MP ceilings the web
  * carries for Vercel's sake go away (`main/limits.ts`), and the images and rows still
@@ -20,10 +20,10 @@ import { applyPreferences, loadPreferences } from './preferences'
 
 // Where the save file lives. Left alone this is the app's display name, which moves
 // whenever the name on the window does, so it is spelled out instead. A checkout gets
-// its own folder so a dev window and an installed copy keep their own session and
-// preferences — testing the login flow should not sign out the app you actually use. It
-// goes first because the single-instance lock below is a file inside this folder, which
-// is also what lets a dev window and an installed one run at the same time.
+// its own folder so a dev window and an installed copy keep their own preferences and
+// tag rules — trying a rule out should not rewrite the set the app you actually use is
+// working from. It goes first because the single-instance lock below is a file inside
+// this folder, which is also what lets a dev window and an installed one run at once.
 app.setPath(
   'userData',
   join(app.getPath('appData'), app.isPackaged ? 'pubooru-desktop' : 'pubooru-desktop-dev')
@@ -126,6 +126,7 @@ void app.whenReady().then(() => {
   // An older version kept the project's keys in the save file. This build reads them
   // from its own bundle, so that copy is deleted rather than left lying about.
   dropStoredConfig()
+  dropStoredLogin()
   // Before the first drag can be fetched: images come in as addresses from a browser
   // that may well resolve them over a DNS this machine does not use (`main/dns.ts`).
   configureDns()

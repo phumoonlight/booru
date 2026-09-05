@@ -1,13 +1,14 @@
 'use server'
 
-import { searchPosts, searchTags, POSTS_PER_PAGE } from '@/lib/data/search'
+import { searchPosts, POSTS_PER_PAGE } from '@/lib/data/search'
+import { searchTags } from '@/lib/data/tags'
 import type { Post } from '@/lib/data/posts'
 import type { Tag } from '@common/tags'
 
 /**
- * Autocomplete source for the client search bar. Deliberately a server action
- * rather than a route handler — the public API is deferred (docs/future.md), and
- * lib/data/search.ts stays reusable when it arrives.
+ * Autocomplete source for the client search bar. Deliberately a server action rather
+ * than a route handler, so the query stays in the data layer where a second caller can
+ * reuse it — which is what the desktop app does with the same function.
  */
 export async function suggestTags(prefix: string): Promise<Tag[]> {
   return searchTags(prefix, 8)

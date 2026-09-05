@@ -27,8 +27,8 @@ import { app } from 'electron'
  * network service, which here means the image downloads in `main/download.ts` and
  * whatever the window itself loads. The Supabase clients go through the global `fetch`,
  * which in the main process is Node's own and keeps using the OS resolver. So a network
- * that blocked both providers below would cost browser drags, not the ability to sign in
- * or upload — and picked files, the ordinary path, never resolve anything at all.
+ * that blocked both providers below would cost browser drags, not the ability to upload
+ * — and picked files, the ordinary path, never resolve anything at all.
  *
  * Two providers because one is a single point of failure, and these two are the ones a
  * browser is most likely to already be using.

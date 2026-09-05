@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react'
-import { CATEGORY_COLOR, CATEGORY_LABEL, TAG_CATEGORIES, type Tag } from '@common/tags'
+import {
+  CATEGORY_COLOR,
+  CATEGORY_LABEL,
+  TAG_CATEGORIES,
+  type Tag,
+  type TagCategory,
+} from '@common/tags'
 import { tagLabel } from '@common/search'
 
 /**
@@ -34,10 +40,17 @@ export function invalidateTags(): void {
  * nowhere to simply look. Sorted by label rather than by count for the same reason the
  * web page is: you arrive holding a name.
  *
- * A tag opens on the board rather than in this window. There is no gallery here to show
- * it in, and the app already sends finished posts to the browser the same way.
+ * Clicking a tag opens its editor: rename it, recategorize it, delete it, or open it on
+ * the board. Those were the website's /tags/manage screen until the board lost its
+ * login — the site holds an anon key and the schema has no write policy for it, so the
+ * vocabulary is managed here or nowhere. The two operations that are not about one
+ * existing tag — creating a name up front, and applying a tag to everything already
+ * carrying another — sit above the list, where they are not attached to whichever row
+ * happens to be under the pointer.
  */
 export function TagIndex({ siteUrl }: { siteUrl: string }) {
+  const [editing, setEditing] = useState<Tag | null>(null)
+  const [panel, setPanel] = useState<'none' | 'create' | 'apply'>('none')
   const [tags, setTags] = useState<Tag[] | null>(cached?.tags ?? null)
   const [fetchedAt, setFetchedAt] = useState<number | null>(cached?.at ?? null)
   // Starts true when there is nothing cached, because the effect below is about to read
@@ -63,6 +76,7 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
   }, [])
 
   async function refresh() {
+    setEditing(null)
     setLoading(true)
     // Both copies, or the button lies: main keeps the index for a day (`main/tag-cache.ts`)
     // and would hand back the same list this screen is already showing. 🔄 means "read the
@@ -111,6 +125,43 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
         )}
       </div>
 
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setPanel((current) => (current === 'create' ? 'none' : 'create'))}
+          className={`min-h-9 rounded-lg border px-3 text-sm transition-colors hover:bg-surface ${
+            panel === 'create' ? 'border-accent text-accent' : 'border-border text-muted'
+          }`}
+        >
+          ➕ New tag
+        </button>
+        <button
+          type="button"
+          onClick={() => setPanel((current) => (current === 'apply' ? 'none' : 'apply'))}
+          title="Add one tag to every post that already has another"
+          className={`min-h-9 rounded-lg border px-3 text-sm transition-colors hover:bg-surface ${
+            panel === 'apply' ? 'border-accent text-accent' : 'border-border text-muted'
+          }`}
+        >
+          🧩 Apply by tag
+        </button>
+      </div>
+
+      {panel === 'create' && <CreateTag onDone={() => void refresh()} />}
+      {panel === 'apply' && <ApplyTag onDone={() => void refresh()} />}
+
+      {editing && (
+        // Keyed by the tag, so selecting another row remounts the panel with that
+        // tag's name and category rather than syncing props into state after the fact.
+        <EditTag
+          key={editing.id}
+          tag={editing}
+          siteUrl={siteUrl}
+          onClose={() => setEditing(null)}
+          onDone={() => void refresh()}
+        />
+      )}
+
       {tags === null ? (
         <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
           Loading…
@@ -134,10 +185,11 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
                 <li key={tag.id} className="-mb-px -mr-px border-b border-r border-border">
                   <button
                     type="button"
-                    disabled={!siteUrl}
-                    onClick={() => void window.api.openExternal(`${siteUrl}/tags/${tag.id}`)}
-                    title={siteUrl ? `Open ${tagLabel(tag.name)} on the board` : tag.name}
-                    className={`flex min-h-9 w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface disabled:hover:bg-transparent ${CATEGORY_COLOR[category]}`}
+                    onClick={() => setEditing(tag)}
+                    title={`Manage ${tagLabel(tag.name)}`}
+                    className={`flex min-h-9 w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface ${
+                      editing?.id === tag.id ? 'bg-surface' : ''
+                    } ${CATEGORY_COLOR[category]}`}
                   >
                     <span className="min-w-0 flex-1 truncate">{tagLabel(tag.name)}</span>
                     <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted">
@@ -151,5 +203,286 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
         ))
       )}
     </div>
+  )
+}
+
+/** The shared shell for the three panels: a bordered card that names what it is. */
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-3 py-3">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h2>
+      {children}
+    </section>
+  )
+}
+
+const FIELD =
+  'min-h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent'
+
+/**
+ * Name a tag before anything carries it — an artist or a series, with the category
+ * already right. Uploads coin tags as a side effect of applying them, so this is only
+ * ever the other order, and the tag starts on no posts.
+ */
+function CreateTag({ onDone }: { onDone: () => void }) {
+  const [name, setName] = useState('')
+  const [category, setCategory] = useState<TagCategory>('general')
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function submit() {
+    setBusy(true)
+    const result = await window.api.createTag(name, category)
+    setBusy(false)
+    if (result.ok) {
+      setMessage({ ok: true, text: `Created ${tagLabel(result.name)}.` })
+      setName('')
+      onDone()
+    } else {
+      setMessage({ ok: false, text: result.error })
+    }
+  }
+
+  return (
+    <Panel title="New tag">
+      <div className="flex flex-wrap gap-2">
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="tag_name"
+          spellCheck={false}
+          className={`${FIELD} min-w-40 flex-1 font-mono`}
+        />
+        <select
+          value={category}
+          onChange={(event) => setCategory(event.target.value as TagCategory)}
+          className={FIELD}
+        >
+          {TAG_CATEGORIES.map((option) => (
+            <option key={option} value={option}>
+              {CATEGORY_LABEL[option]}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={busy || !name.trim()}
+          className="min-h-9 rounded-lg border border-accent px-4 text-sm text-accent transition-colors hover:bg-background disabled:opacity-50"
+        >
+          Create
+        </button>
+      </div>
+      {message && (
+        <p className={`text-sm ${message.ok ? 'text-muted' : 'text-[#ff5d5f]'}`}>{message.text}</p>
+      )}
+    </Panel>
+  )
+}
+
+/**
+ * Add one tag to every post already carrying another — `swimsuit` for everything tagged
+ * `bikini`. The slowest thing this window does, and the only one that reports counts:
+ * "added to 3, 41 already had it" is the difference between a rule that did something
+ * and one that was already satisfied.
+ */
+function ApplyTag({ onDone }: { onDone: () => void }) {
+  const [target, setTarget] = useState('')
+  const [condition, setCondition] = useState('')
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function submit() {
+    setBusy(true)
+    setMessage(null)
+    const result = await window.api.applyTagToTagged(target, condition)
+    setBusy(false)
+    if (result.ok) {
+      setMessage({
+        ok: true,
+        text: `Added ${tagLabel(result.target)} to ${result.added} post${
+          result.added === 1 ? '' : 's'
+        } — ${result.already} already had it.`,
+      })
+      onDone()
+    } else {
+      setMessage({ ok: false, text: result.error })
+    }
+  }
+
+  return (
+    <Panel title="Apply by tag">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={target}
+          onChange={(event) => setTarget(event.target.value)}
+          placeholder="tag to add"
+          spellCheck={false}
+          className={`${FIELD} min-w-32 flex-1 font-mono`}
+        />
+        <span className="text-xs text-muted">to every post tagged</span>
+        <input
+          value={condition}
+          onChange={(event) => setCondition(event.target.value)}
+          placeholder="existing tag"
+          spellCheck={false}
+          className={`${FIELD} min-w-32 flex-1 font-mono`}
+        />
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={busy || !target.trim() || !condition.trim()}
+          className="min-h-9 rounded-lg border border-accent px-4 text-sm text-accent transition-colors hover:bg-background disabled:opacity-50"
+        >
+          {busy ? 'Applying…' : 'Apply'}
+        </button>
+      </div>
+      {message && (
+        <p className={`text-sm ${message.ok ? 'text-muted' : 'text-[#ff5d5f]'}`}>{message.text}</p>
+      )}
+    </Panel>
+  )
+}
+
+/**
+ * One tag: rename it, recategorize it, delete it, or go and look at it on the board.
+ *
+ * Rename keeps the row's id, so every link and every post keeps the tag — only the text
+ * moves. Delete does not: it takes the tag off every post carrying it, which is why it
+ * takes a second press that says so.
+ */
+function EditTag({
+  tag,
+  siteUrl,
+  onClose,
+  onDone,
+}: {
+  tag: Tag
+  siteUrl: string
+  onClose: () => void
+  onDone: () => void
+}) {
+  const [name, setName] = useState(tag.name)
+  const [category, setCategory] = useState<TagCategory>(tag.category)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+
+  async function save() {
+    setBusy(true)
+    setError('')
+    if (name !== tag.name) {
+      const renamed = await window.api.renameTag(tag.id, name)
+      if (!renamed.ok) {
+        setBusy(false)
+        setError(renamed.error)
+        return
+      }
+    }
+    if (category !== tag.category) {
+      const recategorized = await window.api.setTagCategory(tag.id, category)
+      if (!recategorized.ok) {
+        setBusy(false)
+        setError(recategorized.error)
+        return
+      }
+    }
+    setBusy(false)
+    onDone()
+  }
+
+  async function remove() {
+    setBusy(true)
+    setError('')
+    const result = await window.api.deleteTag(tag.id)
+    setBusy(false)
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    onDone()
+  }
+
+  const changed = name !== tag.name || category !== tag.category
+
+  return (
+    <Panel title={`${tagLabel(tag.name)} · ${tag.post_count} post${tag.post_count === 1 ? '' : 's'}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          spellCheck={false}
+          className={`${FIELD} min-w-40 flex-1 font-mono`}
+        />
+        <select
+          value={category}
+          onChange={(event) => setCategory(event.target.value as TagCategory)}
+          className={FIELD}
+        >
+          {TAG_CATEGORIES.map((option) => (
+            <option key={option} value={option}>
+              {CATEGORY_LABEL[option]}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={busy || !changed}
+          className="min-h-9 rounded-lg border border-accent px-4 text-sm text-accent transition-colors hover:bg-background disabled:opacity-50"
+        >
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        {siteUrl && (
+          <button
+            type="button"
+            onClick={() => void window.api.openExternal(`${siteUrl}/tags/${tag.id}`)}
+            className="min-h-9 px-2 text-sm text-muted transition-colors hover:text-foreground"
+          >
+            🖼️ On the board
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onClose}
+          className="min-h-9 px-2 text-sm text-muted transition-colors hover:text-foreground"
+        >
+          Close
+        </button>
+      </div>
+
+      {error && <p className="text-sm text-[#ff5d5f]">{error}</p>}
+
+      <div className="flex items-center gap-2">
+        {confirming ? (
+          <>
+            <button
+              type="button"
+              onClick={() => void remove()}
+              disabled={busy}
+              className="min-h-9 rounded-lg border border-[#ff5d5f] px-3 text-sm text-[#ff5d5f] transition-colors hover:bg-background disabled:opacity-50"
+            >
+              Remove from {tag.post_count} post{tag.post_count === 1 ? '' : 's'} and delete
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              className="min-h-9 px-2 text-sm text-muted hover:text-foreground"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            disabled={busy}
+            className="min-h-9 px-2 text-sm text-muted transition-colors hover:text-[#ff5d5f]"
+          >
+            Delete tag
+          </button>
+        )}
+      </div>
+    </Panel>
   )
 }

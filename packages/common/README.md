@@ -1,14 +1,19 @@
 # common
 
-The code the website and the desktop uploader both compile. Not a copy of either: there
-is one definition of what a post is, one of how an image is squeezed, and both front ends
-import it from here.
+The code the website and the desktop app both compile. Not a copy of either: there is one
+definition of what a post is, one of how an image is squeezed, one search grammar, and
+both front ends import them from here.
 
-It exists because two apps create posts. The website does it from a server action; the
-desktop uploader (`packages/desktop`) does it from a file on disk, because compression is
-CPU work a free serverless tier is bad at. Everything they must agree on — the write path,
-the encoders, the search grammar, the tag rules — is in this directory, and neither of
-them owns it.
+It exists because two programs read the same board and one of them writes to it. The
+website renders the gallery; the desktop app (`packages/desktop`) creates, edits and
+deletes posts from a machine with real CPU, because compression is work a free serverless
+tier is bad at. Everything they must agree on — what a post is, how a query is parsed,
+the write path, the encoders — is in this directory, and neither of them owns it.
+
+The search is the clearest case. `data/search.ts` backs the website's listing *and* the
+desktop's browse screen, so `1girl -solo rating:explicit` narrows to the same rows in
+both windows. Two implementations of that grammar is how `-tag` quietly comes to mean two
+things.
 
 Before this package the desktop app reached into the Next app's `src/` through an `@web`
 alias, plus an `@/` alias only because the files over there spell each other that way.
@@ -24,24 +29,30 @@ where the file is.
 | `tags.ts` | tag parsing and the charset, `CATEGORY_COLOR` |
 | `storage.ts` | bucket names and the md5-derived image paths |
 | `supabase/types.ts` | `BooruClient`, the client type every function here takes |
+| `data/posts.ts` | the `Post` row shape, `POST_COLUMNS`, and the single-post reads |
+| `data/search.ts` | `searchPosts` — the whole query, tag resolution and cursor |
 | `data/shared.ts` | the post write path, `ensureTagIds`, tag-name search, `listTags` |
-| `data/counters.ts` | `syncTagPostCounts` / `syncRatingCounts` — recompute, never increment |
-| `imgcmp/for-post.ts` | lossless AVIF for the stored image, bounded to `POST_MAX_DIMENSION` |
+| `data/tags.ts` | managing the vocabulary: create, rename, recategorize, delete, apply-by-tag |
+| `data/counters.ts` | `syncTagPostCounts` — recompute, never increment |
+| `imgcmp/for-post.ts` | lossy AVIF (q50) for the stored image, bounded to `POST_MAX_DIMENSION` |
 | `imgcmp/for-thumbnail.ts` | lossy AVIF thumbnail, 400px tall |
 | `upload/pipeline.ts` | `createPostFromImage` — one image in, one post out, unwound on failure |
 
 ## The rules that keep it shareable
 
-- **Nothing here builds a Supabase client.** The caller passes `(supabase, admin)`. The
-  web's `supabase/server.ts` imports `next/headers` and `admin.ts` is `server-only`, so a
-  module that built its own client could only ever run inside Next. This is the one
-  constraint the whole package rests on — don't "simplify" a client parameter away.
+- **Nothing here builds a Supabase client.** The caller passes one. The web's `admin.ts`
+  is `server-only`, so a module that built its own client could only ever run inside
+  Next. This is the one constraint the whole package rests on — don't "simplify" the
+  client parameter away.
+  It was `(supabase, admin)` until the board lost its accounts: the uploader's session
+  wrote the post row so RLS could record `uploader_id`, and the service role did storage
+  and the counters. No table has a write policy now, so a write is a write.
 - **No `next/*`, no `server-only`, no React.** Electron's main process compiles these
   files and has none of it.
-- **No environment reads and no limits.** Ceilings are a property of where the code runs:
-  Vercel's are in `src/lib/upload-limits.ts`, the desktop's in
-  `packages/desktop/src/main/limits.ts`, and `createPostFromImage` takes them as an
-  argument.
+- **No environment reads and no limits.** Ceilings are a property of where the code runs.
+  The desktop's are in `packages/desktop/src/main/limits.ts`, and `createPostFromImage`
+  takes them as an argument. (The web had its own, for Vercel; they went with its upload
+  page.)
 - **`search.ts`, `tags.ts` and `storage.ts` stay pure**, so client components can import
   them.
 

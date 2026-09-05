@@ -1,1 +1,1 @@
-# Pubooru
+# booru

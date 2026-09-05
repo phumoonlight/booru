@@ -5,7 +5,7 @@ import type { EncodePriority } from '../shared/api'
 /**
  * How much of the machine the encoder is allowed to take.
  *
- * An upload is a lossless AVIF plus a lossy thumbnail at effort 9, and libvips spreads a
+ * An upload is two AVIF encodes at effort 9 — the full image and a thumbnail — and libvips spreads a
  * single encode across every core it can see. On a 16-core desktop that is the whole CPU
  * pinned for the twenty seconds a large image takes, and everything else on the machine
  * stutters while it happens: a background chore behaving like a benchmark.

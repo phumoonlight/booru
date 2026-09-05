@@ -9,19 +9,17 @@ import { app } from 'electron'
  * It was three files sealed with Electron's `safeStorage` (DPAPI / Keychain /
  * libsecret). That is gone by choice: a sealed file cannot be inspected, hand-edited or
  * copied to another machine, and a key that the OS can no longer produce takes the
- * settings with it. What plain text costs is smaller than it was — the service-role key
- * lives in the bundle now, not in here — but the session token does sit in this file,
- * and the account password too if the login screen was told to remember it. It is
- * written 0600 so it is at least the user's own; on Windows that is advisory.
+ * settings with it. There is now nothing secret in here at all — the service-role key
+ * lives in the bundle, and the session token and remembered password went with the
+ * login. It is still written 0600, which costs nothing.
  *
- * Five sections: the compression preferences, the signed-in session, the remembered
- * credentials, and the two sets of tag rules — `implications`, which the app applies, and
- * `recommendations`, which it only offers. They share a file so there is one thing to look
- * at, back up or delete, and the two rule sections are the ones most worth opening the
- * file for, being lists you may well want to paste a hundred rules into at once. `config`
- * is a sixth name this type still knows, and only so the keys an older version wrote
- * there can be deleted — see `dropStoredConfig()`. Which board the app talks to is
- * compiled into the build now and never written here.
+ * Three sections: the compression preferences, and the two sets of tag rules —
+ * `implications`, which the app applies, and `recommendations`, which it only offers.
+ * They share a file so there is one thing to look at, back up or delete, and the two
+ * rule sections are the ones most worth opening the file for, being lists you may well
+ * want to paste a hundred rules into at once. `session`, `credentials` and `config` are
+ * names this type still knows, and only so what an older version wrote under them can be
+ * deleted — see `dropStoredConfig()` and `dropStoredLogin()`.
  */
 
 const SAVE_FILE = 'save.json'

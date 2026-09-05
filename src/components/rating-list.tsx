@@ -13,33 +13,34 @@ import {
 } from '@common/search'
 
 /**
- * Rating facet: how many posts the whole gallery holds at each tier — a site-wide count
- * like a tag's, so the numbers don't shift as you page through or narrow the search.
- * Tapping a label replaces the whole query with just that rating, while the hover-revealed
- * ➕/➖ add it to the current search (`rating:x`) or exclude it (`-rating:x`). Every rating
- * is always listed, count 0 included, so the scale reads as a fixed set of filters.
+ * Rating facet: the whole scale, always, as a fixed set of filters. Tapping a label
+ * replaces the query with just that rating, while the ➕/➖ add it to the current search
+ * (`rating:x`) or exclude it (`-rating:x`).
+ *
+ * It carries no per-tier count. There was a `rating_counts` table behind one — a
+ * denormalized row per tier that every post write had to remember to recount — and what
+ * it bought was a number beside four fixed filters nobody was choosing between on the
+ * strength of it. The tag facet keeps its counts, where the list is long and the number
+ * is how you tell a useful tag from a stray one.
  */
 export function RatingList({
-  counts,
   currentQuery = '',
   activeRatings = [],
   excludedRatings = [],
 }: {
-  counts: Record<Rating, number>
   currentQuery?: string
   activeRatings?: Rating[]
   excludedRatings?: Rating[]
 }) {
   const rows = RATINGS.map((rating) => ({
     rating,
-    count: counts[rating] ?? 0,
     active: activeRatings.includes(rating),
     excluded: excludedRatings.includes(rating),
   }))
 
   return (
     <ul className="flex flex-col gap-0.5">
-      {rows.map(({ rating, count, active, excluded }) => {
+      {rows.map(({ rating, active, excluded }) => {
         const token = ratingToken(rating)
         const label = RATING_LABEL[rating]
         return (
@@ -55,7 +56,6 @@ export function RatingList({
               <NavProgress />
             </Link>
             <FacetActions
-              count={count}
               plus={{
                 href: searchHref(
                   active ? withoutTag(currentQuery, token) : withTag(currentQuery, token)

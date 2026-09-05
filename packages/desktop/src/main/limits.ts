@@ -3,7 +3,7 @@ import type { UploadLimits } from '@common/upload/pipeline'
 /**
  * The desktop uploader's ceilings. Both numbers in the web's `src/lib/upload-limits.ts` are
  * Vercel's, not the pipeline's: 4MB because a serverless request body is capped at
- * 4.5MB, and 20MP because lossless AVIF costs ~0.17s/MP and the function dies at 10s.
+ * 4.5MB, and 20MP because the AVIF pass costs ~0.17s/MP and the function dies at 10s.
  * Neither applies to a process on your own machine writing straight to Supabase
  * Storage, which is the whole reason this app exists.
  *
@@ -12,7 +12,7 @@ import type { UploadLimits } from '@common/upload/pipeline'
  * compression has already been paid for.
  *
  * 100MP is a memory bound rather than a time one — an RGBA decode of that is ~400MB,
- * and libvips holds one while it encodes. The lossless AVIF pass at that size takes
+ * and libvips holds one while it encodes. The AVIF pass at that size takes
  * around twenty seconds; the queue shows which file it is on, and nothing times out.
  */
 export const MAX_FILE_SIZE = 50 * 1024 * 1024

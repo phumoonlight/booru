@@ -11,17 +11,11 @@ create table public.post_tags (
 -- syncTagPostCounts() an index-only scan.
 create index post_tags_tag_post_idx on public.post_tags (tag_id, post_id);
 
--- RLS: public read; insert/delete only — a post's tags are replaced, never updated
+-- RLS: public read, and no write policy — see the note in 20260826100100_posts.sql.
+-- A post's tags are replaced rather than updated, so the service role only ever
+-- inserts and deletes here.
 alter table public.post_tags enable row level security;
 
 create policy "post_tags are publicly readable"
   on public.post_tags for select
   using (true);
-
-create policy "authenticated can insert post_tags"
-  on public.post_tags for insert
-  with check ((select auth.uid()) is not null);
-
-create policy "authenticated can delete post_tags"
-  on public.post_tags for delete
-  using ((select auth.uid()) is not null);

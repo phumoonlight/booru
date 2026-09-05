@@ -2,14 +2,16 @@ import { readFile } from 'node:fs/promises'
 import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron'
 import { z } from 'zod'
 import { listTags, searchTags } from '@common/data/shared'
+import * as manageTags from '@common/data/tags'
+import { searchPosts } from '@common/data/search'
 import { createPostFromImage, parsePostMetadata } from '@common/upload/pipeline'
+import { TAG_CATEGORIES } from '@common/tags'
 import { DESKTOP_UPLOAD_LIMITS } from './limits'
 import { CPU_COUNT, DEFAULT_ENCODE_PRIORITY, DEFAULT_ENCODE_THREADS } from './cpu'
 import { loadConfig, revealSaveFile } from './config'
 import { loadPreferences, savePreferences } from './preferences'
 import { loadImplications, saveImplications } from './implications'
 import { loadRecommendations, saveRecommendations } from './recommendations'
-import { readCredentials, saveCredentials } from './credentials'
 import { previewFile, stageFiles } from './staging'
 import { downloadImages } from './download'
 import { setQueueState } from './queue-guard'
@@ -20,11 +22,13 @@ import {
   tagCacheStatus,
   TAG_INDEX_LIMIT,
 } from './tag-cache'
-import { adminClient, currentUser, signIn, signOut, userClient } from './supabase'
-import type { AppStatus, Outcome, PreferencesInput, SavedLogin, TagSuggestion } from '../shared/api'
+import { boardClient } from './supabase'
+import { loadPost, removePost, savePost, thumbnailDataUrl, type LoadedPost } from './manage'
+import type { AppStatus, PreferencesInput, TagSuggestion } from '../shared/api'
 import type { ImplicationRules } from '../shared/implications'
 import type { RecommendationRules } from '../shared/recommendations'
 import type { Tag } from '@common/tags'
+import type { PostPage } from '@common/data/posts'
 import type { UploadResult } from '@common/upload/pipeline'
 
 /**
@@ -45,12 +49,22 @@ const preferencesSchema = z.object({
     .default(DEFAULT_ENCODE_PRIORITY),
 })
 
-// Same two rules the web's login action applies, so a bad address is refused here
-// rather than in a round trip.
-const loginSchema = z.object({
-  email: z.email('Enter a valid email'),
-  password: z.string().min(1, 'Password is required'),
+const postIdSchema = z.number().int().positive()
+
+const browseSchema = z.object({
+  query: z.string().max(500).optional().default(''),
+  after: z.number().int().positive().optional(),
 })
+
+const savePostSchema = z.object({
+  id: postIdSchema,
+  tags: z.string(),
+  rating: z.string(),
+  sourceUrl: z.string(),
+})
+
+const tagNameSchema = z.string().max(64)
+const categorySchema = z.enum(TAG_CATEGORIES)
 
 const queueStateSchema = z.object({
   pending: z.number().int().nonnegative(),
@@ -81,7 +95,6 @@ export function registerIpc(): void {
     const preferences = loadPreferences()
     return {
       configured: config !== null,
-      user: config ? await currentUser() : null,
       siteUrl: config?.siteUrl ?? '',
       supabaseUrl: config?.supabaseUrl ?? '',
       // Read here rather than baked into the bundle: the renderer has no `process`, and
@@ -117,31 +130,6 @@ export function registerIpc(): void {
       return savePreferences(parsed.success ? parsed.data : {})
     }
   )
-
-  ipcMain.handle(
-    'auth:log-in',
-    async (_event, email: unknown, password: unknown, remember: unknown) => {
-      const parsed = loginSchema.safeParse({ email, password })
-      if (!parsed.success) {
-        return { ok: false, error: parsed.error.issues[0].message } satisfies Outcome
-      }
-
-      const result = await signIn(parsed.data.email, parsed.data.password)
-      // Only a login that worked is worth keeping, and only the box says to keep it.
-      // Everything else clears the file, so unticking it is how you forget.
-      if (result.ok) saveCredentials(remember === true ? parsed.data : null)
-      return result
-    }
-  )
-
-  /**
-   * Hands the stored password to the form that is about to submit it anyway. Log out
-   * deliberately leaves it alone — the point of the box is that the next login is
-   * already typed out.
-   */
-  ipcMain.handle('auth:saved-login', async (): Promise<SavedLogin | null> => readCredentials())
-
-  ipcMain.handle('auth:log-out', async (): Promise<void> => signOut())
 
   ipcMain.handle('files:choose', async (event): Promise<string[]> => {
     const window = BrowserWindow.fromWebContents(event.sender)
@@ -192,9 +180,8 @@ export function registerIpc(): void {
     const cached = await cachedIndex()
     if (cached) return cached
 
-    const supabase = userClient()
+    const supabase = boardClient()
     if (!supabase) return []
-    if (!(await currentUser())) return []
     return listTags(supabase, TAG_INDEX_LIMIT)
   })
 
@@ -213,9 +200,8 @@ export function registerIpc(): void {
     const cached = await cachedSuggestions(parsed.data)
     if (cached) return suggest(cached)
 
-    const supabase = userClient()
+    const supabase = boardClient()
     if (!supabase) return []
-    if (!(await currentUser())) return []
     return suggest(await searchTags(supabase, parsed.data))
   })
 
@@ -265,14 +251,8 @@ export function registerIpc(): void {
     const parsed = uploadSchema.safeParse(raw)
     if (!parsed.success) return { ok: false, error: 'Nothing to upload' }
 
-    const supabase = userClient()
-    const admin = adminClient()
-    if (!supabase || !admin) return { ok: false, error: 'Not set up yet' }
-
-    // The desktop equivalent of requireUser(): RLS is the real guard, this fails loudly
-    // rather than letting an insert quietly match no policy.
-    const uploader = await currentUser()
-    if (!uploader) return { ok: false, error: 'Sign in first' }
+    const supabase = boardClient()
+    if (!supabase) return { ok: false, error: 'Not set up yet' }
 
     const metadata = parsePostMetadata({
       tags: parsed.data.tags,
@@ -290,14 +270,139 @@ export function registerIpc(): void {
 
     const result = await createPostFromImage(
       supabase,
-      admin,
-      uploader.id,
       bytes,
       metadata.metadata,
       DESKTOP_UPLOAD_LIMITS
     )
     // A post creates tags and moves counts, so the cached index is now wrong in exactly
     // the way that matters: the tag just coined is the one you are about to type again.
+    if (result.ok) clearTagCache()
+    return result
+  })
+
+  // ── Managing what is already on the board ────────────────────────────────────
+  // These came off the website when it lost its login. `posts:search` runs the same
+  // query the gallery does — `@common/data/search`, one grammar — so a query typed in
+  // the browse box means exactly what it means in the site's search bar.
+
+  ipcMain.handle('posts:search', async (_event, raw: unknown): Promise<PostPage> => {
+    const parsed = browseSchema.safeParse(raw ?? {})
+    const empty: PostPage = { posts: [], hasMore: false }
+    if (!parsed.success) return empty
+
+    const supabase = boardClient()
+    if (!supabase) return empty
+    return searchPosts(supabase, { query: parsed.data.query, after: parsed.data.after })
+  })
+
+  /** One post and its tags — what the editor opens with. */
+  ipcMain.handle('posts:get', async (_event, id: unknown): Promise<LoadedPost | null> => {
+    const parsed = postIdSchema.safeParse(id)
+    return parsed.success ? loadPost(parsed.data) : null
+  })
+
+  ipcMain.handle('posts:save', async (_event, raw: unknown) => {
+    const parsed = savePostSchema.safeParse(raw)
+    if (!parsed.success) return { ok: false as const, error: 'Nothing to save' }
+    const { id, tags, rating, sourceUrl } = parsed.data
+    return savePost(id, tags, rating, sourceUrl)
+  })
+
+  ipcMain.handle('posts:delete', async (_event, id: unknown) => {
+    const parsed = postIdSchema.safeParse(id)
+    if (!parsed.success) return { ok: false as const, error: 'No such post' }
+    return removePost(parsed.data)
+  })
+
+  /**
+   * A thumbnail, as a data: URL. The window's CSP lets it load `self` and `data:` and
+   * nothing else, which is worth more than the round trip this costs — `main/manage.ts`.
+   */
+  ipcMain.handle('posts:thumbnail', async (_event, fileName: unknown): Promise<string> => {
+    // Still the md5 shape: `file_name` is what the column is called, and the md5 of the
+    // bytes is what it holds, so anything else is not a name this board ever wrote.
+    const parsed = z.string().regex(/^[0-9a-f]{32}$/).safeParse(fileName)
+    return parsed.success ? thumbnailDataUrl(parsed.data) : ''
+  })
+
+  // ── The tag vocabulary ───────────────────────────────────────────────
+  // The five operations that were /tags/manage. Each one answers `{ ok }` or
+  // `{ error }`; the validation is `@common/data/tags`, which is also what the web's
+  // forms used, so a name rejected here is rejected in the same words.
+  //
+  // Every one of them drops the cached index: a rename, a delete or a category change
+  // makes the copy on disk wrong about a name the field is about to offer.
+
+  ipcMain.handle('tags:create', async (_event, name: unknown, category: unknown) => {
+    const supabase = boardClient()
+    if (!supabase) return { ok: false as const, error: 'Not set up yet' }
+    const parsedName = tagNameSchema.safeParse(name)
+    const parsedCategory = categorySchema.safeParse(category)
+    if (!parsedName.success) return { ok: false as const, error: 'Type a tag name.' }
+    if (!parsedCategory.success) return { ok: false as const, error: 'Pick a category.' }
+
+    const result = await manageTags.createTag(supabase, parsedName.data, parsedCategory.data)
+    if (result.ok) clearTagCache()
+    return result
+  })
+
+  ipcMain.handle('tags:rename', async (_event, id: unknown, name: unknown) => {
+    const supabase = boardClient()
+    if (!supabase) return { ok: false as const, error: 'Not set up yet' }
+    const parsedId = postIdSchema.safeParse(id)
+    const parsedName = tagNameSchema.safeParse(name)
+    if (!parsedId.success) return { ok: false as const, error: 'No such tag' }
+    if (!parsedName.success) return { ok: false as const, error: 'Type a tag name.' }
+
+    const result = await manageTags.renameTag(supabase, parsedId.data, parsedName.data)
+    if (result.ok) clearTagCache()
+    return result
+  })
+
+  ipcMain.handle('tags:set-category', async (_event, id: unknown, category: unknown) => {
+    const supabase = boardClient()
+    if (!supabase) return { ok: false as const, error: 'Not set up yet' }
+    const parsedId = postIdSchema.safeParse(id)
+    const parsedCategory = categorySchema.safeParse(category)
+    if (!parsedId.success) return { ok: false as const, error: 'No such tag' }
+    if (!parsedCategory.success) return { ok: false as const, error: 'Pick a category.' }
+
+    const result = await manageTags.setTagCategory(supabase, parsedId.data, parsedCategory.data)
+    if (result.ok) clearTagCache()
+    return result
+  })
+
+  ipcMain.handle('tags:delete', async (_event, id: unknown) => {
+    const supabase = boardClient()
+    if (!supabase) return { ok: false as const, error: 'Not set up yet' }
+    const parsedId = postIdSchema.safeParse(id)
+    if (!parsedId.success) return { ok: false as const, error: 'No such tag' }
+
+    const result = await manageTags.deleteTag(supabase, parsedId.data)
+    if (result.ok) clearTagCache()
+    return result
+  })
+
+  /**
+   * Apply one tag to every post already carrying another. The slowest thing this app
+   * does — it reads every link on both tags and can insert thousands of rows — so it
+   * answers with the counts rather than a bare ok: "added to 3, 41 already had it" is
+   * the difference between a rule that did something and one already satisfied.
+   */
+  ipcMain.handle('tags:apply', async (_event, target: unknown, condition: unknown) => {
+    const supabase = boardClient()
+    if (!supabase) return { ok: false as const, error: 'Not set up yet' }
+    const parsedTarget = tagNameSchema.safeParse(target)
+    const parsedCondition = tagNameSchema.safeParse(condition)
+    if (!parsedTarget.success || !parsedCondition.success) {
+      return { ok: false as const, error: 'Type a tag name.' }
+    }
+
+    const result = await manageTags.applyTagToTagged(
+      supabase,
+      parsedTarget.data,
+      parsedCondition.data
+    )
     if (result.ok) clearTagCache()
     return result
   })

@@ -1,32 +1,30 @@
 import { useCallback, useEffect, useState } from 'react'
 import { searchHref } from '@common/search'
 import { About } from './components/about'
-import { AccountMenu } from './components/account-menu'
+import { Browse } from './components/browse'
 import { TagRules } from './components/tag-rules'
-import { Login } from './components/login'
 import { Settings } from './components/settings'
 import { TagIndex } from './components/tag-index'
 import { UploadQueue } from './components/upload-queue'
 import type { AppStatus } from '../../shared/api'
 
 /**
- * Screens picked by what the app knows: login until someone is signed in, then the
- * queue. There is no setup step any more — which board this build talks to was decided
- * when it was built and compiled in (`main/config.ts`), so the app opens on a login form
- * and nothing else is ever asked for. Settings is forced open in one case only: a bundle
- * built without those values, which the build itself refuses to produce.
+ * Six screens, one of them always mounted. There is no login and no setup step: which
+ * board this build talks to was decided when it was built and compiled in
+ * (`main/config.ts`), and the board itself has no accounts any more — this app writes
+ * with the service-role key in its own bundle, which is why it is the only thing that
+ * can. The window opens on the queue.
  *
- * About is the exception to that order: it answers "what am I running", which is a fair
- * question before the app is set up at all, so it is the one view allowed to sit in
- * front of an unconfigured window. Tags is not — it reads the board, so it sits behind
- * the session with the queue, and Tag rules sits there with it: the rules are local and
- * need no session, but every box on that screen autocompletes against the board.
+ * Settings is forced open in one case only: a bundle built without those values, which
+ * the build itself refuses to produce. About is the other exception to the screen order —
+ * it answers "what am I running", a fair question of a copy that cannot reach its board
+ * at all.
  */
 export function App() {
   const [status, setStatus] = useState<AppStatus | null>(null)
-  const [view, setView] = useState<'upload' | 'tags' | 'rules' | 'settings' | 'about'>(
-    'upload'
-  )
+  const [view, setView] = useState<
+    'upload' | 'browse' | 'tags' | 'rules' | 'settings' | 'about'
+  >('upload')
 
   const refresh = useCallback(async () => {
     setStatus(await window.api.getStatus())
@@ -65,22 +63,24 @@ export function App() {
     }`
 
   // Anything that takes the window off the queue. Settings is forced open only when the
-  // build carries no project — it is the screen that says so — and the login form until
-  // someone is signed in.
+  // build carries no project — it is the screen that says so.
   const over =
     view === 'about' ? (
       <About status={status} />
     ) : !status.configured || view === 'settings' ? (
       // `onChanged` refreshes the status the compression rows are seeded from; nothing
-      // on this screen can change which board the app talks to any more.
+      // on this screen can change which board the app talks to.
       <Settings status={status} onChanged={() => void refresh()} />
-    ) : !status.user ? (
-      <Login onSignedIn={refresh} />
+    ) : view === 'browse' ? (
+      <Browse siteUrl={status.siteUrl} />
     ) : view === 'tags' ? (
       <TagIndex siteUrl={status.siteUrl} />
     ) : view === 'rules' ? (
       <TagRules siteUrl={status.siteUrl} />
     ) : null
+
+  const toggle = (target: typeof view) => () =>
+    setView((current) => (current === target ? 'upload' : target))
 
   return (
     <div className="flex h-screen flex-col">
@@ -109,83 +109,54 @@ export function App() {
         <div className="flex items-center gap-2">
           {/* The queue, and the way back to it from every other screen — the one item
               here that is the app's actual job, so it leads the row. */}
-          {status.user && (
-            <button
-              type="button"
-              onClick={() => setView('upload')}
-              className={navClass(view === 'upload')}
-            >
-              <span aria-hidden>📤</span>
-              Upload
-            </button>
-          )}
-          {status.user && (
-            <button
-              type="button"
-              onClick={() => setView((current) => (current === 'tags' ? 'upload' : 'tags'))}
-              className={navClass(view === 'tags')}
-            >
-              <span aria-hidden>🏷️</span>
-              Tags
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setView('upload')}
+            className={navClass(view === 'upload')}
+          >
+            <span aria-hidden>📤</span>
+            Upload
+          </button>
+          {/* Next to Upload because it is the other half of the same job: this window
+              puts posts on the board, and this is where it changes the ones already
+              there. The website cannot — it holds a key that only reads. */}
+          <button
+            type="button"
+            onClick={toggle('browse')}
+            title="Find a post and edit or delete it"
+            className={navClass(view === 'browse')}
+          >
+            <span aria-hidden>🔍</span>
+            Browse
+          </button>
+          <button type="button" onClick={toggle('tags')} className={navClass(view === 'tags')}>
+            <span aria-hidden>🏷️</span>
+            Tags
+          </button>
           {/* Beside Tags because it is about tags, and because the two answer the same
               question from opposite ends: what does the board call this, and what should
               this one drag in with it. */}
-          {status.user && (
-            <button
-              type="button"
-              onClick={() => setView((current) => (current === 'rules' ? 'upload' : 'rules'))}
-              title="Tags that bring other tags with them"
-              className={navClass(view === 'rules')}
-            >
-              <span aria-hidden>🔗</span>
-              Tag rules
-            </button>
-          )}
           <button
             type="button"
-            onClick={() => setView((current) => (current === 'about' ? 'upload' : 'about'))}
-            className={navClass(view === 'about')}
+            onClick={toggle('rules')}
+            title="Tags that bring other tags with them"
+            className={navClass(view === 'rules')}
           >
+            <span aria-hidden>🔗</span>
+            Tag rules
+          </button>
+          <button type="button" onClick={toggle('about')} className={navClass(view === 'about')}>
             <span aria-hidden>ℹ️</span>
             About
           </button>
           <button
             type="button"
-            onClick={() => setView((current) => (current === 'settings' ? 'upload' : 'settings'))}
+            onClick={toggle('settings')}
             className={navClass(view === 'settings' || !status.configured)}
           >
             <span aria-hidden>⚙️</span>
             Settings
           </button>
-          {/* Signed out, the same corner says so and goes back to the form — from About
-              or settings there was otherwise nothing naming the way to it. */}
-          {!status.user && (
-            <button
-              type="button"
-              onClick={() => setView('upload')}
-              className={navClass(view === 'upload')}
-            >
-              <span aria-hidden>👤</span>
-              Log in
-            </button>
-          )}
-          {status.user && (
-            <AccountMenu
-              username={status.user.username}
-              siteUrl={status.siteUrl}
-              onLogOut={() =>
-                void window.api.logOut().then(() => {
-                  // About and settings both sit in front of the login check, so logging
-                  // out from either left the window on a screen for a session that no
-                  // longer exists. Signing out ends whatever you were doing.
-                  setView('upload')
-                  return refresh()
-                })
-              }
-            />
-          )}
         </div>
       </header>
 
@@ -196,15 +167,12 @@ export function App() {
         {/*
           The queue is hidden rather than unmounted. Staging a dozen images, tagging half
           of them and then glancing at About used to throw all of it away — and an upload
-          already in flight lost the component waiting for its answer. It only exists
-          while there is a session to upload with, so logging out still clears it.
+          already in flight lost the component waiting for its answer.
         */}
-        {status.configured && status.user && (
+        {status.configured && (
           <div
             className={
-              over
-                ? 'hidden'
-                : 'mx-auto flex min-h-full w-full max-w-6xl flex-col px-4 py-4'
+              over ? 'hidden' : 'mx-auto flex min-h-full w-full max-w-6xl flex-col px-4 py-4'
             }
           >
             {/* The empty drop zone is the whole screen's content, so it sits in the

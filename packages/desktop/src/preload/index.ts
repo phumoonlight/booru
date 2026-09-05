@@ -13,10 +13,6 @@ const api: PostAppApi = {
   getStatus: () => ipcRenderer.invoke('app:status'),
   savePreferences: (preferences: PreferencesInput) =>
     ipcRenderer.invoke('app:save-preferences', preferences),
-  logIn: (email, password, remember) =>
-    ipcRenderer.invoke('auth:log-in', email, password, remember),
-  readSavedLogin: () => ipcRenderer.invoke('auth:saved-login'),
-  logOut: () => ipcRenderer.invoke('auth:log-out'),
   chooseFiles: () => ipcRenderer.invoke('files:choose'),
   stageFiles: (paths) => ipcRenderer.invoke('files:stage', paths),
   fetchImages: (urls) => ipcRenderer.invoke('files:fetch', urls),
@@ -30,6 +26,16 @@ const api: PostAppApi = {
   listRecommendations: () => ipcRenderer.invoke('recommendations:list'),
   saveRecommendations: (rules) => ipcRenderer.invoke('recommendations:save', rules),
   uploadPost: (request: UploadRequest) => ipcRenderer.invoke('post:upload', request),
+  searchPosts: (options) => ipcRenderer.invoke('posts:search', options),
+  getPost: (id) => ipcRenderer.invoke('posts:get', id),
+  savePost: (request) => ipcRenderer.invoke('posts:save', request),
+  deletePost: (id) => ipcRenderer.invoke('posts:delete', id),
+  postThumbnail: (fileName) => ipcRenderer.invoke('posts:thumbnail', fileName),
+  createTag: (name, category) => ipcRenderer.invoke('tags:create', name, category),
+  renameTag: (id, name) => ipcRenderer.invoke('tags:rename', id, name),
+  setTagCategory: (id, category) => ipcRenderer.invoke('tags:set-category', id, category),
+  deleteTag: (id) => ipcRenderer.invoke('tags:delete', id),
+  applyTagToTagged: (target, condition) => ipcRenderer.invoke('tags:apply', target, condition),
   // The one channel with nothing to answer: main only reads it when the window closes,
   // and the renderer pushes on every queue change, so a reply would be noise.
   reportQueue: (state: QueueState) => ipcRenderer.send('queue:state', state),

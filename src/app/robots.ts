@@ -13,7 +13,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: ['/login', '/upload', `/?${SEARCH_PARAM}=`, `/*?${SEARCH_PARAM}=`],
+      disallow: [`/?${SEARCH_PARAM}=`, `/*?${SEARCH_PARAM}=`],
     },
     sitemap: `${base}/sitemap.xml`,
   }

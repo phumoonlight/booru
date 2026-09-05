@@ -1,107 +1,135 @@
 # Architecture
 
+A booru-style image board: tag-centric gallery, multi-tag search with negation, post
+detail pages. Danbooru is the reference.
+
+**The website is read-only.** It has no accounts and makes one write — the view counter.
+Everything that changes the board is the desktop app's, which holds a service-role key
+compiled into its own bundle. That single fact explains most of the shape below.
+
+## Three programs
+
+| | | |
+|---|---|---|
+| `src/` | the website | Next.js 16 App Router on Vercel. Renders the gallery; reads only |
+| `packages/desktop` | the uploader and manager | Electron. Uploads, edits, deletes, and manages the tag vocabulary |
+| `packages/common` | what both compile | The post shape, the search grammar, the write path, both AVIF encoders |
+
+`packages/common` is reached as `@common/*`, a tsconfig `paths` mapping with no build
+step and nothing published. It exists because two programs read the same board and one
+writes to it: a second implementation of the query grammar is how `-tag` quietly comes
+to mean two different things. Nothing in there may import `next/*`, `server-only` or
+React — Electron's main process compiles it. See
+[packages/common/README.md](../packages/common/README.md).
+
 ## Stack
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Framework | Next.js (latest, App Router) | RSC for reads, Server Actions for writes |
-| Language | TypeScript (strict) | |
-| Styling | Tailwind CSS v4 | Mobile-first utilities; dark theme default (booru convention) |
-| UI primitives | none | Plain Tailwind against the CSS variables in `globals.css` — no component library |
-| Database | Supabase Postgres | Schema in `supabase/migrations/`, RLS enabled on all tables |
-| File storage | Supabase Storage | Two buckets: `posts`, `post-thumbnails` (both public-read) |
-| Auth | Supabase Auth | Email/password to start; any signed-in user can upload and manage posts |
-| Image processing | `sharp` (server-side) | Both AVIF encoders live in `packages/common/src/imgcmp/`, shared with the desktop uploader |
+| Framework | Next.js 16, App Router | RSC for reads; one Server Action for the view counter |
+| Language | TypeScript (strict) | React 19 |
+| Styling | Tailwind CSS v4 | Mobile-first, dark theme only, no component library — plain utilities against the CSS variables in `globals.css` |
+| Database | Supabase Postgres | Four migrations in `supabase/migrations/`; RLS on every table, select policies only |
+| File storage | Supabase Storage | `posts` and `post-thumbnails`, both public-read |
+| Auth | none | Removed. Possession of a desktop build is the write authorization |
+| Image processing | `sharp` | Both AVIF encoders in `@common/imgcmp/`. Only the desktop app runs them now; the root `tsc` still compiles them |
+| Desktop | Electron 44 + electron-vite | Packaged for Windows with electron-builder |
 | Deployment | Vercel + Supabase cloud | |
 
-## Folder structure (target)
+## Repository
 
 ```
 booru/
-├── docs/                     # this plan
+├── docs/                      # this file, database-schema.md, design/
 ├── supabase/
-│   ├── migrations/           # timestamped SQL files — source of truth for schema
-│   └── config.toml           # supabase CLI config (local dev)
-├── src/
-│   ├── app/
-│   │   ├── (public)/
-│   │   │   ├── page.tsx          # home = post grid
-│   │   │   ├── posts/[id]/       # post detail
-│   │   │   └── tags/             # tag listing
-│   │   ├── (auth)/login/         # login (public signup deferred)
-│   │   ├── admin/
-│   │   │   ├── upload/           # upload form
-│   │   │   └── posts/            # manage/edit/delete posts
-│   │   └── layout.tsx
-│   ├── components/
-│   │   ├── post-grid.tsx, post-card.tsx, tag-sidebar.tsx,
-│   │   ├── tag-drawer.tsx        # mobile: sidebar content in a sheet
-│   │   └── search-bar.tsx        # with tag autocomplete
-│   ├── lib/
-│   │   ├── supabase/             # client factories: server.ts, client.ts, admin.ts
-│   │   ├── data/                 # ALL queries live here (posts.ts, tags.ts, ...)
-│   │   │                         #   → reused by future public API route handlers
-│   │   └── actions/              # Server Actions (upload.ts, post.ts, auth.ts, ...)
-│   └── proxy.ts                  # Supabase session refresh (Next 16 name for middleware.ts)
-└── .env.local                    # NEXT_PUBLIC_SUPABASE_URL / ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
+│   ├── migrations/            # four files: storage, posts, tags, post_tags
+│   ├── seed.sql               # data, not schema — runs on db:reset only
+│   └── config.toml
+├── packages/
+│   ├── common/src/            # @common/* — one definition of everything shared
+│   │   ├── search.ts          # the ?query= grammar, ratings, searchHref
+│   │   ├── tags.ts storage.ts # tag charset and colours; md5-derived paths
+│   │   ├── data/              # posts, search, shared (writes), tags, counters
+│   │   ├── imgcmp/            # for-post.ts, for-thumbnail.ts
+│   │   └── upload/pipeline.ts # createPostFromImage — one image in, one post out
+│   └── desktop/src/           # main / preload / renderer, plus shared/api.ts
+└── src/
+    ├── app/(public)/          # page.tsx (landing), posts/, tags/
+    ├── components/            # post-feed, post-card, tag-list, rating-list, search-bar…
+    └── lib/
+        ├── supabase/          # anon.ts (every read), admin.ts (the view counter)
+        ├── data/              # @common/data bound to the anon client
+        └── actions/           # search.ts (the feed's next chunk), posts.ts (views)
 ```
 
-## Key patterns
+No `(auth)/`, no `upload/`, no `tags/manage/`, no `proxy.ts`. All four left when the
+board dropped its accounts; git has them.
 
-### Data access
-- **Reads:** RSC → functions in `src/lib/data/` → Supabase server client (anon key,
-  RLS enforced). Never query Supabase directly inside page components.
-- **Writes:** `"use server"` actions in `src/lib/actions/` → validate with `zod` →
-  call `lib/data` or Supabase. Mutating actions check the session via `requireUser()`
-  server-side (never trust the client).
-- The service-role client (`lib/supabase/admin.ts`) is used **only** where RLS must be
-  bypassed (e.g. storage writes during upload), never exposed to the browser.
+## Data access
 
-### Upload pipeline (Phase 2 detail)
-1. Client posts `FormData` (file + tags + rating + source) to the upload action.
-2. Action: verify session → compute MD5 → reject if a post with that hash exists (dedup)
-   → read dimensions with sharp → encode a lossy AVIF thumbnail (400px tall, width
-   capped at 800 for panoramas) and try a lossless AVIF of the image itself, bounded
-   to 2048 on both sides
-   → upload the image to `posts/{md5}.{ext}`, keeping the uploaded bytes byte-for-byte
-   when the AVIF didn't beat them and nothing had to be downscaled, and the thumb to
-   `post-thumbnails/{md5}.avif`
-   → `createPostWithTags()` inserts the `posts` row, upserts the tags and links them
-   (see database-schema.md) → `revalidatePath('/')`.
-3. `MAX_FILE_SIZE` keeps uploads under Vercel's server action body limit. The desktop
-   uploader (`packages/desktop`) is the answer to files above it: same pipeline, on a
-   real CPU, with its own 50MB/100MP ceiling.
+- **Reads:** RSC → `src/lib/data/*` → `@common/data/*` → the anon client. Never query
+  Supabase from a page or component. The one read that isn't an RSC is `loadMorePosts`
+  in `lib/actions/search.ts` — the feed's next chunk, an action rather than a route
+  handler so the data layer stays the only query surface.
+- **Writes:** there is one, `recordPostView`, and it runs on the service-role client
+  because no table has an update policy. A mutation being added to `src/` is almost
+  certainly being added to the wrong program.
+- **Two clients, each with one job.** `anon.ts` is cookie-less, so every page stays
+  cacheable and every read is the same read for everybody; `admin.ts` is `server-only`
+  and never reaches the browser.
+- Reads that both `generateMetadata` and the page need (`getPost`, `getPostTags`) are
+  wrapped in React `cache`, so each runs once per request.
 
-### Search (Phase 4 detail)
-- URL is the state, and `?query=` is all of it: `/posts?query=blue_hair+solo+-photo+start:900`.
-  `start:900` is a metatag like `rating:e3` — where the listing begins, older posts
-  below — so a saved query is one string, and the search bar's chips clear it like any
-  other token.
-- Query runs through `searchPosts()` in `lib/data/search.ts` (see database-schema.md).
-  Multi-tag AND is the one thing PostgREST can't say in a single filter, so tag
-  membership is resolved to id lists in TypeScript first and the request that follows
-  only filters, orders and counts. It lived in a `search_posts` SQL function early on,
-  which was faster to write and much harder to change.
-- Tag autocomplete: prefix search on `tags.name` ordered by `post_count desc`, debounced.
+## The write path (desktop only)
 
-### Ratings and SEO (Phase 5 detail)
-- Ratings are **metatags inside the same query string**: `rating:general`,
-  `-rating:e3`. `packages/common/src/search.ts` parses the string once, `splitRatings()` peels the
-  metatags off the tag names and `resolveRatings()` turns them into the whitelist
-  `searchPosts()` filters `rating` against. Nothing else — chips, tag links,
-  autocomplete, listing hrefs — needs to know they exist.
-- No rating is hidden from anyone: the facet lists every tier and `resolveRatings()`
-  narrows only when the query names one. The adult tiers (`RESTRICTED_RATINGS`) are
-  still kept out of `sitemap.xml` and carry `noindex` — a search-engine policy, not a
-  viewer one.
+1. A file is staged in the app: within the limits (50MB / 100MP), decodable, preview drawn.
+2. `createPostFromImage` computes the md5 of the uploaded bytes and refuses a duplicate —
+   that hash is also `posts.file_name`, the name both stored files take.
+3. Encode: two lossy AVIFs at quality 50 — a thumbnail (384px tall, width capped at 768
+   for panoramas) and the image itself, bounded to 2048 on both sides. The full-size AVIF
+   is kept only if it beats the uploaded bytes; otherwise the original is stored
+   byte-for-byte. Above the cap it is kept however it measures, being the only version
+   inside the bound.
+4. Store `posts/{file_name}.{ext}` and `post-thumbnails/{file_name}.avif`, then
+   `createPostWithTags()` inserts the row, upserts the tags and links them. No
+   transaction: if tagging fails the post is deleted again, counters included.
+5. `syncTagPostCounts()` recomputes `tags.post_count` for exactly the tags that moved.
+
+Compression is why this is a desktop app at all: it is seconds of CPU per file, which a
+free serverless tier bills by the second and kills at ten.
+
+## Search
+
+- **The URL is the state, and `?query=` is all of it**:
+  `/posts?query=blue_hair+solo+-photo+start:900`. Ratings and the cursor ride in the same
+  string as metatags — `rating:explicit`, `start:900` — so a saved query is one string
+  and the search bar renders every token as a chip you can clear.
+- `searchPosts()` in `@common/data/search.ts` runs it, for the website's listing *and*
+  the desktop's browse screen. Multi-tag AND is the one thing PostgREST cannot say in a
+  single filter, so tag membership is resolved to id lists in TypeScript first and the
+  request that follows only filters and orders. It was a `search_posts` SQL function
+  early on — faster to write, much harder to change.
+- **The listing is a feed, not pages.** The newest screenful is server-rendered; older
+  chunks append by cursor (`id < lastId`), never by offset, which slides when an upload
+  lands mid-scroll. Nothing counts rows: `hasMore` is one row read past the chunk.
+- Tag autocomplete is a prefix match on `tags.name` ordered by `post_count desc`. It uses
+  `like`, not `ilike`, because only `like` can use the `text_pattern_ops` index — the
+  name check constraint guarantees lowercase, so the results are identical.
+
+## Ratings and SEO
+
+- **Stored as one letter, written as a word.** `posts.rating` holds `g`, `s`, `q` or `e`;
+  a query spells `rating:explicit`. `RATING_NAME` in `@common/search` is the only
+  translation, and `asRating` reads either form while `ratingToken` only writes the word.
+- Nothing is hidden from a visitor: the facet lists every tier and the query narrows only
+  when it names one. `RESTRICTED_RATINGS` (`q`, `e`) is a search-engine policy — kept out
+  of `sitemap.xml`, `noindex` on the page — not a viewer one.
+- Rating blur is a per-browser display preference: a `data-blur-ratings` attribute on
+  `<html>`, set before first paint, so the grid stays a plain server render.
 - Absolute URLs (canonicals, OpenGraph, `robots.txt`, `sitemap.xml`) all come from
   `lib/site.ts` → `NEXT_PUBLIC_SITE_URL`, so the origin is configured in one place.
 - Search-result URLs are `noindex, follow` and disallowed in `robots.txt` — the
   tag-combination space is unbounded. Post pages and `/tags` carry the indexable content.
-- `sitemap.ts` must stay cacheable, so it reads through `lib/supabase/anon.ts`
-  (cookie-less) instead of the request-scoped server client.
-- Reads that both `generateMetadata` and the page need (`getPost`, `getPostTags`,
-  `getCurrentProfile`) are wrapped in React `cache` so each runs once per request.
 
 ## Mobile-first layout
 
@@ -111,15 +139,15 @@ The Danbooru reference is desktop-shaped; translate it like this:
 |---|---|---|
 | Fixed left sidebar (search + tag list) | Sticky top search bar; tag list in a slide-up drawer ("Tags" button) | Left sidebar returns, ~240px |
 | Dense thumbnail grid | 2–3 column grid, larger tap targets | 5–6 columns |
-| Top nav bar with many links | Everything in the sticky top bar: Pubooru · Tags · Log in/out. No Upload link — /upload still answers, but uploading is the desktop app's job | Same bar, more room |
-| Pagination row | A feed: the newest screenful is server-rendered, older ones append as you reach the bottom. No page numbers — `start:<id>` in the query is the only cursor | Same |
+| Top nav bar with many links | The sticky bar holds two things: Pubooru · Tags | Same bar, more room |
+| Pagination row | A feed — older chunks append as you reach the bottom, `start:<id>` the only cursor | Same |
 | Post page: image + sidebar metadata | Image full-width, tags/metadata below | Two-column |
 
-- Thumbnails come from the `post-thumbnails` bucket, the post image from `posts`.
-- Compression happens **once, at upload**. Both images are `unoptimized`, so the stored
+- Thumbnails come from `post-thumbnails`, the post image from `posts`.
+- **Compression happens once, at upload.** Both images are `unoptimized`, so the stored
   file is served untouched — animation intact, no second lossy pass. The grid used to go
-  through the Next optimizer and it visibly softened thumbnails: Next scales the
-  requested quality by 50/80 for AVIF, making the default 75 an AVIF quality of 47, for
-  a resize its optimizer could not perform anyway. Cost: the detail view downloads the
-  full image.
-- Tap target minimum 44px; test at 375px width throughout.
+  through the Next optimizer and it visibly softened thumbnails: Next scales the requested
+  quality by 50/80 for AVIF, making the default 75 an AVIF quality of 47, for a resize its
+  optimizer could not perform anyway. The cost is that the detail view downloads the full
+  image.
+- Tap target minimum 44px; design at 375px and scale up with `sm:` / `md:` / `lg:`.
