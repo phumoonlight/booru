@@ -412,7 +412,7 @@ function TagPicker({
                   <span
                     aria-hidden
                     style={{ background: colorSwatch(color) }}
-                    className="size-2 shrink-0 rounded-full border border-border"
+                    className="size-3 shrink-0 rounded-full border border-border"
                   />
                   {tag.name}
                 </button>
