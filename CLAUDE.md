@@ -227,16 +227,22 @@ behind a session, because there is none.
   not in what a tag is. It replaced a free-text box that had to guess a category and so
   coined every new tag as general. Every category gets a row including the empty ones —
   that row's ＋ is the only way to put a first tag in it — and the picker offers only that
-  category's tags, plus a create row for a name that matches nothing. It holds the board's
-  names in a module-level cache shared by every field on screen, separate from the Tags
-  screen's: that one carries `post_count` and is dropped on every post save, this one
-  holds names and categories, which no post write can change. `TagField` (free text) is
+  category's tags — **and only tags that exist**: naming one is the Tags screen's job,
+  where the whole vocabulary is on screen and a near-duplicate is visible before it is
+  made. It holds the board's names in a module-level cache shared by every field on
+  screen, separate from the Tags screen's: that one carries `post_count` and is dropped on
+  every post save, this one holds names and categories, so only `invalidateTagNames()`
+  from the Tags screen's own refresh drops it. `TagField` (free text) is
   now the Tag rules screen's and nothing else — what is typed there is a rule, not a
   post's tag.
 - **The rules apply where a post is made.** `seedsToInput` appends implications at upload,
   which is the only place the two lists meet; the queue card shows them under the rows and
   names the rule that lifted a rating. The post editor takes recommendations (a press
   commits) but not implications, since nothing there would be writing them.
+- **A finished upload reads its post back** and lists what it actually carries, with
+  Review tags opening that post's editor — `App` holds the `reviewing` id, since it is the
+  one thing one screen sends another, and clears it on any ordinary navigation so Browse
+  doesn't reopen an editor nobody asked for.
 - **The post editor (`post-editor.tsx`) has no Save button.** Every control writes on use
   and puts the old value back if the write fails; `writeId` is a ref, not state, because
   clicks outrun round trips and an earlier failure must not roll back a later success.

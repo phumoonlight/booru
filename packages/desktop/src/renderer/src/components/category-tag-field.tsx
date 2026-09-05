@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { TAG_PATTERN, categoryColor, categoryLabel, categoryOrder, type Tag } from '@common/tags'
+import { categoryColor, categoryLabel, categoryOrder, type Tag } from '@common/tags'
 import { impliedTags, type ImplicationRules } from '../../../shared/implications'
 import { recommendedTags } from '../../../shared/recommendations'
 import { useImplications } from '../implications'
@@ -48,8 +48,13 @@ function loadIndex(): Promise<void> {
   return inflight
 }
 
-/** Called when a tag is coined, which is the only thing here that can make it stale. */
-function invalidateIndex(): void {
+/**
+ * Drops the shared copy and reads again. Called from the Tags screen, which is the only
+ * place a tag can now be created, renamed or deleted — nothing on the tagging screens can
+ * change this list any more, and a post save cannot: it moves `post_count`, which this
+ * cache does not carry.
+ */
+export function invalidateTagNames(): void {
   index = null
   void loadIndex()
 }
@@ -251,9 +256,11 @@ export function CategoryTagField({
  * Counts are not drawn: they order the list, most used first, and that ordering is the
  * answer to what a number beside each name was being read for.
  *
- * Coining a tag is still possible and still deliberate: a name matching nothing offers a
- * create row, and the tag it creates belongs to *this* category, which is the whole reason
- * to add tags from here rather than from a box that has to guess.
+ * **It only offers what the board already has.** Coining a tag from here is gone: a tag
+ * created while tagging is created in a hurry, by someone looking at a picture rather than
+ * at the vocabulary, which is how a board ends up with `twintail`, `twintails` and
+ * `twin_tails`. Naming one is the Tags screen's job, where the whole list is in front of
+ * you and a near-duplicate is visible before you make it.
  */
 function TagPicker({
   category,
@@ -269,8 +276,6 @@ function TagPicker({
   onClose: () => void
 }) {
   const [filter, setFilter] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   const typed = filter.trim().toLowerCase()
@@ -282,14 +287,6 @@ function TagPicker({
       .slice(0, 60)
   }, [all, category, exclude, typed])
 
-  // Offered only when it is a name and nothing already answers to it — a create row beside
-  // an exact match is how a board ends up holding the same tag twice.
-  const coinable =
-    typed.length > 0 &&
-    TAG_PATTERN.test(typed) &&
-    !exclude.includes(typed) &&
-    !(all ?? []).some((tag) => tag.name === typed)
-
   /** A pick clears the filter and hands focus back, so the next tag is typed rather than
    *  clicked into. Leaving the word there would leave the list showing the one thing it
    *  can no longer offer — the tag just added. */
@@ -297,21 +294,6 @@ function TagPicker({
     setFilter('')
     inputRef.current?.focus()
     onPick(tag)
-  }
-
-  async function coin() {
-    setBusy(true)
-    setError('')
-    const result = await window.api.createTag(typed, category)
-    setBusy(false)
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    // The board has a name it did not have a moment ago, and every field on screen is
-    // reading the same copy of that list.
-    invalidateIndex()
-    pick({ name: result.name, category })
   }
 
   return (
@@ -330,8 +312,6 @@ function TagPicker({
         className="min-h-8 rounded-lg border border-border bg-background px-2 font-mono text-xs outline-none focus:border-accent"
       />
 
-      {error && <p className="text-xs text-[#ff5d5f]">{error}</p>}
-
       {all === null ? (
         <p className="px-1 py-2 text-xs text-muted">Reading tags…</p>
       ) : (
@@ -347,22 +327,12 @@ function TagPicker({
             </button>
           ))}
 
-          {options.length === 0 && !coinable && (
+          {options.length === 0 && (
             <p className="px-1 py-2 text-xs text-muted">
-              {typed ? 'No tag in this category matches.' : 'No tags in this category yet.'}
+              {typed
+                ? 'No tag in this category matches — new ones are named on the Tags screen.'
+                : 'No tags in this category yet.'}
             </p>
-          )}
-
-          {coinable && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void coin()}
-              title={`Create ${typed} as a ${categoryLabel(category)} tag`}
-              className="flex min-h-7 items-center rounded border border-accent px-2 font-mono text-xs text-accent transition-colors hover:bg-background disabled:opacity-50"
-            >
-              ＋ {typed}
-            </button>
           )}
         </div>
       )}

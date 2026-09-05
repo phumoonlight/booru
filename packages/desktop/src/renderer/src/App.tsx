@@ -25,6 +25,10 @@ export function App() {
   const [view, setView] = useState<
     'upload' | 'browse' | 'tags' | 'rules' | 'settings' | 'about'
   >('upload')
+  // A post the queue asked to review after uploading it. Held here because it is the one
+  // thing one screen sends another, and cleared by any ordinary navigation — otherwise
+  // Browse would reopen that editor the next time it is opened for its own reasons.
+  const [reviewing, setReviewing] = useState<number | null>(null)
 
   const refresh = useCallback(async () => {
     setStatus(await window.api.getStatus())
@@ -72,15 +76,22 @@ export function App() {
       // on this screen can change which board the app talks to.
       <Settings status={status} onChanged={() => void refresh()} />
     ) : view === 'browse' ? (
-      <Browse siteUrl={status.siteUrl} />
+      <Browse siteUrl={status.siteUrl} initialEdit={reviewing} />
     ) : view === 'tags' ? (
       <TagIndex siteUrl={status.siteUrl} />
     ) : view === 'rules' ? (
       <TagRules siteUrl={status.siteUrl} />
     ) : null
 
-  const toggle = (target: typeof view) => () =>
+  const go = (target: typeof view) => {
+    setReviewing(null)
+    setView(target)
+  }
+
+  const toggle = (target: typeof view) => () => {
+    setReviewing(null)
     setView((current) => (current === target ? 'upload' : target))
+  }
 
   return (
     <div className="flex h-screen flex-col">
@@ -111,7 +122,7 @@ export function App() {
               here that is the app's actual job, so it leads the row. */}
           <button
             type="button"
-            onClick={() => setView('upload')}
+            onClick={() => go('upload')}
             className={navClass(view === 'upload')}
           >
             <span aria-hidden>📤</span>
@@ -181,7 +192,13 @@ export function App() {
                 margins collapse to zero, where centring would push the first rows off
                 the top of a scroller, out of reach. */}
             <div className="my-auto">
-              <UploadQueue status={status} />
+              <UploadQueue
+                status={status}
+                onReview={(postId) => {
+                  setReviewing(postId)
+                  setView('browse')
+                }}
+              />
             </div>
           </div>
         )}

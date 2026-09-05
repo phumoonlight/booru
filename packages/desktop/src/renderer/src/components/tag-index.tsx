@@ -8,6 +8,7 @@ import {
   type TagCategory,
 } from '@common/tags'
 import { tagLabel } from '@common/search'
+import { invalidateTagNames } from './category-tag-field'
 
 /**
  * The last index read, kept outside React on purpose. This screen is unmounted whenever
@@ -83,6 +84,9 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
     // and would hand back the same list this screen is already showing. 🔄 means "read the
     // board", which is a thing only main can do.
     await window.api.clearTagCache()
+    // Creating, renaming and deleting all land here, and they are the only things that can
+    // change the names the tag pickers offer — this is where that copy is dropped too.
+    invalidateTagNames()
     const next = await window.api.listTags()
     cached = { tags: next, at: Date.now() }
     setTags(next)

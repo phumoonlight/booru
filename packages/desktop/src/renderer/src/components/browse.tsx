@@ -27,13 +27,25 @@ let lastQuery = ''
 
 const CHUNK = 24
 
-export function Browse({ siteUrl }: { siteUrl: string }) {
+export function Browse({
+  siteUrl,
+  initialEdit = null,
+}: {
+  siteUrl: string
+  /**
+   * A post to open the editor on straight away — the queue's Review after an upload. A
+   * prop rather than the module-level trick `lastQuery` uses, because this screen is
+   * mounted fresh every time it is switched to, so the prop is read exactly once and a
+   * second visit doesn't reopen an editor nobody asked for.
+   */
+  initialEdit?: number | null
+}) {
   const [query, setQuery] = useState(lastQuery)
   const [submitted, setSubmitted] = useState(lastQuery)
   const [posts, setPosts] = useState<Post[]>([])
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState<number | null>(null)
+  const [editing, setEditing] = useState<number | null>(initialEdit)
   // A save leaves the grid's copy of that row stale. It is not re-read then — the editor
   // is still the screen in front, and swapping it out was the old behaviour this replaced
   // — so the debt is noted here and paid on the way back out.

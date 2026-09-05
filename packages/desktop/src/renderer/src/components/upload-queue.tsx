@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { RATING_COLOR, RATING_LABEL, RATINGS, type Rating } from '@common/search'
 import { ArrowDownIcon, ArrowUpIcon, TrashIcon } from './icons'
 import { ImageViewer } from './image-viewer'
+import { categoryColor } from '@common/tags'
 import { CategoryTagField, seedsToInput } from './category-tag-field'
 import type { TagSeed } from './tag-field'
 import { invalidateTags } from './tag-index'
@@ -24,6 +25,13 @@ type Staged = {
   status: Status
   message?: string
   postId?: number
+  /**
+   * What the post actually came out carrying, read back from the board rather than
+   * assumed from what was sent. The rules add tags at upload and the pipeline dedupes, so
+   * the list that went up is not quite the list that landed — and this row exists to be
+   * checked, which a copy of the request could not do.
+   */
+  postTags?: TagSeed[]
 }
 
 /**
@@ -87,7 +95,14 @@ function formatSize(bytes: number): string {
  * are read at upload time, on the other side of the bridge, so a 40MB image is never
  * copied into the window at all.
  */
-export function UploadQueue({ status }: { status: AppStatus }) {
+export function UploadQueue({
+  status,
+  onReview,
+}: {
+  status: AppStatus
+  /** Open this post in the editor — the way back into a post whose tags need another look. */
+  onReview: (postId: number) => void
+}) {
   const [dragging, setDragging] = useState(false)
   // What the staging step is doing, or null. A label rather than a flag: reading a
   // picked file and fetching one off the web take visibly different amounts of time.
@@ -259,10 +274,20 @@ export function UploadQueue({ status }: { status: AppStatus }) {
       }
 
       if (result.ok) {
-        patch(item.file.path, { status: 'ok', postId: result.postId })
+        const postId = result.postId
+        patch(item.file.path, { status: 'ok', postId })
         // The post just created tags and moved counts, so the Tags screen's remembered
         // index is out of date. Dropped rather than re-read: it may never be looked at.
         invalidateTags()
+        // Not awaited: the next upload in the run must not wait on a read that only fills
+        // in a row already marked done.
+        void window.api.getPost(postId).then((loaded) => {
+          if (loaded) {
+            patch(item.file.path, {
+              postTags: loaded.tags.map(({ name, category }) => ({ name, category })),
+            })
+          }
+        })
       } else {
         patch(item.file.path, {
           status: 'error',
@@ -507,13 +532,12 @@ export function UploadQueue({ status }: { status: AppStatus }) {
 
                   <div className="flex min-w-0 flex-1 flex-col gap-3">
                     {item.status === 'ok' ? (
-                      <p className="text-sm">
-                        <PostLink
-                          siteUrl={status.siteUrl}
-                          postId={item.postId}
-                          label={`Uploaded — post #${item.postId}`}
-                        />
-                      </p>
+                      <Uploaded
+                        siteUrl={status.siteUrl}
+                        postId={item.postId}
+                        tags={item.postTags}
+                        onReview={onReview}
+                      />
                     ) : (
                       <>
                         <CategoryTagField
@@ -636,6 +660,62 @@ export function UploadQueue({ status }: { status: AppStatus }) {
  * A finished post, opened in the real browser. Without a site URL in settings there is
  * nowhere to send it, so the id is still shown — it just isn't a link.
  */
+/**
+ * A finished row. It says what landed rather than only that something did: the tags the
+ * post actually carries, read back from the board, and a way straight into the editor.
+ *
+ * Both because this is the moment tagging is checked. A tag that was meant to go on and
+ * did not is invisible from a row that only says "Uploaded", and the queue is where you
+ * still remember what the picture was supposed to be tagged — ten uploads later it is a
+ * search to find again.
+ */
+function Uploaded({
+  siteUrl,
+  postId,
+  tags,
+  onReview,
+}: {
+  siteUrl: string
+  postId: number | undefined
+  tags: TagSeed[] | undefined
+  onReview: (postId: number) => void
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="flex flex-wrap items-baseline gap-3 text-sm">
+        <PostLink siteUrl={siteUrl} postId={postId} label={`Uploaded — post #${postId}`} />
+        {postId !== undefined && (
+          <button
+            type="button"
+            onClick={() => onReview(postId)}
+            title="Open this post in the editor"
+            className="text-xs text-muted underline-offset-2 transition-colors hover:text-foreground hover:underline"
+          >
+            ✏️ Review tags
+          </button>
+        )}
+      </p>
+
+      {tags === undefined ? (
+        <p className="text-xs text-muted">Reading its tags…</p>
+      ) : tags.length === 0 ? (
+        <p className="text-xs text-muted">No tags — nothing will find this post.</p>
+      ) : (
+        <div className="flex flex-wrap gap-1">
+          {tags.map((tag) => (
+            <span
+              key={tag.name}
+              className={`rounded bg-surface px-2 py-0.5 font-mono text-xs ${categoryColor(tag.category)}`}
+            >
+              {tag.name}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PostLink({
   siteUrl,
   postId,
