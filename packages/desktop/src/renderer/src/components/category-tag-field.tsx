@@ -196,7 +196,12 @@ export function CategoryTagField({
       */}
       {implied.length > 0 && (
         <div className="flex flex-wrap items-baseline gap-1 pt-1">
-          <span className="w-32 shrink-0 text-xs uppercase tracking-wide text-muted">Implied</span>
+          {/* Accent, where every category label is grey: these two rows are the only ones
+              on the field that something other than you put there, and a rule that goes
+              unnoticed is a rule you stop trusting. */}
+          <span className="w-32 shrink-0 text-xs font-semibold uppercase tracking-wide text-accent">
+            Implied
+          </span>
           {implied.map((name) => (
             <span
               key={name}
@@ -216,7 +221,7 @@ export function CategoryTagField({
       */}
       {offered.length > 0 && (
         <div className="flex flex-wrap items-baseline gap-1 pt-1">
-          <span className="w-32 shrink-0 text-xs uppercase tracking-wide text-muted">
+          <span className="w-32 shrink-0 text-xs font-semibold uppercase tracking-wide text-accent">
             Recommended
           </span>
           {offered.map((name) => (
