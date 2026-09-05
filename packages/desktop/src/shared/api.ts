@@ -188,6 +188,8 @@ export type PostAppApi = {
   setTagCategory: (id: number, category: TagCategory) => Promise<Outcome>
   /** Moves a tag into a subgroup of its category, or out of one with ''. */
   setTagSubcategory: (id: number, subcategory: string) => Promise<Outcome>
+  /** Sets the glyph drawn in front of the tag's name, or clears it with ''. */
+  setTagEmoji: (id: number, emoji: string) => Promise<Outcome>
   deleteTag: (id: number) => Promise<Outcome>
   /** Adds one tag to every post already carrying another. */
   applyTagToTagged: (target: string, condition: string) => Promise<ApplyTagOutcome>

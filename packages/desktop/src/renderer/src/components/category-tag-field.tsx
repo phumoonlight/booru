@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   COLOR_NAMES,
-  TAG_EMOJI,
   categoryColor,
   categoryLabel,
   categoryOrder,
@@ -144,6 +143,14 @@ export function CategoryTagField({
   const categoryOf = (name: string): string =>
     (all ?? []).find((tag) => tag.name === name)?.category ?? 'general'
 
+  /**
+   * The same for the glyph. A chosen tag is a name and a category — `TagSeed` — so its
+   * emoji comes from the board's index rather than from the chip, and a tag that has not
+   * loaded yet, or was coined a moment ago, simply has none until it does.
+   */
+  const emojiOf = (name: string): string | null =>
+    (all ?? []).find((tag) => tag.name === name)?.emoji ?? null
+
   const add = (tag: TagSeed) => {
     if (value.some((t) => t.name === tag.name)) return
     onChange([...value, tag])
@@ -178,7 +185,7 @@ export function CategoryTagField({
                     // the two apart all the same — offered is square, chosen is a pill.
                     className={`flex items-center gap-1.5 rounded-full border border-border bg-surface pl-2.5 font-mono text-xs ${categoryColor(category)}`}
                   >
-                    <TagMarks name={tag.name} />
+                    <TagMarks name={tag.name} emoji={emojiOf(tag.name)} />
                     {tagLabel(tag.name)}
                     <button
                       type="button"
@@ -326,15 +333,20 @@ export function CategoryTagField({
 const COLOR_PREFIXES = [...COLOR_NAMES].sort((a, b) => b.length - a.length)
 
 /**
- * What a tag carries in front of its name: its emoji, if one is written for that exact
- * name, and the colour it names, painted. Either, both or neither.
+ * What a tag carries in front of its name: the emoji stored on its row, if it has one,
+ * and the colour it names, painted. Either, both or neither.
+ *
+ * The two arrive by opposite routes on purpose. The colour is read off the name here,
+ * because guessing it is free and painting the wrong one costs nothing; the emoji is
+ * passed in from the tag's own row, because it is a judgement about the tag that only the
+ * board can hold — it used to be a record in code, which meant a new tag's glyph was a
+ * commit and an installer away from being seen.
  *
  * Drawn on the chips a post already carries as well as the ones offered, so a tag looks
  * the same before and after it is picked — and on the row where it landed, which is the
  * only place a mis-picked colour is ever noticed.
  */
-function TagMarks({ name }: { name: string }) {
-  const emoji = TAG_EMOJI[name]
+function TagMarks({ name, emoji }: { name: string; emoji: string | null }) {
   const split = splitColor(name, COLOR_PREFIXES)
 
   return (
@@ -506,7 +518,7 @@ function TagOption({
       onClick={() => onPick({ name: tag.name, category: tag.category })}
       className={`flex min-h-7 items-center gap-1.5 rounded border border-border px-2 font-mono text-xs transition-colors hover:border-accent ${categoryColor(category)}`}
     >
-      <TagMarks name={tag.name} />
+      <TagMarks name={tag.name} emoji={tag.emoji} />
       {tagLabel(tag.name)}
     </button>
   )

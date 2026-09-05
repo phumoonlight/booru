@@ -66,6 +66,27 @@ export function FacetActions({
   )
 }
 
+/**
+ * The glyph a tag carries in front of its name — `tags.emoji`, set per tag in the desktop
+ * app and null for most of them, which is why this renders nothing rather than a space.
+ *
+ * `aria-hidden`, like every emoji on the site: it is decoration in front of a name the
+ * screen reader is about to read anyway, and "woman's briefs" announced ahead of
+ * `panties` is worse than silence.
+ *
+ * Inline with a margin rather than a flex child, so it goes in front of the label text
+ * itself wherever a tag is drawn — including inside a truncating cell, where sitting at
+ * the head of the string is what keeps it out of the ellipsis.
+ */
+export function TagEmoji({ emoji }: { emoji: string | null }) {
+  if (!emoji) return null
+  return (
+    <span aria-hidden className="mr-1">
+      {emoji}
+    </span>
+  )
+}
+
 export type TagEntry = { tag: Tag; count: number }
 
 /**
@@ -96,6 +117,7 @@ function TagRow({ entry, currentQuery }: { entry: TagEntry; currentQuery: string
           included ? 'font-semibold underline' : ''
         } ${excluded ? 'line-through opacity-60' : ''}`}
       >
+        <TagEmoji emoji={tag.emoji} />
         {label}
         <NavProgress />
       </Link>

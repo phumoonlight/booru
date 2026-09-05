@@ -232,7 +232,7 @@ export async function getTagsForPosts(
 
   const { data } = await client
     .from('post_tags')
-    .select('tags(id, name, category, post_count)')
+    .select('tags(id, name, category, emoji, post_count)')
     .in('post_id', postIds)
 
   const counts = new Map<number, { tag: Tag; onPage: number }>()

@@ -278,6 +278,13 @@ function TagGrid({
               editingId === tag.id ? 'bg-surface' : ''
             } ${categoryColor(category)}`}
           >
+            {/* Ahead of the name and outside the truncation, so a long tag loses its own
+                tail rather than the glyph that identifies it fastest. */}
+            {tag.emoji && (
+              <span aria-hidden className="shrink-0 leading-none">
+                {tag.emoji}
+              </span>
+            )}
             <span className="min-w-0 flex-1 truncate">{tagLabel(tag.name)}</span>
             <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted">
               {tag.post_count}
@@ -580,6 +587,7 @@ function EditTag({
   const [name, setName] = useState(tag.name)
   const [category, setCategory] = useState<TagCategory>(tag.category)
   const [subcategory, setSubcategory] = useState(tag.category2 ?? '')
+  const [emoji, setEmoji] = useState(tag.emoji ?? '')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -611,6 +619,14 @@ function EditTag({
         return
       }
     }
+    if (emoji !== (tag.emoji ?? '')) {
+      const marked = await window.api.setTagEmoji(tag.id, emoji)
+      if (!marked.ok) {
+        setBusy(false)
+        setError(marked.error)
+        return
+      }
+    }
     setBusy(false)
     onDone()
   }
@@ -628,7 +644,10 @@ function EditTag({
   }
 
   const changed =
-    name !== tag.name || category !== tag.category || subcategory !== (tag.category2 ?? '')
+    name !== tag.name ||
+    category !== tag.category ||
+    subcategory !== (tag.category2 ?? '') ||
+    emoji !== (tag.emoji ?? '')
 
   return (
     <Panel
@@ -664,6 +683,18 @@ function EditTag({
       }
     >
       <div className="flex flex-wrap items-center gap-2">
+        {/* In front of the name, where what it holds is drawn. One glyph wide and no
+            wider: the field is the size of the thing it takes, which says more about what
+            belongs in it than a placeholder would, and an empty box clears the column. */}
+        <input
+          value={emoji}
+          onChange={(event) => setEmoji(event.target.value)}
+          disabled={busy}
+          aria-label={`Emoji in front of ${tagLabel(tag.name)}`}
+          title="One emoji, drawn in front of the name. Empty for none."
+          spellCheck={false}
+          className={`${FIELD} w-14 shrink-0 px-0 text-center`}
+        />
         <input
           value={name}
           onChange={(event) => setName(event.target.value)}

@@ -72,6 +72,13 @@ export type Tag = {
    * post page's own tag list.
    */
   category2?: Subcategory
+  /**
+   * One glyph drawn in front of the name, or null — `tags.emoji`, whose migration has why
+   * it exists. Required rather than optional, unlike `category2` above it: every read asks
+   * for this column, because a tag is drawn with its emoji wherever it is drawn at all and
+   * a list that quietly dropped it would look like a tag that has none.
+   */
+  emoji: string | null
   post_count: number
 }
 
@@ -214,23 +221,6 @@ export const COLOR_NAMES: readonly string[] = [
   'white',
   'yellow',
 ]
-
-/**
- * An emoji for a tag, by its exact name.
- *
- * Exact and nothing cleverer: a tag is a name, not a phrase, and matching on substrings
- * would put a bow on `bow_underwear` and on `rainbow` alike. `bow_underwear` earns its own
- * key rather than inheriting one from `bow`, because whether a compound tag reads as its
- * head word is a judgement per tag and not a rule.
- *
- * Decoration, deliberately partial. A glyph is worth having where one exists that is
- * unmistakably the thing; most tags have no such glyph and are better off with none than
- * with an approximation that has to be decoded. Adding one is a line here.
- */
-export const TAG_EMOJI: Record<string, string> = {
-  panties: '🩲',
-  bow_underwear: '🎀',
-}
 
 /**
  * A colour word as something a browser can paint, for the dot beside a colour variant.

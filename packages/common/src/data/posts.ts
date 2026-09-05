@@ -53,7 +53,7 @@ export async function getPost(client: BooruClient, id: number): Promise<Post | n
 export async function getPostTags(client: BooruClient, postId: number): Promise<Tag[]> {
   const { data } = await client
     .from('post_tags')
-    .select('tags(id, name, category, post_count)')
+    .select('tags(id, name, category, emoji, post_count)')
     .eq('post_id', postId)
 
   return (data ?? [])

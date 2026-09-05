@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { suggestTags } from '@/lib/actions/search'
 import { NavProgressBar } from '@/components/nav-progress'
+import { TagEmoji } from '@/components/tag-list'
 import type { Tag } from '@common/tags'
 import { queryTokens, searchHref, SEARCH_PARAM, tagLabel, withoutTag } from '@common/search'
 
@@ -139,7 +140,10 @@ export function SearchBar({
                     i === activeIndex ? 'bg-accent/20' : ''
                   }`}
                 >
-                  <span>{tagLabel(tag.name)}</span>
+                  <span>
+                    <TagEmoji emoji={tag.emoji} />
+                    {tagLabel(tag.name)}
+                  </span>
                   <span className="text-xs tabular-nums text-muted">{tag.post_count}</span>
                 </button>
               </li>

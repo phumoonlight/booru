@@ -55,7 +55,8 @@ served by the primary key, which Postgres reads backwards as cheaply as forwards
 ## `tags`
 
 `supabase/migrations/20260826100200_tags.sql`, plus
-`supabase/migrations/20260905120000_tags_category2.sql`
+`supabase/migrations/20260905120000_tags_category2.sql` and
+`supabase/migrations/20260906120000_tags_emoji.sql`
 
 | column | type | notes |
 | --- | --- | --- |
@@ -63,6 +64,7 @@ served by the primary key, which Postgres reads backwards as cheaply as forwards
 | `name` | `text unique not null` | `check (name ~ '^[a-z0-9_().-]+$')` — lowercase `snake_case` |
 | `category` | `text not null default 'general'` | free-form; `TAG_CATEGORIES` in `@common/tags` is the ten the app writes, each with a colour and a place in the order |
 | `category2` | `text` (nullable) | a finer grouping *within* the category, free-form and usually null — read by the desktop tag picker and by nothing else |
+| `emoji` | `text` (nullable) | one glyph drawn in front of the name, usually null — every read selects it |
 | `post_count` | `int not null default 0` | denormalized, see [Counters](#counters) |
 | `created_at` | `timestamptz not null default now()` | |
 
@@ -86,6 +88,12 @@ lookup); `tags_name_prefix_idx (name text_pattern_ops)` for autocomplete;
   storage or a post's own page knows it exists. There is no list of valid values —
   `normalizeSubcategory` in `@common/tags` lowercases and space-collapses what is typed so
   that a subgroup has one spelling, and `''` clears the column back to null.
+- `emoji` is cosmetic and the opposite of local: every tag read selects it, because a tag
+  is drawn with its glyph wherever it is drawn at all and a read that left the column out
+  would render a tag that has one as a tag that has none. It replaced a `TAG_EMOJI` record
+  in code keyed by tag name, which made a new tag's glyph a build and an installer away
+  from being seen. `readTagEmoji` in `@common/data/tags` is what may be written — exactly
+  one grapheme, not a plain ASCII character — and `''` clears the column back to null.
 
 ## `post_tags`
 

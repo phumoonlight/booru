@@ -2,7 +2,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { getTags } from '@/lib/data/tags'
 import { categoryOrder, type TagCategory } from '@common/tags'
-import { categoryColor, categoryLabel } from '@/components/tag-list'
+import { categoryColor, categoryLabel, TagEmoji } from '@/components/tag-list'
 import { SearchHeader } from '@/components/search-header'
 import { NavProgress } from '@/components/nav-progress'
 import { SetupNotice } from '@/components/setup-notice'
@@ -78,7 +78,10 @@ export default async function TagsPage() {
                     href={`/tags/${tag.id}`}
                     className={`flex min-h-9 items-center gap-2 px-3 py-1.5 text-sm hover:bg-surface ${categoryColor(category)}`}
                   >
-                    <span className="min-w-0 flex-1 truncate">{tagLabel(tag.name)}</span>
+                    <span className="min-w-0 flex-1 truncate">
+                      <TagEmoji emoji={tag.emoji} />
+                      {tagLabel(tag.name)}
+                    </span>
                     <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted">
                       {tag.post_count}
                     </span>

@@ -37,6 +37,7 @@ const api: PostAppApi = {
   setTagCategory: (id, category) => ipcRenderer.invoke('tags:set-category', id, category),
   setTagSubcategory: (id, subcategory) =>
     ipcRenderer.invoke('tags:set-category2', id, subcategory),
+  setTagEmoji: (id, emoji) => ipcRenderer.invoke('tags:set-emoji', id, emoji),
   deleteTag: (id) => ipcRenderer.invoke('tags:delete', id),
   applyTagToTagged: (target, condition) => ipcRenderer.invoke('tags:apply', target, condition),
   // The one channel with nothing to answer: main only reads it when the window closes,

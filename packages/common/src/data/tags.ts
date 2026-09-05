@@ -48,10 +48,34 @@ export function readTagName(raw: string): { name: string } | { error: string } {
   return { name: tags[0] }
 }
 
+/**
+ * The typed-in emoji as it is stored: trimmed, with an empty box meaning "no glyph" and
+ * clearing the column rather than failing.
+ *
+ * Exactly one grapheme, which is the unit a person means by "an emoji" and not the unit
+ * `length` counts — 🧑‍🚀 is five UTF-16 units and 🇯🇵 is four, so a character cap here
+ * would have refused half the keyboard's own suggestions. Two glyphs are refused rather
+ * than truncated: the second one was typed on purpose, and silently dropping it is how a
+ * field teaches nobody what it wants.
+ *
+ * A plain ASCII character is refused too. The column would hold it and the label would
+ * draw it, but `[` in front of a tag name is a typo every time it happens — nobody reaches
+ * for this field to put a bracket on a tag.
+ */
+export function readTagEmoji(raw: string): { emoji: string | null } | { error: string } {
+  const value = raw.trim()
+  if (value === '') return { emoji: null }
+
+  const graphemes = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(value)]
+  if (graphemes.length > 1) return { error: 'One emoji — that is more than one glyph.' }
+  if (/^[\x20-\x7e]$/.test(value)) return { error: 'That is a plain character, not an emoji.' }
+  return { emoji: value }
+}
+
 export async function getTagByName(client: BooruClient, name: string): Promise<Tag | null> {
   const { data } = await client
     .from('tags')
-    .select('id, name, category, post_count')
+    .select('id, name, category, emoji, post_count')
     .eq('name', name)
     .maybeSingle()
   return data
@@ -61,7 +85,7 @@ export async function getTagByName(client: BooruClient, name: string): Promise<T
 export async function getTagById(client: BooruClient, id: number): Promise<Tag | null> {
   const { data } = await client
     .from('tags')
-    .select('id, name, category, post_count')
+    .select('id, name, category, emoji, post_count')
     .eq('id', id)
     .maybeSingle()
   return data
@@ -159,6 +183,28 @@ export async function setTagSubcategory(
 }
 
 /**
+ * Set the glyph drawn in front of a tag's name, or clear it with an empty string —
+ * `tags.emoji`.
+ *
+ * The most cosmetic write there is: it moves no post, no link and no count, and a wrong
+ * value costs one glyph at the front of a label. Its own channel rather than a field on
+ * the category or the rename, for the same reason the subgroup has one — what a tag *is*,
+ * where it is drawn and what it is drawn with are three separate decisions about the row.
+ */
+export async function setTagEmoji(
+  client: BooruClient,
+  id: number,
+  rawEmoji: string
+): Promise<TagOutcome<{ emoji: string | null }>> {
+  const parsed = readTagEmoji(rawEmoji)
+  if ('error' in parsed) return { ok: false, error: parsed.error }
+
+  const { error } = await client.from('tags').update({ emoji: parsed.emoji }).eq('id', id)
+  if (error) return { ok: false, error: `Update failed: ${error.message}` }
+  return { ok: true, emoji: parsed.emoji }
+}
+
+/**
  * Remove a tag from the board entirely — it comes off every post that carries it.
  * post_tags has no cascade from tags, so its rows go first or the foreign key
  * refuses the delete.
@@ -241,7 +287,7 @@ export async function applyTagToTagged(
   try {
     const { data: rows, error } = await client
       .from('tags')
-      .select('id, name, category, post_count')
+      .select('id, name, category, emoji, post_count')
       .in('name', [target.name, condition.name])
     if (error) throw new Error(`Could not read the tags: ${error.message}`)
 
@@ -253,7 +299,7 @@ export async function applyTagToTagged(
     let targetTag = (rows ?? []).find((tag) => tag.name === target.name)
     if (!targetTag) {
       const [id] = await ensureTagIds(client, [target.name])
-      targetTag = { id, name: target.name, category: 'general', post_count: 0 }
+      targetTag = { id, name: target.name, category: 'general', emoji: null, post_count: 0 }
     }
     const targetId = targetTag.id
 
