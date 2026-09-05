@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   COLOR_NAMES,
+  TAG_EMOJI,
   categoryColor,
   categoryLabel,
   categoryOrder,
@@ -158,7 +159,7 @@ export function CategoryTagField({
                   key={tag.name}
                   className={`flex items-center gap-1.5 rounded bg-surface pl-2 font-mono text-xs ${categoryColor(category)}`}
                 >
-                  <ColorDot name={tag.name} category={category} colors={colors} />
+                  <TagMarks name={tag.name} category={category} colors={colors} />
                   {tag.name}
                   <button
                     type="button"
@@ -298,11 +299,14 @@ function colorWords(all: Tag[] | null): string[] {
 }
 
 /**
- * The colour a tag names, painted, or nothing. Drawn on the chips a post already carries
- * as well as the ones offered, so a tag looks the same before and after it is picked — and
- * on the row where it landed, which is the only place a mis-picked colour is ever noticed.
+ * What a tag carries in front of its name: its emoji, if one is written for that exact
+ * name, and the colour it names, painted. Either, both or neither.
+ *
+ * Drawn on the chips a post already carries as well as the ones offered, so a tag looks
+ * the same before and after it is picked — and on the row where it landed, which is the
+ * only place a mis-picked colour is ever noticed.
  */
-function ColorDot({
+function TagMarks({
   name,
   category,
   colors,
@@ -311,17 +315,28 @@ function ColorDot({
   category: string
   colors: string[]
 }) {
-  // Not inside the Color row: there the tag *is* the colour, and a dot beside a word that
-  // says the same thing is decoration.
+  const emoji = TAG_EMOJI[name]
+  // No dot inside the Color row: there the tag *is* the colour, and a dot beside a word
+  // that says the same thing is decoration.
   const split = category === 'color' ? null : splitColor(name, colors)
-  if (!split) return null
 
   return (
-    <span
-      aria-hidden
-      style={{ background: colorSwatch(split.color) }}
-      className="size-3 shrink-0 rounded-full border border-border"
-    />
+    <>
+      {emoji && (
+        <span aria-hidden className="leading-none">
+          {emoji}
+        </span>
+      )}
+      {split && (
+        <span
+          aria-hidden
+          // The border keeps white and black from disappearing into the two grounds they
+          // would otherwise match.
+          style={{ background: colorSwatch(split.color) }}
+          className="size-3 shrink-0 rounded-full border border-border"
+        />
+      )}
+    </>
   )
 }
 
@@ -440,7 +455,7 @@ function TagPicker({
                   {/* The colour itself, painted, rather than a second word colour in the
                       text — these chips belong to the category they are in, and a dot is
                       read before the name is, which is the order you pick one in. */}
-                  <ColorDot name={tag.name} category={category} colors={colors} />
+                  <TagMarks name={tag.name} category={category} colors={colors} />
                   {tag.name}
                 </button>
               ))}

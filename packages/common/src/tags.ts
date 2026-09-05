@@ -169,6 +169,23 @@ export const COLOR_NAMES: readonly string[] = [
 ]
 
 /**
+ * An emoji for a tag, by its exact name.
+ *
+ * Exact and nothing cleverer: a tag is a name, not a phrase, and matching on substrings
+ * would put a bow on `bow_underwear` and on `rainbow` alike. `bow_underwear` earns its own
+ * key rather than inheriting one from `bow`, because whether a compound tag reads as its
+ * head word is a judgement per tag and not a rule.
+ *
+ * Decoration, deliberately partial. A glyph is worth having where one exists that is
+ * unmistakably the thing; most tags have no such glyph and are better off with none than
+ * with an approximation that has to be decoded. Adding one is a line here.
+ */
+export const TAG_EMOJI: Record<string, string> = {
+  panties: '🩲',
+  bow_underwear: '🎀',
+}
+
+/**
  * A colour word as something a browser can paint, for the dot beside a colour variant.
  *
  * Most of `COLOR_NAMES` are CSS named colours once the underscore is dropped —
