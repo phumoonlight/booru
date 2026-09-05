@@ -11,6 +11,7 @@ together or the app lies about itself.
 Entries are grouped **Added** / **Changed** / **Fixed**, and say what someone using the
 app would notice.
 
+- [2.0.3](2.0.3.md) — 2026-09-05 — five more tag categories; the category field is a menu again.
 - [2.0.2](2.0.2.md) — 2026-09-05 — a tag's category is free text, with suggestions.
 - [2.0.1](2.0.1.md) — 2026-09-05 — saving a post in Browse stays on the post.
 - [2.0.0](2.0.0.md) — 2026-09-04 — no accounts: Browse and edit the board from here.

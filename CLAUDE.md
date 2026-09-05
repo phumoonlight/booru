@@ -228,10 +228,10 @@ behind a session, because there is none.
   nothing left to look at.
 - **Tags** lists and manages: click a row for rename / recategorize / delete, with New tag
   and Apply by tag above the list, those being the two operations not about a row you are
-  pointing at. **A category is free text, not a menu** — letters only, filtered as typed,
-  with the five known ones plus whatever the board has coined offered in a `<datalist>`.
-  The column was always free-form; a `<select>` made the five mandatory from the only
-  window that can write one. Each drops the cached index. Its list is cached in a module-level `let`
+  pointing at. The category menu is `TAG_CATEGORIES` — **adding one is a line there plus
+  a colour**, and no migration, since the column is free-form text. Reads don't assume
+  the list (`categoryOrder` puts an unknown category after the known ones rather than
+  dropping its tags); writes do (`z.enum(TAG_CATEGORIES)` on both IPC channels). Each drops the cached index. Its list is cached in a module-level `let`
   because the view unmounts whenever something is in front of it; 🔄 re-reads (clearing
   main's copy first, or it hands back the same list) and `invalidateTags()` drops it when
   an upload or edit lands.

@@ -1,6 +1,6 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
-  CATEGORY_PATTERN,
+  TAG_CATEGORIES,
   categoryColor,
   categoryLabel,
   categoryOrder,
@@ -102,10 +102,6 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
     )
     .filter(([, group]) => group.length > 0)
 
-  // What the two forms offer as suggestions: the five the app knows plus whatever this
-  // board has actually coined, so a category invented once is a click the second time.
-  const inUse = categoryOrder((tags ?? []).map((tag) => tag.category))
-
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-4">
       <div className="flex items-baseline gap-2">
@@ -154,7 +150,7 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
         </button>
       </div>
 
-      {panel === 'create' && <CreateTag categories={inUse} onDone={() => void refresh()} />}
+      {panel === 'create' && <CreateTag onDone={() => void refresh()} />}
       {panel === 'apply' && <ApplyTag onDone={() => void refresh()} />}
 
       {editing && (
@@ -163,7 +159,6 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
         <EditTag
           key={editing.id}
           tag={editing}
-          categories={inUse}
           siteUrl={siteUrl}
           onClose={() => setEditing(null)}
           onDone={() => void refresh()}
@@ -228,54 +223,36 @@ const FIELD =
   'min-h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent'
 
 /**
- * The category, as free text with the board's own categories offered under it.
+ * The category, as the menu both forms use.
  *
- * It was a `<select>` over the five names in `TAG_CATEGORIES`, which made those five the
- * whole vocabulary from the only window that can write one — while the column itself has
- * always been free-form text and the migration says so. A board that wants `series` or
- * `medium` can have it now; the five keep their colours and their place at the top of
- * the list, and everything else is drawn in the plain foreground.
- *
- * Typing is filtered rather than validated: `CATEGORY_PATTERN` is letters only, so a
- * digit or a space is dropped as it is typed and the field can never hold something the
- * IPC channel would reject. A `<datalist>` is the autocomplete — it suggests without
- * confining, which a combobox of our own would have to be careful to keep true.
+ * A menu rather than free text: `tags.category` is free-form in the database, but the
+ * list it is drawn from is what gives a category its colour and its place in the order,
+ * and a category with neither is a row nobody can find. Adding one is a line in
+ * `TAG_CATEGORIES` and a colour beside it, which is the change that makes it real
+ * everywhere — the website's /tags included — rather than only in this window.
  */
 function CategoryField({
   value,
-  options,
   onChange,
   disabled = false,
 }: {
-  value: string
-  options: string[]
-  onChange: (next: string) => void
+  value: TagCategory
+  onChange: (next: TagCategory) => void
   disabled?: boolean
 }) {
-  // Two of these are on screen at once (New tag, and a row being edited), so the list's
-  // id has to be per-instance or the browser resolves both to whichever came first.
-  const listId = useId()
-
   return (
-    <>
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value.toLowerCase().replace(/[^a-z]/g, ''))}
-        list={listId}
-        placeholder="general"
-        spellCheck={false}
-        disabled={disabled}
-        title="Letters only"
-        className={`${FIELD} w-36`}
-      />
-      <datalist id={listId}>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {categoryLabel(option)}
-          </option>
-        ))}
-      </datalist>
-    </>
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      disabled={disabled}
+      className={FIELD}
+    >
+      {TAG_CATEGORIES.map((option) => (
+        <option key={option} value={option}>
+          {categoryLabel(option)}
+        </option>
+      ))}
+    </select>
   )
 }
 
@@ -284,7 +261,7 @@ function CategoryField({
  * already right. Uploads coin tags as a side effect of applying them, so this is only
  * ever the other order, and the tag starts on no posts.
  */
-function CreateTag({ categories, onDone }: { categories: string[]; onDone: () => void }) {
+function CreateTag({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState('')
   const [category, setCategory] = useState<TagCategory>('general')
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
@@ -313,11 +290,11 @@ function CreateTag({ categories, onDone }: { categories: string[]; onDone: () =>
           spellCheck={false}
           className={`${FIELD} min-w-40 flex-1 font-mono`}
         />
-        <CategoryField value={category} options={categories} onChange={setCategory} />
+        <CategoryField value={category} onChange={setCategory} />
         <button
           type="button"
           onClick={() => void submit()}
-          disabled={busy || !name.trim() || !CATEGORY_PATTERN.test(category)}
+          disabled={busy || !name.trim()}
           className="min-h-9 rounded-lg border border-accent px-4 text-sm text-accent transition-colors hover:bg-background disabled:opacity-50"
         >
           Create
@@ -403,13 +380,11 @@ function ApplyTag({ onDone }: { onDone: () => void }) {
  */
 function EditTag({
   tag,
-  categories,
   siteUrl,
   onClose,
   onDone,
 }: {
   tag: Tag
-  categories: string[]
   siteUrl: string
   onClose: () => void
   onDone: () => void
@@ -466,16 +441,11 @@ function EditTag({
           spellCheck={false}
           className={`${FIELD} min-w-40 flex-1 font-mono`}
         />
-        <CategoryField
-          value={category}
-          options={categories}
-          onChange={setCategory}
-          disabled={busy}
-        />
+        <CategoryField value={category} onChange={setCategory} disabled={busy} />
         <button
           type="button"
           onClick={() => void save()}
-          disabled={busy || !changed || !CATEGORY_PATTERN.test(category)}
+          disabled={busy || !changed}
           className="min-h-9 rounded-lg border border-accent px-4 text-sm text-accent transition-colors hover:bg-background disabled:opacity-50"
         >
           {busy ? 'Saving…' : 'Save'}
