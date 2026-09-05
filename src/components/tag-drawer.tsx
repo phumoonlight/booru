@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'next/navigation'
 
 /**
@@ -19,6 +20,13 @@ import { useSearchParams } from 'next/navigation'
  * the panel's own heading.
  *
  * Content is server-rendered and passed in as children.
+ *
+ * The open panel is **portalled to `<body>`**, and has to be. The trigger sits inside the
+ * sticky header, which carries `backdrop-blur` — and a `backdrop-filter` makes an element
+ * the containing block for every `position: fixed` descendant. `inset-0` then meant the
+ * header's own box rather than the viewport, so the panel came out as a small pane hanging
+ * under the bar instead of a column down the left edge. Nothing renders on the server
+ * either way: the panel exists only once it has been opened.
  */
 export function TagDrawer({ children, label }: { children: ReactNode; label: string }) {
   // The sheet closes when the search it started actually lands, not on the tap that
@@ -44,32 +52,34 @@ export function TagDrawer({ children, label }: { children: ReactNode; label: str
         <span aria-hidden>☰</span>
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex">
-          {/* Capped, so the panel is a column against the edge rather than a sheet
-              covering the results it is meant to narrow. The facets are a list of tags:
-              a tall narrow column fits far more of them on screen at once than a band
-              across the bottom did, and leaves the grid visible beside it. */}
-          <div className="flex h-full w-full max-w-sm flex-col overflow-y-auto border-r border-border bg-surface p-4">
-            <div className="mb-3 flex items-center justify-end">
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="flex min-h-11 items-center px-3 text-sm text-muted"
-              >
-                Close ✕
-              </button>
+      {open &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex">
+            {/* Capped, so the panel is a column against the edge rather than a sheet
+                covering the results it is meant to narrow. The facets are a list of tags:
+                a tall narrow column fits far more of them on screen at once than a band
+                across the bottom did, and leaves the grid visible beside it. */}
+            <div className="flex h-full w-full max-w-sm flex-col overflow-y-auto border-r border-border bg-surface p-4">
+              <div className="mb-3 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="flex min-h-11 items-center px-3 text-sm text-muted"
+                >
+                  Close ✕
+                </button>
+              </div>
+              {children}
             </div>
-            {children}
-          </div>
-          <button
-            type="button"
-            aria-label="Close tags"
-            onClick={() => setOpen(false)}
-            className="flex-1 bg-black/60"
-          />
-        </div>
-      )}
+            <button
+              type="button"
+              aria-label="Close tags"
+              onClick={() => setOpen(false)}
+              className="flex-1 bg-black/60"
+            />
+          </div>,
+          document.body
+        )}
     </>
   )
 }
