@@ -47,15 +47,13 @@ export function TagDrawer({ children, label }: { children: ReactNode; label: str
         title={label}
         aria-label={label}
         aria-expanded={open}
-        className="pointer-fine:size-8 group/menu flex size-11 shrink-0 items-center justify-center rounded-lg border border-border leading-none transition-colors hover:border-accent"
+        className="pointer-fine:size-8 flex size-11 shrink-0 items-center justify-center rounded-lg border border-border leading-none transition-colors hover:border-accent"
       >
-        {/* A hamburger menu, taken at its word. Desaturated at rest like every other emoji
-            button here — they ignore `color`, so this is what keeps it from shouting at
-            the wordmark beside it — and hover hands it back its own. */}
-        <span
-          aria-hidden
-          className="text-base brightness-150 grayscale transition-[filter] group-hover/menu:brightness-100 group-hover/menu:grayscale-0"
-        >
+        {/* A hamburger menu, taken at its word, and left its own colour — the border is
+            what answers the hover. The desaturate-and-light trick the facet buttons use is
+            for rows of emoji that would otherwise shout; one glyph beside the wordmark is
+            not that. */}
+        <span aria-hidden className="text-base">
           🍔
         </span>
       </button>
@@ -68,24 +66,19 @@ export function TagDrawer({ children, label }: { children: ReactNode; label: str
                 a tall narrow column fits far more of them on screen at once than a band
                 across the bottom did, and leaves the grid visible beside it. */}
             <div className="flex h-full w-full max-w-sm flex-col overflow-y-auto border-r border-border bg-surface p-4">
-              <div className="mb-3 flex items-center justify-end">
-                {/* Emoji ignore `color`, so the ❌ is desaturated and brightened while
-                    resting — against this surface that lands it near `--muted`, where
-                    fading it with opacity would only sink it into the panel — and hover
-                    hands the glyph its own red back. The same trick the facet buttons
-                    use, for the same reason. */}
+              <div className="-mr-2 -mt-2 mb-1 flex items-center justify-end">
+                {/* Just the ❌: a close control in the top corner of a panel needs no
+                    word for it. Emoji ignore `color`, so it rests desaturated and
+                    brightened — against this surface that lands it near `--muted`, where
+                    opacity would only sink it into the panel — and hover hands the glyph
+                    its own red back. The name stays for anything not looking at it. */}
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="group/close flex min-h-11 items-center gap-1.5 px-3 text-sm text-muted transition-colors hover:text-foreground"
+                  aria-label="Close tags"
+                  className="flex size-11 items-center justify-center text-sm brightness-150 grayscale transition-[filter] hover:brightness-100 hover:grayscale-0"
                 >
-                  Close
-                  <span
-                    aria-hidden
-                    className="text-xs brightness-150 grayscale transition-[filter] group-hover/close:brightness-100 group-hover/close:grayscale-0"
-                  >
-                    ❌
-                  </span>
+                  <span aria-hidden>❌</span>
                 </button>
               </div>
               {children}
