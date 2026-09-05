@@ -12,6 +12,12 @@ import { useSearchParams } from 'next/navigation'
  * grid has the full width and the facets are one tap away at any size: the panel slides
  * over the left edge, where the sidebar used to be, so a tag is where the hand expects.
  *
+ * The trigger is a ☰ in the header, ahead of the wordmark — the corner a menu is looked
+ * for in, and the panel opens against that same edge. It was a labelled button in a row
+ * of its own above the grid, which spent a line of the page saying what one glyph says.
+ * The count it used to carry lives in the title and the accessible name, and again on
+ * the panel's own heading.
+ *
  * Content is server-rendered and passed in as children.
  */
 export function TagDrawer({ children, label }: { children: ReactNode; label: string }) {
@@ -30,9 +36,12 @@ export function TagDrawer({ children, label }: { children: ReactNode; label: str
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="pointer-fine:min-h-8 flex min-h-11 w-fit shrink-0 items-center rounded-lg border border-border px-3 text-sm hover:border-accent"
+        title={label}
+        aria-label={label}
+        aria-expanded={open}
+        className="pointer-fine:size-8 flex size-11 shrink-0 items-center justify-center rounded-lg border border-border text-lg leading-none text-muted transition-colors hover:border-accent hover:text-foreground"
       >
-        {label}
+        <span aria-hidden>☰</span>
       </button>
 
       {open && (

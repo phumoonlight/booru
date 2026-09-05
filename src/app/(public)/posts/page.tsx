@@ -67,20 +67,19 @@ export default async function PostsPage({ searchParams }: PageProps<'/posts'>) {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">
-      <SearchHeader query={query} />
+      <SearchHeader
+        query={query}
+        menu={
+          <TagDrawer label={`Tags (${tagEntries.length})`}>
+            <h2 className="mb-2 text-base font-semibold">Tags ({tagEntries.length})</h2>
+            <GroupedTagList entries={tagEntries.slice(0, 50)} currentQuery={query} />
+          </TagDrawer>
+        }
+      />
 
-      {/* One row above the grid instead of a column beside it: the facets behind a
-          button, the saved shelf beside it, and the full width left for thumbnails. */}
-      <div className="flex items-center gap-2">
-        <TagDrawer label={`🏷️ Tags (${tagEntries.length})`}>
-          <h2 className="mb-2 text-base font-semibold">Tags ({tagEntries.length})</h2>
-          <GroupedTagList entries={tagEntries.slice(0, 50)} currentQuery={query} />
-        </TagDrawer>
-
-        {/* The one thing here about *you* rather than about what is on screen — and the
-            way back into a browse you left. */}
-        <SavedQueries currentQuery={query} />
-      </div>
+      {/* What is left of the row the drawer used to share: the one thing here about *you*
+          rather than about what is on screen, and the way back into a browse you left. */}
+      <SavedQueries currentQuery={query} />
 
       {/* The grid speaks for itself, so the heading is left for assistive tech only */}
       {/* No banner for a resumed cursor: `start:900` is a chip in the search bar

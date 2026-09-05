@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 import { SearchBar } from '@/components/search-bar'
 import { NavProgress } from '@/components/nav-progress'
 import { SITE_NAME } from '@/lib/site'
@@ -18,20 +19,34 @@ import { SITE_NAME } from '@/lib/site'
 export function SearchHeader({
   query = '',
   showSearch = true,
+  menu,
 }: {
   query?: string
   showSearch?: boolean
+  /**
+   * A control at the far left, ahead of the wordmark — the listing's tag drawer, and
+   * nothing else so far. A slot rather than the drawer itself, because this file is a
+   * server component and the drawer is not: the panel's contents are server-rendered by
+   * the page that knows which tags are on screen, and passed down through it.
+   */
+  menu?: ReactNode
 }) {
   return (
     <div className="sticky top-0 z-30 -mx-3 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
       <div className={`flex items-center justify-between gap-3 ${showSearch ? 'mb-2' : ''}`}>
-        {/* The wordmark carries the bar — it outsizes the nav links rather than matching
-            them. It goes to the gallery, not to `/`: the landing page is a front door,
-            and nothing behind it needs a way back to a search box it already has. */}
-        <Link href="/posts" className="text-xl font-bold tracking-tight sm:text-2xl hover:underline">
-          {SITE_NAME}
-          <NavProgress />
-        </Link>
+        <div className="flex min-w-0 items-center gap-2">
+          {menu}
+          {/* The wordmark carries the bar — it outsizes the nav links rather than matching
+              them. It goes to the gallery, not to `/`: the landing page is a front door,
+              and nothing behind it needs a way back to a search box it already has. */}
+          <Link
+            href="/posts"
+            className="truncate text-xl font-bold tracking-tight sm:text-2xl hover:underline"
+          >
+            {SITE_NAME}
+            <NavProgress />
+          </Link>
+        </div>
         <nav className="flex items-center gap-3">
           <Link href="/tags" className="text-sm text-muted hover:text-foreground">
             🏷️ Tags
@@ -60,8 +75,11 @@ export function SearchHeaderSkeleton() {
   return (
     <div className="sticky top-0 z-30 -mx-3 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
       <div className="mb-2 flex items-center justify-between gap-3">
-        {/* Matches the wordmark's 1.75rem / sm:2rem line box */}
-        <div className="h-7 w-32 animate-pulse rounded bg-surface sm:h-8" />
+        <div className="flex items-center gap-2">
+          {/* The ☰, then the wordmark's own 1.75rem / sm:2rem line box */}
+          <div className="pointer-fine:size-8 size-11 animate-pulse rounded-lg bg-surface" />
+          <div className="h-7 w-32 animate-pulse rounded bg-surface sm:h-8" />
+        </div>
         <div className="flex items-center gap-3">
           <div className="h-5 w-14 animate-pulse rounded bg-surface" />
           <div className="h-5 w-20 animate-pulse rounded bg-surface" />
