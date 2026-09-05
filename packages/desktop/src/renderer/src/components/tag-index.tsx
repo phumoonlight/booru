@@ -697,7 +697,7 @@ function EditTag({
       }
     >
       <div className="flex flex-wrap items-center gap-2">
-        {/* In front of the name, where what it holds is drawn. One glyph wide and no
+        {/* In front of the name, where what it holds is drawn. Three glyphs wide and no
             wider: the field is the size of the thing it takes, which says more about what
             belongs in it than a placeholder would, and an empty box clears the column. */}
         <input
@@ -705,9 +705,9 @@ function EditTag({
           onChange={(event) => setEmoji(event.target.value)}
           disabled={busy}
           aria-label={`Emoji in front of ${tagLabel(tag.name)}`}
-          title="One emoji, drawn in front of the name. Empty for none."
+          title="Up to three emoji, drawn in front of the name. Empty for none."
           spellCheck={false}
-          className={`${FIELD} w-14 shrink-0 px-0 text-center`}
+          className={`${FIELD} w-24 shrink-0 px-0 text-center`}
         />
         <input
           value={name}

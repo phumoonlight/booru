@@ -64,7 +64,7 @@ served by the primary key, which Postgres reads backwards as cheaply as forwards
 | `name` | `text unique not null` | `check (name ~ '^[a-z0-9_().-]+$')` — lowercase `snake_case` |
 | `category` | `text not null default 'general'` | free-form; `TAG_CATEGORIES` in `@common/tags` is the ten the app writes, each with a colour and a place in the order |
 | `category2` | `text` (nullable) | a finer grouping *within* the category, free-form and usually null — read by the desktop tag picker and by nothing else |
-| `emoji` | `text` (nullable) | one glyph drawn in front of the name, usually null — every read selects it |
+| `emoji` | `text` (nullable) | up to three glyphs drawn in front of the name, usually null — every read selects it |
 | `post_count` | `int not null default 0` | denormalized, see [Counters](#counters) |
 | `created_at` | `timestamptz not null default now()` | |
 

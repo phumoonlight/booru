@@ -1,4 +1,4 @@
--- `tags.emoji` — one glyph drawn in front of the tag's name.
+-- `tags.emoji` — up to three glyphs drawn in front of the tag's name.
 
 -- It replaced a record in code (`TAG_EMOJI` in packages/common/src/tags.ts) keyed by tag
 -- name, which could only ever be this repo holding a list about someone else's
@@ -14,7 +14,7 @@
 -- `rainbow` when this was tried as a substring match.
 --
 -- Free-form text with no constraint, like `category` and `category2` above it. What may be
--- written is `readTagEmoji`'s business in @common/data/tags — one grapheme, and not a
--- plain ASCII character — and a row hand-edited to hold a word simply draws that word,
+-- written is `readTagEmoji`'s business in @common/data/tags — three graphemes at most, and
+-- none of them a plain ASCII character — and a row hand-edited to hold a word simply draws that word,
 -- since this column reaches nothing but the front of a label.
 alter table public.tags add column emoji text;

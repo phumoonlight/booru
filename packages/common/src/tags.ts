@@ -73,10 +73,11 @@ export type Tag = {
    */
   category2?: Subcategory
   /**
-   * One glyph drawn in front of the name, or null — `tags.emoji`, whose migration has why
-   * it exists. Required rather than optional, unlike `category2` above it: every read asks
-   * for this column, because a tag is drawn with its emoji wherever it is drawn at all and
-   * a list that quietly dropped it would look like a tag that has none.
+   * Up to three glyphs drawn in front of the name, or null — `tags.emoji`, whose
+   * migration has why it exists. Required rather than optional, unlike `category2` above
+   * it: every read asks for this column, because a tag is drawn with its emoji wherever
+   * it is drawn at all and a list that quietly dropped it would look like a tag that has
+   * none.
    */
   emoji: string | null
   post_count: number

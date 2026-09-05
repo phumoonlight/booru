@@ -48,27 +48,38 @@ export function readTagName(raw: string): { name: string } | { error: string } {
   return { name: tags[0] }
 }
 
+/** How many glyphs a tag's emoji may be — see `readTagEmoji` for why it is three. */
+export const TAG_EMOJI_MAX = 3
+
 /**
  * The typed-in emoji as it is stored: trimmed, with an empty box meaning "no glyph" and
  * clearing the column rather than failing.
  *
- * Exactly one grapheme, which is the unit a person means by "an emoji" and not the unit
- * `length` counts — 🧑‍🚀 is five UTF-16 units and 🇯🇵 is four, so a character cap here
- * would have refused half the keyboard's own suggestions. Two glyphs are refused rather
- * than truncated: the second one was typed on purpose, and silently dropping it is how a
- * field teaches nobody what it wants.
+ * Graphemes, which is the unit a person means by "an emoji" and not the unit `length`
+ * counts — 🧑‍🚀 is five UTF-16 units and 🇯🇵 is four, so a character cap here would have
+ * refused half the keyboard's own suggestions. Three of them at most: a pair still reads
+ * as one mark in front of a name, and past that the glyphs start competing with the name
+ * they are there to identify. Over the cap is refused rather than truncated — the extra
+ * one was typed on purpose, and silently dropping it is how a field teaches nobody what
+ * it wants.
  *
- * A plain ASCII character is refused too. The column would hold it and the label would
- * draw it, but `[` in front of a tag name is a typo every time it happens — nobody reaches
- * for this field to put a bracket on a tag.
+ * A plain ASCII character is refused too, and per glyph rather than for the value as a
+ * whole, since a pair is now a thing that can be typed. The column would hold it and the
+ * label would draw it, but `[` in front of a tag name is a typo every time it happens —
+ * nobody reaches for this field to put a bracket on a tag. The space goes with them,
+ * which is what keeps a pair drawn as the one mark it is meant to be.
  */
 export function readTagEmoji(raw: string): { emoji: string | null } | { error: string } {
   const value = raw.trim()
   if (value === '') return { emoji: null }
 
   const graphemes = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(value)]
-  if (graphemes.length > 1) return { error: 'One emoji — that is more than one glyph.' }
-  if (/^[\x20-\x7e]$/.test(value)) return { error: 'That is a plain character, not an emoji.' }
+  if (graphemes.length > TAG_EMOJI_MAX) {
+    return { error: `${TAG_EMOJI_MAX} emoji at most — that is ${graphemes.length} glyphs.` }
+  }
+  if (graphemes.some((entry) => /^[\x20-\x7e]$/.test(entry.segment))) {
+    return { error: 'That is a plain character, not an emoji.' }
+  }
   return { emoji: value }
 }
 
@@ -183,7 +194,7 @@ export async function setTagSubcategory(
 }
 
 /**
- * Set the glyph drawn in front of a tag's name, or clear it with an empty string —
+ * Set the glyphs drawn in front of a tag's name, or clear them with an empty string —
  * `tags.emoji`.
  *
  * The most cosmetic write there is: it moves no post, no link and no count, and a wrong
