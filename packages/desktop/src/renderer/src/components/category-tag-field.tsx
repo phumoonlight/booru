@@ -261,7 +261,32 @@ export function CategoryTagField({
  * at the vocabulary, which is how a board ends up with `twintail`, `twintails` and
  * `twin_tails`. Naming one is the Tags screen's job, where the whole list is in front of
  * you and a near-duplicate is visible before you make it.
+ *
+ * **Colour variants sit in a row of their own.** `white_underwear` and `pink_underwear`
+ * are the same garment answered twice, and mixed in among `bikini` and `dress` they
+ * tripled the length of a list whose useful part is the garments. Below the rule they are
+ * grouped by what they are and sorted by colour, so choosing one is finding the thing and
+ * then reading across.
  */
+
+/**
+ * A tag's colour prefix, or null.
+ *
+ * The board's own `color` category is the vocabulary — not a list written here, which
+ * would be a second place to add `chartreuse` and a silent no-op when someone forgot.
+ * Longest match wins, so `light_blue_dress` is a light blue dress rather than a blue one
+ * that happens to start with `light`.
+ */
+function splitColor(name: string, colors: string[]): { color: string; rest: string } | null {
+  for (const color of colors) {
+    if (name.startsWith(`${color}_`) && name.length > color.length + 1) {
+      return { color, rest: name.slice(color.length + 1) }
+    }
+  }
+  return null
+}
+type ColorOption = { tag: Tag; color: string; rest: string }
+
 function TagPicker({
   category,
   all,
@@ -279,12 +304,36 @@ function TagPicker({
   const inputRef = useRef<HTMLInputElement>(null)
 
   const typed = filter.trim().toLowerCase()
-  const options = useMemo(() => {
+
+  const { plain, colored } = useMemo(() => {
     const taken = new Set(exclude)
-    return (all ?? [])
+    const options = (all ?? [])
       .filter((tag) => tag.category === category && !taken.has(tag.name))
       .filter((tag) => (typed ? tag.name.includes(typed) : true))
       .slice(0, 60)
+
+    // Not inside the Color row itself: there every name *is* a colour, and splitting one
+    // off another would only claim `light_blue` is a kind of `light`.
+    if (category === 'color') return { plain: options, colored: [] as ColorOption[] }
+
+    const colors = (all ?? [])
+      .filter((tag) => tag.category === 'color')
+      .map((tag) => tag.name)
+      .sort((a, b) => b.length - a.length)
+
+    const plain: Tag[] = []
+    const colored: ColorOption[] = []
+    for (const tag of options) {
+      const split = splitColor(tag.name, colors)
+      if (split) colored.push({ tag, ...split })
+      else plain.push(tag)
+    }
+
+    // By the thing first and the colour second — the two orders a row of variants is read
+    // in, and the one that puts every underwear together rather than every white thing.
+    colored.sort((a, b) => a.rest.localeCompare(b.rest) || a.color.localeCompare(b.color))
+
+    return { plain, colored }
   }, [all, category, exclude, typed])
 
   /** A pick clears the filter and hands focus back, so the next tag is typed rather than
@@ -315,19 +364,43 @@ function TagPicker({
       {all === null ? (
         <p className="px-1 py-2 text-xs text-muted">Reading tags…</p>
       ) : (
-        <div className="flex max-h-48 flex-wrap gap-1 overflow-y-auto">
-          {options.map((tag) => (
-            <button
-              key={tag.id}
-              type="button"
-              onClick={() => pick({ name: tag.name, category: tag.category })}
-              className={`flex min-h-7 items-center rounded border border-border px-2 font-mono text-xs transition-colors hover:border-accent ${categoryColor(category)}`}
-            >
-              {tag.name}
-            </button>
-          ))}
+        <div className="flex max-h-48 flex-col gap-2 overflow-y-auto">
+          {plain.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {plain.map((tag) => (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => pick({ name: tag.name, category: tag.category })}
+                  className={`flex min-h-7 items-center rounded border border-border px-2 font-mono text-xs transition-colors hover:border-accent ${categoryColor(category)}`}
+                >
+                  {tag.name}
+                </button>
+              ))}
+            </div>
+          )}
 
-          {options.length === 0 && (
+          {colored.length > 0 && (
+            <div
+              className={`flex flex-wrap gap-1 ${plain.length > 0 ? 'border-t border-border pt-2' : ''}`}
+            >
+              {colored.map(({ tag, color, rest }) => (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => pick({ name: tag.name, category: tag.category })}
+                  className={`flex min-h-7 items-center rounded border border-border px-2 font-mono text-xs transition-colors hover:border-accent ${categoryColor(category)}`}
+                >
+                  {/* The colour in the Color category's own colour, so a row of variants
+                      is read by its second half — the first half is what they share. */}
+                  <span className={categoryColor('color')}>{color}</span>
+                  <span>_{rest}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {plain.length === 0 && colored.length === 0 && (
             <p className="px-1 py-2 text-xs text-muted">
               {typed
                 ? 'No tag in this category matches — new ones are named on the Tags screen.'
