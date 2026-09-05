@@ -254,14 +254,15 @@ export function PostEditor({
                   </button>
                 </div>
 
+                {/* Left open on purpose: tagging is done in runs — a post gets three
+                    colours or four pieces of clothing at once — and a picker that closed
+                    on each pick charged a click to reopen for every tag after the first.
+                    Close and Escape are the way out. */}
                 {adding === category && (
                   <TagPicker
                     category={category}
                     exclude={names}
-                    onPick={(tag) => {
-                      setAdding(null)
-                      void commit({ ...value, tags: [...value.tags, tag] })
-                    }}
+                    onPick={(tag) => void commit({ ...value, tags: [...value.tags, tag] })}
                     onClose={() => setAdding(null)}
                   />
                 )}
@@ -340,6 +341,7 @@ function TagPicker({
   const [filter, setFilter] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     let alive = true
@@ -353,6 +355,21 @@ function TagPicker({
       alive = false
     }
   }, [])
+
+  /** Only after coining one — the effect above is the first read, and this is the only
+   *  thing that can change the board's index while the picker is open. */
+  async function reread() {
+    setAll(await window.api.listTags().catch(() => []))
+  }
+
+  /** A pick clears the filter and hands focus back, so the next tag is typed, not clicked
+   *  into. Leaving the word there would leave the list showing the one thing it can no
+   *  longer offer — the tag just added. */
+  function pick(tag: TagSeed) {
+    setFilter('')
+    inputRef.current?.focus()
+    onPick(tag)
+  }
 
   const typed = filter.trim().toLowerCase()
   const options = useMemo(() => {
@@ -380,7 +397,10 @@ function TagPicker({
       setError(result.error)
       return
     }
-    onPick({ name: result.name, category })
+    // Main dropped its cached index when the tag was created, so this re-read is what
+    // puts the new name in the list the picker is still showing.
+    void reread()
+    pick({ name: result.name, category })
   }
 
   return (
@@ -388,6 +408,7 @@ function TagPicker({
       <div className="flex items-center gap-2">
         <input
           autoFocus
+          ref={inputRef}
           value={filter}
           onChange={(event) => setFilter(event.target.value.toLowerCase())}
           onKeyDown={(event) => event.key === 'Escape' && onClose()}
@@ -414,7 +435,7 @@ function TagPicker({
             <button
               key={tag.id}
               type="button"
-              onClick={() => onPick({ name: tag.name, category: tag.category })}
+              onClick={() => pick({ name: tag.name, category: tag.category })}
               className={`flex min-h-7 items-center rounded border border-border px-2 font-mono text-xs transition-colors hover:border-accent ${categoryColor(category)}`}
             >
               {tag.name}
