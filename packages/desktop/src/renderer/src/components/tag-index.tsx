@@ -352,6 +352,18 @@ const FIELD =
   'min-h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent'
 
 /**
+ * The button that finishes a form — Create, Apply, Save.
+ *
+ * Unbordered on purpose. Each of these sits at the end of a row of bordered fields, and an
+ * outlined button in that row read as a fourth box rather than as the control: the shapes
+ * were the same and only the colour differed. What it is drawn as instead is its glyph and
+ * its accent text, which is also how the header items above the list are drawn — the same
+ * hover ground under both.
+ */
+const SUBMIT =
+  'min-h-9 rounded-lg px-4 text-sm text-accent transition-colors hover:bg-background disabled:opacity-50'
+
+/**
  * The category, as the menu both forms use.
  *
  * A menu rather than free text: `tags.category` is free-form in the database, but the
@@ -488,9 +500,11 @@ function CreateTag({
           type="button"
           onClick={() => void submit()}
           disabled={busy || !name.trim()}
-          className="min-h-9 rounded-lg border border-accent px-4 text-sm text-accent transition-colors hover:bg-background disabled:opacity-50"
+          className={SUBMIT}
         >
-          Create
+          {/* The glyph the header item that opened this panel is drawn with, so the thing
+              pressed to start and the thing pressed to finish are visibly one operation. */}
+          <span aria-hidden>➕</span> Create
         </button>
       </div>
       {message && (
@@ -552,9 +566,9 @@ function ApplyTag({ onDone }: { onDone: () => void }) {
           type="button"
           onClick={() => void submit()}
           disabled={busy || !target.trim() || !condition.trim()}
-          className="min-h-9 rounded-lg border border-accent px-4 text-sm text-accent transition-colors hover:bg-background disabled:opacity-50"
+          className={SUBMIT}
         >
-          {busy ? 'Applying…' : 'Apply'}
+          <span aria-hidden>🧩</span> {busy ? 'Applying…' : 'Apply'}
         </button>
       </div>
       {message && (
@@ -714,9 +728,9 @@ function EditTag({
           type="button"
           onClick={() => void save()}
           disabled={busy || !changed}
-          className="min-h-9 rounded-lg border border-accent px-4 text-sm text-accent transition-colors hover:bg-background disabled:opacity-50"
+          className={SUBMIT}
         >
-          {busy ? 'Saving…' : 'Save'}
+          <span aria-hidden>💾</span> {busy ? 'Saving…' : 'Save'}
         </button>
       </div>
 
