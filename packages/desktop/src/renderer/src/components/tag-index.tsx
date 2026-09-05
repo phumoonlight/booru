@@ -214,9 +214,32 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
 }
 
 /** The shared shell for the three panels: a bordered card that names what it is. */
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({
+  title,
+  children,
+  pinned = false,
+}: {
+  title: string
+  children: React.ReactNode
+  /**
+   * Stay at the top of the scroller while the list moves under it. The edit panel is the
+   * one that needs it: it is opened by clicking a row, and the row that sent you there can
+   * be a screen and a half down a board's worth of tags — so the panel used to appear
+   * somewhere you would have to scroll back up to find, and the tag you were editing was
+   * off the other end of the page by the time you got there.
+   *
+   * Sticky rather than moving the panel down beside the row: the list is a four-column
+   * grid, and a form spliced into it either breaks the columns or pushes the row you are
+   * comparing against out of view. Pinned, both stay on screen at once.
+   */
+  pinned?: boolean
+}) {
   return (
-    <section className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-3 py-3">
+    <section
+      className={`flex flex-col gap-2 rounded-lg border border-border bg-surface px-3 py-3 ${
+        pinned ? 'sticky top-0 z-10 shadow-lg shadow-background/80' : ''
+      }`}
+    >
       <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h2>
       {children}
     </section>
@@ -437,7 +460,10 @@ function EditTag({
   const changed = name !== tag.name || category !== tag.category
 
   return (
-    <Panel title={`${tagLabel(tag.name)} · ${tag.post_count} post${tag.post_count === 1 ? '' : 's'}`}>
+    <Panel
+      pinned
+      title={`${tagLabel(tag.name)} · ${tag.post_count} post${tag.post_count === 1 ? '' : 's'}`}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <input
           value={name}
