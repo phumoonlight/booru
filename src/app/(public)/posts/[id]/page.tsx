@@ -101,7 +101,7 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
   // neighbours, and `PostViewCounter` never mounts, so a view is not counted for a page
   // that showed nothing.
   if (isRestricted(post.rating) && !(await isNsfwEnabled())) {
-    return <RestrictedNotice postId={post.id} rating={post.rating} />
+    return <RestrictedNotice />
   }
 
   const [tags, { prevId, nextId }] = await Promise.all([

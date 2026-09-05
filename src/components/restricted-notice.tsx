@@ -1,7 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { NavProgress } from '@/components/nav-progress'
-import { RATING_COLOR, RATING_LABEL, type Rating } from '@common/search'
 
 /**
  * What a post page shows when the visitor has not turned the adult tiers on.
@@ -11,15 +10,12 @@ import { RATING_COLOR, RATING_LABEL, type Rating } from '@common/search'
  * past the gallery. So the check belongs on the page too, not only on the query that
  * would have offered it.
  *
- * It names the tier, so the refusal doesn't read as a broken link, and otherwise gets out
- * of the way with a joke — the cat is doing the work. There is no link to Settings: the
- * gallery has one in its header, and a gate that offers its own key in the same breath is
- * a formality rather than a gate.
- *
- * Everything about the post itself stays off this page: no thumbnail, no tags, no
- * dimensions. A gate that describes what is behind it is not much of a gate either.
+ * It says nothing about the post — not the tier, not even the number. A gate that
+ * describes what is behind it is not much of a gate, and the cat is doing the work
+ * anyway. There is no link to Settings either: the gallery has one in its header, and a
+ * gate that offers its own key in the same breath is a formality.
  */
-export function RestrictedNotice({ postId, rating }: { postId: number; rating: Rating }) {
+export function RestrictedNotice() {
   return (
     // Centred against the viewport, not just the column: `main` is a flex child with
     // `pb-8`, so the height to fill is the viewport less that padding — anything taller
@@ -36,11 +32,7 @@ export function RestrictedNotice({ postId, rating }: { postId: number; rating: R
 
       <div className="flex flex-col gap-2">
         <h1 className="text-xl font-bold tracking-tight">&ldquo;What are you doing?&rdquo;</h1>
-        <p className="text-sm text-muted">
-          Post #{postId} is rated{' '}
-          <span className={RATING_COLOR[rating]}>{RATING_LABEL[rating]}</span>, and this
-          browser is set to leave those out.
-        </p>
+        <p className="text-sm text-muted">You might not want to see this.</p>
       </div>
 
       <Link href="/posts" className="text-sm text-muted hover:text-foreground hover:underline">
