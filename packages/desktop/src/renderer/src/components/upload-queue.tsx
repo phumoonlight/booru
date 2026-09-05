@@ -32,7 +32,10 @@ type Staged = {
  * another.
  */
 function ratingRule(tags: TagSeed[], rules: ImplicationRules): ImpliedRating | null {
-  return impliedRating(tags.map((tag) => tag.name), rules)
+  return impliedRating(
+    tags.map((tag) => tag.name),
+    rules
+  )
 }
 
 /**
@@ -176,8 +179,7 @@ export function UploadQueue({ status }: { status: AppStatus }) {
    * set by hand or earned by a stronger tag.
    */
   const ratingFor = useCallback(
-    (tags: TagSeed[], current: Rating): Rating =>
-      raisedRating(current, ratingRule(tags, rules)),
+    (tags: TagSeed[], current: Rating): Rating => raisedRating(current, ratingRule(tags, rules)),
     [rules]
   )
 
@@ -384,7 +386,11 @@ export function UploadQueue({ status }: { status: AppStatus }) {
                   >
                     <option value="">Leave as is</option>
                     {RATINGS.map((rating) => (
-                      <option key={rating} value={rating} className={`bg-background ${RATING_COLOR[rating]}`}>
+                      <option
+                        key={rating}
+                        value={rating}
+                        className={`bg-background ${RATING_COLOR[rating]}`}
+                      >
                         {RATING_LABEL[rating]}
                       </option>
                     ))}
@@ -393,9 +399,7 @@ export function UploadQueue({ status }: { status: AppStatus }) {
                 <button
                   type="button"
                   onClick={applyToAll}
-                  disabled={
-                    busy || (bulkTags.length === 0 && !bulkRating)
-                  }
+                  disabled={busy || (bulkTags.length === 0 && !bulkRating)}
                   className="min-h-11 rounded-lg border border-border px-4 text-sm font-medium disabled:opacity-50"
                 >
                   Apply
@@ -492,7 +496,7 @@ export function UploadQueue({ status }: { status: AppStatus }) {
                     onClick={() => setViewing(item.file.path)}
                     title="Open a bigger preview"
                     aria-label={`Open a bigger preview of ${item.file.name}`}
-                    className="h-192 w-full shrink-0 overflow-hidden rounded-lg bg-background ring-border hover:ring-2"
+                    className="h-96 w-full shrink-0 overflow-hidden rounded-lg bg-background ring-border hover:ring-2"
                   >
                     <img
                       src={item.file.preview}
@@ -539,7 +543,11 @@ export function UploadQueue({ status }: { status: AppStatus }) {
                               className={`min-h-11 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent ${RATING_COLOR[item.rating]}`}
                             >
                               {RATINGS.map((rating) => (
-                                <option key={rating} value={rating} className={`bg-background ${RATING_COLOR[rating]}`}>
+                                <option
+                                  key={rating}
+                                  value={rating}
+                                  className={`bg-background ${RATING_COLOR[rating]}`}
+                                >
                                   {RATING_LABEL[rating]}
                                 </option>
                               ))}

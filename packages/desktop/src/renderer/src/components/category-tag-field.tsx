@@ -316,25 +316,19 @@ function TagPicker({
 
   return (
     <div className="mb-2 ml-32 flex flex-col gap-2 rounded-lg border border-border bg-surface p-2">
-      <div className="flex items-center gap-2">
-        <input
-          autoFocus
-          ref={inputRef}
-          value={filter}
-          onChange={(event) => setFilter(event.target.value.toLowerCase())}
-          onKeyDown={(event) => event.key === 'Escape' && onClose()}
-          placeholder={`filter ${categoryLabel(category).toLowerCase()} tags`}
-          spellCheck={false}
-          className="min-h-8 flex-1 rounded-lg border border-border bg-background px-2 font-mono text-xs outline-none focus:border-accent"
-        />
-        <button
-          type="button"
-          onClick={onClose}
-          className="min-h-8 px-2 text-xs text-muted hover:text-foreground"
-        >
-          Close
-        </button>
-      </div>
+      {/* No Close button: the ＋ that opened this closes it, and it is drawn active while
+          the picker is up. A second way out earns its place only where the first is hard
+          to find, and that one is directly above. Escape works too. */}
+      <input
+        autoFocus
+        ref={inputRef}
+        value={filter}
+        onChange={(event) => setFilter(event.target.value.toLowerCase())}
+        onKeyDown={(event) => event.key === 'Escape' && onClose()}
+        placeholder={`filter ${categoryLabel(category).toLowerCase()} tags`}
+        spellCheck={false}
+        className="min-h-8 rounded-lg border border-border bg-background px-2 font-mono text-xs outline-none focus:border-accent"
+      />
 
       {error && <p className="text-xs text-[#ff5d5f]">{error}</p>}
 
