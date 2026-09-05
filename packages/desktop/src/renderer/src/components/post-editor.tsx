@@ -252,7 +252,8 @@ function formatBytes(bytes: number): string {
 /**
  * The source, read until it is clicked. It is a URL looked at far more often than it is
  * changed, and a box is the wrong resting state for a value like that: an input invites a
- * cursor, and this one is an address you mostly want to read.
+ * cursor, and this one is an address you mostly want to read — or follow, which is the
+ * Open beside the label.
  */
 function SourceField({ value, onCommit }: { value: string; onCommit: (next: string) => void }) {
   const [editing, setEditing] = useState(false)
@@ -266,7 +267,22 @@ function SourceField({ value, onCommit }: { value: string; onCommit: (next: stri
   if (!editing) {
     return (
       <div className="flex flex-col gap-1">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted">Source</span>
+        <div className="flex items-baseline gap-3">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted">Source</span>
+          {/* Beside the label rather than on the URL itself: the URL is the button that
+              starts an edit, and one control cannot both open a page and put a cursor in
+              it. Absent with no source, since there is nothing to open. */}
+          {value && (
+            <button
+              type="button"
+              onClick={() => void window.api.openExternal(value)}
+              title="Open the source in your browser"
+              className="text-xs text-muted transition-colors hover:text-foreground"
+            >
+              🔗 Open
+            </button>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => {
