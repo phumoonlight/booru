@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { getTags } from '@/lib/data/tags'
-import { TAG_CATEGORIES, type TagCategory } from '@common/tags'
-import { CATEGORY_COLOR, CATEGORY_LABEL } from '@/components/tag-list'
+import { categoryOrder, type TagCategory } from '@common/tags'
+import { categoryColor, categoryLabel } from '@/components/tag-list'
 import { SearchHeader } from '@/components/search-header'
 import { NavProgress } from '@/components/nav-progress'
 import { SetupNotice } from '@/components/setup-notice'
@@ -34,7 +34,7 @@ export default async function TagsPage() {
   // orders by post_count and that is what decides which tags the cap lets through, but
   // this page is an index: you arrive holding a name, and a tag's size says nothing about
   // where to look for it. Sorted by the label, since the underscores are not on screen.
-  const groups = TAG_CATEGORIES.map(
+  const groups = categoryOrder(tags.map((t) => t.category)).map(
     (category) =>
       [
         category,
@@ -62,7 +62,7 @@ export default async function TagsPage() {
         groups.map(([category, group]) => (
           <section key={category}>
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-              {CATEGORY_LABEL[category]} ({group.length})
+              {categoryLabel(category)} ({group.length})
             </h2>
             {/* Ruled like a table rather than spaced apart: a count sitting in open space
                 was as close to the next column's name as to its own, and no gap says
@@ -76,7 +76,7 @@ export default async function TagsPage() {
                 <li key={tag.id} className="-mb-px -mr-px border-b border-r border-border">
                   <Link
                     href={`/tags/${tag.id}`}
-                    className={`flex min-h-9 items-center gap-2 px-3 py-1.5 text-sm hover:bg-surface ${CATEGORY_COLOR[category]}`}
+                    className={`flex min-h-9 items-center gap-2 px-3 py-1.5 text-sm hover:bg-surface ${categoryColor(category)}`}
                   >
                     <span className="min-w-0 flex-1 truncate">{tagLabel(tag.name)}</span>
                     <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted">

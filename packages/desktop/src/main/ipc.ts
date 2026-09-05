@@ -5,7 +5,7 @@ import { listTags, searchTags } from '@common/data/shared'
 import * as manageTags from '@common/data/tags'
 import { searchPosts } from '@common/data/search'
 import { createPostFromImage, parsePostMetadata } from '@common/upload/pipeline'
-import { TAG_CATEGORIES } from '@common/tags'
+import { CATEGORY_PATTERN } from '@common/tags'
 import { DESKTOP_UPLOAD_LIMITS } from './limits'
 import { CPU_COUNT, DEFAULT_ENCODE_PRIORITY, DEFAULT_ENCODE_THREADS } from './cpu'
 import { loadConfig, revealSaveFile } from './config'
@@ -64,7 +64,10 @@ const savePostSchema = z.object({
 })
 
 const tagNameSchema = z.string().max(64)
-const categorySchema = z.enum(TAG_CATEGORIES)
+// Letters only, not one of five names: the column is free-form text and the Tags screen
+// now offers the known categories as suggestions rather than as the whole vocabulary.
+// The pattern is still the guard — a category reaches the board from this window alone.
+const categorySchema = z.string().regex(CATEGORY_PATTERN)
 
 const queueStateSchema = z.object({
   pending: z.number().int().nonnegative(),

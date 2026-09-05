@@ -3,15 +3,15 @@
 create table public.tags (
   id bigint generated always as identity primary key,
   name text unique not null check (name ~ '^[a-z0-9_().-]+$'),
-  -- Free-form, the same way `posts.rating` is. The set lives in TAG_CATEGORIES in
-  -- packages/common/src/tags.ts, which is where a new one gets added, along with the
-  -- colour and label it needs to be drawn at all; a check constraint here only meant
-  -- every new category also needed a migration to go with the code change.
+  -- Free-form, the same way `posts.rating` is, and the desktop app's Tags screen takes
+  -- it as free text. TAG_CATEGORIES in packages/common/src/tags.ts is the five that get
+  -- a colour, a label and a place at the top of the display order; anything else is
+  -- drawn plain and sorts after them. A check constraint here would have meant a
+  -- migration for every new category.
   --
-  -- The writes still validate: `z.enum(TAG_CATEGORIES)` guards the two IPC channels
-  -- that set this column, so an unknown value can only arrive by hand-editing the
-  -- table — and one that does gets no colour and no label, since CATEGORY_COLOR and
-  -- CATEGORY_LABEL are keyed on the list.
+  -- The writes still validate: CATEGORY_PATTERN — letters only — guards the two IPC
+  -- channels that set this column, so a category can never need escaping in a URL or a
+  -- class name, and can never be confused with a tag name, which allows more.
   category text not null default 'general',
   -- Maintained by syncTagPostCounts() in packages/common/src/data/counters.ts, not by
   -- a trigger.

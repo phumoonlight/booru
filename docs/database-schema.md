@@ -60,7 +60,7 @@ served by the primary key, which Postgres reads backwards as cheaply as forwards
 | --- | --- | --- |
 | `id` | `bigint` PK identity | `/tags/[id]` is addressed by this, so a rename never breaks a link |
 | `name` | `text unique not null` | `check (name ~ '^[a-z0-9_().-]+$')` — lowercase `snake_case` |
-| `category` | `text not null default 'general'` | free-form; the set is `TAG_CATEGORIES` in `@common/tags` |
+| `category` | `text not null default 'general'` | free-form, letters only; `TAG_CATEGORIES` in `@common/tags` is the five that get a colour and a place in the order |
 | `post_count` | `int not null default 0` | denormalized, see [Counters](#counters) |
 | `created_at` | `timestamptz not null default now()` | |
 
@@ -74,9 +74,11 @@ lookup); `tags_name_prefix_idx (name text_pattern_ops)` for autocomplete;
   `@common/data/shared.ts` therefore uses `like`; the name check constraint guarantees
   lowercase, so the results are identical either way. Changing it back to `ilike` silently
   turns every autocomplete into a sequential scan.
-- `category` outside `TAG_CATEGORIES` gets no colour and no label — `CATEGORY_COLOR` and
-  `CATEGORY_LABEL` are keyed on that list. Writes validate with `z.enum(TAG_CATEGORIES)`,
-  so it can only happen by hand-editing the table.
+- `category` outside `TAG_CATEGORIES` is drawn in the plain foreground and labelled as
+  typed (`categoryColor` / `categoryLabel`), and sorts after the five in every grouped
+  list (`categoryOrder`). Writes validate against `CATEGORY_PATTERN` — letters only — so
+  the Tags screen can coin one, but nothing can store a category a URL or a class name
+  would have to escape.
 
 ## `post_tags`
 

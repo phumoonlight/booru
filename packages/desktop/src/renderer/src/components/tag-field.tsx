@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
-import { CATEGORY_COLOR, type TagCategory } from '@common/tags'
+import { categoryColor, type TagCategory } from '@common/tags'
 import { impliedTags, type ImplicationRules } from '../../../shared/implications'
 import { recommendedTags } from '../../../shared/recommendations'
 import { useImplications } from '../implications'
@@ -223,7 +223,7 @@ export function TagField({
         {tags.map((tag) => (
           <span
             key={tag.name}
-            className={`flex items-center rounded bg-background pl-2 font-mono text-xs ${CATEGORY_COLOR[tag.category]}`}
+            className={`flex items-center rounded bg-background pl-2 font-mono text-xs ${categoryColor(tag.category)}`}
           >
             {tag.name}
             <button
@@ -278,7 +278,7 @@ export function TagField({
                   onMouseEnter={() => setActive(index)}
                   className={`flex cursor-pointer items-center justify-between gap-3 px-2 py-1.5 font-mono text-xs ${
                     index === active ? 'bg-background' : ''
-                  } ${CATEGORY_COLOR[option.category]}`}
+                  } ${categoryColor(option.category)}`}
                 >
                   <span className="truncate">{option.name}</span>
                   <span className="tabular-nums text-muted">{option.post_count}</span>

@@ -7,7 +7,7 @@ import { PostFeed } from '@/components/post-feed'
 import { SearchHeader } from '@/components/search-header'
 import { SetupNotice } from '@/components/setup-notice'
 import { NavProgress } from '@/components/nav-progress'
-import { CATEGORY_COLOR, CATEGORY_LABEL } from '@/components/tag-list'
+import { categoryColor, categoryLabel } from '@/components/tag-list'
 import { isSupabaseConfigured } from '@/lib/env'
 import { searchHref, tagLabel } from '@common/search'
 import { SITE_NAME } from '@/lib/site'
@@ -83,11 +83,11 @@ export default async function TagPage({ params }: PageProps<'/tags/[id]'>) {
 
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <div className="flex items-baseline gap-2">
-          <h1 className={`text-lg font-bold tracking-tight ${CATEGORY_COLOR[tag.category]}`}>
+          <h1 className={`text-lg font-bold tracking-tight ${categoryColor(tag.category)}`}>
             {tagLabel(tag.name)}
           </h1>
           <span className="text-xs uppercase tracking-wide text-muted">
-            {CATEGORY_LABEL[tag.category]} · {tag.post_count} post
+            {categoryLabel(tag.category)} · {tag.post_count} post
             {tag.post_count === 1 ? '' : 's'}
           </span>
         </div>

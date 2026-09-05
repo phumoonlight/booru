@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { NavProgress } from '@/components/nav-progress'
-import { CATEGORY_COLOR, CATEGORY_LABEL, TAG_CATEGORIES, type Tag } from '@common/tags'
+import { categoryColor, categoryLabel, categoryOrder, type Tag } from '@common/tags'
 import { parseSearchQuery, searchHref, tagLabel, withTag, withoutTag } from '@common/search'
 
 
@@ -81,7 +81,7 @@ function TagRow({ entry, currentQuery }: { entry: TagEntry; currentQuery: string
       <Link
         href={searchHref(tag.name)}
         aria-label={`Search only ${label}`}
-        className={`pointer-fine:min-h-7 min-h-9 flex-1 py-1 text-sm hover:underline ${CATEGORY_COLOR[tag.category]} ${
+        className={`pointer-fine:min-h-7 min-h-9 flex-1 py-1 text-sm hover:underline ${categoryColor(tag.category)} ${
           included ? 'font-semibold underline' : ''
         } ${excluded ? 'line-through opacity-60' : ''}`}
       >
@@ -126,7 +126,7 @@ export function GroupedTagList({
   currentQuery?: string
   empty?: string
 }) {
-  const groups = TAG_CATEGORIES.map(
+  const groups = categoryOrder(entries.map((e) => e.tag.category)).map(
     (category) =>
       [
         category,
@@ -147,7 +147,7 @@ export function GroupedTagList({
       {groups.map(([category, group]) => (
         <section key={category}>
           <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
-            {CATEGORY_LABEL[category]}
+            {categoryLabel(category)}
           </h3>
           <ul className="flex flex-col gap-0.5">
             {group.map((entry) => (
@@ -161,4 +161,4 @@ export function GroupedTagList({
 }
 
 // Re-exported so the components that paint tags keep one import for the whole set
-export { CATEGORY_COLOR, CATEGORY_LABEL }
+export { categoryColor, categoryLabel }

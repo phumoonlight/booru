@@ -5,8 +5,9 @@
 @source './**/*.{ts,tsx}';
 @source '../index.html';
 
-/* The exceptions, and each has to be named: `CATEGORY_COLOR` in the shared package's
-   tags.ts and `RATING_COLOR` in its search.ts are Tailwind classes, worn by the tag
+/* The exceptions, and each has to be named: the category colours in the shared package's
+   tags.ts (`categoryColor`, including its plain-foreground fallback) and `RATING_COLOR`
+   in its search.ts are Tailwind classes, worn by the tag
    index, the tag field and the implication rules. Class names are only ever found by
    reading files, so a map imported from outside the scanned tree compiles to nothing at
    all — the categories came out plain grey rather than wrong, which is the kind of miss
@@ -19,8 +20,8 @@
 @source '../../../../common/src/search.ts';
 
 /* The web's palette, verbatim from src/app/globals.css. Kept in step by hand rather than
-   imported: that file also carries the rating blur and the scrollbar rules for a page
-   that scrolls a gallery, none of which this window has. Dark theme only, same as the
+   imported: that file also carries the scrollbar rules for a page that scrolls a
+   gallery, which this window has no use for. Dark theme only, same as the
    board. */
 :root {
   /* Tells the UA to paint its own furniture dark — scrollbars, the select popup */

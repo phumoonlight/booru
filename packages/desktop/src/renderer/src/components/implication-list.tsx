@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CATEGORY_COLOR } from '@common/tags'
+import { categoryColor } from '@common/tags'
 import {
   asRating,
   RATING_COLOR,
@@ -180,7 +180,7 @@ export function ImplicationList({ siteUrl }: { siteUrl: string }) {
                     void window.api.openExternal(`${siteUrl}${searchHref(trigger)}`)
                   }
                   title={siteUrl ? `Open ${tagLabel(trigger)} on the board` : trigger}
-                  className={`w-44 shrink-0 truncate text-left font-mono text-xs hover:underline disabled:no-underline ${CATEGORY_COLOR.general}`}
+                  className={`w-44 shrink-0 truncate text-left font-mono text-xs hover:underline disabled:no-underline ${categoryColor('general')}`}
                 >
                   {trigger}
                 </button>

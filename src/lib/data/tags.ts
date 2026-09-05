@@ -2,7 +2,7 @@ import 'server-only'
 import { createAnonClient } from '@/lib/supabase/anon'
 import { listTags, searchTags as sharedSearchTags } from '@common/data/shared'
 import * as tags from '@common/data/tags'
-import { TAG_CATEGORIES, type Tag, type TagCategory } from '@common/tags'
+import { categoryOrder, type Tag, type TagCategory } from '@common/tags'
 
 /**
  * Tag reads, and only reads. Creating, renaming, recategorizing and deleting tags moved
@@ -25,9 +25,9 @@ export async function getTags(limit = 200): Promise<Tag[]> {
   return listTags(createAnonClient(), limit)
 }
 
-/** Groups tags into display order: artist → copyright → character → general → meta. */
+/** Groups tags into display order: the five known categories, then any others A–Z. */
 export function groupByCategory(tags: Tag[]): [TagCategory, Tag[]][] {
-  return TAG_CATEGORIES.map(
+  return categoryOrder(tags.map((t) => t.category)).map(
     (category) => [category, tags.filter((t) => t.category === category)] as [TagCategory, Tag[]]
   ).filter(([, group]) => group.length > 0)
 }

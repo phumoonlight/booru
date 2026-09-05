@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import {
-  CATEGORY_COLOR,
-  CATEGORY_LABEL,
-  TAG_CATEGORIES,
+  CATEGORY_PATTERN,
+  categoryColor,
+  categoryLabel,
+  categoryOrder,
   type Tag,
   type TagCategory,
 } from '@common/tags'
@@ -89,15 +90,21 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
     setLoading(false)
   }
 
-  const groups = TAG_CATEGORIES.map(
-    (category) =>
-      [
-        category,
-        (tags ?? [])
-          .filter((tag) => tag.category === category)
-          .sort((a, b) => tagLabel(a.name).localeCompare(tagLabel(b.name))),
-      ] as [(typeof TAG_CATEGORIES)[number], Tag[]]
-  ).filter(([, group]) => group.length > 0)
+  const groups = categoryOrder((tags ?? []).map((tag) => tag.category))
+    .map(
+      (category) =>
+        [
+          category,
+          (tags ?? [])
+            .filter((tag) => tag.category === category)
+            .sort((a, b) => tagLabel(a.name).localeCompare(tagLabel(b.name))),
+        ] as [TagCategory, Tag[]]
+    )
+    .filter(([, group]) => group.length > 0)
+
+  // What the two forms offer as suggestions: the five the app knows plus whatever this
+  // board has actually coined, so a category invented once is a click the second time.
+  const inUse = categoryOrder((tags ?? []).map((tag) => tag.category))
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-4">
@@ -147,7 +154,7 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
         </button>
       </div>
 
-      {panel === 'create' && <CreateTag onDone={() => void refresh()} />}
+      {panel === 'create' && <CreateTag categories={inUse} onDone={() => void refresh()} />}
       {panel === 'apply' && <ApplyTag onDone={() => void refresh()} />}
 
       {editing && (
@@ -156,6 +163,7 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
         <EditTag
           key={editing.id}
           tag={editing}
+          categories={inUse}
           siteUrl={siteUrl}
           onClose={() => setEditing(null)}
           onDone={() => void refresh()}
@@ -174,7 +182,7 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
         groups.map(([category, group]) => (
           <section key={category}>
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-              {CATEGORY_LABEL[category]} ({group.length})
+              {categoryLabel(category)} ({group.length})
             </h2>
             {/* Ruled like a table, the same way the web page is: a count sitting in open
                 space reads as close to the next column's name as to its own. Each cell
@@ -189,7 +197,7 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
                     title={`Manage ${tagLabel(tag.name)}`}
                     className={`flex min-h-9 w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface ${
                       editing?.id === tag.id ? 'bg-surface' : ''
-                    } ${CATEGORY_COLOR[category]}`}
+                    } ${categoryColor(category)}`}
                   >
                     <span className="min-w-0 flex-1 truncate">{tagLabel(tag.name)}</span>
                     <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted">
@@ -220,11 +228,63 @@ const FIELD =
   'min-h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent'
 
 /**
+ * The category, as free text with the board's own categories offered under it.
+ *
+ * It was a `<select>` over the five names in `TAG_CATEGORIES`, which made those five the
+ * whole vocabulary from the only window that can write one — while the column itself has
+ * always been free-form text and the migration says so. A board that wants `series` or
+ * `medium` can have it now; the five keep their colours and their place at the top of
+ * the list, and everything else is drawn in the plain foreground.
+ *
+ * Typing is filtered rather than validated: `CATEGORY_PATTERN` is letters only, so a
+ * digit or a space is dropped as it is typed and the field can never hold something the
+ * IPC channel would reject. A `<datalist>` is the autocomplete — it suggests without
+ * confining, which a combobox of our own would have to be careful to keep true.
+ */
+function CategoryField({
+  value,
+  options,
+  onChange,
+  disabled = false,
+}: {
+  value: string
+  options: string[]
+  onChange: (next: string) => void
+  disabled?: boolean
+}) {
+  // Two of these are on screen at once (New tag, and a row being edited), so the list's
+  // id has to be per-instance or the browser resolves both to whichever came first.
+  const listId = useId()
+
+  return (
+    <>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value.toLowerCase().replace(/[^a-z]/g, ''))}
+        list={listId}
+        placeholder="general"
+        spellCheck={false}
+        disabled={disabled}
+        title="Letters only"
+        className={`${FIELD} w-36`}
+      />
+      <datalist id={listId}>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {categoryLabel(option)}
+          </option>
+        ))}
+      </datalist>
+    </>
+  )
+}
+
+/**
  * Name a tag before anything carries it — an artist or a series, with the category
  * already right. Uploads coin tags as a side effect of applying them, so this is only
  * ever the other order, and the tag starts on no posts.
  */
-function CreateTag({ onDone }: { onDone: () => void }) {
+function CreateTag({ categories, onDone }: { categories: string[]; onDone: () => void }) {
   const [name, setName] = useState('')
   const [category, setCategory] = useState<TagCategory>('general')
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
@@ -253,21 +313,11 @@ function CreateTag({ onDone }: { onDone: () => void }) {
           spellCheck={false}
           className={`${FIELD} min-w-40 flex-1 font-mono`}
         />
-        <select
-          value={category}
-          onChange={(event) => setCategory(event.target.value as TagCategory)}
-          className={FIELD}
-        >
-          {TAG_CATEGORIES.map((option) => (
-            <option key={option} value={option}>
-              {CATEGORY_LABEL[option]}
-            </option>
-          ))}
-        </select>
+        <CategoryField value={category} options={categories} onChange={setCategory} />
         <button
           type="button"
           onClick={() => void submit()}
-          disabled={busy || !name.trim()}
+          disabled={busy || !name.trim() || !CATEGORY_PATTERN.test(category)}
           className="min-h-9 rounded-lg border border-accent px-4 text-sm text-accent transition-colors hover:bg-background disabled:opacity-50"
         >
           Create
@@ -353,11 +403,13 @@ function ApplyTag({ onDone }: { onDone: () => void }) {
  */
 function EditTag({
   tag,
+  categories,
   siteUrl,
   onClose,
   onDone,
 }: {
   tag: Tag
+  categories: string[]
   siteUrl: string
   onClose: () => void
   onDone: () => void
@@ -414,21 +466,16 @@ function EditTag({
           spellCheck={false}
           className={`${FIELD} min-w-40 flex-1 font-mono`}
         />
-        <select
+        <CategoryField
           value={category}
-          onChange={(event) => setCategory(event.target.value as TagCategory)}
-          className={FIELD}
-        >
-          {TAG_CATEGORIES.map((option) => (
-            <option key={option} value={option}>
-              {CATEGORY_LABEL[option]}
-            </option>
-          ))}
-        </select>
+          options={categories}
+          onChange={setCategory}
+          disabled={busy}
+        />
         <button
           type="button"
           onClick={() => void save()}
-          disabled={busy || !changed}
+          disabled={busy || !changed || !CATEGORY_PATTERN.test(category)}
           className="min-h-9 rounded-lg border border-accent px-4 text-sm text-accent transition-colors hover:bg-background disabled:opacity-50"
         >
           {busy ? 'Saving…' : 'Save'}

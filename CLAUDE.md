@@ -75,8 +75,8 @@ structure further down.
    deletes the post it inserted if tagging fails.
 7. **A Tailwind class in `packages/common` needs an `@source` line** in
    `packages/desktop/src/renderer/src/styles.css`, or it compiles to nothing in the
-   desktop build. Currently `CATEGORY_COLOR` (`@common/tags`) and `RATING_COLOR`
-   (`@common/search`). The failure can be *partial*, where a hex shared with another
+   desktop build. Currently the category colours behind `categoryColor` (`@common/tags`),
+   its plain-foreground fallback included, and `RATING_COLOR` (`@common/search`). The failure can be *partial*, where a hex shared with another
    scanned constant happens to survive.
 8. **`searchHref()` is the only thing that spells the listing's path.** Tag links,
    facets and the feed all derive from it.
@@ -228,7 +228,10 @@ behind a session, because there is none.
   nothing left to look at.
 - **Tags** lists and manages: click a row for rename / recategorize / delete, with New tag
   and Apply by tag above the list, those being the two operations not about a row you are
-  pointing at. Each drops the cached index. Its list is cached in a module-level `let`
+  pointing at. **A category is free text, not a menu** — letters only, filtered as typed,
+  with the five known ones plus whatever the board has coined offered in a `<datalist>`.
+  The column was always free-form; a `<select>` made the five mandatory from the only
+  window that can write one. Each drops the cached index. Its list is cached in a module-level `let`
   because the view unmounts whenever something is in front of it; 🔄 re-reads (clearing
   main's copy first, or it hands back the same list) and `invalidateTags()` drops it when
   an upload or edit lands.
