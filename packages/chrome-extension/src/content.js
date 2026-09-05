@@ -543,6 +543,10 @@ function enlarge(img) {
   clone.removeAttribute('width')
   clone.removeAttribute('height')
   clone.removeAttribute('loading')
+  // Nothing that draws text. `alt` is the board's tag list on most of them, and it is
+  // what fills the box in the moment before a picture decodes or if one never does.
+  clone.removeAttribute('alt')
+  clone.removeAttribute('title')
   // Pinned to the exact bytes the page already decoded, with nothing left that could make
   // the browser choose differently. A responsive thumbnail re-runs candidate selection
   // when it is laid out four times larger, and a `w`-descriptor set answers that by
@@ -554,11 +558,46 @@ function enlarge(img) {
   return clone
 }
 
+/**
+ * The board's own tooltip, parked for as long as the preview is up.
+ *
+ * Every booru writes the post's whole tag list into `title`, on the thumbnail or on the
+ * anchor around it, and the browser draws that beside the cursor after a moment — which
+ * is exactly where the preview was put. Forty tags of system tooltip across the picture
+ * is not something the overlay's CSS can reach, a tooltip being drawn by the browser
+ * rather than by the page. So the attribute is moved aside and put back on hide: the page
+ * keeps its tooltip, and a hover with the extension turned off is unchanged.
+ */
+const PARKED = 'data-booru-hover-title'
+let muted = []
+
+function muteTooltips(img) {
+  const anchor = img.closest('a')
+  muted = [img, img.parentElement, anchor].filter((el) => el && el.hasAttribute('title'))
+  for (const el of muted) {
+    el.setAttribute(PARKED, el.getAttribute('title'))
+    el.removeAttribute('title')
+  }
+}
+
+function restoreTooltips() {
+  for (const el of muted) {
+    const parked = el.getAttribute(PARKED)
+    if (parked !== null) el.setAttribute('title', parked)
+    el.removeAttribute(PARKED)
+  }
+  muted = []
+}
+
 function show(img) {
   build()
   const key = img.currentSrc || img.src
   if (!key) return
   showingKey = key
+  // Whatever was parked belongs to the last thumbnail, which may not be this one — a
+  // mode switch re-shows the same one, and a slide along a row shows the next.
+  restoreTooltips()
+  muteTooltips(img)
 
   // Bigger mode is the mode that costs nothing, and that has to include a sample started
   // before the switch: the bytes are still arriving, and the load would still resolve
@@ -594,6 +633,7 @@ function hide() {
   hovered = null
   showingKey = null
   shown = null
+  restoreTooltips()
   if (!shadow) return
   shadow.getElementById('box').classList.remove('on')
   // A cached sample stays in the cache but leaves the tree, so hovering the same
