@@ -122,9 +122,6 @@ export function CategoryTagField({
 
   const names = value.map((tag) => tag.name)
   const rows = categoryOrder(value.map((tag) => tag.category))
-  // Once for the field: the chips already on the post are dotted from the same list the
-  // picker splits by, so a tag looks the same before and after it is chosen.
-  const colors = useMemo(() => colorWords(all), [all])
 
   // Derived every render, never state: the rules are the truth about what follows from
   // what is on the post, so there is nothing here to fall out of step with the rows.
@@ -159,7 +156,7 @@ export function CategoryTagField({
                   key={tag.name}
                   className={`flex items-center gap-1.5 rounded bg-surface pl-2 font-mono text-xs ${categoryColor(category)}`}
                 >
-                  <TagMarks name={tag.name} category={category} colors={colors} />
+                  <TagMarks name={tag.name} />
                   {tag.name}
                   <button
                     type="button"
@@ -196,7 +193,6 @@ export function CategoryTagField({
             <TagPicker
               category={category}
               all={all}
-              colors={colors}
               exclude={names}
               onPick={add}
               onClose={() => setAdding(null)}
@@ -279,24 +275,19 @@ export function CategoryTagField({
  * are the same garment answered twice, and mixed in among `bikini` and `dress` they
  * tripled the length of a list whose useful part is the garments. Below the rule they are
  * grouped by what they are and sorted by colour, so choosing one is finding the thing and
- * then reading across. `colorWords` is what counts as a colour.
+ * then reading across. `COLOR_PREFIXES` is what counts as a colour.
  */
 
 /**
- * Every colour this can recognise: the words in `COLOR_NAMES`, plus whatever the board
- * happens to keep in a `color` category. Longest first, so `light_blue_dress` is a light
- * blue dress rather than a blue one that starts with `light`.
+ * Every colour this recognises, longest first — so `light_blue_dress` is a light blue
+ * dress rather than a blue one that starts with `light`.
  *
- * It began as the board's tags alone, which could not work: `pink_underwear` only split
- * once a bare `pink` tag existed, so a board that had never coined one — most of them —
- * got no splitting and no reason why. The words come with the language; the board's own
- * colours are added to them rather than replaced by them.
+ * It once read the board's own `color` category instead, which could not work:
+ * `pink_underwear` only split when a bare `pink` tag existed, so a board that had never
+ * coined one — most of them — got no splitting and no reason why. The words come with the
+ * language, not with a board's vocabulary, which is why this outlived that category.
  */
-function colorWords(all: Tag[] | null): string[] {
-  const words = new Set<string>(COLOR_NAMES)
-  for (const tag of all ?? []) if (tag.category === 'color') words.add(tag.name)
-  return [...words].sort((a, b) => b.length - a.length)
-}
+const COLOR_PREFIXES = [...COLOR_NAMES].sort((a, b) => b.length - a.length)
 
 /**
  * What a tag carries in front of its name: its emoji, if one is written for that exact
@@ -306,19 +297,9 @@ function colorWords(all: Tag[] | null): string[] {
  * the same before and after it is picked — and on the row where it landed, which is the
  * only place a mis-picked colour is ever noticed.
  */
-function TagMarks({
-  name,
-  category,
-  colors,
-}: {
-  name: string
-  category: string
-  colors: string[]
-}) {
+function TagMarks({ name }: { name: string }) {
   const emoji = TAG_EMOJI[name]
-  // No dot inside the Color row: there the tag *is* the colour, and a dot beside a word
-  // that says the same thing is decoration.
-  const split = category === 'color' ? null : splitColor(name, colors)
+  const split = splitColor(name, COLOR_PREFIXES)
 
   return (
     <>
@@ -354,14 +335,12 @@ type ColorOption = { tag: Tag; color: string; rest: string }
 function TagPicker({
   category,
   all,
-  colors,
   exclude,
   onPick,
   onClose,
 }: {
   category: string
   all: Tag[] | null
-  colors: string[]
   exclude: string[]
   onPick: (tag: TagSeed) => void
   onClose: () => void
@@ -378,14 +357,10 @@ function TagPicker({
       .filter((tag) => (typed ? tag.name.includes(typed) : true))
       .slice(0, 60)
 
-    // Not inside the Color row itself: there every name *is* a colour, and splitting one
-    // off another would only claim `light_blue` is a kind of `light`.
-    if (category === 'color') return { plain: options, colored: [] as ColorOption[] }
-
     const plain: Tag[] = []
     const colored: ColorOption[] = []
     for (const tag of options) {
-      const split = splitColor(tag.name, colors)
+      const split = splitColor(tag.name, COLOR_PREFIXES)
       if (split) colored.push({ tag, ...split })
       else plain.push(tag)
     }
@@ -395,7 +370,7 @@ function TagPicker({
     colored.sort((a, b) => a.rest.localeCompare(b.rest) || a.color.localeCompare(b.color))
 
     return { plain, colored }
-  }, [all, category, colors, exclude, typed])
+  }, [all, category, exclude, typed])
 
   /** A pick clears the filter and hands focus back, so the next tag is typed rather than
    *  clicked into. Leaving the word there would leave the list showing the one thing it
@@ -455,7 +430,7 @@ function TagPicker({
                   {/* The colour itself, painted, rather than a second word colour in the
                       text — these chips belong to the category they are in, and a dot is
                       read before the name is, which is the order you pick one in. */}
-                  <TagMarks name={tag.name} category={category} colors={colors} />
+                  <TagMarks name={tag.name} />
                   {tag.name}
                 </button>
               ))}

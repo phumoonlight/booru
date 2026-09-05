@@ -3,9 +3,15 @@
  * the display order, and the only ones the desktop app will write.
  *
  * This list is the display order too, so it reads the way the Tags screen does: who made
- * it, then who is in it, then what is in the picture, then the two catch-alls. The middle
- * group is the board's own vocabulary rather than Danbooru's four — a booru's categories
- * are a statement about what it is for, and the code only ever needed a colour per name.
+ * it, then who is in it, then the subject from the head down, then the two catch-alls.
+ * The middle group is the board's own vocabulary rather than Danbooru's four — a booru's
+ * categories are a statement about what it is for, and the code only ever needed a colour
+ * per name.
+ *
+ * There was a `color` category. It went because a colour is never what a tag *is*:
+ * `pink_dress` is a dress and `blonde_hair` is hair, and filing them by their adjective
+ * put the same garment in two categories. Colour is a prefix now, recognised by
+ * `COLOR_NAMES` and drawn as a dot, which is why nothing was lost by retiring it.
  *
  * It is still not a database constraint: `tags.category` is free-form text (see the
  * migration's own comment), so a row edited by hand can hold anything and the code draws
@@ -15,8 +21,8 @@ export const TAG_CATEGORIES = [
   'artist',
   'copyright',
   'character',
+  'head',
   'body',
-  'color',
   'clothes',
   'exposure',
   'posture',
@@ -94,8 +100,8 @@ const KNOWN_COLOR: Record<KnownCategory, string> = {
   artist: 'text-[#ff8a8b]',
   copyright: 'text-[#c797ff]',
   character: 'text-[#35c64a]',
+  head: 'text-[#ff9f43]',
   body: 'text-[#8b9cff]',
-  color: 'text-[#ff9f43]',
   clothes: 'text-[#45c8c0]',
   exposure: 'text-[#ff87c8]',
   posture: 'text-[#b6d94c]',
@@ -108,8 +114,8 @@ const KNOWN_LABEL: Record<KnownCategory, string> = {
   artist: 'Artist',
   copyright: 'Copyright',
   character: 'Character',
+  head: 'Head',
   body: 'Body',
-  color: 'Color',
   clothes: 'Clothes',
   exposure: 'Exposure',
   posture: 'Posture',
@@ -121,11 +127,11 @@ const KNOWN_LABEL: Record<KnownCategory, string> = {
 /**
  * Colour words, for splitting a tag like `white_underwear` into the colour and the thing.
  *
- * A list here rather than "whatever tags are in the Color category", which is what this
+ * A list here rather than "whatever tags are in a Color category", which is what this
  * started as and could not work: recognising `pink_underwear` then needed a `pink` tag to
  * exist first, so a board that had never coined bare colours — most of them — got no
  * splitting at all, silently. The colours a language has are not a property of one board's
- * vocabulary, so they are not read from it.
+ * vocabulary, so they are not read from it, and this outlived the category itself.
  *
  * Longest match wins at the call site, which is why `light_blue` may sit beside `blue`.
  * Adding one is a line here; it costs nothing and nothing depends on the order.
