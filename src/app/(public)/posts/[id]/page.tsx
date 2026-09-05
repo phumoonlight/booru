@@ -10,7 +10,9 @@ import { isRestricted, ratingToken, RATING_COLOR, RATING_LABEL, searchHref } fro
 import { postImageUrl, thumbnailUrl } from '@common/storage'
 import { GroupedTagList } from '@/components/tag-list'
 import { isSupabaseConfigured } from '@/lib/env'
+import { isNsfwEnabled } from '@/lib/nsfw-server'
 import { SetupNotice } from '@/components/setup-notice'
+import { RestrictedNotice } from '@/components/restricted-notice'
 import { BLUR_DATA_URL } from '@/lib/blur'
 import { SITE_NAME } from '@/lib/site'
 
@@ -29,6 +31,20 @@ export async function generateMetadata({ params }: PageProps<'/posts/[id]'>): Pr
 
   const post = await getPost(postId)
   if (!post) return { title: 'Post not found', robots: { index: false, follow: false } }
+
+  // A blocked page describes nothing, and neither does its metadata. The tags were the
+  // title and the thumbnail was the OpenGraph image, so a link to an explicit post
+  // unfurled in a chat window as a picture of it and a list of what it shows — past a
+  // gate the page itself now holds. Nothing fetching this carries the cookie, which is
+  // the point: an unfurl is exactly the reader who has not asked.
+  if (isRestricted(post.rating) && !(await isNsfwEnabled())) {
+    return {
+      title: `Post #${post.id}`,
+      description: `Rated ${RATING_LABEL[post.rating]}. Turn on NSFW in Settings to see it.`,
+      alternates: { canonical: `/posts/${post.id}` },
+      robots: { index: false, follow: true },
+    }
+  }
 
   const tags = await getPostTags(postId)
   const tagNames = tags.map((tag) => tag.name)
@@ -78,6 +94,15 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
 
   const post = await getPost(postId)
   if (!post) notFound()
+
+  // The listing has left the adult tiers out since the setting arrived, but a post's own
+  // URL is reachable without going near the listing — a link, a bookmark, a fresh private
+  // window. Nothing below this line runs for a blocked post: no tags are read, no
+  // neighbours, and `PostViewCounter` never mounts, so a view is not counted for a page
+  // that showed nothing.
+  if (isRestricted(post.rating) && !(await isNsfwEnabled())) {
+    return <RestrictedNotice postId={post.id} rating={post.rating} />
+  }
 
   const [tags, { prevId, nextId }] = await Promise.all([
     getPostTags(postId),

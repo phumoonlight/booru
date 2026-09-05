@@ -121,9 +121,10 @@ free serverless tier bills by the second and kills at ten.
 - **Stored as one letter, written as a word.** `posts.rating` holds `g`, `s`, `q` or `e`;
   a query spells `rating:explicit`. `RATING_NAME` in `@common/search` is the only
   translation, and `asRating` reads either form while `ratingToken` only writes the word.
-- `RESTRICTED_RATINGS` (`q`, `e`) is kept out of `sitemap.xml` and `noindex`ed, *and*
-  left out of every listing until the `nsfw` cookie is set at `/settings`. Not access
-  control: a post opened by its own URL renders whatever it holds.
+- `RESTRICTED_RATINGS` (`q`, `e`) is kept out of `sitemap.xml` and `noindex`ed, left out
+  of every listing until the `nsfw` cookie is set at `/settings`, and blocked on its own
+  page — `<RestrictedNotice />`, with the metadata cut back to match, since an unfurl
+  carries no cookie. Not access control: the cookie is a checkbox anyone can tick.
 - The cookie is a ceiling `resolveRatings` intersects the query against, applied once in
   `lib/data/search.ts` so every listing and every feed chunk agrees. There used to be a
   rating *blur* here instead — every post sent, some obscured by CSS.

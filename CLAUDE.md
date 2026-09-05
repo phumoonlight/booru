@@ -352,10 +352,14 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   `rating:e`, because someone who has seen the column will type the letter.
   `ratingToken` only ever writes the name, so every link, chip and saved query the app
   produces has one spelling and a hand-typed URL still works.
-- **`RESTRICTED_RATINGS` (`q`, `e`) is two policies now.** It keeps those tiers out of
-  `sitemap.xml` and `noindex`s the page, *and* it is what the listing leaves out until
-  the NSFW cookie is set. Still not access control: a post opened by its own URL renders
-  whatever it holds, there being no accounts to attach an age to.
+- **`RESTRICTED_RATINGS` (`q`, `e`) gates three things.** Those tiers stay out of
+  `sitemap.xml` and are `noindex`ed; the listing leaves them out until the NSFW cookie is
+  set; and `/posts/[id]` itself renders `<RestrictedNotice />` instead — a post's own URL
+  is reachable without going near a listing, which is what a link, a bookmark or a
+  private window is. The **metadata is gated too**: the tags were the title and the
+  thumbnail was the OpenGraph image, so an unfurl described the post past its own gate,
+  and nothing fetching that carries the cookie. Still not access control — the cookie is
+  a checkbox anyone can tick, and there are no accounts to attach an age to.
 - **A ceiling the query narrows within, never lifts.** `resolveRatings` takes the visible
   set as a second argument (all four when omitted, which is what the desktop app gets),
   intersects the query's own `rating:` metatags with it, and can return an empty
