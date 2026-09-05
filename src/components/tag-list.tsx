@@ -14,7 +14,7 @@ export function FacetActions({
   plus,
   minus,
 }: {
-  /** Omitted by the rating facet, which has no counter table behind it — see rating-list. */
+  /** Optional: a facet with no counter behind it renders the buttons without one. */
   count?: number
   plus: { href: string; label: string; on: boolean }
   minus: { href: string; label: string; on: boolean }

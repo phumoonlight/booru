@@ -6,7 +6,7 @@ import { getPost, getPostNeighbours, getPostTags } from '@/lib/data/posts'
 import { PostViewCounter } from '@/components/post-view-counter'
 import { PostNav } from '@/components/post-nav'
 import { StartHereLink } from '@/components/start-here'
-import { isRestricted, RATING_COLOR, RATING_LABEL } from '@common/search'
+import { isRestricted, ratingToken, RATING_COLOR, RATING_LABEL, searchHref } from '@common/search'
 import { postImageUrl, thumbnailUrl } from '@common/storage'
 import { GroupedTagList } from '@/components/tag-list'
 import { isSupabaseConfigured } from '@/lib/env'
@@ -161,7 +161,17 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-muted">Rating</dt>
-                <dd className={RATING_COLOR[post.rating]}>{RATING_LABEL[post.rating]}</dd>
+                {/* The listing's rating facet is gone, so this is where a tier is picked
+                    up: the same `rating:x` token the search bar takes, one click away
+                    from the post that made you want it. */}
+                <dd>
+                  <Link
+                    href={searchHref(ratingToken(post.rating))}
+                    className={`hover:underline ${RATING_COLOR[post.rating]}`}
+                  >
+                    {RATING_LABEL[post.rating]}
+                  </Link>
+                </dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-muted">Size</dt>

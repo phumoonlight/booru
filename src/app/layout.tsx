@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { SITE_DESCRIPTION, SITE_NAME, siteUrl } from '@/lib/site'
-import { BLUR_INIT_SCRIPT, DEFAULT_BLUR_ATTR_VALUE } from '@/lib/rating-blur'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -44,17 +43,14 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
+    // Nothing is set on <html> before paint any more. The adult tiers used to arrive
+    // blurred, which meant a script in <head> and an attribute the CSS keyed off; they
+    // are now simply absent from the listing unless the NSFW cookie says otherwise, and
+    // a row that was never rendered needs nothing hidden.
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
-      // The rating blur every visitor starts with; the script below swaps in a stored
-      // choice while the head parses, so nothing unblurred is ever painted.
-      data-blur-ratings={DEFAULT_BLUR_ATTR_VALUE}
-      suppressHydrationWarning
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: BLUR_INIT_SCRIPT }} />
-      </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {/* Navigation lives in the sticky SearchHeader each page renders */}
         <main className="flex-1 pb-8">{children}</main>

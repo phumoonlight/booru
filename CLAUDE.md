@@ -117,9 +117,10 @@ The post write path, the search, the counters, both encoders, and the pure helpe
 
 ## The website (`src/`)
 
-- **Seven routes**, and none of them writes: `/`, `/posts`, `/posts/[id]`, `/tags`,
-  `/tags/[id]`, `robots.txt`, `sitemap.xml`. There is no `/upload`, `/login`, `/account`,
-  `/tags/manage` or `src/proxy.ts` (Next 16's `middleware.ts`) — see [History](#history).
+- **Eight routes**, and none of them writes: `/`, `/posts`, `/posts/[id]`, `/tags`,
+  `/tags/[id]`, `/settings`, `robots.txt`, `sitemap.xml`. There is no `/upload`,
+  `/login`, `/account`, `/tags/manage` or `src/proxy.ts` (Next 16's `middleware.ts`) —
+  see [History](#history).
 - **The gallery is `/posts`, not `/`.** `/` is a landing page: wordmark, search box,
   emoji post count. `/?query=` redirects to the listing for old links.
 - **`?query=` is the only param the listing has** (`SEARCH_PARAM` in `@common/search`),
@@ -143,8 +144,14 @@ The post write path, the search, the counters, both encoders, and the pure helpe
   lossy pass. The grid used to be optimized and visibly softened thumbnails: Next scales
   the requested quality by 50/80 for AVIF, so the default 75 became quality 47 at effort
   3, for a resize its optimizer could not perform anyway (`withoutEnlargement`).
-- **Rating blur is a `data-blur-ratings` attribute on `<html>`**, set before first paint,
-  so the grid stays a plain server render (`lib/rating-blur.ts` + `globals.css`).
+- **The adult tiers are off by default, behind one cookie.** `/settings` is the site's
+  only preferences page and Enable NSFW is its only setting; `lib/nsfw.ts` holds the
+  cookie's spelling and `lib/nsfw-server.ts` reads it, split because the checkbox that
+  writes it is a client component and `next/headers` anywhere in that import graph is a
+  build error. `lib/data/search.ts` applies it to *every* listing the site renders, so a
+  page cannot forget and the feed's later chunks cannot disagree with its first.
+  It replaced a CSS blur — an attribute on `<html>` set before first paint — which sent
+  every post and obscured some of them client-side.
 - **Saved queries are `localStorage`**, so they need no account (`lib/saved-queries.ts`,
   module store in `use-saved-queries.ts` — the sidebar renders twice and both copies must
   agree). A row's identity is its tags, the query minus `start:`, which is what lets 💾
@@ -308,16 +315,23 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
 ## Ratings
 
 - **Stored as one letter, written as a word.** `posts.rating` holds `g`, `s`, `q` or `e`
-  — that is `RATINGS`, and what `Rating` means everywhere in the code, in `data-rating`,
-  `data-blur-ratings` and `blurred_ratings`. A query spells it out (`rating:explicit`);
+  — that is `RATINGS`, and what `Rating` means everywhere in the code. A query spells it
+  out (`rating:explicit`);
   `RATING_NAME` is the only translation; `RATING_LABEL` is the third form and the only one
   a person reads.
 - **Reading is loose, writing is strict.** `asRating` accepts `rating:explicit` *and*
   `rating:e`, because someone who has seen the column will type the letter.
   `ratingToken` only ever writes the name, so every link, chip and saved query the app
   produces has one spelling and a hand-typed URL still works.
-- **`RESTRICTED_RATINGS` (`q`, `e`) is a search-engine policy**, not a viewer one — out of
-  `sitemap.xml`, `noindex` on the page. Nothing is hidden from a visitor.
+- **`RESTRICTED_RATINGS` (`q`, `e`) is two policies now.** It keeps those tiers out of
+  `sitemap.xml` and `noindex`s the page, *and* it is what the listing leaves out until
+  the NSFW cookie is set. Still not access control: a post opened by its own URL renders
+  whatever it holds, there being no accounts to attach an age to.
+- **A ceiling the query narrows within, never lifts.** `resolveRatings` takes the visible
+  set as a second argument (all four when omitted, which is what the desktop app gets),
+  intersects the query's own `rating:` metatags with it, and can return an empty
+  whitelist — so `rating:explicit` typed with NSFW off honestly returns nothing rather
+  than reaching past the setting. The listing says why, with a link to `/settings`.
 - The column is free-form text with no check constraint, so a new tier is a code change
   only.
 

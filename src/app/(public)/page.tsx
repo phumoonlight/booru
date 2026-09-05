@@ -48,6 +48,10 @@ export default async function HomePage({ searchParams }: PageProps<'/'>) {
           Tags
           <NavProgress />
         </Link>
+        <Link href="/settings" className="text-muted hover:text-foreground hover:underline">
+          Settings
+          <NavProgress />
+        </Link>
       </nav>
 
       {configured ? (

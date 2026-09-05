@@ -10,8 +10,8 @@ import {
   type SavedQuery,
 } from '@/lib/saved-queries'
 
-// A module-level store, like the rating-blur options: the sidebar renders twice (desktop
-// column + mobile sheet) and both copies have to agree the moment either one saves.
+// A module-level store rather than component state: more than one copy of the shelf can
+// be mounted at once, and both have to agree the moment either one saves.
 let cached: SavedQuery[] | null = null
 const listeners = new Set<() => void>()
 

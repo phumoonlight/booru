@@ -37,6 +37,12 @@ export function SearchHeader({
             🏷️ Tags
             <NavProgress />
           </Link>
+          {/* Where the adult tiers are turned on, which is the only thing on this site
+              that changes what a listing contains rather than what it is sorted by */}
+          <Link href="/settings" className="text-sm text-muted hover:text-foreground">
+            ⚙️ Settings
+            <NavProgress />
+          </Link>
         </nav>
       </div>
       {/* Keyed so navigation (back/forward, tag links) resets the input to the URL */}
@@ -58,6 +64,7 @@ export function SearchHeaderSkeleton() {
         <div className="h-7 w-32 animate-pulse rounded bg-surface sm:h-8" />
         <div className="flex items-center gap-3">
           <div className="h-5 w-14 animate-pulse rounded bg-surface" />
+          <div className="h-5 w-20 animate-pulse rounded bg-surface" />
         </div>
       </div>
       <div className="flex gap-2">

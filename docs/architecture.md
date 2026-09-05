@@ -121,11 +121,12 @@ free serverless tier bills by the second and kills at ten.
 - **Stored as one letter, written as a word.** `posts.rating` holds `g`, `s`, `q` or `e`;
   a query spells `rating:explicit`. `RATING_NAME` in `@common/search` is the only
   translation, and `asRating` reads either form while `ratingToken` only writes the word.
-- Nothing is hidden from a visitor: the facet lists every tier and the query narrows only
-  when it names one. `RESTRICTED_RATINGS` (`q`, `e`) is a search-engine policy — kept out
-  of `sitemap.xml`, `noindex` on the page — not a viewer one.
-- Rating blur is a per-browser display preference: a `data-blur-ratings` attribute on
-  `<html>`, set before first paint, so the grid stays a plain server render.
+- `RESTRICTED_RATINGS` (`q`, `e`) is kept out of `sitemap.xml` and `noindex`ed, *and*
+  left out of every listing until the `nsfw` cookie is set at `/settings`. Not access
+  control: a post opened by its own URL renders whatever it holds.
+- The cookie is a ceiling `resolveRatings` intersects the query against, applied once in
+  `lib/data/search.ts` so every listing and every feed chunk agrees. There used to be a
+  rating *blur* here instead — every post sent, some obscured by CSS.
 - Absolute URLs (canonicals, OpenGraph, `robots.txt`, `sitemap.xml`) all come from
   `lib/site.ts` → `NEXT_PUBLIC_SITE_URL`, so the origin is configured in one place.
 - Search-result URLs are `noindex, follow` and disallowed in `robots.txt` — the

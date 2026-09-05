@@ -134,14 +134,20 @@ export const RATING_COLOR: Record<Rating, string> = {
 }
 
 /**
- * The adult tiers. Every visitor sees them on the site; this list only keeps them
- * out of the sitemap and out of search-engine results (`robots: noindex`).
+ * The adult tiers. They stay out of the sitemap and out of search-engine results
+ * (`robots: noindex`), and the website now also keeps them out of the listing until a
+ * visitor turns them on in Settings — see `src/lib/nsfw.ts`. A post is still reachable
+ * by its own URL either way: this is what the gallery volunteers, not access control,
+ * and there are no accounts here to make it anything more.
  */
 export const RESTRICTED_RATINGS: readonly Rating[] = ['q', 'e']
 
 export function isRestricted(rating: Rating): boolean {
   return RESTRICTED_RATINGS.includes(rating)
 }
+
+/** The tiers shown to someone who has not asked for the adult ones. */
+export const SAFE_RATINGS: readonly Rating[] = RATINGS.filter((r) => !isRestricted(r))
 
 // ── The cursor metatag ─────────────────────────────────────────────────────────
 // `start:900` means "begin at post 900 and go older", which is what a bookmark on a
@@ -254,14 +260,23 @@ export function splitQuery(parsed: ParsedQuery): SplitQuery {
 }
 
 /**
- * The rating whitelist to hand the search RPC, or `null` for "no filter".
- * Only the query narrows it: no rating is hidden from anyone by default.
+ * The rating whitelist to hand the search, or `null` for "no filter".
+ *
+ * Two things narrow it, and they compose in one direction only. `visible` is the ceiling
+ * the *caller* sets — the website hands it the safe tiers unless the NSFW cookie is
+ * there; the desktop app passes nothing and gets everything. The query narrows within
+ * that ceiling and can never lift it, so `rating:explicit` typed by someone who hasn't
+ * turned the adult tiers on returns nothing rather than quietly reaching past the
+ * setting. That is also why the intersection can come back empty: an empty whitelist is
+ * a real answer, and `readPosts` filtering `rating in ()` matches no row, which is the
+ * honest result.
  */
-export function resolveRatings({
-  ratings,
-  excludeRatings,
-}: Pick<SplitQuery, 'ratings' | 'excludeRatings'>): Rating[] | null {
-  let allowed: Rating[] = ratings.length > 0 ? [...ratings] : [...RATINGS]
+export function resolveRatings(
+  { ratings, excludeRatings }: Pick<SplitQuery, 'ratings' | 'excludeRatings'>,
+  visible: readonly Rating[] = RATINGS
+): Rating[] | null {
+  let allowed: Rating[] = ratings.length > 0 ? [...ratings] : [...visible]
+  allowed = allowed.filter((r) => visible.includes(r))
 
   if (excludeRatings.length > 0) {
     allowed = allowed.filter((r) => !excludeRatings.includes(r))

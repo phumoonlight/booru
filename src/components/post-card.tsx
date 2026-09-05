@@ -17,13 +17,10 @@ export function PostCard({
   active?: boolean
 }) {
   return (
-    // `data-rating` is what the blur CSS keys off; overflow keeps the blurred edges
-    // from spilling past the thumb. See `lib/rating-blur.ts`.
-    //
     // The wrapper exists so the badge can sit over the thumbnail: nesting one link
     // inside another is not a thing, so the two are siblings and the group/positioning
-    // moved up here. The blur CSS is a descendant selector, so it doesn't notice.
-    <div data-rating={post.rating} className="group relative h-full">
+    // moved up here.
+    <div className="group relative h-full">
       <StartHereBadge postId={post.id} query={query} active={active} />
       <Link
         href={`/posts/${post.id}`}

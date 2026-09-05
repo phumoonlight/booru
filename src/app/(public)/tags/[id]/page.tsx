@@ -76,10 +76,7 @@ export default async function TagPage({ params }: PageProps<'/tags/[id]'>) {
   const { posts, hasMore } = await searchPosts({ query: tag.name, perPage: SAMPLE_SIZE })
 
   return (
-    // `data-no-blur` turns the rating blur off for everything below it (globals.css).
-    // Arriving here is already a choice of one tag, so there is nothing left to warn
-    // about the way a mixed gallery does.
-    <div data-no-blur className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">
       {/* No search box and no tag drawer: this page is one tag, and both controls exist
           to narrow across many. The gallery keeps them. */}
       <SearchHeader showSearch={false} />

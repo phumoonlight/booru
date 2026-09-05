@@ -98,29 +98,3 @@ select {
   background-size: 0.7em;
   padding-right: 2.1em;
 }
-
-/* ── Rating blur ───────────────────────────────────────────────────────────────
-   Which tiers are obscured lives in `data-blur-ratings` on <html> — set before the
-   first paint by the root layout's script, rewritten by the sidebar's ⚙ panel. Doing
-   it in CSS keeps the grid a plain server render: nothing re-renders when it changes.
-   Every rating gets its own rule because CSS can't compare two elements' attributes. */
-[data-rating] img {
-  transition: filter 150ms ease;
-}
-
-[data-blur-ratings~='g'] [data-rating='g'] img,
-[data-blur-ratings~='s'] [data-rating='s'] img,
-[data-blur-ratings~='q'] [data-rating='q'] img,
-[data-blur-ratings~='e'] [data-rating='e'] img {
-  /* Scaled past the frame so the blur's soft edge never exposes a rim of the image */
-  filter: blur(18px);
-  transform: scale(1.2);
-}
-
-/* A subtree that opts out entirely — the tag page, where picking the tag was already
-   the choice the blur exists to offer. Three attributes deep so it outweighs the
-   rules above on specificity rather than on source order. */
-[data-blur-ratings] [data-no-blur] [data-rating] img {
-  filter: none;
-  transform: none;
-}

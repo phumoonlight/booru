@@ -110,9 +110,13 @@ type PostFilters = {
   start: number | null
 }
 
-async function resolveFilters(client: BooruClient, query: string): Promise<PostFilters | null> {
+async function resolveFilters(
+  client: BooruClient,
+  query: string,
+  visibleRatings?: readonly Rating[]
+): Promise<PostFilters | null> {
   const { include, exclude, ratings, excludeRatings, start } = splitQuery(parseSearchQuery(query))
-  const allowedRatings = resolveRatings({ ratings, excludeRatings })
+  const allowedRatings = resolveRatings({ ratings, excludeRatings }, visibleRatings)
 
   let onlyIds: number[] | null = null
   if (include.length > 0) {
@@ -171,7 +175,6 @@ async function readPosts(
 /**
  * Multi-tag search: AND over includes, NOT over excludes.
  * An empty query returns the whole gallery, so this backs plain browsing too.
- * Ratings narrow only when the query says so — nothing is hidden by default.
  *
  * One function for both halves of the feed: no cursor is the newest screenful, the one
  * the server renders and a crawler sees; `after` is every chunk the browser appends.
@@ -182,18 +185,25 @@ export async function searchPosts(
     query = '',
     perPage = POSTS_PER_PAGE,
     after,
+    visibleRatings,
   }: {
     /** Tags, rating metatags, and the `start:` cursor — the whole address of a listing. */
     query?: string
     perPage?: number
     /** Continue point: strictly older than this post. The feed's own, never in the URL. */
     after?: number
+    /**
+     * The tiers this caller is willing to list, as a ceiling the query narrows within.
+     * Omitted means all four — the desktop app browses the whole board, and the policy
+     * of which tiers a *visitor* gets belongs to the website's own wrapper, not here.
+     */
+    visibleRatings?: readonly Rating[]
   } = {}
 ): Promise<PostPage> {
   const empty: PostPage = { posts: [], hasMore: false }
 
   try {
-    const filters = await resolveFilters(client, query)
+    const filters = await resolveFilters(client, query, visibleRatings)
     if (!filters) return empty
 
     // The cursor came in inside the query; `after` is the feed's own continuation
