@@ -226,9 +226,13 @@ function evict() {
  * thumbnail stays on screen rather than the preview vanishing.
  */
 function loadChain(urls) {
-  return new Promise((resolve, reject) => {
+  let current = null
+  let stopped = false
+
+  const promise = new Promise((resolve, reject) => {
     let index = 0
     const attempt = () => {
+      if (stopped) return
       if (index >= urls.length) return reject(new Error('no candidate loaded'))
       const url = urls[index++]
 
@@ -241,6 +245,7 @@ function loadChain(urls) {
         video.preload = 'auto'
         video.addEventListener('error', attempt, { once: true })
         video.addEventListener('loadeddata', () => resolve(video), { once: true })
+        current = video
         video.src = url
         return
       }
@@ -261,10 +266,47 @@ function loadChain(urls) {
         },
         { once: true }
       )
+      current = image
       image.src = url
     }
     attempt()
   })
+
+  /**
+   * Abandon whatever is on the wire. Clearing `src` is what actually tells Chromium to
+   * stop the transfer — the element was never in the tree, so dropping the reference does
+   * nothing on its own. The clear fires `error`, which is why `attempt` checks the flag
+   * before doing anything: without it, cancelling would walk the rest of the candidates.
+   */
+  const stop = () => {
+    stopped = true
+    if (!current) return
+    current.removeAttribute('src')
+    if (current.load) current.load()
+    current = null
+  }
+
+  return { promise, stop }
+}
+
+/**
+ * The one sample that may be in flight, and why it is worth holding onto.
+ *
+ * Only one thumbnail is hovered at a time, so there is never a second — and until this
+ * existed there was no way to take a request back. Switching to bigger mode mid-load left
+ * the sample downloading in a mode whose whole claim is that it costs nothing, and worse,
+ * it still resolved against the key being shown and painted itself over the thumbnail.
+ */
+let pending = null
+
+function cancelPending() {
+  if (!pending) return
+  const { key, stop } = pending
+  pending = null
+  stop()
+  // A half-downloaded entry is not a cached one. Dropping it means a later hover in
+  // sample mode asks again, rather than waiting on a promise that will never settle.
+  cache.delete(key)
 }
 
 function entryFor(img) {
@@ -276,19 +318,27 @@ function entryFor(img) {
   const urls = candidatesFor(img)
   if (!urls) return null
 
+  const settled = () => {
+    if (pending && pending.key === key) pending = null
+  }
+  const chain = loadChain(urls)
   const entry = { urls, node: null, failed: false }
-  entry.promise = loadChain(urls).then(
+  entry.promise = chain.promise.then(
     (node) => {
       entry.node = node
+      settled()
       return node
     },
     (error) => {
       entry.failed = true
+      settled()
       throw error
     }
   )
   // A rejection nobody happens to be waiting on is still an unhandled rejection.
   entry.promise.catch(() => {})
+  cancelPending()
+  pending = { key, stop: chain.stop }
   cache.set(key, entry)
   evict()
   return entry
@@ -493,6 +543,14 @@ function enlarge(img) {
   clone.removeAttribute('width')
   clone.removeAttribute('height')
   clone.removeAttribute('loading')
+  // Pinned to the exact bytes the page already decoded, with nothing left that could make
+  // the browser choose differently. A responsive thumbnail re-runs candidate selection
+  // when it is laid out four times larger, and a `w`-descriptor set answers that by
+  // fetching the biggest file it lists — a request, in the mode whose whole point is that
+  // it makes none.
+  clone.removeAttribute('srcset')
+  clone.removeAttribute('sizes')
+  clone.src = img.currentSrc || img.src
   return clone
 }
 
@@ -501,6 +559,11 @@ function show(img) {
   const key = img.currentSrc || img.src
   if (!key) return
   showingKey = key
+
+  // Bigger mode is the mode that costs nothing, and that has to include a sample started
+  // before the switch: the bytes are still arriving, and the load would still resolve
+  // against the key on screen and paint itself over the thumbnail when it did.
+  if (mode !== 'sample') cancelPending()
 
   const entry = mode === 'sample' ? entryFor(img) : null
   if (entry && entry.node) {
@@ -516,7 +579,9 @@ function show(img) {
 
   entry.promise.then(
     (node) => {
-      if (showingKey === key) paint(node, 'sample')
+      // Still pointing at it, and still asking for samples — a mode switch between the
+      // request and its answer is a change of mind, not a slow frame.
+      if (showingKey === key && mode === 'sample') paint(node, 'sample')
     },
     () => {
       // Every candidate 404'd. The enlarged thumbnail is still on screen and is still
