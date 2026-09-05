@@ -9,7 +9,8 @@ import { useSearchParams } from 'next/navigation'
  * It was Danbooru's fixed left sidebar under `lg` and a bottom sheet above it. The
  * sidebar cost every row of thumbnails a 224px column, permanently, to hold facets that
  * are used in bursts — you narrow a search, then look at pictures for a while. Now the
- * grid has the full width and the facets are one tap away at any size.
+ * grid has the full width and the facets are one tap away at any size: the panel slides
+ * over the left edge, where the sidebar used to be, so a tag is where the hand expects.
  *
  * Content is server-rendered and passed in as children.
  */
@@ -35,16 +36,12 @@ export function TagDrawer({ children, label }: { children: ReactNode; label: str
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end">
-          <button
-            type="button"
-            aria-label="Close tags"
-            onClick={() => setOpen(false)}
-            className="flex-1 bg-black/60"
-          />
-          {/* Capped and centred, so the sheet is a panel on a wide screen rather than a
-              band of controls stretched across two thousand pixels. */}
-          <div className="mx-auto max-h-[70vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl border-t border-border bg-surface p-4 pb-8">
+        <div className="fixed inset-0 z-50 flex">
+          {/* Capped, so the panel is a column against the edge rather than a sheet
+              covering the results it is meant to narrow. The facets are a list of tags:
+              a tall narrow column fits far more of them on screen at once than a band
+              across the bottom did, and leaves the grid visible beside it. */}
+          <div className="flex h-full w-full max-w-sm flex-col overflow-y-auto border-r border-border bg-surface p-4">
             <div className="mb-3 flex items-center justify-end">
               <button
                 type="button"
@@ -56,6 +53,12 @@ export function TagDrawer({ children, label }: { children: ReactNode; label: str
             </div>
             {children}
           </div>
+          <button
+            type="button"
+            aria-label="Close tags"
+            onClick={() => setOpen(false)}
+            className="flex-1 bg-black/60"
+          />
         </div>
       )}
     </>
