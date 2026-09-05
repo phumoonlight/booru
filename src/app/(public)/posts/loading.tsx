@@ -1,7 +1,7 @@
 import { PostGridSkeleton } from '@/components/post-grid'
 import { SearchHeaderSkeleton } from '@/components/search-header'
 
-/** Mirrors the listing: header — which now carries the ☰ — the saved shelf, then the grid. */
+/** Mirrors the listing: header — which now carries the 🍔 — the saved shelf, then the grid. */
 export default function Loading() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">

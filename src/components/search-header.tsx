@@ -76,7 +76,7 @@ export function SearchHeaderSkeleton() {
     <div className="sticky top-0 z-30 -mx-3 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          {/* The ☰, then the wordmark's own 1.75rem / sm:2rem line box */}
+          {/* The 🍔, then the wordmark's own 1.75rem / sm:2rem line box */}
           <div className="pointer-fine:size-8 size-11 animate-pulse rounded-lg bg-surface" />
           <div className="h-7 w-32 animate-pulse rounded bg-surface sm:h-8" />
         </div>

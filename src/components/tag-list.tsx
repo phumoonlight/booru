@@ -8,6 +8,11 @@ import { parseSearchQuery, searchHref, tagLabel, withTag, withoutTag } from '@co
  * ➕/➖ share the count's slot on the right: the count fades out and the buttons take its
  * place while the row is hovered or keyboard-focused, so a resting list is just names and
  * numbers. Coarse pointers have no hover, so there the buttons sit beside the count.
+ *
+ * `plus` is optional because on an empty search it has nothing of its own to do: adding a
+ * tag to no query and replacing no query with that tag are the same search, and the tag's
+ * own name already does it. Offering both put two controls on a row for one outcome, and
+ * the smaller of the two was the one that looked like the real button.
  */
 export function FacetActions({
   count,
@@ -16,7 +21,7 @@ export function FacetActions({
 }: {
   /** Optional: a facet with no counter behind it renders the buttons without one. */
   count?: number
-  plus: { href: string; label: string; on: boolean }
+  plus?: { href: string; label: string; on: boolean }
   minus: { href: string; label: string; on: boolean }
 }) {
   // Emoji ignore `color`, so an off button is desaturated and brightened instead — against
@@ -46,10 +51,12 @@ export function FacetActions({
             : 'pointer-coarse:relative pointer-coarse:ml-1 pointer-coarse:opacity-100 absolute right-0 flex items-center opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100'
         }
       >
-        <Link href={plus.href} aria-label={plus.label} className={button(plus.on)}>
-          ➕
-          <NavProgress />
-        </Link>
+        {plus && (
+          <Link href={plus.href} aria-label={plus.label} className={button(plus.on)}>
+            ➕
+            <NavProgress />
+          </Link>
+        )}
         <Link href={minus.href} aria-label={minus.label} className={button(minus.on)}>
           ➖
           <NavProgress />
@@ -65,6 +72,10 @@ export type TagEntry = { tag: Tag; count: number }
  * A tag row: tapping the name replaces the whole query with just this tag — one filter,
  * nothing carried over — while the hover-revealed ➕/➖ add it to the current search or
  * exclude it. Both toggle: pressing the one already on removes the tag again.
+ *
+ * ➕ appears only once something is being searched for, since with an empty query it is
+ * the tag's own name spelled a second way. ➖ stays either way: `-tag` on nothing is
+ * everything *except* this, which no other control on the row says.
  *
  * `min-h-9` buys a thumb-sized target, but a mouse doesn't need one and the slack reads as
  * a gappy list, so fine pointers get rows just tall enough for the text.
@@ -90,13 +101,19 @@ function TagRow({ entry, currentQuery }: { entry: TagEntry; currentQuery: string
       </Link>
       <FacetActions
         count={count}
-        plus={{
-          href: searchHref(
-            included ? withoutTag(currentQuery, tag.name) : withTag(currentQuery, tag.name)
-          ),
-          label: included ? `Remove ${label} from the search` : `Add ${label} to the search`,
-          on: included,
-        }}
+        plus={
+          currentQuery.trim()
+            ? {
+                href: searchHref(
+                  included ? withoutTag(currentQuery, tag.name) : withTag(currentQuery, tag.name)
+                ),
+                label: included
+                  ? `Remove ${label} from the search`
+                  : `Add ${label} to the search`,
+                on: included,
+              }
+            : undefined
+        }
         minus={{
           href: searchHref(
             excluded

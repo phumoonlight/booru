@@ -13,7 +13,7 @@ import { useSearchParams } from 'next/navigation'
  * grid has the full width and the facets are one tap away at any size: the panel slides
  * over the left edge, where the sidebar used to be, so a tag is where the hand expects.
  *
- * The trigger is a ☰ in the header, ahead of the wordmark — the corner a menu is looked
+ * The trigger is a 🍔 in the header, ahead of the wordmark — the corner a menu is looked
  * for in, and the panel opens against that same edge. It was a labelled button in a row
  * of its own above the grid, which spent a line of the page saying what one glyph says.
  * The count it used to carry lives in the title and the accessible name, and again on
@@ -47,9 +47,17 @@ export function TagDrawer({ children, label }: { children: ReactNode; label: str
         title={label}
         aria-label={label}
         aria-expanded={open}
-        className="pointer-fine:size-8 flex size-11 shrink-0 items-center justify-center rounded-lg border border-border text-lg leading-none text-muted transition-colors hover:border-accent hover:text-foreground"
+        className="pointer-fine:size-8 group/menu flex size-11 shrink-0 items-center justify-center rounded-lg border border-border leading-none transition-colors hover:border-accent"
       >
-        <span aria-hidden>☰</span>
+        {/* A hamburger menu, taken at its word. Desaturated at rest like every other emoji
+            button here — they ignore `color`, so this is what keeps it from shouting at
+            the wordmark beside it — and hover hands it back its own. */}
+        <span
+          aria-hidden
+          className="text-base brightness-150 grayscale transition-[filter] group-hover/menu:brightness-100 group-hover/menu:grayscale-0"
+        >
+          🍔
+        </span>
       </button>
 
       {open &&
