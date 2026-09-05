@@ -20,14 +20,14 @@ export function RestrictedNotice() {
     // Centred against the viewport, not just the column: `main` is a flex child with
     // `pb-8`, so the height to fill is the viewport less that padding — anything taller
     // and the page grows a scrollbar for nothing.
-    <div className="mx-auto flex min-h-[calc(100dvh-2rem)] w-full max-w-md flex-col items-center justify-center gap-5 px-3 py-8 text-center">
+    <div className="mx-auto flex min-h-[calc(100dvh-2rem)] w-full max-w-md flex-col items-center justify-center gap-8 px-3 py-8 text-center">
       <Image
         src="/nsfw-gate.jpg"
         alt=""
         width={473}
         height={456}
         priority
-        className="h-auto w-70 max-w-full rounded-lg"
+        className="h-auto w-[320px] max-w-full rounded-lg"
       />
 
       <div className="flex flex-col gap-2">
