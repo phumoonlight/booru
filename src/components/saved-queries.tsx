@@ -25,67 +25,67 @@ function Row({ entry }: { entry: SavedQuery }) {
   const start = startOf(entry.query)
   const tags = withoutStart(entry.query)
 
-  return (
-    <li className="flex flex-col">
-      <div className="flex items-center gap-1">
-        <Link
-          href={searchHref(entry.query)}
-          className="flex min-h-11 min-w-0 flex-1 flex-col justify-center rounded px-1 text-sm hover:text-accent"
-        >
-          {/* 🔖 for a query that resumes somewhere, 🔍 for one that always starts at the
-              newest — the same list holds both, and they behave differently enough to
-              deserve telling apart at a glance. */}
-          <span className="truncate">
-            {start === null ? '🔍' : '🔖'} {tags ? tagLabel(tags) : 'All posts'}
-          </span>
-          <span className="text-xs text-muted">
-            {start === null ? ago(entry.at) : `from #${start} · ${ago(entry.at)}`}
-          </span>
-          <NavProgress />
-        </Link>
+  // Confirming replaces the pill rather than opening a panel under it. In a column
+  // there was room to keep the row legible above its own confirmation; in a bar there
+  // is not, and a panel that pushed the rest of the shelf sideways would move the very
+  // buttons being aimed at.
+  if (confirming) {
+    return (
+      <li className="flex items-center gap-1 rounded-lg border border-red-500/40 bg-red-500/10 pl-2">
+        <span className="text-xs">Remove?</span>
+        {/* Cancel first, and it is the wider habit: the button under the thumb after a
+            mis-tap should be the one that changes nothing. */}
         <button
           type="button"
-          onClick={() => setConfirming((open) => !open)}
-          aria-expanded={confirming}
-          title="Remove"
-          aria-label={`Remove saved query ${entry.query}`}
-          className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded text-sm hover:text-foreground ${
-            confirming ? 'text-red-400' : 'text-muted'
-          }`}
+          onClick={() => setConfirming(false)}
+          className="pointer-fine:min-h-8 flex min-h-11 items-center rounded-lg px-2 text-xs"
         >
-          ✕
+          Cancel
         </button>
-      </div>
+        <button
+          type="button"
+          onClick={() => removeQuery(entry.query)}
+          className="pointer-fine:min-h-8 flex min-h-11 items-center rounded-lg bg-red-500 px-2 text-xs font-medium text-background"
+        >
+          Remove
+        </button>
+      </li>
+    )
+  }
 
-      {confirming && (
-        <div className="mb-1 flex flex-col gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-2">
-          <p className="text-xs">Remove this saved query?</p>
-          <div className="flex gap-2">
-            {/* Cancel first, and it is the wider habit: the button under the thumb after
-                a mis-tap should be the one that changes nothing. */}
-            <button
-              type="button"
-              onClick={() => setConfirming(false)}
-              className="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-border text-sm"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => removeQuery(entry.query)}
-              className="flex min-h-11 flex-1 items-center justify-center rounded-lg bg-red-500 text-sm font-medium text-background"
-            >
-              Remove
-            </button>
-          </div>
-        </div>
-      )}
+  return (
+    <li className="flex shrink-0 items-center rounded-lg border border-border">
+      <Link
+        href={searchHref(entry.query)}
+        title={start === null ? ago(entry.at) : `from #${start} · ${ago(entry.at)}`}
+        className="pointer-fine:min-h-8 flex min-h-11 max-w-56 items-center gap-1 rounded-lg px-2 text-sm hover:text-accent"
+      >
+        {/* 🔖 for a query that resumes somewhere, 🔍 for one that always starts at the
+            newest — the same list holds both, and they behave differently enough to
+            deserve telling apart at a glance. */}
+        <span aria-hidden>{start === null ? '🔍' : '🔖'}</span>
+        <span className="truncate">{tags ? tagLabel(tags) : 'All posts'}</span>
+        {/* The date is a title, not a line of its own: in a bar it doubled every row's
+            height to say something you only want when choosing between two similar ones. */}
+        <NavProgress />
+      </Link>
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        title="Remove"
+        aria-label={`Remove saved query ${entry.query}`}
+        className="pointer-fine:min-h-8 pointer-fine:min-w-6 flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg pr-2 text-xs text-muted hover:text-red-400"
+      >
+        ✕
+      </button>
     </li>
   )
 }
 
 /**
- * The sidebar's shelf of saved queries, and the two controls that put things on it.
+ * The shelf of saved queries, and the two controls that put things on it. It sits above
+ * the grid rather than in a sidebar, because a sidebar cost every thumbnail 224px of
+ * width to hold three short lines that are read once a session.
  *
  * ➕ appears for a search that isn't on the shelf yet. 💾 replaces it once it is, and
  * only when the current query has drifted from what was saved — in practice, when you
@@ -100,48 +100,44 @@ export function SavedQueries({ currentQuery }: { currentQuery: string }) {
   const match = current ? findSaved(saved, current) : undefined
   const drifted = match !== undefined && match.query !== current
 
-  return (
-    <>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h2 className="text-base font-semibold">Saved</h2>
-        <div className="flex items-center gap-1">
-          {drifted && (
-            <button
-              type="button"
-              onClick={() => updateQuery(current)}
-              title={`Update "${withoutStart(match.query) || 'All posts'}" to start here`}
-              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-border text-sm hover:border-accent"
-            >
-              <span aria-hidden>💾</span>
-              <span className="sr-only">Update the saved query</span>
-            </button>
-          )}
-          {current && !match && (
-            <button
-              type="button"
-              onClick={() => saveQuery(current)}
-              title="Save this search"
-              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-border text-lg hover:border-accent"
-            >
-              <span aria-hidden>➕</span>
-              <span className="sr-only">Save this search</span>
-            </button>
-          )}
-        </div>
-      </div>
+  // Nothing at all when the shelf is empty and there is nothing to put on it: an empty
+  // row above the grid is a band of explanation for a feature you have not used, in the
+  // place the images were supposed to get back.
+  if (saved.length === 0 && !current) return null
 
-      {saved.length === 0 ? (
-        <p className="text-sm text-muted">
-          Nothing saved. ➕ keeps the current search; 🔖 on a thumbnail starts the listing
-          there, and saving that keeps your place too.
-        </p>
-      ) : (
-        <ul className="flex flex-col gap-1">
-          {saved.map((entry) => (
-            <Row key={entry.query} entry={entry} />
-          ))}
-        </ul>
+  return (
+    <div className="flex items-center gap-2">
+      <h2 className="sr-only">Saved searches</h2>
+      {drifted && (
+        <button
+          type="button"
+          onClick={() => updateQuery(current)}
+          title={`Update "${withoutStart(match.query) || 'All posts'}" to start here`}
+          className="pointer-fine:min-h-8 flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-border text-sm hover:border-accent"
+        >
+          <span aria-hidden>💾</span>
+          <span className="sr-only">Update the saved query</span>
+        </button>
       )}
-    </>
+      {current && !match && (
+        <button
+          type="button"
+          onClick={() => saveQuery(current)}
+          title="Save this search"
+          className="pointer-fine:min-h-8 flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-border text-sm hover:border-accent"
+        >
+          <span aria-hidden>➕</span>
+          <span className="sr-only">Save this search</span>
+        </button>
+      )}
+
+      {/* Scrolls rather than wraps: the shelf grows without ever pushing the grid down
+          the page, which is the whole point of moving it out of the sidebar. */}
+      <ul className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+        {saved.map((entry) => (
+          <Row key={entry.query} entry={entry} />
+        ))}
+      </ul>
+    </div>
   )
 }

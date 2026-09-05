@@ -64,15 +64,12 @@ export default async function PostsPage({ searchParams }: PageProps<'/posts'>) {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">
       <SearchHeader query={query} />
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <TagDrawer label={`Tags (${tagEntries.length})`}>
+      {/* One row above the grid instead of a column beside it: the facets behind a
+          button, the saved shelf beside it, and the full width left for thumbnails. */}
+      <div className="flex items-center gap-2">
+        <TagDrawer label={`🏷️ Tags (${tagEntries.length})`}>
           <div className="flex flex-col gap-4">
-            {/* First, because it is the only thing here that is about *you* rather than
-                about what is on screen — and the way back into a browse you left. */}
             <section>
-              <SavedQueries currentQuery={query} />
-            </section>
-            <section className="border-t border-border pt-4">
               <RatingDisplayOptions />
               <RatingList
                 currentQuery={query}
@@ -88,38 +85,38 @@ export default async function PostsPage({ searchParams }: PageProps<'/posts'>) {
           </div>
         </TagDrawer>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
-          {/* The grid speaks for itself, so the heading is left for assistive tech only */}
-          {/* No banner for a resumed cursor: `start:900` is a chip in the search bar
-              like any other token, and tapping its ✕ is how you leave it behind. */}
-          <h1 className="sr-only">
-            {include.length === 0 && exclude.length === 0 && ratings.length === 0
-              ? 'All posts'
-              : `Matching ${[...include, ...ratings.map((r) => `rating:${r}`)].join(', ') || 'any'}${
-                  exclude.length ? ` without ${exclude.join(', ')}` : ''
-                }`}
-          </h1>
-
-          {posts.length === 0 ? (
-            <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
-              {query
-                ? 'No posts match that search.'
-                : 'No posts yet — the desktop app adds the first one.'}
-            </p>
-          ) : (
-            <PostFeed
-              // A new search is a new feed, not more of the old one: the key throws the
-              // appended chunks away rather than letting them outlive their query.
-              key={searchHref(query)}
-              initialPosts={posts}
-              query={query}
-              hasMore={hasMore}
-              perPage={FEED_CHUNK_SIZE}
-              resumable
-            />
-          )}
-        </div>
+        {/* The one thing here about *you* rather than about what is on screen — and the
+            way back into a browse you left. */}
+        <SavedQueries currentQuery={query} />
       </div>
+
+      {/* The grid speaks for itself, so the heading is left for assistive tech only */}
+      {/* No banner for a resumed cursor: `start:900` is a chip in the search bar
+          like any other token, and tapping its ✕ is how you leave it behind. */}
+      <h1 className="sr-only">
+        {include.length === 0 && exclude.length === 0 && ratings.length === 0
+          ? 'All posts'
+          : `Matching ${[...include, ...ratings.map((r) => `rating:${r}`)].join(', ') || 'any'}${
+              exclude.length ? ` without ${exclude.join(', ')}` : ''
+            }`}
+      </h1>
+
+      {posts.length === 0 ? (
+        <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
+          {query ? 'No posts match that search.' : 'No posts yet — the desktop app adds the first one.'}
+        </p>
+      ) : (
+        <PostFeed
+          // A new search is a new feed, not more of the old one: the key throws the
+          // appended chunks away rather than letting them outlive their query.
+          key={searchHref(query)}
+          initialPosts={posts}
+          query={query}
+          hasMore={hasMore}
+          perPage={FEED_CHUNK_SIZE}
+          resumable
+        />
+      )}
     </div>
   )
 }

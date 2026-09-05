@@ -4,9 +4,14 @@ import { useState, type ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 /**
- * Danbooru's fixed left sidebar, translated for mobile: a button that opens a bottom
- * sheet under `lg`, and a plain sidebar column from `lg` up. Content (tag facets,
- * rating breakdown) is server-rendered and passed in as children.
+ * The tag and rating facets, behind a button, at every width.
+ *
+ * It was Danbooru's fixed left sidebar under `lg` and a bottom sheet above it. The
+ * sidebar cost every row of thumbnails a 224px column, permanently, to hold facets that
+ * are used in bursts — you narrow a search, then look at pictures for a while. Now the
+ * grid has the full width and the facets are one tap away at any size.
+ *
+ * Content is server-rendered and passed in as children.
  */
 export function TagDrawer({ children, label }: { children: ReactNode; label: string }) {
   // The sheet closes when the search it started actually lands, not on the tap that
@@ -21,27 +26,25 @@ export function TagDrawer({ children, label }: { children: ReactNode; label: str
 
   return (
     <>
-      {/* Desktop: static sidebar */}
-      <aside className="hidden lg:block lg:w-56 lg:shrink-0">{children}</aside>
-
-      {/* Mobile: trigger + bottom sheet */}
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex min-h-11 w-fit items-center rounded-lg border border-border px-4 text-sm lg:hidden"
+        className="pointer-fine:min-h-8 flex min-h-11 w-fit shrink-0 items-center rounded-lg border border-border px-3 text-sm hover:border-accent"
       >
         {label}
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end lg:hidden">
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <button
             type="button"
             aria-label="Close tags"
             onClick={() => setOpen(false)}
             className="flex-1 bg-black/60"
           />
-          <div className="max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-border bg-surface p-4 pb-8">
+          {/* Capped and centred, so the sheet is a panel on a wide screen rather than a
+              band of controls stretched across two thousand pixels. */}
+          <div className="mx-auto max-h-[70vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl border-t border-border bg-surface p-4 pb-8">
             <div className="mb-3 flex items-center justify-end">
               <button
                 type="button"
