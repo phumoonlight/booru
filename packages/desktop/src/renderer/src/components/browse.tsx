@@ -27,6 +27,33 @@ let lastQuery = ''
 
 const CHUNK = 24
 
+/**
+ * A query that is nothing but a post number, or null.
+ *
+ * Typing `11` into this box means post 11 far more often than it means a tag called `11`,
+ * and reaching one post by its number is what this window is usually for — you have the
+ * id from an upload, from the board, from a report. It is a convenience of *this box* and
+ * not of the search grammar: `@common/data/search` is shared with the website and there is
+ * one implementation of it, so a bare number still means a tag everywhere else.
+ *
+ * The tag reading is not given up, only tried second — `2024` is a plausible tag name, and
+ * a board that has one would otherwise lose it to a post number that may not even exist.
+ */
+function asPostId(query: string): number | null {
+  const value = Number(query.trim())
+  return /^\d+$/.test(query.trim()) && Number.isSafeInteger(value) && value > 0 ? value : null
+}
+
+/** One post, shaped like a page, so the id lookup and the search return the same thing. */
+async function readPosts(query: string): Promise<{ posts: Post[]; hasMore: boolean }> {
+  const id = asPostId(query)
+  if (id !== null) {
+    const loaded = await window.api.getPost(id)
+    if (loaded) return { posts: [loaded.post], hasMore: false }
+  }
+  return window.api.searchPosts({ query })
+}
+
 export function Browse({
   siteUrl,
   initialEdit = null,
@@ -62,7 +89,7 @@ export function Browse({
 
   useEffect(() => {
     let alive = true
-    void window.api.searchPosts({ query: submitted }).then((page) => {
+    void readPosts(submitted).then((page) => {
       if (!alive) return
       setPosts(page.posts)
       setHasMore(page.hasMore)
