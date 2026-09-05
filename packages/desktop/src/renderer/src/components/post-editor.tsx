@@ -317,7 +317,9 @@ function formatBytes(bytes: number): string {
  *
  * It reads the whole index rather than querying per keystroke — that is `main/tag-cache.ts`,
  * a day-old copy of every name and count on the board, which is what makes narrowing a
- * category to a substring a local operation instead of a request per letter.
+ * category to a substring a local operation instead of a request per letter. The counts
+ * are not drawn: they order the list, most used first, and that ordering is the answer to
+ * the question a number beside each name was being read for.
  *
  * Coining a tag is still possible and still deliberate: a name matching nothing offers a
  * create row, and the tag it creates belongs to *this* category, which is the whole reason
@@ -413,10 +415,9 @@ function TagPicker({
               key={tag.id}
               type="button"
               onClick={() => onPick({ name: tag.name, category: tag.category })}
-              className={`flex min-h-7 items-center gap-1.5 rounded border border-border px-2 font-mono text-xs transition-colors hover:border-accent ${categoryColor(category)}`}
+              className={`flex min-h-7 items-center rounded border border-border px-2 font-mono text-xs transition-colors hover:border-accent ${categoryColor(category)}`}
             >
               {tag.name}
-              <span className="tabular-nums text-muted">{tag.post_count}</span>
             </button>
           ))}
 
