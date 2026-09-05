@@ -453,7 +453,13 @@ function TagPicker({
       {all === null ? (
         <p className="px-1 py-2 text-xs text-muted">Reading tags…</p>
       ) : (
-        <div className="flex max-h-48 flex-col gap-2 overflow-y-auto">
+        // Every option on screen at once, however tall that makes the panel. It used to
+        // stop at 12rem and scroll, which put the subgroups — the whole reason the list is
+        // divided — below a fold in a box that was itself inside the page's scroll, so
+        // finding a tag meant a second scrollbar nested in the first one, and the headings
+        // that would have said where to look were the part hidden. What bounds this is the
+        // 60 options above, and the filter box for when that is not enough.
+        <div className="flex flex-col gap-2">
           {/* The ungrouped tags, under no heading of their own: they are the category, whose
               name is already on the row that opened this, and a second label would only push
               the tags a line further down. */}
@@ -465,15 +471,11 @@ function TagPicker({
             </div>
           )}
 
-          {grouped.map(([name, group], at) => (
-            <div
-              key={name}
-              // Ruled off from whatever is above — the ungrouped block, or the subgroup
-              // before this one — except when this is the first thing in the picker.
-              className={`flex flex-col gap-1 ${
-                loose.length > 0 || at > 0 ? 'border-t border-border pt-2' : ''
-              }`}
-            >
+          {grouped.map(([name, group]) => (
+            // No rule between the blocks: the heading is already the break, and a line
+            // above every one of them turned a picker with several subgroups into a
+            // ruled table of two-word headings.
+            <div key={name} className="flex flex-col gap-1">
               <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted">
                 {subcategoryLabel(name)}
               </h3>
