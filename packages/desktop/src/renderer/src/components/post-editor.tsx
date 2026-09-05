@@ -187,9 +187,11 @@ export function PostEditor({
         </p>
       ) : (
         <>
-          {/* The queue card's image band, at the same height: this screen and that one are
-              the same picture answering the same questions. */}
-          <div className="h-192 w-full overflow-hidden rounded-lg bg-background">
+          {/* 384px, which is exactly THUMB_MAX_HEIGHT — the thumbnail is all that crosses
+              the bridge, so a taller band is upscaling and empty background either side
+              of it. The queue card's is twice this because a staged file has its full
+              preview to show and a rating still to be chosen from it. */}
+          <div className="h-96 w-full overflow-hidden rounded-lg bg-background">
             {thumb ? (
               <img src={thumb} alt={`Post ${postId}`} className="h-full w-full object-contain" />
             ) : (
