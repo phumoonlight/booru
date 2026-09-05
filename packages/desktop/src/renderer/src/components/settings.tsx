@@ -1,5 +1,10 @@
 import { useState, type FormEvent, type KeyboardEvent } from 'react'
-import type { AppStatus, EncodePriority, PreferencesInput } from '../../../shared/api'
+import type {
+  AppStatus,
+  BrowserChoice,
+  EncodePriority,
+  PreferencesInput,
+} from '../../../shared/api'
 
 /**
  * Spelled out here rather than imported from `main/cpu.ts`, which owns the behaviour:
@@ -13,7 +18,7 @@ const PRIORITIES: { value: EncodePriority; label: string }[] = [
 ]
 
 /**
- * Three things, and only two of them are settings.
+ * Four things, and only three of them are settings.
  *
  * **Connection** is a readout. Which board this copy uploads to was decided when it was
  * built — the project URL, both keys and the site address are compiled into the bundle
@@ -28,6 +33,10 @@ const PRIORITIES: { value: EncodePriority; label: string }[] = [
  * **Compression** is the real settings, and they are about this machine rather than the
  * board: how many cores an upload may take and how hard it argues for them.
  *
+ * **Links** is where a post opens when you click through to the board. Left alone that is
+ * whatever the OS would pick, which is the browser you live in — and a board is not always
+ * something you want in that history. The list is what the Start menu would offer.
+ *
  * **Tag cache** is a readout with a button under it. Nothing about it is configurable —
  * a day is a day — but a cache is the one thing in the app that can be wrong while
  * everything else is right, so there is a way to throw it away without hunting for the
@@ -39,6 +48,7 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
   const [values, setValues] = useState<PreferencesInput>({
     encodeThreads: status.cpu.threads,
     encodePriority: status.cpu.priority,
+    browser: status.browser.chosen,
   })
   const [editingThreads, setEditingThreads] = useState(false)
 
@@ -154,6 +164,27 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
         />
       </div>
 
+      {/* Where a link leaves for. Not about the board and not about the encoder, which is
+          why it is its own section rather than a row in either. */}
+      <div className="flex flex-col gap-4">
+        <div>
+          <h2 className="flex gap-1 text-lg font-bold tracking-tight">
+            <span aria-hidden>🌐</span>
+            Links
+          </h2>
+          <p className="mt-1 text-sm text-muted">
+            Opening a post, a tag or the board itself hands the address to a browser. Pick which
+            one, or leave it to the system.
+          </p>
+        </div>
+
+        <BrowserPicker
+          value={values.browser}
+          options={status.browser.options}
+          onChange={(next) => void save({ browser: next })}
+        />
+      </div>
+
       {/* Not a setting — a readout and an escape hatch. */}
       <div className="flex flex-col gap-4">
         <div>
@@ -191,6 +222,67 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
           </span>
         </div>
       </div>
+    </div>
+  )
+}
+
+/**
+ * A row per browser rather than the segmented `Choice`: names are long, there can be five
+ * of them, and the list is whatever this machine happens to have — a control sized for
+ * three fixed options would be unreadable at four real ones.
+ *
+ * Only installed browsers are offered, because only those can be launched: the choice is
+ * checked against the same list when a link is opened, so an option that isn't here would
+ * silently fall back to the system anyway. Detection is Windows-only, so elsewhere this is
+ * the one row.
+ */
+function BrowserPicker({
+  value,
+  options,
+  onChange,
+}: {
+  value: string
+  options: BrowserChoice[]
+  onChange: (next: string) => void
+}) {
+  const fallback = options.find((option) => option.isDefault)
+  const rows = [
+    { path: '', name: fallback ? `System default (${fallback.name})` : 'System default' },
+    ...options,
+  ]
+
+  return (
+    <div className="flex flex-col gap-1.5 text-sm">
+      Open links in
+      <div role="radiogroup" aria-label="Open links in" className="flex flex-col gap-1">
+        {rows.map((row) => {
+          const selected = row.path === value
+          return (
+            <button
+              key={row.path || 'system'}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(row.path)}
+              className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 text-left text-sm transition-colors ${
+                selected
+                  ? 'border-accent bg-accent/10 text-foreground'
+                  : 'border-border bg-surface text-muted hover:border-accent hover:text-foreground'
+              }`}
+            >
+              <span aria-hidden className={selected ? 'text-accent' : 'text-muted'}>
+                {selected ? '◉' : '○'}
+              </span>
+              <span className="min-w-0 flex-1 truncate">{row.name}</span>
+            </button>
+          )
+        })}
+      </div>
+      <span className="text-xs text-muted">
+        {options.length === 0
+          ? 'No installed browsers were found, so links go wherever the system sends them.'
+          : 'A browser that has been uninstalled since falls back to the system default.'}
+      </span>
     </div>
   )
 }

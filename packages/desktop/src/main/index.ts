@@ -1,9 +1,10 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { registerIpc } from './ipc'
 import { cleanupDownloads } from './download'
 import { dropStoredConfig, dropStoredLogin } from './config'
 import { configureDns } from './dns'
+import { openUrl } from './browser'
 import { confirmClose, queueIsWorthKeeping } from './queue-guard'
 import { applyPreferences, loadPreferences } from './preferences'
 
@@ -93,7 +94,9 @@ function createWindow(): void {
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     try {
       const { protocol } = new URL(url)
-      if (protocol === 'https:' || protocol === 'http:') void shell.openExternal(url)
+      // The chosen browser, same as a link clicked in the app — `main/browser.ts`.
+      if (protocol === 'https:' || protocol === 'http:')
+        void openUrl(url, loadPreferences().browser)
     } catch {
       // Not a URL at all — nothing to open
     }

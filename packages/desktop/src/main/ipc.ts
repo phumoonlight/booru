@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron'
 import { z } from 'zod'
 import { listTags, searchTags } from '@common/data/shared'
 import * as manageTags from '@common/data/tags'
@@ -10,6 +10,7 @@ import { DESKTOP_UPLOAD_LIMITS } from './limits'
 import { CPU_COUNT, DEFAULT_ENCODE_PRIORITY, DEFAULT_ENCODE_THREADS } from './cpu'
 import { loadConfig, revealSaveFile } from './config'
 import { loadPreferences, savePreferences } from './preferences'
+import { listBrowsers, openUrl } from './browser'
 import { loadImplications, saveImplications } from './implications'
 import { loadRecommendations, saveRecommendations } from './recommendations'
 import { previewFile, stageFiles } from './staging'
@@ -47,6 +48,7 @@ const preferencesSchema = z.object({
     .enum(['low', 'below-normal', 'normal'])
     .optional()
     .default(DEFAULT_ENCODE_PRIORITY),
+  browser: z.string().max(500).optional().default(''),
 })
 
 const postIdSchema = z.number().int().positive()
@@ -115,6 +117,9 @@ export function registerIpc(): void {
         threads: preferences.encodeThreads,
         priority: preferences.encodePriority,
       },
+      // Detected once per launch and cached, so re-reading status after every settings
+      // write does not re-walk the registry.
+      browser: { chosen: preferences.browser, options: await listBrowsers() },
     }
   })
 
@@ -423,13 +428,13 @@ export function registerIpc(): void {
   ipcMain.handle('shell:open-data-folder', async (): Promise<void> => revealSaveFile())
 
   /**
-   * Only ever a post on the board. `openExternal` hands the string to the OS, which will
-   * happily run a `file:` or a custom-scheme URL, so the scheme is checked rather than
-   * assumed — the renderer builds these from a site URL the user typed into settings.
+   * Only ever a post on the board. The URL ends up as an argument to a browser or as a
+   * string handed to the OS, which would happily run a `file:` or a custom-scheme one, so
+   * the scheme is checked rather than assumed.
    */
   ipcMain.handle('shell:open-external', async (_event, url: unknown): Promise<void> => {
     if (typeof url !== 'string') return
     if (!isWebUrl(url)) return
-    await shell.openExternal(url)
+    await openUrl(url, loadPreferences().browser)
   })
 }

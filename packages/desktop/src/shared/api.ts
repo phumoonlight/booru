@@ -22,14 +22,25 @@ import type { RecommendationRules } from './recommendations'
 export type EncodePriority = 'low' | 'below-normal' | 'normal'
 
 /**
+ * A browser installed on this machine, as `main/browser.ts` found it. `path` is the
+ * executable and the identity — it is what the preference stores and what gets launched.
+ */
+export type BrowserChoice = { path: string; name: string; isDefault: boolean }
+
+/**
  * The only settings the window can change. Which board the app talks to is compiled into
- * the build (`main/config.ts`) — these two are about the machine it happens to run on.
+ * the build (`main/config.ts`) — these are about the machine it happens to run on.
  */
 export type PreferencesInput = {
   /** Cores the compressor may use. Clamped to what the machine has — `main/cpu.ts`. */
   encodeThreads: number
   /** How hard the app argues for those cores against everything else running. */
   encodePriority: EncodePriority
+  /**
+   * The executable a link opens in, or '' for whatever the OS would pick. Checked against
+   * the installed list when a link is opened, never run as given — `main/browser.ts`.
+   */
+  browser: string
 }
 
 export type AppStatus = {
@@ -51,6 +62,8 @@ export type AppStatus = {
   tagCache: { count: number; at: number | null }
   /** What the machine has, and what the encoder is currently running with. */
   cpu: { count: number; threads: number; priority: EncodePriority }
+  /** Where links go: the browsers found on this machine, and the one chosen. */
+  browser: { chosen: string; options: BrowserChoice[] }
 }
 
 /**
