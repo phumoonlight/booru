@@ -217,10 +217,18 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
 function Panel({
   title,
   children,
+  actions,
   pinned = false,
 }: {
   title: string
   children: React.ReactNode
+  /**
+   * What the panel does *as a panel* — leave it, open it elsewhere, destroy it — beside
+   * its heading rather than below its fields. They are not part of the form: Save answers
+   * the two boxes, these answer the tag, and mixing the two put Close where a return key
+   * lands and Delete a tab away from a text field.
+   */
+  actions?: React.ReactNode
   /**
    * Stay at the top of the scroller while the list moves under it. The edit panel is the
    * one that needs it: it is opened by clicking a row, and the row that sent you there can
@@ -236,7 +244,10 @@ function Panel({
 }) {
   const card = (
     <section className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-3 py-3">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h2>
+        {actions && <div className="flex items-center gap-1">{actions}</div>}
+      </div>
       {children}
     </section>
   )
@@ -471,6 +482,34 @@ function EditTag({
     <Panel
       pinned
       title={`${tagLabel(tag.name)} · ${tag.post_count} post${tag.post_count === 1 ? '' : 's'}`}
+      actions={
+        <>
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            disabled={busy || confirming}
+            className="min-h-8 px-2 text-xs text-muted transition-colors hover:text-[#ff5d5f] disabled:opacity-40"
+          >
+            🗑️ Delete tag
+          </button>
+          {siteUrl && (
+            <button
+              type="button"
+              onClick={() => void window.api.openExternal(`${siteUrl}/tags/${tag.id}`)}
+              className="min-h-8 px-2 text-xs text-muted transition-colors hover:text-foreground"
+            >
+              🖼️ On the board
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="min-h-8 px-2 text-xs text-muted transition-colors hover:text-foreground"
+          >
+            ❌ Close
+          </button>
+        </>
+      }
     >
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -488,56 +527,50 @@ function EditTag({
         >
           {busy ? 'Saving…' : 'Save'}
         </button>
-        {siteUrl && (
-          <button
-            type="button"
-            onClick={() => void window.api.openExternal(`${siteUrl}/tags/${tag.id}`)}
-            className="min-h-9 px-2 text-sm text-muted transition-colors hover:text-foreground"
-          >
-            🖼️ On the board
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={onClose}
-          className="min-h-9 px-2 text-sm text-muted transition-colors hover:text-foreground"
-        >
-          Close
-        </button>
       </div>
 
       {error && <p className="text-sm text-[#ff5d5f]">{error}</p>}
 
-      <div className="flex items-center gap-2">
-        {confirming ? (
-          <>
+      {/* Drawn as what it is, like the post editor's. A tag is not only a row: deleting it
+          takes it off every post carrying it, and that is the number worth reading before
+          the button rather than after. Filled rather than outlined, and the way out sits
+          where the hand was already going. */}
+      {confirming && (
+        <div className="flex flex-col gap-3 rounded-lg border-2 border-[#ff5d5f] bg-[#ff5d5f]/5 p-3">
+          <div>
+            <h3 className="text-sm font-bold text-[#ff5d5f]">
+              ⚠ Delete {tagLabel(tag.name)} for good
+            </h3>
+            <p className="mt-1 text-sm text-muted">
+              It comes off{' '}
+              <strong className="text-foreground">
+                {tag.post_count} post{tag.post_count === 1 ? '' : 's'}
+              </strong>{' '}
+              and the tag itself is removed from the board. Any search or saved query
+              naming it stops matching.{' '}
+              <strong className="text-foreground">There is no undo.</strong>
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => void remove()}
               disabled={busy}
-              className="min-h-9 rounded-lg border border-[#ff5d5f] px-3 text-sm text-[#ff5d5f] transition-colors hover:bg-background disabled:opacity-50"
+              className="min-h-9 rounded-lg bg-[#ff5d5f] px-4 text-sm font-semibold text-[#0d0f14] transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              Remove from {tag.post_count} post{tag.post_count === 1 ? '' : 's'} and delete
+              {busy ? 'Deleting…' : 'Delete permanently'}
             </button>
             <button
               type="button"
               onClick={() => setConfirming(false)}
-              className="min-h-9 px-2 text-sm text-muted hover:text-foreground"
+              disabled={busy}
+              className="min-h-9 rounded-lg border border-border px-4 text-sm transition-colors hover:bg-background"
             >
-              Cancel
+              Keep it
             </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setConfirming(true)}
-            disabled={busy}
-            className="min-h-9 px-2 text-sm text-muted transition-colors hover:text-[#ff5d5f]"
-          >
-            Delete tag
-          </button>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
     </Panel>
   )
 }
