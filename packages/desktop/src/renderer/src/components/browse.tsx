@@ -35,6 +35,10 @@ export function Browse({ siteUrl }: { siteUrl: string }) {
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<number | null>(null)
+  // A save leaves the grid's copy of that row stale. It is not re-read then — the editor
+  // is still the screen in front, and swapping it out was the old behaviour this replaced
+  // — so the debt is noted here and paid on the way back out.
+  const [stale, setStale] = useState(false)
 
   // The read is a request to the main process, not a state sync, so the answer sets
   // state from the callback rather than the effect body — the effect itself touches
@@ -76,15 +80,34 @@ export function Browse({ siteUrl }: { siteUrl: string }) {
     setNonce((n) => n + 1)
   }
 
-  /** After an edit or a delete, the row on screen is stale — re-read what is showing. */
-  const reload = useCallback(() => {
+  /** A deleted post has nothing left to edit, so that one does leave — and the grid it
+   *  returns to is holding a row that is gone. */
+  const closeAndReload = useCallback(() => {
     setEditing(null)
+    setStale(false)
     setLoading(true)
     setNonce((n) => n + 1)
   }, [])
 
+  /** Back out of the editor, re-reading only if something was actually saved. */
+  const close = useCallback(() => {
+    if (stale) {
+      closeAndReload()
+      return
+    }
+    setEditing(null)
+  }, [stale, closeAndReload])
+
   if (editing !== null) {
-    return <PostEditor postId={editing} siteUrl={siteUrl} onDone={reload} onCancel={() => setEditing(null)} />
+    return (
+      <PostEditor
+        postId={editing}
+        siteUrl={siteUrl}
+        onSaved={() => setStale(true)}
+        onDeleted={closeAndReload}
+        onClose={close}
+      />
+    )
   }
 
   return (
@@ -207,19 +230,27 @@ function Card({ post, onOpen }: { post: Post; onOpen: () => void }) {
  * silent overwrite. Tags come back as the field's own seeds, so the colours are right
  * without a second lookup.
  *
- * Delete asks. It removes the row and both stored images and there is no undo — the same
- * confirmation the web's form had, for the same reason.
+ * **Saving stays here.** It used to drop straight back to the grid, which read as the
+ * post having been closed rather than written — and a rating typed one keystroke wrong
+ * meant finding the card again to fix it. Now Save says Saved and the screen is still
+ * the post, so a second correction is the next thing you do rather than the next thing
+ * you go looking for. Back is the only way out.
+ *
+ * Delete asks, and that one does leave: it removes the row and both stored images and
+ * there is no undo — the same confirmation the web's form had, for the same reason.
  */
 function PostEditor({
   postId,
   siteUrl,
-  onDone,
-  onCancel,
+  onSaved,
+  onDeleted,
+  onClose,
 }: {
   postId: number
   siteUrl: string
-  onDone: () => void
-  onCancel: () => void
+  onSaved: () => void
+  onDeleted: () => void
+  onClose: () => void
 }) {
   const [tags, setTags] = useState<TagFieldValue>(EMPTY_TAGS)
   const [rating, setRating] = useState<Rating>('g')
@@ -230,6 +261,10 @@ function PostEditor({
   const [busy, setBusy] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [missing, setMissing] = useState(false)
+  // Cleared by the next edit rather than by a timer: it is answering "did that land",
+  // and the honest moment for it to stop saying yes is when the form stops matching
+  // what was written.
+  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -271,7 +306,8 @@ function PostEditor({
     }
     // The edit may have coined a tag; the Tags screen's copy is now wrong about it.
     invalidateTags()
-    onDone()
+    setSaved(true)
+    onSaved()
   }
 
   async function remove() {
@@ -284,7 +320,7 @@ function PostEditor({
       return
     }
     invalidateTags()
-    onDone()
+    onDeleted()
   }
 
   if (missing) {
@@ -295,7 +331,7 @@ function PostEditor({
         </p>
         <button
           type="button"
-          onClick={onCancel}
+          onClick={onClose}
           className="mx-auto mt-4 block min-h-9 rounded-lg border border-border px-4 text-sm hover:bg-surface"
         >
           Back
@@ -320,7 +356,7 @@ function PostEditor({
           )}
           <button
             type="button"
-            onClick={onCancel}
+            onClick={onClose}
             className="text-xs text-muted transition-colors hover:text-foreground"
           >
             ← Back
@@ -348,7 +384,14 @@ function PostEditor({
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col gap-3">
-            <TagField value={tags} onChange={setTags} disabled={busy} />
+            <TagField
+              value={tags}
+              onChange={(next) => {
+                setSaved(false)
+                setTags(next)
+              }}
+              disabled={busy}
+            />
 
             <label className="flex flex-col gap-1">
               <span className="text-xs font-semibold uppercase tracking-wide text-muted">
@@ -356,7 +399,10 @@ function PostEditor({
               </span>
               <select
                 value={rating}
-                onChange={(event) => setRating(event.target.value as Rating)}
+                onChange={(event) => {
+                  setSaved(false)
+                  setRating(event.target.value as Rating)
+                }}
                 disabled={busy}
                 className="min-h-9 rounded-lg border border-border bg-surface px-2 text-sm outline-none focus:border-accent"
               >
@@ -374,7 +420,10 @@ function PostEditor({
               </span>
               <input
                 value={sourceUrl}
-                onChange={(event) => setSourceUrl(event.target.value)}
+                onChange={(event) => {
+                  setSaved(false)
+                  setSourceUrl(event.target.value)
+                }}
                 disabled={busy}
                 placeholder="https://…"
                 spellCheck={false}
@@ -393,6 +442,8 @@ function PostEditor({
               >
                 {busy ? 'Saving…' : 'Save'}
               </button>
+
+              {saved && !busy && <span className="text-xs text-accent">Saved</span>}
 
               {/* Two presses, not a dialog: the second button is the confirmation, and it
                   says what it will do rather than asking whether you are sure. */}

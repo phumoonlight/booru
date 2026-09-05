@@ -222,7 +222,10 @@ behind a session, because there is none.
 - **Browse** is the website's gallery and edit panel, moved here. It runs
   `@common/data/search`, so a query means the same thing in both windows. Its query lives
   in a module-level `let` — coming back to an empty box after finding a post is a search
-  typed twice.
+  typed twice. **Save keeps the post in front of you** and Back is the only way out; the
+  grid's stale row is re-read on the way out rather than on the save, so correcting a
+  rating twice is two clicks and not two searches. Delete is the exception — there is
+  nothing left to look at.
 - **Tags** lists and manages: click a row for rename / recategorize / delete, with New tag
   and Apply by tag above the list, those being the two operations not about a row you are
   pointing at. Each drops the cached index. Its list is cached in a module-level `let`

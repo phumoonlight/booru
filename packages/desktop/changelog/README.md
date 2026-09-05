@@ -11,6 +11,8 @@ together or the app lies about itself.
 Entries are grouped **Added** / **Changed** / **Fixed**, and say what someone using the
 app would notice.
 
+- [2.0.1](2.0.1.md) — 2026-09-05 — saving a post in Browse stays on the post.
+- [2.0.0](2.0.0.md) — 2026-09-04 — no accounts: Browse and edit the board from here.
 - [1.1.0](1.1.0.md) — 2026-09-04 — tag rules: a tag can add or offer other tags.
 - [1.0.7](1.0.7.md) — 2026-09-04 — one big card per queue row; images capped at 2048px.
 - [1.0.6](1.0.6.md) — 2026-09-03 — reorder the queue by dragging; closing asks first.
