@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { COLOR_NAMES, categoryColor, categoryLabel, categoryOrder, type Tag } from '@common/tags'
+import {
+  COLOR_NAMES,
+  categoryColor,
+  categoryLabel,
+  categoryOrder,
+  colorSwatch,
+  type Tag,
+} from '@common/tags'
 import { impliedTags, type ImplicationRules } from '../../../shared/implications'
 import { recommendedTags } from '../../../shared/recommendations'
 import { useImplications } from '../implications'
@@ -390,17 +397,24 @@ function TagPicker({
             <div
               className={`flex flex-wrap gap-1 ${plain.length > 0 ? 'border-t border-border pt-2' : ''}`}
             >
-              {colored.map(({ tag, color, rest }) => (
+              {colored.map(({ tag, color }) => (
                 <button
                   key={tag.id}
                   type="button"
                   onClick={() => pick({ name: tag.name, category: tag.category })}
-                  className={`flex min-h-7 items-center rounded border border-border px-2 font-mono text-xs transition-colors hover:border-accent ${categoryColor(category)}`}
+                  className={`flex min-h-7 items-center gap-1.5 rounded border border-border px-2 font-mono text-xs transition-colors hover:border-accent ${categoryColor(category)}`}
                 >
-                  {/* The colour in the Color category's own colour, so a row of variants
-                      is read by its second half — the first half is what they share. */}
-                  <span className={categoryColor('color')}>{color}</span>
-                  <span>_{rest}</span>
+                  {/* The colour itself, painted, rather than a second word colour in the
+                      text — these chips belong to the category they are in, and a dot is
+                      read before the name is, which is the order you pick one in. The
+                      border keeps white and black from disappearing into the two grounds
+                      they would otherwise match. */}
+                  <span
+                    aria-hidden
+                    style={{ background: colorSwatch(color) }}
+                    className="size-2 shrink-0 rounded-full border border-border"
+                  />
+                  {tag.name}
                 </button>
               ))}
             </div>

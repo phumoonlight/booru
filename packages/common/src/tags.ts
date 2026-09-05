@@ -169,6 +169,26 @@ export const COLOR_NAMES: readonly string[] = [
 ]
 
 /**
+ * A colour word as something a browser can paint, for the dot beside a colour variant.
+ *
+ * Most of `COLOR_NAMES` are CSS named colours once the underscore is dropped —
+ * `light_blue` is `lightblue`, `dark_green` is `darkgreen` — so only the words CSS has no
+ * name for are listed here. A word from neither list (a colour a board coined itself)
+ * falls through as-is: `chartreuse` happens to be CSS too, and anything that is not simply
+ * paints nothing, leaving the dot as an empty ring rather than a wrong colour.
+ */
+const SWATCH: Record<string, string> = {
+  blonde: '#e8c87a',
+  dark_brown: '#5b3a1e',
+  light_brown: '#c08552',
+  light_purple: '#c9a7ff',
+}
+
+export function colorSwatch(color: string): string {
+  return SWATCH[color] ?? color.replace(/_/g, '')
+}
+
+/**
  * The colour a category is drawn in. Functions rather than the two records they wrap,
  * because a category is any word now and an unknown one still has to be legible — it
  * gets the plain foreground rather than a colour of its own, which is also the honest
