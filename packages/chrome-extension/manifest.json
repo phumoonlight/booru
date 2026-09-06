@@ -1,8 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Booru hover",
-  "version": "1.0.0",
-  "description": "Hover a booru thumbnail, see the full-size picture immediately. No permissions, no remote rules, no fetch.",
+  "name": "Booru explorer",
+  "version": "1.1.0",
+  "description": "Hover a booru thumbnail to see it full size, and mark the posts you have already been through so they fade out of the next search.",
+  "permissions": ["storage", "unlimitedStorage"],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "options_page": "src/options.html",
   "content_scripts": [
     {
       "matches": [

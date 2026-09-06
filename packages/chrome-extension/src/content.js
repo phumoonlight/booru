@@ -645,9 +645,17 @@ function hide() {
 
 function thumbUnder(target) {
   if (!(target instanceof Element)) return null
+  // In marking mode the grid answers a different question, and a preview covering the
+  // thumbnail you are about to click is in the way of it.
+  if (marking) return null
   const img =
     target instanceof HTMLImageElement ? target : target.closest('a')?.querySelector('img')
   if (!img || !img.currentSrc) return null
+  // A post marked read is not previewed. "Which picture is this" is the only question a
+  // preview answers, and it is the question marking the post already answered — so the
+  // fade is not decoration, it is what a thumbnail that has stopped responding looks
+  // like.
+  if (img.closest(`[${READ_ATTR}]`)) return null
   // A picture already large on the page is not worth covering with itself.
   return img.clientWidth > 0 && img.clientWidth < 400 ? img : null
 }
@@ -769,3 +777,572 @@ new MutationObserver(() => {
     indexed = null
   })
 }).observe(document.documentElement, { childList: true, subtree: true })
+
+// ------------------------------------------------------------------ read posts
+
+/**
+ * Which posts you have already looked at, and the button that says so.
+ *
+ * Sourcing a board is a search run again next week against a listing that has moved by
+ * forty posts. The forty are the point and the rest is the work, so the thing worth
+ * recording is the narrowest possible fact — a post number — and the thing worth doing
+ * with it is getting it out of the way.
+ *
+ * A read post is **faded and cannot be hovered**. The fade alone would have been
+ * decoration: the reason to point at a thumbnail is to ask which picture it is, and that
+ * is a question already answered for a post marked read. Skipping it is the feature; the
+ * fade is how you can tell it will be skipped.
+ *
+ * Nothing here is stored in the page. The numbers live in the extension's own database
+ * behind `background.js`, which is what lets one settings page export both boards and
+ * what keeps a board's "clear site data" from taking the history with it.
+ */
+
+/**
+ * The boards this applies to, and how a post's number is read out of a link.
+ *
+ * Fewer boards than the preview works on, on purpose: a number means nothing without
+ * knowing whose it is, and the gelbooru *engine* is five sites with five unrelated id
+ * spaces behind one set of markup. Adding one is an entry here — a host and a function
+ * that pulls the digits out of a URL — and nothing else. Konachan's two hosts are one
+ * board: `.net` is the same posts with the same numbers, filtered.
+ */
+const BOARDS = [
+  {
+    key: 'gelbooru',
+    label: 'Gelbooru',
+    host: /(^|\.)gelbooru\.com$/i,
+    postId(url) {
+      const query = url.searchParams
+      if (query.get('page') !== 'post' || query.get('s') !== 'view') return null
+      return digits(query.get('id'))
+    },
+  },
+  {
+    key: 'konachan',
+    label: 'Konachan',
+    host: /(^|\.)konachan\.(com|net)$/i,
+    postId(url) {
+      const match = url.pathname.match(/^\/post\/show\/(\d+)/)
+      return match ? Number(match[1]) : null
+    },
+  },
+]
+
+function digits(value) {
+  return value && /^\d+$/.test(value) ? Number(value) : null
+}
+
+const board = BOARDS.find((entry) => entry.host.test(location.hostname)) ?? null
+
+/**
+ * The post a link goes to, or null if it isn't one. Same string work as everything else
+ * here — the number is already in the address, so nothing is fetched to find it.
+ */
+function postIdOf(href) {
+  try {
+    const url = new URL(href, location.href)
+    if (!board.host.test(url.hostname)) return null
+    return board.postId(url)
+  } catch {
+    return null
+  }
+}
+
+// The attribute the fade and the marking outline hang off. Written onto the anchor, which
+// is the element that wraps the thumbnail on both boards and is the thing you click.
+const POST_ATTR = 'data-booru-post'
+const READ_ATTR = 'data-booru-read'
+const MARKING_ATTR = 'data-booru-marking'
+
+/**
+ * Preferences, in `chrome.storage` rather than `localStorage`, because these answer for
+ * the extension rather than for a board. Mode and size stay where they are: a screen and
+ * a pair of eyes are per board by design, and read history is not.
+ */
+const PREF_KEY = 'booru-explorer-prefs'
+const prefs = { marking: true, side: 'left' }
+
+function loadPrefs() {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.get(PREF_KEY, (stored) => {
+        if (!chrome.runtime.lastError && stored && stored[PREF_KEY]) {
+          Object.assign(prefs, stored[PREF_KEY])
+        }
+        resolve()
+      })
+    } catch {
+      // An extension reloaded under a page leaves the old context invalidated. The
+      // defaults are a fine answer, and the next page load gets the real ones.
+      resolve()
+    }
+  })
+}
+
+function savePrefs() {
+  try {
+    chrome.storage.local.set({ [PREF_KEY]: { ...prefs } })
+  } catch {
+    // Then it lasts the tab.
+  }
+}
+
+// Ids already asked about, so a board that appends a second page only asks about the new
+// ones, and the answers, which are what the fade and the hover check consult.
+const seen = new Set()
+const readIds = new Set()
+const examined = new WeakSet()
+let marking = false
+
+function send(message, then) {
+  try {
+    chrome.runtime.sendMessage(message, (answer) => {
+      // Reading `lastError` is what marks it handled; without this an unanswered message
+      // is a console error on every page.
+      if (chrome.runtime.lastError) return
+      if (then) then(answer)
+    })
+  } catch {
+    // The extension was reloaded out from under this page.
+  }
+}
+
+/**
+ * Find the post links that have appeared and ask about the ones we haven't. Anchors are
+ * remembered in a WeakSet rather than tagged, so the ones that aren't posts — and a booru
+ * page is mostly those — are examined once and never again.
+ */
+function scan() {
+  const fresh = []
+  let found = 0
+  for (const anchor of document.links) {
+    if (examined.has(anchor)) continue
+    examined.add(anchor)
+    if (!anchor.querySelector('img')) continue
+    const id = postIdOf(anchor.href)
+    if (id === null) continue
+    anchor.setAttribute(POST_ATTR, String(id))
+    found += 1
+    if (!seen.has(id)) {
+      seen.add(id)
+      fresh.push(id)
+    }
+  }
+  // Painting is on anything new appearing, not on anything new being *asked* about — a
+  // post that turns up a second time on the same page already has its answer, and
+  // waiting for a query that will never be sent would leave that copy of it unfaded.
+  if (found === 0) return
+  paintRead()
+  if (fresh.length === 0) return
+  send({ type: 'query', site: board.key, ids: fresh }, (answer) => {
+    if (!answer || !Array.isArray(answer.read)) return
+    for (const id of answer.read) readIds.add(id)
+    paintRead()
+  })
+}
+
+function paintRead() {
+  for (const anchor of document.querySelectorAll(`[${POST_ATTR}]`)) {
+    const id = Number(anchor.getAttribute(POST_ATTR))
+    if (prefs.marking && readIds.has(id)) anchor.setAttribute(READ_ATTR, '')
+    else anchor.removeAttribute(READ_ATTR)
+  }
+  repaintDock()
+}
+
+/**
+ * Write the marks. The page is repainted first and the store told after: a click that
+ * waits on a round trip before the thumbnail dims feels like it missed, and there is
+ * nothing a failed write could have done differently anyway.
+ */
+function mark(ids, read) {
+  if (ids.length === 0) return
+  for (const id of ids) {
+    seen.add(id)
+    if (read) readIds.add(id)
+    else readIds.delete(id)
+  }
+  paintRead()
+  send({ type: 'mark', site: board.key, ids, read })
+}
+
+function pageIds() {
+  const ids = new Set()
+  for (const anchor of document.querySelectorAll(`[${POST_ATTR}]`)) {
+    ids.add(Number(anchor.getAttribute(POST_ATTR)))
+  }
+  return [...ids]
+}
+
+/**
+ * The fade and the marking outline, in the page's own stylesheet rather than the
+ * overlay's — these style the board's elements, which nothing inside a shadow root can
+ * reach. Colours that read on both a light gelbooru and a dark konachan, since a dashed
+ * grey outline is invisible on one of them.
+ */
+function injectStyle() {
+  const style = document.createElement('style')
+  style.textContent = `
+    [${READ_ATTR}] { opacity: .28; transition: opacity .15s ease }
+    [${READ_ATTR}]:hover { opacity: .5 }
+    html[${MARKING_ATTR}] [${POST_ATTR}] {
+      cursor: copy;
+      outline: 1px dashed rgba(30, 136, 255, .5);
+      outline-offset: 2px;
+    }
+    html[${MARKING_ATTR}] [${POST_ATTR}]:hover { outline: 2px solid #1e88ff }
+    html[${MARKING_ATTR}] [${READ_ATTR}] { outline-color: #12b76a }
+  `
+  document.documentElement.appendChild(style)
+}
+
+// ------------------------------------------------------------------- the dock
+
+let dockShadow = null
+let dockHost = null
+
+/**
+ * One button at the bottom of the page, and the menu it opens.
+ *
+ * Its own closed shadow root, separate from the preview's: that one is
+ * `pointer-events:none` over the whole viewport on purpose, and this is the one thing in
+ * the extension you are meant to be able to click. It sits on the left and can be dragged
+ * to the right, because which side is out of the way depends on which board's sidebar you
+ * are looking at.
+ */
+function buildDock() {
+  if (dockHost) return
+  dockHost = document.createElement('div')
+  dockHost.style.cssText =
+    'all:initial;position:fixed;inset:0;z-index:2147483646;pointer-events:none'
+  dockShadow = dockHost.attachShadow({ mode: 'closed' })
+  dockShadow.innerHTML = `
+    <style>
+      :host { contain: layout paint }
+      #dock {
+        position: fixed;
+        bottom: 18px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        pointer-events: auto;
+        font: 13px/1.4 system-ui, sans-serif;
+        color: #e6e6ea;
+      }
+      #dock.right { align-items: flex-end }
+      #fab {
+        all: unset;
+        box-sizing: border-box;
+        width: 44px;
+        height: 44px;
+        display: grid;
+        place-items: center;
+        font-size: 20px;
+        border-radius: 50%;
+        background: #14141a;
+        cursor: grab;
+        touch-action: none;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, .18), 0 8px 24px rgba(0, 0, 0, .5);
+      }
+      #fab:active { cursor: grabbing }
+      #fab.on { background: #1e88ff; box-shadow: 0 0 0 1px #1e88ff, 0 10px 28px rgba(30, 136, 255, .5) }
+      #fab.off { opacity: .45 }
+      #menu {
+        min-width: 236px;
+        padding: 6px;
+        border-radius: 10px;
+        background: #14141a;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, .14), 0 18px 48px rgba(0, 0, 0, .6);
+      }
+      #menu[hidden] { display: none }
+      .item {
+        all: unset;
+        box-sizing: border-box;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 9px 10px;
+        border-radius: 7px;
+        cursor: pointer;
+      }
+      .item:hover { background: #22222c; color: #fff }
+      .item[disabled] { opacity: .35; cursor: default }
+      .item[disabled]:hover { background: transparent; color: #e6e6ea }
+      .fill {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 0;
+        background: rgba(30, 136, 255, .4);
+        pointer-events: none;
+      }
+      .item.holding .fill { width: 100%; transition: width 600ms linear }
+      .label { position: relative }
+      .state { position: relative; margin-left: auto; font-size: 11px; opacity: .55; letter-spacing: .04em }
+      #note { padding: 5px 10px 6px; font-size: 11px; opacity: .45 }
+    </style>
+    <div id="dock">
+      <div id="menu" hidden>
+        <button class="item" id="all">
+          <span class="fill"></span>
+          <span class="label" aria-hidden="true">📚</span>
+          <span class="label">Mark this page read</span>
+          <span class="state">hold</span>
+        </button>
+        <button class="item" id="one">
+          <span aria-hidden="true">✅</span>
+          <span id="one-label">Mark this post read</span>
+        </button>
+        <button class="item" id="pick">
+          <span aria-hidden="true">👆</span>
+          <span id="pick-label">Start marking</span>
+        </button>
+        <button class="item" id="power">
+          <span aria-hidden="true">👁️</span>
+          <span>Read marking</span>
+          <span class="state" id="power-state">on</span>
+        </button>
+        <button class="item" id="settings">
+          <span aria-hidden="true">⚙️</span>
+          <span>Settings</span>
+        </button>
+        <div id="note"></div>
+      </div>
+      <button id="fab" aria-label="Booru explorer" title="Booru explorer">📖</button>
+    </div>
+  `
+  document.documentElement.appendChild(dockHost)
+  wireDock()
+  repaintDock()
+}
+
+function dockPart(id) {
+  return dockShadow ? dockShadow.getElementById(id) : null
+}
+
+function menuOpen() {
+  const menu = dockPart('menu')
+  return Boolean(menu) && !menu.hidden
+}
+
+function closeMenu() {
+  const menu = dockPart('menu')
+  if (menu) menu.hidden = true
+}
+
+function repaintDock() {
+  if (!dockShadow) return
+  const dock = dockPart('dock')
+  const fab = dockPart('fab')
+  dock.classList.toggle('right', prefs.side === 'right')
+  // Cleared rather than left where a drag put it — snapping is what the release means.
+  dock.style.left = prefs.side === 'right' ? 'auto' : '18px'
+  dock.style.right = prefs.side === 'right' ? '18px' : 'auto'
+  fab.classList.toggle('on', marking)
+  fab.classList.toggle('off', !prefs.marking)
+
+  dockPart('pick-label').textContent = marking ? 'Stop marking' : 'Start marking'
+  dockPart('power-state').textContent = prefs.marking ? 'on' : 'off'
+  dockPart('pick').disabled = !prefs.marking
+  dockPart('all').disabled = !prefs.marking
+
+  // The one item that isn't about the listing: on a post's own page there is exactly one
+  // thing to mark, and the menu says which way it would go.
+  const current = postIdOf(location.href)
+  dockPart('one').disabled = !prefs.marking || current === null
+  dockPart('one-label').textContent =
+    current !== null && readIds.has(current) ? 'Mark this post unread' : 'Mark this post read'
+
+  const ids = pageIds()
+  const read = ids.filter((id) => readIds.has(id)).length
+  dockPart('note').textContent = !prefs.marking
+    ? 'Marking is off — nothing is faded or recorded.'
+    : ids.length === 0
+      ? current === null
+        ? 'No posts on this page.'
+        : `Post ${current}.`
+      : `${read} of ${ids.length} read on this page.`
+}
+
+function setMarking(next) {
+  marking = next && prefs.marking
+  document.documentElement.toggleAttribute(MARKING_ATTR, marking)
+  // Whatever the pointer was over belongs to the other mode.
+  hide()
+  repaintDock()
+}
+
+function wireDock() {
+  const fab = dockPart('fab')
+  const menu = dockPart('menu')
+  const dock = dockPart('dock')
+
+  // A drag and a click are the same gesture until the pointer moves, so the fab decides
+  // between them on release rather than committing at the start.
+  let drag = null
+  fab.addEventListener('pointerdown', (event) => {
+    drag = { x: event.clientX, moved: false }
+    fab.setPointerCapture(event.pointerId)
+  })
+  fab.addEventListener('pointermove', (event) => {
+    if (!drag) return
+    if (Math.abs(event.clientX - drag.x) > 6) drag.moved = true
+    if (!drag.moved) return
+    closeMenu()
+    dock.style.left = `${Math.round(event.clientX - 22)}px`
+    dock.style.right = 'auto'
+  })
+  fab.addEventListener('pointerup', (event) => {
+    const gesture = drag
+    drag = null
+    if (!gesture) return
+    if (gesture.moved) {
+      prefs.side = event.clientX > innerWidth / 2 ? 'right' : 'left'
+      savePrefs()
+      repaintDock()
+      return
+    }
+    menu.hidden = !menu.hidden
+    repaintDock()
+  })
+
+  /**
+   * A whole page at once is the one action here that cannot be undone by repeating it, so
+   * it is held rather than clicked. 600ms with the fill running under the label — long
+   * enough that it cannot be a slip, short enough that it isn't a chore.
+   */
+  const all = dockPart('all')
+  let holding = 0
+  const startHold = () => {
+    if (all.disabled) return
+    all.classList.add('holding')
+    holding = setTimeout(() => {
+      all.classList.remove('holding')
+      mark(pageIds(), true)
+      closeMenu()
+    }, 600)
+  }
+  const cancelHold = () => {
+    clearTimeout(holding)
+    all.classList.remove('holding')
+  }
+  all.addEventListener('pointerdown', startHold)
+  all.addEventListener('pointerup', cancelHold)
+  all.addEventListener('pointerleave', cancelHold)
+
+  dockPart('one').addEventListener('click', () => {
+    const current = postIdOf(location.href)
+    if (current === null) return
+    mark([current], !readIds.has(current))
+  })
+
+  dockPart('pick').addEventListener('click', () => {
+    setMarking(!marking)
+    closeMenu()
+  })
+
+  dockPart('power').addEventListener('click', () => {
+    prefs.marking = !prefs.marking
+    savePrefs()
+    if (!prefs.marking) setMarking(false)
+    paintRead()
+  })
+
+  dockPart('settings').addEventListener('click', () => {
+    send({ type: 'options' })
+    closeMenu()
+  })
+}
+
+// ------------------------------------------------------- marking, and the page
+
+/**
+ * In marking mode a thumbnail is a checkbox, so the board's own navigation has to be
+ * stopped on the way down — a booru thumbnail is an anchor, and by the time a bubbled
+ * handler sees the click the tab is already opening.
+ */
+document.addEventListener(
+  'mousedown',
+  (event) => {
+    if (!marking || !(event.target instanceof Element)) return
+    if (!event.target.closest(`[${POST_ATTR}]`)) return
+    event.preventDefault()
+    event.stopPropagation()
+  },
+  true
+)
+
+document.addEventListener(
+  'click',
+  (event) => {
+    if (!marking || !(event.target instanceof Element)) return
+    const anchor = event.target.closest(`[${POST_ATTR}]`)
+    if (!anchor) return
+    event.preventDefault()
+    event.stopPropagation()
+    const id = Number(anchor.getAttribute(POST_ATTR))
+    // The same click both ways — a mode you can only mark in is a mode you get stuck in
+    // one post past where you meant to stop.
+    mark([id], !readIds.has(id))
+  },
+  true
+)
+
+document.addEventListener(
+  'keydown',
+  (event) => {
+    if (event.key !== 'Escape') return
+    if (marking) setMarking(false)
+    closeMenu()
+  },
+  true
+)
+
+// A click anywhere in the page closes the menu. Events from inside the shadow root are
+// retargeted to the host, so the host is what "not the menu" is measured against.
+document.addEventListener(
+  'mousedown',
+  (event) => {
+    if (!menuOpen() || event.target === dockHost) return
+    closeMenu()
+  },
+  true
+)
+
+if (board) {
+  injectStyle()
+  loadPrefs().then(() => {
+    buildDock()
+    scan()
+  })
+  document.addEventListener('DOMContentLoaded', scan)
+
+  // The settings page can turn marking off while a board is open, and a fade that only
+  // answers on reload is a setting you cannot tell had any effect.
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local' || !changes[PREF_KEY]) return
+      Object.assign(prefs, changes[PREF_KEY].newValue ?? {})
+      if (!prefs.marking) setMarking(false)
+      paintRead()
+    })
+  } catch {
+    // An invalidated context. The next page load reads them fresh.
+  }
+
+  // Both boards append rather than reload — gelbooru through its own pagination, konachan
+  // when a listing grows — and a post that arrives unfaded is one you look at twice.
+  let rescanQueued = false
+  new MutationObserver(() => {
+    if (rescanQueued) return
+    rescanQueued = true
+    idle(() => {
+      rescanQueued = false
+      scan()
+    })
+  }).observe(document.documentElement, { childList: true, subtree: true })
+}

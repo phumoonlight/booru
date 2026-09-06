@@ -1,6 +1,6 @@
 {
   "name": "chrome-extension",
   "private": true,
-  "description": "Booru hover — the source board's thumbnail, full size, with no wait. Loaded unpacked; manifest.json holds the version.",
+  "description": "Booru explorer — the source board's thumbnail full size with no wait, and the posts you have already seen faded out. Loaded unpacked; manifest.json holds the version.",
   "type": "module"
 }
