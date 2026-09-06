@@ -8,6 +8,7 @@ import type {
 import { BUTTON_ON_SURFACE, BUTTON_SM } from './buttons'
 import { reloadImplications } from '../implications'
 import { reloadRecommendations } from '../recommendations'
+import { reloadCatalogs } from '../catalogs'
 
 /**
  * Spelled out here rather than imported from `main/cpu.ts`, which owns the behaviour:
@@ -65,9 +66,9 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
    * then withdrew, and a line reporting it is a line to dismiss in turn.
    *
    * An import replaces sections of a file three things in this window are holding a copy
-   * of: the two rule stores, which read once per launch, and the preference fields above,
-   * seeded from what main is running with. All three are re-read rather than left to
-   * disagree with the file until the next restart.
+   * of: the two rule stores and the catalogs, which read once per launch, and the
+   * preference fields above, seeded from what main is running with. All of them are
+   * re-read rather than left to disagree with the file until the next restart.
    */
   async function transfer(direction: 'export' | 'import') {
     setTransferring(true)
@@ -83,7 +84,7 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
     }
 
     if (direction === 'import') {
-      await Promise.all([reloadImplications(), reloadRecommendations()])
+      await Promise.all([reloadImplications(), reloadRecommendations(), reloadCatalogs()])
       // Re-seeded from what main is now running with, exactly as `useState` seeded it —
       // `onChanged` refreshes the status App holds, but these fields are state and would
       // otherwise keep showing the numbers from before the import until a restart.
@@ -164,7 +165,7 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
             type="button"
             onClick={() => void transfer('export')}
             disabled={transferring}
-            title="Write preferences and tag rules to a file you choose"
+            title="Write preferences, tag rules and catalogs to a file you choose"
             className={BUTTON_SM}
           >
             <span aria-hidden>📤</span> Export settings
@@ -173,7 +174,7 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
             type="button"
             onClick={() => void transfer('import')}
             disabled={transferring}
-            title="Read preferences and tag rules back from a file"
+            title="Read preferences, tag rules and catalogs back from a file"
             className={BUTTON_SM}
           >
             <span aria-hidden>📥</span> Import settings
@@ -191,9 +192,9 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
             bundle, not stored — and that is worth saying, since a file called "settings"
             from an app that writes to a database sounds like it should not leave. */}
         <p className="text-xs text-muted">
-          Preferences and both sets of tag rules, as plain JSON. Nothing secret is in it:
-          the board’s keys are compiled into the app, not saved here. An import takes only
-          the sections the file has, and leaves the rest alone.
+          Preferences, both sets of tag rules and your tag catalogs, as plain JSON. Nothing
+          secret is in it: the board’s keys are compiled into the app, not saved here. An
+          import takes only the sections the file has, and leaves the rest alone.
         </p>
         {transferred && (
           <p className={`text-sm ${transferred.ok ? 'text-muted' : 'text-[#ff5d5f]'}`}>

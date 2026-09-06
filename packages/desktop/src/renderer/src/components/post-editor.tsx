@@ -248,6 +248,7 @@ export function PostEditor({
             value={value.tags}
             onChange={(tags) => void commit({ ...value, tags })}
             recommend
+            catalogs
           />
 
           <label className="flex flex-col gap-1">

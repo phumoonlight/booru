@@ -187,7 +187,8 @@ is bad at — see [packages/desktop/README.md](packages/desktop/README.md). It i
   is how a finished post gets opened. `main/config.ts` reads `__BUILD_ENV__` and nothing
   else; only the main bundle gets the `define`, so no key is compiled into a file the
   window loads.
-- **`save.json` holds preferences and both sets of tag rules, and nothing else**
+- **`save.json` holds preferences, both sets of tag rules and the tag catalogs, and
+  nothing else**
   (`main/save-file.ts`), and the settings screen can **write it out and read it back**
   (`main/transfer.ts`). Export is a byte copy — it is meant to be the file. Import is
   section by section through the same `normalize…` the IPC channels use, so it can only
@@ -272,15 +273,18 @@ behind a session, because there is none.
   rather than on the save, so correcting a rating twice is two clicks and not two
   searches. Delete is the exception: nothing is left to look at.
 - **Tags** lists and manages: click a row for rename / recategorize / delete **and that
-  tag's rules**. Two rows carry the controls: New tag, Apply by tag and Rule map on
+  tag's rules**. Two rows carry the controls: New tag, Apply by tag, Catalogs and Rule map on
   the title line, then a toolbar of Refresh and a full-width filter box, which is Browse's
   search bar drawn the same way — the first three being what is not about a row you are pointing at,
   and the filter being what makes a few hundred tags browsable now that the grid is also a
   picker. Every button is unbordered (`HEADER_LINK` / `headerToggle`, shared with Browse); the box
   keeps its border, being the one thing you type into. **The grid has two
-  meanings**: ordinarily a click opens that tag, and while a rule on the open tag is being
-  filled in (`picking` in `TagIndex`) a click toggles that tag in the rule instead, with
-  the count column showing ✓/＋ rather than a number for as long as that lasts. **Its
+  meanings**: ordinarily a click opens that tag, and while a rule on the open tag or a
+  catalog is being filled in (`picking` in `TagIndex`, a union of the two) a click toggles
+  that tag in *that* instead, with
+  the count column showing ✓/＋ rather than a number for as long as that lasts. The
+  catalogs panel and a tag's own both pin to the top of the scroller, so `showPanel` makes
+  them take turns and ends any pick with the panel that was answering it. **Its
   posts** hands the tag name to Browse via `browseFor` and switches to it, rather than
   opening `/tags/<id>` in a browser — the reason to ask what a tag is on is usually to fix
   one of them, and only this window can. The category menu is `TAG_CATEGORIES` — **adding one is a line there plus
@@ -336,6 +340,23 @@ file read per keystroke.
   the chain is walked by choosing. Anything already typed or implied is left out. No
   ratings: a rating is not a chip you press, and `TAG_PATTERN` drops the token on its
   colon for free.
+
+**Tag catalogs** — the third section of `save.json` and the third answer to "what else
+goes on this post?", `{ name: [tag, …] }` like the two rule sets, same `normalize…`
+doubling as the IPC validation, same module-level store. What makes it a different thing
+is *who asks*: an implication fires by itself and a recommendation offers itself, and a
+catalog does neither until it is picked **by name** — so it holds what is true of a set of
+images rather than of a tag, which is what no rule can say. It is built on the Tags screen
+(`tag-catalogs.tsx`, ➕ New names one, 👆 Choose fills it from the grid, 📋 From a post
+fills it from a post via the queue's own `TagImport`) and applied from `CategoryTagField`'s
+`catalogs` prop, which puts 📚 Catalogs on the heading row of every tag field — queue card,
+Apply to all, post editor — so it reaches a post being made and one already on the board
+alike. **Names only**: no rating, for the recommendations' reason, and no category, which
+is looked up in the board's index when the catalog is applied — a stored one would be a
+lie the first time a tag is recategorized. A name the index doesn't have is skipped rather
+than coined, and the menu's `＋n` counts what a press would actually add. **An empty
+catalog survives `normalizeCatalogs`**, unlike an empty rule: naming one before filling it
+is the ordinary order, and the delete button is what removes one.
 
 **Tag index cache** (`main/tag-cache.ts`) — the board's tags on disk for a day, serving
 both `tags:list` and `tags:suggest`. Autocomplete was a query per pause in typing, which

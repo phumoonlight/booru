@@ -3,6 +3,7 @@ import { app, dialog } from 'electron'
 import type { TransferResult } from '../shared/api'
 import { normalizeRules } from '../shared/implications'
 import { normalizeRecommendations } from '../shared/recommendations'
+import { normalizeCatalogs } from '../shared/catalogs'
 import { loadPreferences, savePreferences } from './preferences'
 import { savePath, writeSection } from './save-file'
 
@@ -126,6 +127,11 @@ export async function importSave(): Promise<TransferResult> {
     writeSection('recommendations', rules)
     took.push(count(Object.keys(rules).length, 'recommendation'))
   }
+  if ('catalogs' in document) {
+    const catalogs = normalizeCatalogs(document.catalogs)
+    writeSection('catalogs', catalogs)
+    took.push(count(Object.keys(catalogs).length, 'catalog'))
+  }
   const preferences = document.preferences
   if (preferences && typeof preferences === 'object' && !Array.isArray(preferences)) {
     // Merged onto what is already stored rather than replacing it, so a file written by a
@@ -135,7 +141,10 @@ export async function importSave(): Promise<TransferResult> {
   }
 
   if (took.length === 0) {
-    return { ok: false, error: 'Nothing in that file to import — no preferences, no tag rules.' }
+    return {
+      ok: false,
+      error: 'Nothing in that file to import — no preferences, no tag rules, no catalogs.',
+    }
   }
   return { ok: true, path: file, message: `Imported ${took.join(', ')}.` }
 }

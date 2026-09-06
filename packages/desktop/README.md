@@ -63,9 +63,9 @@ those four values on first launch and kept them in `save.json`, which put a serv
 key on every machine that ran the app — a copy this version deletes on startup if it
 finds one.
 
-`save.json` now holds the compression preferences and the two sets of tag rules, and
-nothing else, as plain readable text — the rules in particular are a `{ tag: [name, …] }`
-object worth opening the file for once there are more of them than you want to type in
+`save.json` now holds the compression preferences, the two sets of tag rules and the tag
+catalogs, and nothing else, as plain readable text — all three are `{ name: [tag, …] }`
+objects worth opening the file for once there are more of them than you want to type in
 one at a time. `desktop:dev` uses a folder of its own (`pubooru-desktop-dev` beside
 `pubooru-desktop`), so working on the app never disturbs the copy you use, and both can
 be open at once.
@@ -87,6 +87,7 @@ for your own board. Treat the installer accordingly: anyone who has it can write
 | `src/shared/api.ts` | the types across the bridge, imported by all three |
 | `src/shared/implications.ts` | rules the app applies: what they are, and the pure code that applies them |
 | `src/shared/recommendations.ts` | rules the app only offers, same shape |
+| `src/shared/catalogs.ts` | named sets of tags, applied when asked for by name |
 
 The renderer holds no keys, no file access and no network. Every capability it has is one
 `ipcMain.handle` in [`src/main/ipc.ts`](src/main/ipc.ts) — including reading the file it

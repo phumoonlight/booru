@@ -13,11 +13,12 @@ import { app } from 'electron'
  * lives in the bundle, and the session token and remembered password went with the
  * login. It is still written 0600, which costs nothing.
  *
- * Three sections: the compression preferences, and the two sets of tag rules —
- * `implications`, which the app applies, and `recommendations`, which it only offers.
- * They share a file so there is one thing to look at, back up or delete, and the two
- * rule sections are the ones most worth opening the file for, being lists you may well
- * want to paste a hundred rules into at once. `session`, `credentials` and `config` are
+ * Four sections: the compression preferences, the two sets of tag rules —
+ * `implications`, which the app applies, and `recommendations`, which it only offers —
+ * and `catalogs`, the named sets of tags that are applied when asked for by name.
+ * They share a file so there is one thing to look at, back up or delete, and those three
+ * are the ones most worth opening the file for, being lists you may well
+ * want to paste a hundred entries into at once. `session`, `credentials` and `config` are
  * names this type still knows, and only so what an older version wrote under them can be
  * deleted — see `dropStoredConfig()` and `dropStoredLogin()`.
  */
@@ -30,6 +31,7 @@ export type Section =
   | 'credentials'
   | 'implications'
   | 'recommendations'
+  | 'catalogs'
   | 'config'
 
 /** Where the save file lives. Exported so the settings screen can point at it. */

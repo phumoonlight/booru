@@ -553,6 +553,7 @@ export function UploadQueue({
                     onChange={setBulkTags}
                     label="Tags to add to every staged post"
                     disabled={busy}
+                    catalogs
                   />
                   <div className="flex flex-wrap items-end gap-2">
                     <label className="flex flex-1 flex-col gap-1.5 text-sm">
@@ -818,6 +819,7 @@ export function UploadQueue({
                             disabled={busy}
                             imply
                             recommend
+                            catalogs
                           />
 
                           <div className="flex flex-col gap-3 sm:flex-row">

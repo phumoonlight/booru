@@ -26,10 +26,17 @@ import type { TagSeed } from './tag-seed'
 export function TagImport({
   onImport,
   onClose,
+  destination = 'card',
 }: {
   /** The chosen post's tags. Merging them with what the row already has is the caller's. */
   onImport: (tags: TagSeed[]) => void
   onClose: () => void
+  /**
+   * What the tags are being copied *into*, for the one line that says so. The queue's cards
+   * were the only caller until the Tags screen started building catalogs the same way, and
+   * "what the card already has" is a lie on a screen with no cards on it.
+   */
+  destination?: string
 }) {
   const [query, setQuery] = useState('')
   const [submitted, setSubmitted] = useState('')
@@ -170,7 +177,7 @@ export function TagImport({
               Add {chosen.tags.length} {chosen.tags.length === 1 ? 'tag' : 'tags'}
             </button>
             <span className="text-xs text-muted">
-              Added to what the card already has — nothing is replaced.
+              Added to what the {destination} already has — nothing is replaced.
             </span>
           </div>
         </div>

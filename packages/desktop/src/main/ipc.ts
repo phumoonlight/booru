@@ -13,6 +13,7 @@ import { loadPreferences, savePreferences } from './preferences'
 import { listBrowsers, openUrl } from './browser'
 import { loadImplications, saveImplications } from './implications'
 import { loadRecommendations, saveRecommendations } from './recommendations'
+import { loadCatalogs, saveCatalogs } from './catalogs'
 import { previewFile, stageFiles } from './staging'
 import { downloadImages } from './download'
 import { setQueueState } from './queue-guard'
@@ -30,6 +31,7 @@ import { loadPost, removePost, savePost, thumbnailDataUrl, type LoadedPost } fro
 import type { AppStatus, BrowseCacheFile, PreferencesInput, TagSuggestion } from '../shared/api'
 import type { ImplicationRules } from '../shared/implications'
 import type { RecommendationRules } from '../shared/recommendations'
+import type { TagCatalogs } from '../shared/catalogs'
 import type { Tag } from '@common/tags'
 import type { PostPage } from '@common/data/posts'
 import type { UploadResult } from '@common/upload/pipeline'
@@ -291,6 +293,17 @@ export function registerIpc(): void {
   ipcMain.handle(
     'recommendations:save',
     async (_event, raw: unknown): Promise<RecommendationRules> => saveRecommendations(raw)
+  )
+
+  /**
+   * The named tag sets, the third section of the same file and the same two channels —
+   * `normalizeCatalogs` inside is the parse, as it is for both rule sets.
+   */
+  ipcMain.handle('catalogs:list', async (): Promise<TagCatalogs> => loadCatalogs())
+
+  ipcMain.handle(
+    'catalogs:save',
+    async (_event, raw: unknown): Promise<TagCatalogs> => saveCatalogs(raw)
   )
 
   /**

@@ -12,10 +12,26 @@ import {
 import { tagLabel } from '@common/search'
 import { BUTTON, BUTTON_ON_SURFACE, BUTTON_SUBMIT_ON_SURFACE, buttonToggle } from './buttons'
 import { TagMark, invalidateTagNames } from './category-tag-field'
+import { FIELD, Panel } from './panel'
 import { RuleDiagram } from './rule-diagram'
+import { TagCatalogs } from './tag-catalogs'
 import { TagRuleEditor, toggleRuleTag, type RuleKind } from './tag-rule-editor'
+import { toggleCatalogTag } from '../../../shared/catalogs'
+import { saveCatalogs, useCatalogs } from '../catalogs'
 import { saveImplications, useImplications } from '../implications'
 import { saveRecommendations, useRecommendations } from '../recommendations'
+
+/**
+ * What a click on the tag grid is currently answering, when it is not simply opening a tag.
+ *
+ * Two things fill themselves in from the grid now — a tag's rules and a catalog — and they
+ * are told apart by what the pick is *about*: a rule is about the tag whose panel is open,
+ * a catalog is about a name that has nothing to do with any row. One at a time, because
+ * there is one grid and a click has to mean one thing.
+ */
+type Picking =
+  | { into: RuleKind; tag: string }
+  | { into: 'catalog'; name: string }
 
 /**
  * The last index read, kept outside React on purpose. This screen is unmounted whenever
@@ -63,13 +79,13 @@ export function invalidateTags(): void {
  */
 export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
   const [editing, setEditing] = useState<Tag | null>(null)
-  const [panel, setPanel] = useState<'none' | 'create' | 'apply'>('none')
+  const [panel, setPanel] = useState<'none' | 'create' | 'apply' | 'catalogs'>('none')
   const [diagram, setDiagram] = useState(false)
-  // Which of the open tag's two rules the grid is currently filling in, or null for the
-  // grid's ordinary job. It lives here rather than in the panel because the two halves of
-  // the gesture are in different components — the button that starts it is in the panel,
-  // and the tags it is answered with are the list below.
-  const [picking, setPicking] = useState<RuleKind | null>(null)
+  // What the grid is currently filling in, or null for its ordinary job. It lives here
+  // rather than in the panel because the two halves of the gesture are in different
+  // components — the button that starts it is in a panel, and the tags it is answered with
+  // are the list below.
+  const [picking, setPicking] = useState<Picking | null>(null)
   // Narrows the grid, which is what makes picking from it practical on a board with a few
   // hundred tags — the box it replaced was an autocomplete, and browsing to a name is only
   // better than typing one while the name is on screen. It earns its place outside picking
@@ -77,6 +93,7 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
   const [filter, setFilter] = useState('')
   const implications = useImplications()
   const recommendations = useRecommendations()
+  const catalogs = useCatalogs()
   const [tags, setTags] = useState<Tag[] | null>(cached?.tags ?? null)
   const [fetchedAt, setFetchedAt] = useState<number | null>(cached?.at ?? null)
   // Starts true when there is nothing cached, because the effect below is about to read
@@ -128,24 +145,31 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
     subcategoryOrder((tags ?? []).filter((tag) => tag.category === category).map((t) => t.category2))
 
   /**
-   * What a click on a tag in the grid means, which depends on what the panel is asking.
+   * What a click on a tag in the grid means, which depends on what a panel is asking.
    *
-   * Ordinarily it opens that tag. While a rule is being filled in it toggles that tag in
-   * the rule instead — and it *toggles*, so the same row that added it takes it off again
-   * and the grid can be read as the answer rather than as a list of things already done.
-   * The open tag is inert: a tag implying itself is the one rule that can never fire.
+   * Ordinarily it opens that tag. While a rule or a catalog is being filled in it toggles
+   * that tag in *that* instead — and it toggles, so the same row that added it takes it off
+   * again and the grid can be read as the answer rather than as a list of things already
+   * done. The tag a rule is about is inert: a tag implying itself is the one rule that can
+   * never fire. A catalog has no such tag, since it is about no tag at all.
    */
   function pickTag(tag: Tag) {
-    if (!picking || !editing) {
+    if (!picking) {
       setEditing(tag)
-      setPicking(null)
+      // A tag's panel and the catalogs panel are both pinned to the top of the scroller,
+      // so only one of them may be open — and clicking a row is a request for that row's.
+      if (panel === 'catalogs') setPanel('none')
       return
     }
-    if (tag.name === editing.name) return
-    if (picking === 'implies') {
-      void saveImplications(toggleRuleTag(implications, editing.name, tag.name))
+    if (picking.into === 'catalog') {
+      void saveCatalogs(toggleCatalogTag(catalogs, picking.name, tag.name))
+      return
+    }
+    if (tag.name === picking.tag) return
+    if (picking.into === 'implies') {
+      void saveImplications(toggleRuleTag(implications, picking.tag, tag.name))
     } else {
-      void saveRecommendations(toggleRuleTag(recommendations, editing.name, tag.name))
+      void saveRecommendations(toggleRuleTag(recommendations, picking.tag, tag.name))
     }
   }
 
@@ -153,6 +177,20 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
   function openTag(tag: Tag | null) {
     setEditing(tag)
     setPicking(null)
+  }
+
+  /**
+   * Which panel sits above the list. Pressing the one already open closes it.
+   *
+   * Any change ends a pick, because the panel being filled in may be the one leaving — a
+   * grid still answering a catalog that is no longer on screen is a list whose clicks go
+   * somewhere you cannot see. Opening the catalogs also closes a tag: both of those panels
+   * pin to the top of the scroller, so they take turns.
+   */
+  function showPanel(next: typeof panel) {
+    setPanel((current) => (current === next ? 'none' : next))
+    setPicking(null)
+    if (next === 'catalogs') setEditing(null)
   }
 
   // Escape leaves the pick without leaving the panel — the hand is on the list, not on
@@ -166,12 +204,18 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [picking])
 
-  // The names already in the rule being filled in, so the grid can mark them
+  // The names already in whatever is being filled in, so the grid can mark them
   const picked = new Set(
-    picking && editing
-      ? (picking === 'implies' ? implications : recommendations)[editing.name] ?? []
-      : []
+    picking === null
+      ? []
+      : picking.into === 'catalog'
+        ? catalogs[picking.name] ?? []
+        : (picking.into === 'implies' ? implications : recommendations)[picking.tag] ?? []
   )
+
+  // The tag a rule is being written about, which cannot be one of its own answers. A
+  // catalog has none — it is about a set of images, not about a tag.
+  const triggerName = picking && picking.into !== 'catalog' ? picking.tag : null
 
   // Matched against the stored spelling with spaces read as underscores, so the box takes
   // `blue archive` and `blue_archive` alike — the same courtesy the tag picker's does.
@@ -209,7 +253,7 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
         )}
         <button
           type="button"
-          onClick={() => setPanel((current) => (current === 'create' ? 'none' : 'create'))}
+          onClick={() => showPanel('create')}
           title="Name a tag before anything carries it"
           className={`${buttonToggle(panel === 'create')} ml-auto`}
         >
@@ -218,12 +262,25 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
         </button>
         <button
           type="button"
-          onClick={() => setPanel((current) => (current === 'apply' ? 'none' : 'apply'))}
+          onClick={() => showPanel('apply')}
           title="Add one tag to every post that already has another"
           className={buttonToggle(panel === 'apply')}
         >
           <span aria-hidden>🧩</span>
           Apply by tag
+        </button>
+        {/* A catalog is named here for the same reason a rule is written here: everything
+            that goes in one is a row on the list below, spelled the way the board spells
+            it. Beside Apply by tag, which is the other control that acts on a set of posts
+            rather than on the row under the pointer. */}
+        <button
+          type="button"
+          onClick={() => showPanel('catalogs')}
+          title="Sets of tags you apply together, by name"
+          className={buttonToggle(panel === 'catalogs')}
+        >
+          <span aria-hidden>📚</span>
+          Catalogs
         </button>
         {/* The rules are written one tag at a time, on the panel a row opens — which is
             the right place to write one and the wrong place to see what they add up to,
@@ -281,6 +338,14 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
         <CreateTag subcategoriesIn={subcategoriesIn} onDone={() => void refresh()} />
       )}
       {panel === 'apply' && <ApplyTag onDone={() => void refresh()} />}
+      {panel === 'catalogs' && (
+        <TagCatalogs
+          tags={tags}
+          picking={picking?.into === 'catalog' ? picking.name : null}
+          onPick={(name) => setPicking(name ? { into: 'catalog', name } : null)}
+          onClose={() => showPanel('none')}
+        />
+      )}
 
       {editing && (
         // Keyed by the tag, so selecting another row remounts the panel with that
@@ -290,8 +355,10 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
           tag={editing}
           onBrowse={onBrowse}
           subcategoriesIn={subcategoriesIn}
-          picking={picking}
-          onPick={setPicking}
+          // The rule editor knows about its own two kinds and nothing else; a catalog
+          // pick is somebody else's business and reads to it as no pick at all.
+          picking={picking && picking.into !== 'catalog' ? picking.into : null}
+          onPick={(kind) => setPicking(kind ? { into: kind, tag: editing.name } : null)}
           onClose={() => openTag(null)}
           onDone={() => void refresh()}
         />
@@ -330,7 +397,7 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
                   onSelect={pickTag}
                   picking={picking !== null}
                   picked={picked}
-                  triggerName={picking ? editing?.name ?? null : null}
+                  triggerName={triggerName}
                 />
               )}
               {subgroups.map(([name, list]) => (
@@ -353,7 +420,7 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
                     onSelect={pickTag}
                     picking={picking !== null}
                     picked={picked}
-                    triggerName={picking ? editing?.name ?? null : null}
+                    triggerName={triggerName}
                   />
                 </div>
               ))}
@@ -439,61 +506,6 @@ function TagGrid({
     </ul>
   )
 }
-
-/** The shared shell for the three panels: a bordered card that names what it is. */
-function Panel({
-  title,
-  children,
-  actions,
-  pinned = false,
-}: {
-  title: string
-  children: React.ReactNode
-  /**
-   * What the panel does *as a panel* — leave it, open it elsewhere, destroy it — beside
-   * its heading rather than below its fields. They are not part of the form: Save answers
-   * the two boxes, these answer the tag, and mixing the two put Close where a return key
-   * lands and Delete a tab away from a text field.
-   */
-  actions?: React.ReactNode
-  /**
-   * Stay at the top of the scroller while the list moves under it. The edit panel is the
-   * one that needs it: it is opened by clicking a row, and the row that sent you there can
-   * be a screen and a half down a board's worth of tags — so the panel used to appear
-   * somewhere you would have to scroll back up to find, and the tag you were editing was
-   * off the other end of the page by the time you got there.
-   *
-   * Sticky rather than moving the panel down beside the row: the list is a four-column
-   * grid, and a form spliced into it either breaks the columns or pushes the row you are
-   * comparing against out of view. Pinned, both stay on screen at once.
-   */
-  pinned?: boolean
-}) {
-  const card = (
-    <section className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-3 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h2>
-        {actions && <div className="flex items-center gap-1">{actions}</div>}
-      </div>
-      {children}
-    </section>
-  )
-
-  if (!pinned) return card
-
-  // The gap above the card is part of what sticks, so the list scrolls *under* a strip of
-  // page rather than up against the header. `-mt-4` and `pt-4` are the parent's own
-  // `gap-4` taken back and reinstated as padding: at rest the spacing is unchanged, and
-  // pinned it is an opaque band nothing can show through.
-  return (
-    <div className="sticky top-0 z-10 -mt-4 bg-background pt-4 shadow-lg shadow-background/80">
-      {card}
-    </div>
-  )
-}
-
-const FIELD =
-  'min-h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent'
 
 /**
  * The button that finishes a form — Create, Apply, Save.

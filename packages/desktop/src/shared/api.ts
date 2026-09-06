@@ -4,6 +4,7 @@ import type { Post, PostPage } from '@common/data/posts'
 import type { UploadResult } from '@common/upload/pipeline'
 import type { ImplicationRules } from './implications'
 import type { RecommendationRules } from './recommendations'
+import type { TagCatalogs } from './catalogs'
 
 /**
  * The whole surface between the window and the process that does the work. The renderer
@@ -187,6 +188,9 @@ export type PostAppApi = {
   /** The rules that are offered rather than applied — `shared/recommendations.ts`. */
   listRecommendations: () => Promise<RecommendationRules>
   saveRecommendations: (rules: RecommendationRules) => Promise<RecommendationRules>
+  /** The named sets of tags this machine keeps — `shared/catalogs.ts` has what they are. */
+  listCatalogs: () => Promise<TagCatalogs>
+  saveCatalogs: (catalogs: TagCatalogs) => Promise<TagCatalogs>
   uploadPost: (request: UploadRequest) => Promise<UploadResult>
   /**
    * Browse the board. The same query grammar the website's search bar uses — one
