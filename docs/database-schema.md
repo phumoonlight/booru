@@ -1,23 +1,25 @@
 # Database Schema
 
-**Source of truth:** `supabase/migrations/` — four files, applied with `npm run db:push`
-(or `db:reset` / `db:reset:remote`, which also run `supabase/seed.sql`). This document
+**Source of truth:** `supabase/migrations/`, applied with `npm run db:push` (or
+`db:reset` / `db:reset:remote`, which also run `supabase/seed.sql`). This document
 describes them; when the two disagree, the migrations win and this file is the bug.
 
 **Shape:**
 
 ```
-posts >─── post_tags ───< tags
+posts >─── post_tags ───< tags ───< tag_rules >─── tags
 ```
 
-Three tables, no functions, no triggers. There is no `profiles` table: the board has no
+Four tables, no functions, no triggers. There is no `profiles` table: the board has no
 accounts. Every write is made by the desktop app (`packages/desktop`) on a service-role
 client built from a key compiled into its own bundle; the website holds the anon key and
-only reads.
+only reads — and it reads three of the four, `tag_rules` being consulted only where a post
+is tagged.
 
 Migration order is foreign-key order: `20260826090000_storage_buckets` →
-`100100_posts` → `100200_tags` → `100300_post_tags`. Each table's file holds its columns,
-indexes **and** RLS policies, so nothing about one table is spread across migrations.
+`100100_posts` → `100200_tags` → `100300_post_tags` → `20260906140000_tag_rules`. Each
+table's file holds its columns, indexes **and** RLS policies, so nothing about one table
+is spread across migrations.
 
 ---
 
@@ -67,7 +69,7 @@ served by the primary key, which Postgres reads backwards as cheaply as forwards
 | `category` | `text not null default 'general'` | free-form; `TAG_CATEGORIES` in `@common/tags` is the ten the app writes, each with a colour and a place in the order |
 | `category2` | `text` (nullable) | a finer grouping *within* the category, free-form and usually null — read by the desktop tag picker and by nothing else |
 | `mark` | `text` (nullable) | what is drawn in front of the name — a colour or up to three glyphs — usually null; every read selects it |
-| `implied_rating` | `text` (nullable) | a rating **floor** carried by this tag — see [`tag_rules`](#tag_rules) |
+| `implied_rating` | `text` (nullable) | a rating **floor** carried by this tag, stored as the letter like `posts.rating` — see [`tag_rules`](#tag_rules) |
 | `post_count` | `int not null default 0` | denormalized, see [Counters](#counters) |
 | `created_at` | `timestamptz not null default now()` | |
 
@@ -149,6 +151,11 @@ to keep true for no reader.
   takes them. That file is the one place the two spellings meet.
 - **A rule can only name a tag that exists**, which the foreign keys now enforce and
   `resolveTagIds` refuses before them. This is the same rule the post write paths follow.
+- **The floor is stored as a letter, listed as a token.** The column holds `g`/`s`/`q`/`e`
+  the way `posts.rating` does; the rule list above it carries `rating:explicit`, because
+  that is the grammar every helper there expects. `storedRating` in `@common/data/rules.ts`
+  is the reader — `asRating` parses *tokens* and returns null for a bare `e`, so reading
+  the column through it drops every floor silently.
 - **The rating floor is not a row.** `tags.implied_rating` holds it: one per tag, since a
   floor under a floor is the same rule written twice. `listTagRules` folds it back into the
   implied list as a `rating:` token, which is the grammar `?query=` uses and the shape

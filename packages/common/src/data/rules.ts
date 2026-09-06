@@ -1,4 +1,4 @@
-import { asRating, ratingToken } from '@common/search'
+import { asRating, RATINGS, ratingToken, type Rating } from '@common/search'
 import { resolveTagIds } from '@common/data/shared'
 import type { BooruClient } from '@common/supabase/types'
 
@@ -84,9 +84,9 @@ export async function listTagRules(client: BooruClient, kind: RuleKind): Promise
     if (floorError) throw new Error(`Could not read the implied ratings: ${floorError.message}`)
 
     for (const row of floors ?? []) {
-      // Free-form column, so an unreadable value is no floor rather than a token nothing
-      // downstream can parse
-      const rating = asRating(row.implied_rating as string)
+      // The column holds the letter; the list above it holds the token. This is where the
+      // one becomes the other.
+      const rating = storedRating(row.implied_rating)
       if (!rating) continue
       ;(out[row.name as string] ??= []).push(ratingToken(rating))
     }
@@ -164,6 +164,22 @@ export async function setTagRule(
     const { error } = await client.from('tags').update({ implied_rating: floor }).eq('id', tagId)
     if (error) throw new Error(`Could not save the implied rating: ${error.message}`)
   }
+}
+
+/**
+ * `tags.implied_rating` as it is stored: the letter, the way `posts.rating` holds one, not
+ * the `rating:explicit` token a query spells. `asRating` reads tokens and returns null for
+ * a bare `e`, which is right for a query and wrong for this column — reading the column
+ * through it silently dropped every floor on the way out, so a rating could be set and
+ * never came back.
+ *
+ * Free-form text with no check constraint, so an unreadable value is no floor rather than
+ * a crash.
+ */
+function storedRating(value: unknown): Rating | null {
+  return typeof value === 'string' && (RATINGS as readonly string[]).includes(value)
+    ? (value as Rating)
+    : null
 }
 
 /** Keys in order, so a map read down the page reads the same way every time. */

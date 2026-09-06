@@ -81,7 +81,9 @@ create policy "tag rules are publicly readable"
 -- alternative is two mutually-exclusive nullable columns and a partial unique index
 -- underneath them.
 --
--- Free-form text like `posts.rating`, and read through `asRating` (@common/search), so an
+-- Free-form text like `posts.rating`, and holding what that column holds: the letter, not
+-- the `rating:explicit` token a query spells. `storedRating` in @common/data/rules.ts is
+-- what reads it — `asRating` is for tokens and returns null for a bare `e` — and an
 -- unreadable value is no floor rather than a crash.
 alter table public.tags add column implied_rating text;
 
