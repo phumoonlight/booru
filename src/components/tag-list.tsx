@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { NavProgress } from '@/components/nav-progress'
-import { categoryColor, categoryLabel, categoryOrder, type Tag } from '@common/tags'
+import { categoryColor, categoryLabel, categoryOrder, markColor, type Tag } from '@common/tags'
 import { parseSearchQuery, searchHref, tagLabel, withTag, withoutTag } from '@common/search'
 
 
@@ -67,8 +67,13 @@ export function FacetActions({
 }
 
 /**
- * The glyph a tag carries in front of its name — `tags.emoji`, set per tag in the desktop
- * app and null for most of them, which is why this renders nothing rather than a space.
+ * What a tag carries in front of its name — `tags.mark`, set per tag in the desktop app
+ * and null for most of them, which is why this renders nothing rather than a space.
+ *
+ * One column, two kinds of thing: a colour is drawn as a dot, anything else as text.
+ * `markColor` is the whole of that decision and it is shared with the desktop app, so a
+ * tag looks the same in both windows. The dot's border keeps white and black from
+ * disappearing into the two grounds they would otherwise match.
  *
  * `aria-hidden`, like every emoji on the site: it is decoration in front of a name the
  * screen reader is about to read anyway, and "woman's briefs" announced ahead of
@@ -78,12 +83,24 @@ export function FacetActions({
  * itself wherever a tag is drawn — including inside a truncating cell, where sitting at
  * the head of the string is what keeps it out of the ellipsis.
  */
-export function TagEmoji({ emoji }: { emoji: string | null }) {
-  if (!emoji) return null
+export function TagMark({ mark }: { mark: string | null }) {
+  if (!mark) return null
+
+  const color = markColor(mark)
+  if (!color) {
+    return (
+      <span aria-hidden className="mr-1">
+        {mark}
+      </span>
+    )
+  }
+
   return (
-    <span aria-hidden className="mr-1">
-      {emoji}
-    </span>
+    <span
+      aria-hidden
+      style={{ background: color }}
+      className="mr-1 inline-block size-3 shrink-0 translate-y-px rounded-full border border-border"
+    />
   )
 }
 
@@ -117,7 +134,7 @@ function TagRow({ entry, currentQuery }: { entry: TagEntry; currentQuery: string
           included ? 'font-semibold underline' : ''
         } ${excluded ? 'line-through opacity-60' : ''}`}
       >
-        <TagEmoji emoji={tag.emoji} />
+        <TagMark mark={tag.mark} />
         {label}
         <NavProgress />
       </Link>

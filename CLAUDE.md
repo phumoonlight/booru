@@ -357,7 +357,7 @@ written as what a user would notice. Reasoning belongs in the commit and beside 
 
 Full reference: [docs/database-schema.md](docs/database-schema.md).
 
-- **Four migrations: storage, then one per table** — `20260826090000_storage_buckets.sql`,
+- **Storage, then one per table, then a column at a time** — `20260826090000_storage_buckets.sql`,
   then `posts` → `tags` → `post_tags` in foreign-key order. Each table's file holds its
   columns, indexes **and** RLS policies. Schema changes from here are **always** a new
   timestamped file, never a dashboard edit and never an edit to the squashed four once
@@ -369,6 +369,12 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   counters all moved to TypeScript — a plpgsql body needs a migration to edit and reports
   one opaque error from inside a statement that was about something else. Don't add RPCs
   back without a reason PostgREST genuinely can't meet.
+- **`tags.mark` is one slot holding two kinds of thing.** A `#hex` or a CSS colour name
+  is drawn as a dot, anything else as text, and `markColor` (`@common/tags`) is the only
+  place that decides which — shared, so a tag looks the same on the site and in the app.
+  It replaced a guess: the desktop used to paint a dot on any name starting with a colour
+  word from a list in code, which read `golden_retriever` as gold and could not be
+  overridden. `readTagMark` is what may be written; `''` clears it.
 - **One denormalized counter**, `tags.post_count`, in `@common/data/counters`. It
   **recomputes** — PostgREST can't increment, and an increment that loses a race is wrong
   for good. It logs rather than throws: the post write has already landed by then.

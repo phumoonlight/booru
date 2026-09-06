@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  COLOR_NAMES,
   categoryColor,
   categoryLabel,
   categoryOrder,
-  colorSwatch,
+  markColor,
   subcategoryLabel,
   subcategoryOrder,
   type Tag,
@@ -144,12 +143,12 @@ export function CategoryTagField({
     (all ?? []).find((tag) => tag.name === name)?.category ?? 'general'
 
   /**
-   * The same for the glyph. A chosen tag is a name and a category — `TagSeed` — so its
-   * emoji comes from the board's index rather than from the chip, and a tag that has not
-   * loaded yet, or was coined a moment ago, simply has none until it does.
+   * The same for the mark. A chosen tag is a name and a category — `TagSeed` — so what is
+   * drawn in front of it comes from the board's index rather than from the chip, and a tag
+   * that has not loaded yet, or was coined a moment ago, simply has none until it does.
    */
-  const emojiOf = (name: string): string | null =>
-    (all ?? []).find((tag) => tag.name === name)?.emoji ?? null
+  const markOf = (name: string): string | null =>
+    (all ?? []).find((tag) => tag.name === name)?.mark ?? null
 
   const add = (tag: TagSeed) => {
     if (value.some((t) => t.name === tag.name)) return
@@ -185,7 +184,7 @@ export function CategoryTagField({
                     // the two apart all the same — offered is square, chosen is a pill.
                     className={`flex items-center gap-1.5 rounded-full border border-border bg-surface pl-2.5 font-mono text-xs ${categoryColor(category)}`}
                   >
-                    <TagMarks name={tag.name} emoji={emojiOf(tag.name)} />
+                    <TagMark mark={markOf(tag.name)} />
                     {tagLabel(tag.name)}
                     <button
                       type="button"
@@ -316,68 +315,49 @@ export function CategoryTagField({
  * below the rule. That worked for `blue_dress` and for nothing else — `bra` and `panties`
  * belong together and share no prefix, and `blonde_hair` was filed as a variant of `hair`
  * when it is the only spelling that tag has. Grouping is a judgement about the vocabulary,
- * so it is stored beside the vocabulary rather than re-derived here. The colour *dot* is
- * unchanged: reading a colour off a name is a fine thing to guess, and painting the wrong
- * one costs nothing.
+ * so it is stored beside the vocabulary rather than re-derived here — as is the mark in
+ * front of a name, which used to be half guessed from the name itself. See `TagMark`.
  */
 
 /**
- * Every colour this recognises, longest first — so `light_blue_dress` is a light blue
- * dress rather than a blue one that starts with `light`.
+ * What a tag carries in front of its name — one mark, from the tag's own row.
  *
- * It once read the board's own `color` category instead, which could not work:
- * `pink_underwear` only split when a bare `pink` tag existed, so a board that had never
- * coined one — most of them — got no splitting and no reason why. The words come with the
- * language, not with a board's vocabulary, which is why this outlived that category.
- */
-const COLOR_PREFIXES = [...COLOR_NAMES].sort((a, b) => b.length - a.length)
-
-/**
- * What a tag carries in front of its name: the emoji stored on its row, if it has one,
- * and the colour it names, painted. Either, both or neither.
+ * A colour is a dot, anything else is drawn as text; `markColor` is the whole of that
+ * decision and it is shared with the website, so a tag looks the same in both windows.
  *
- * The two arrive by opposite routes on purpose. The colour is read off the name here,
- * because guessing it is free and painting the wrong one costs nothing; the emoji is
- * passed in from the tag's own row, because it is a judgement about the tag that only the
- * board can hold — it used to be a record in code, which meant a new tag's glyph was a
- * commit and an installer away from being seen.
+ * There used to be a second, unrelated mark here: a colour dot guessed from the *name*,
+ * painted on any tag beginning with a word from a list in code. It read `gold_trim` as
+ * gold and `golden_retriever` as gold too, said nothing about a colour the list had never
+ * heard of, and could not be corrected on the one tag it got wrong. A guess that cannot be
+ * overridden is worse than no guess, so the dot is asked for now — typed into the same box
+ * the emoji goes in, which is why they are one column and why only one of them can win.
  *
  * Drawn on the chips a post already carries as well as the ones offered, so a tag looks
- * the same before and after it is picked — and on the row where it landed, which is the
- * only place a mis-picked colour is ever noticed.
+ * the same before and after it is picked.
  */
-function TagMarks({ name, emoji }: { name: string; emoji: string | null }) {
-  const split = splitColor(name, COLOR_PREFIXES)
+export function TagMark({ mark }: { mark: string | null }) {
+  if (!mark) return null
+
+  const color = markColor(mark)
+  if (!color) {
+    return (
+      <span aria-hidden className="leading-none">
+        {mark}
+      </span>
+    )
+  }
 
   return (
-    <>
-      {emoji && (
-        <span aria-hidden className="leading-none">
-          {emoji}
-        </span>
-      )}
-      {split && (
-        <span
-          aria-hidden
-          // The border keeps white and black from disappearing into the two grounds they
-          // would otherwise match.
-          style={{ background: colorSwatch(split.color) }}
-          className="size-3 shrink-0 rounded-full border border-border"
-        />
-      )}
-    </>
+    <span
+      aria-hidden
+      // The border keeps white and black from disappearing into the two grounds they
+      // would otherwise match.
+      style={{ background: color }}
+      className="size-3 shrink-0 rounded-full border border-border"
+    />
   )
 }
 
-/** A tag's colour prefix, or null. */
-function splitColor(name: string, colors: string[]): { color: string; rest: string } | null {
-  for (const color of colors) {
-    if (name.startsWith(`${color}_`) && name.length > color.length + 1) {
-      return { color, rest: name.slice(color.length + 1) }
-    }
-  }
-  return null
-}
 function TagPicker({
   category,
   all,
@@ -520,7 +500,7 @@ function TagOption({
       onClick={() => onPick({ name: tag.name, category: tag.category })}
       className={`flex min-h-7 items-center gap-1.5 rounded border border-border px-2 font-mono text-xs transition-colors hover:border-accent ${categoryColor(category)}`}
     >
-      <TagMarks name={tag.name} emoji={tag.emoji} />
+      <TagMark mark={tag.mark} />
       {tagLabel(tag.name)}
     </button>
   )

@@ -69,11 +69,11 @@ const tagNameSchema = z.string().max(64)
 // Free text, not an enum: there is no list of subgroups — see `tags.category2`'s
 // migration. `setTagSubcategory` normalizes what gets through, and '' clears the column.
 const subcategorySchema = z.string().max(64)
-// A ceiling, not a rule: `readTagEmoji` is what decides an emoji is up to three glyphs
-// and not a bracket, and it answers a message the field can show. This only keeps a paste
-// of a paragraph from reaching the board at all — generous, because three ZWJ sequences
-// are a great many UTF-16 units and this is not the check that counts them.
-const emojiSchema = z.string().max(96)
+// A ceiling, not a rule: `readTagMark` is what decides a mark is a colour, or up to three
+// glyphs, and not a bracket — and it answers a message the field can show. This only keeps
+// a paste of a paragraph from reaching the board at all — generous, because three ZWJ
+// sequences are a great many UTF-16 units and this is not the check that counts them.
+const markSchema = z.string().max(96)
 // The known list, which is also the only list with a colour and a place in the display
 // order. A category outside it can only arrive by hand-editing the table.
 const categorySchema = z.enum(TAG_CATEGORIES)
@@ -414,16 +414,16 @@ export function registerIpc(): void {
     return result
   })
 
-  /** The glyphs in front of the tag's name — `tags.emoji`. '' clears them. */
-  ipcMain.handle('tags:set-emoji', async (_event, id: unknown, emoji: unknown) => {
+  /** What is drawn in front of the tag's name — `tags.mark`. '' clears it. */
+  ipcMain.handle('tags:set-mark', async (_event, id: unknown, mark: unknown) => {
     const supabase = boardClient()
     if (!supabase) return { ok: false as const, error: 'Not set up yet' }
     const parsedId = postIdSchema.safeParse(id)
-    const parsed = emojiSchema.safeParse(emoji)
+    const parsed = markSchema.safeParse(mark)
     if (!parsedId.success) return { ok: false as const, error: 'No such tag' }
-    if (!parsed.success) return { ok: false as const, error: 'That is too long for an emoji.' }
+    if (!parsed.success) return { ok: false as const, error: 'That is too long for a mark.' }
 
-    const result = await manageTags.setTagEmoji(supabase, parsedId.data, parsed.data)
+    const result = await manageTags.setTagMark(supabase, parsedId.data, parsed.data)
     if (result.ok) clearTagCache()
     return result
   })

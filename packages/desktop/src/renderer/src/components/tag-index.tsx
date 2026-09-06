@@ -11,7 +11,7 @@ import {
 } from '@common/tags'
 import { tagLabel } from '@common/search'
 import { BUTTON, BUTTON_ON_SURFACE, BUTTON_SUBMIT_ON_SURFACE, buttonToggle } from './buttons'
-import { invalidateTagNames } from './category-tag-field'
+import { TagMark, invalidateTagNames } from './category-tag-field'
 import { RuleDiagram } from './rule-diagram'
 import { TagRuleEditor, toggleRuleTag, type RuleKind } from './tag-rule-editor'
 import { saveImplications, useImplications } from '../implications'
@@ -418,12 +418,8 @@ function TagGrid({
               } ${categoryColor(category)}`}
             >
               {/* Ahead of the name and outside the truncation, so a long tag loses its own
-                  tail rather than the glyph that identifies it fastest. */}
-              {tag.emoji && (
-                <span aria-hidden className="shrink-0 leading-none">
-                  {tag.emoji}
-                </span>
-              )}
+                  tail rather than the mark that identifies it fastest. */}
+              <TagMark mark={tag.mark} />
               <span className="min-w-0 flex-1 truncate">{tagLabel(tag.name)}</span>
               {/* While picking, the fixed right-hand slot says whether this tag is in the
                   rule instead of how many posts carry it. Membership is the only thing
@@ -752,7 +748,7 @@ function EditTag({
   const [name, setName] = useState(tag.name)
   const [category, setCategory] = useState<TagCategory>(tag.category)
   const [subcategory, setSubcategory] = useState(tag.category2 ?? '')
-  const [emoji, setEmoji] = useState(tag.emoji ?? '')
+  const [mark, setMark] = useState(tag.mark ?? '')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -797,8 +793,8 @@ function EditTag({
         return
       }
     }
-    if (emoji !== (tag.emoji ?? '')) {
-      const marked = await window.api.setTagEmoji(tag.id, emoji)
+    if (mark !== (tag.mark ?? '')) {
+      const marked = await window.api.setTagMark(tag.id, mark)
       if (!marked.ok) {
         setBusy(false)
         setError(marked.error)
@@ -825,7 +821,7 @@ function EditTag({
     name !== tag.name ||
     category !== tag.category ||
     subcategory !== (tag.category2 ?? '') ||
-    emoji !== (tag.emoji ?? '')
+    mark !== (tag.mark ?? '')
 
   return (
     <Panel
@@ -878,18 +874,23 @@ function EditTag({
       }
     >
       <div className="flex flex-wrap items-center gap-2">
-        {/* In front of the name, where what it holds is drawn. Three glyphs wide and no
-            wider: the field is the size of the thing it takes, which says more about what
-            belongs in it than a placeholder would, and an empty box clears the column. */}
-        <input
-          value={emoji}
-          onChange={(event) => setEmoji(event.target.value)}
-          disabled={busy}
-          aria-label={`Emoji in front of ${tagLabel(tag.name)}`}
-          title="Up to three emoji, drawn in front of the name. Empty for none."
-          spellCheck={false}
-          className={`${FIELD} w-24 shrink-0 px-0 text-center`}
-        />
+        {/* In front of the name, where what it holds is drawn — and drawn *as* it will be
+            drawn, so a hex is a dot here before it is a dot on the board. Wide enough for
+            `#7fc8ff` now that a colour goes in the same box as an emoji; an empty box
+            clears the column. */}
+        <span className="flex shrink-0 items-center gap-1.5">
+          <input
+            value={mark}
+            onChange={(event) => setMark(event.target.value)}
+            disabled={busy}
+            aria-label={`Mark in front of ${tagLabel(tag.name)}`}
+            title="An emoji, a #hex colour, or a CSS colour name. Empty for none."
+            placeholder="🎀"
+            spellCheck={false}
+            className={`${FIELD} w-28 px-2 text-center font-mono`}
+          />
+          <TagMark mark={mark} />
+        </span>
         <input
           value={name}
           onChange={(event) => setName(event.target.value)}

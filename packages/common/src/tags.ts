@@ -23,8 +23,8 @@
  *
  * There was a `color` category. It went because a colour is never what a tag *is*:
  * `pink_dress` is a dress and `blonde_hair` is hair, and filing them by their adjective
- * put the same garment in two categories. Colour is a prefix now, recognised by
- * `COLOR_NAMES` and drawn as a dot, which is why nothing was lost by retiring it.
+ * put the same garment in two categories. A colour is a *mark* now — `tags.mark`, set per
+ * tag and drawn as a dot — which is why nothing was lost by retiring it.
  *
  * It is still not a database constraint: `tags.category` is free-form text (see the
  * migration's own comment), so a row edited by hand can hold anything and the code draws
@@ -86,13 +86,15 @@ export type Tag = {
    */
   category2?: Subcategory
   /**
-   * Up to three glyphs drawn in front of the name, or null — `tags.emoji`, whose
-   * migration has why it exists. Required rather than optional, unlike `category2` above
-   * it: every read asks for this column, because a tag is drawn with its emoji wherever
-   * it is drawn at all and a list that quietly dropped it would look like a tag that has
-   * none.
+   * What is drawn in front of the name, or null — `tags.mark`, whose migration has why it
+   * exists. Either a glyph or a colour, never both: `markColor` decides which by looking
+   * at it, and `readTagMark` decides what may be written.
+   *
+   * Required rather than optional, unlike `category2` above it: every read asks for this
+   * column, because a tag is drawn with its mark wherever it is drawn at all and a list
+   * that quietly dropped it would look like a tag that has none.
    */
-  emoji: string | null
+  mark: string | null
   post_count: number
 }
 
@@ -194,73 +196,66 @@ const KNOWN_LABEL: Record<KnownCategory, string> = {
 }
 
 /**
- * Colour words, for splitting a tag like `white_underwear` into the colour and the thing.
+ * The 148 colours CSS knows by name, so `blue` in a tag's mark paints and `bow` does not.
  *
- * A list here rather than "whatever tags are in a Color category", which is what this
- * started as and could not work: recognising `pink_underwear` then needed a `pink` tag to
- * exist first, so a board that had never coined bare colours — most of them — got no
- * splitting at all, silently. The colours a language has are not a property of one board's
- * vocabulary, so they are not read from it, and this outlived the category itself.
+ * A list is the only way to tell one from the other without a browser to ask: `@common`
+ * compiles in Electron's main process and in a server render, neither of which has
+ * `CSS.supports`. The whole list rather than a useful subset, because "a plain CSS colour"
+ * is the promise the field makes, and a subset makes that promise a guessing game about
+ * which names somebody thought to include.
  *
- * Longest match wins at the call site, which is why `light_blue` may sit beside `blue`.
- * Adding one is a line here; it costs nothing and nothing depends on the order.
+ * It replaced `COLOR_NAMES`, a list of colour *words* used to guess a dot off the front of
+ * a tag's name — `blue_hair` painted blue. That guess read `golden_retriever` as gold, had
+ * nothing to say about a colour it had never heard of, and could not be corrected on the
+ * one tag it got wrong. A mark is typed now, so the list only has to answer "is this
+ * word a colour", which is a question about CSS and not about anyone's vocabulary.
  */
-export const COLOR_NAMES: readonly string[] = [
-  'aqua',
-  'beige',
-  'black',
-  'blonde',
-  'blue',
-  'brown',
-  'cyan',
-  'dark_blue',
-  'dark_brown',
-  'dark_green',
-  'dark_grey',
-  'gold',
-  'green',
-  'grey',
-  'gray',
-  'light_blue',
-  'light_brown',
-  'light_green',
-  'light_purple',
-  'lavender',
-  'magenta',
-  'maroon',
-  'navy',
-  'olive',
-  'orange',
-  'pink',
-  'purple',
-  'red',
-  'silver',
-  'tan',
-  'teal',
-  'turquoise',
-  'violet',
-  'white',
-  'yellow',
-]
+const CSS_COLOR_NAMES = new Set([
+  'aliceblue', 'antiquewhite', 'aqua', 'aquamarine', 'azure', 'beige', 'bisque', 'black',
+  'blanchedalmond', 'blue', 'blueviolet', 'brown', 'burlywood', 'cadetblue', 'chartreuse',
+  'chocolate', 'coral', 'cornflowerblue', 'cornsilk', 'crimson', 'cyan', 'darkblue',
+  'darkcyan', 'darkgoldenrod', 'darkgray', 'darkgreen', 'darkgrey', 'darkkhaki',
+  'darkmagenta', 'darkolivegreen', 'darkorange', 'darkorchid', 'darkred', 'darksalmon',
+  'darkseagreen', 'darkslateblue', 'darkslategray', 'darkslategrey', 'darkturquoise',
+  'darkviolet', 'deeppink', 'deepskyblue', 'dimgray', 'dimgrey', 'dodgerblue',
+  'firebrick', 'floralwhite', 'forestgreen', 'fuchsia', 'gainsboro', 'ghostwhite', 'gold',
+  'goldenrod', 'gray', 'green', 'greenyellow', 'grey', 'honeydew', 'hotpink',
+  'indianred', 'indigo', 'ivory', 'khaki', 'lavender', 'lavenderblush', 'lawngreen',
+  'lemonchiffon', 'lightblue', 'lightcoral', 'lightcyan', 'lightgoldenrodyellow',
+  'lightgray', 'lightgreen', 'lightgrey', 'lightpink', 'lightsalmon', 'lightseagreen',
+  'lightskyblue', 'lightslategray', 'lightslategrey', 'lightsteelblue', 'lightyellow',
+  'lime', 'limegreen', 'linen', 'magenta', 'maroon', 'mediumaquamarine', 'mediumblue',
+  'mediumorchid', 'mediumpurple', 'mediumseagreen', 'mediumslateblue',
+  'mediumspringgreen', 'mediumturquoise', 'mediumvioletred', 'midnightblue', 'mintcream',
+  'mistyrose', 'moccasin', 'navajowhite', 'navy', 'oldlace', 'olive', 'olivedrab',
+  'orange', 'orangered', 'orchid', 'palegoldenrod', 'palegreen', 'paleturquoise',
+  'palevioletred', 'papayawhip', 'peachpuff', 'peru', 'pink', 'plum', 'powderblue',
+  'purple', 'rebeccapurple', 'red', 'rosybrown', 'royalblue', 'saddlebrown', 'salmon',
+  'sandybrown', 'seagreen', 'seashell', 'sienna', 'silver', 'skyblue', 'slateblue',
+  'slategray', 'slategrey', 'snow', 'springgreen', 'steelblue', 'tan', 'teal', 'thistle',
+  'tomato', 'transparent', 'turquoise', 'violet', 'wheat', 'white', 'whitesmoke',
+  'yellow', 'yellowgreen',
+])
+
+/** `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa` — the hex forms a browser accepts. */
+const HEX = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/
 
 /**
- * A colour word as something a browser can paint, for the dot beside a colour variant.
+ * A mark read as a colour a browser can paint, or null if it is meant to be drawn as text.
  *
- * Most of `COLOR_NAMES` are CSS named colours once the underscore is dropped —
- * `light_blue` is `lightblue`, `dark_green` is `darkgreen` — so only the words CSS has no
- * name for are listed here. A word from neither list (a colour a board coined itself)
- * falls through as-is: `chartreuse` happens to be CSS too, and anything that is not simply
- * paints nothing, leaving the dot as an empty ring rather than a wrong colour.
+ * This is the whole of how one column holds two kinds of thing: `#7fc8ff` and `blue` come
+ * back as themselves and get a dot, `🎀` comes back null and gets drawn. Nothing is
+ * ambiguous in practice — an emoji is never a hex string and never a CSS colour name —
+ * and the one collision that exists is decided in the colour's favour on purpose: a mark
+ * of `red` is a red dot, because a person who wanted the word would have typed something
+ * that is not also a colour.
+ *
+ * Case-insensitive, since `#7FC8FF` off a colour picker is the same colour as `#7fc8ff`.
  */
-const SWATCH: Record<string, string> = {
-  blonde: '#e8c87a',
-  dark_brown: '#5b3a1e',
-  light_brown: '#c08552',
-  light_purple: '#c9a7ff',
-}
-
-export function colorSwatch(color: string): string {
-  return SWATCH[color] ?? color.replace(/_/g, '')
+export function markColor(mark: string | null | undefined): string | null {
+  if (!mark) return null
+  const value = mark.trim().toLowerCase()
+  return HEX.test(value) || CSS_COLOR_NAMES.has(value) ? value : null
 }
 
 /**

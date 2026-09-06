@@ -2,6 +2,7 @@ import type { BooruClient } from '@common/supabase/types'
 import { syncTagPostCounts } from '@common/data/counters'
 import { ensureTagIds } from '@common/data/shared'
 import {
+  markColor,
   normalizeSubcategory,
   parseTagInput,
   type Subcategory,
@@ -48,45 +49,55 @@ export function readTagName(raw: string): { name: string } | { error: string } {
   return { name: tags[0] }
 }
 
-/** How many glyphs a tag's emoji may be — see `readTagEmoji` for why it is three. */
-export const TAG_EMOJI_MAX = 3
+/** How many glyphs a text mark may be — see `readTagMark` for why it is three. */
+export const TAG_MARK_MAX = 3
 
 /**
- * The typed-in emoji as it is stored: trimmed, with an empty box meaning "no glyph" and
- * clearing the column rather than failing.
+ * The typed-in mark as it is stored: a colour, a short run of glyphs, or nothing.
  *
- * Graphemes, which is the unit a person means by "an emoji" and not the unit `length`
- * counts — 🧑‍🚀 is five UTF-16 units and 🇯🇵 is four, so a character cap here would have
- * refused half the keyboard's own suggestions. Three of them at most: a pair still reads
- * as one mark in front of a name, and past that the glyphs start competing with the name
- * they are there to identify. Over the cap is refused rather than truncated — the extra
- * one was typed on purpose, and silently dropping it is how a field teaches nobody what
- * it wants.
+ * An empty box means "no mark" and clears the column rather than failing, which is how a
+ * mark is removed.
  *
- * A plain ASCII character is refused too, and per glyph rather than for the value as a
- * whole, since a pair is now a thing that can be typed. The column would hold it and the
- * label would draw it, but `[` in front of a tag name is a typo every time it happens —
- * nobody reaches for this field to put a bracket on a tag. The space goes with them,
- * which is what keeps a pair drawn as the one mark it is meant to be.
+ * **A colour is taken first and stored lowercased** — `markColor` is the same test the
+ * renderer will apply, so what is accepted here is exactly what will paint. Lowercasing
+ * matters because `#7FC8FF` off a picker and `#7fc8ff` typed by hand are one value, and
+ * two spellings of one colour is two rows that look identical and compare unequal.
+ *
+ * Otherwise it is glyphs, counted as **graphemes** — the unit a person means by "an
+ * emoji" and not the unit `length` counts, since 🧑‍🚀 is five UTF-16 units and 🇯🇵 is four,
+ * so a character cap would have refused half the keyboard's own suggestions. Three at
+ * most: a pair still reads as one mark in front of a name, and past that the glyphs start
+ * competing with the name they are there to identify. Over the cap is refused rather than
+ * truncated — the extra one was typed on purpose, and silently dropping it is how a field
+ * teaches nobody what it wants.
+ *
+ * A plain ASCII character is refused, per glyph rather than for the value as a whole. The
+ * column would hold it and the label would draw it, but `[` in front of a tag name is a
+ * typo every time it happens. This is also what catches a near-miss colour: `#7fc8f` is
+ * five hex digits, no CSS form, and every character in it is plain ASCII, so it is turned
+ * away here rather than stored as a five-character "emoji" that draws as itself.
  */
-export function readTagEmoji(raw: string): { emoji: string | null } | { error: string } {
+export function readTagMark(raw: string): { mark: string | null } | { error: string } {
   const value = raw.trim()
-  if (value === '') return { emoji: null }
+  if (value === '') return { mark: null }
+
+  const color = markColor(value)
+  if (color) return { mark: color }
 
   const graphemes = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(value)]
-  if (graphemes.length > TAG_EMOJI_MAX) {
-    return { error: `${TAG_EMOJI_MAX} emoji at most — that is ${graphemes.length} glyphs.` }
+  if (graphemes.length > TAG_MARK_MAX) {
+    return { error: `${TAG_MARK_MAX} glyphs at most — that is ${graphemes.length}.` }
   }
   if (graphemes.some((entry) => /^[\x20-\x7e]$/.test(entry.segment))) {
-    return { error: 'That is a plain character, not an emoji.' }
+    return { error: 'Type an emoji, a #hex colour, or a CSS colour name.' }
   }
-  return { emoji: value }
+  return { mark: value }
 }
 
 export async function getTagByName(client: BooruClient, name: string): Promise<Tag | null> {
   const { data } = await client
     .from('tags')
-    .select('id, name, category, emoji, post_count')
+    .select('id, name, category, mark, post_count')
     .eq('name', name)
     .maybeSingle()
   return data
@@ -96,7 +107,7 @@ export async function getTagByName(client: BooruClient, name: string): Promise<T
 export async function getTagById(client: BooruClient, id: number): Promise<Tag | null> {
   const { data } = await client
     .from('tags')
-    .select('id, name, category, emoji, post_count')
+    .select('id, name, category, mark, post_count')
     .eq('id', id)
     .maybeSingle()
   return data
@@ -194,25 +205,25 @@ export async function setTagSubcategory(
 }
 
 /**
- * Set the glyphs drawn in front of a tag's name, or clear them with an empty string —
- * `tags.emoji`.
+ * Set what is drawn in front of a tag's name — a glyph or a colour — or clear it with an
+ * empty string. `tags.mark`.
  *
  * The most cosmetic write there is: it moves no post, no link and no count, and a wrong
- * value costs one glyph at the front of a label. Its own channel rather than a field on
+ * value costs one mark at the front of a label. Its own channel rather than a field on
  * the category or the rename, for the same reason the subgroup has one — what a tag *is*,
  * where it is drawn and what it is drawn with are three separate decisions about the row.
  */
-export async function setTagEmoji(
+export async function setTagMark(
   client: BooruClient,
   id: number,
-  rawEmoji: string
-): Promise<TagOutcome<{ emoji: string | null }>> {
-  const parsed = readTagEmoji(rawEmoji)
+  rawMark: string
+): Promise<TagOutcome<{ mark: string | null }>> {
+  const parsed = readTagMark(rawMark)
   if ('error' in parsed) return { ok: false, error: parsed.error }
 
-  const { error } = await client.from('tags').update({ emoji: parsed.emoji }).eq('id', id)
+  const { error } = await client.from('tags').update({ mark: parsed.mark }).eq('id', id)
   if (error) return { ok: false, error: `Update failed: ${error.message}` }
-  return { ok: true, emoji: parsed.emoji }
+  return { ok: true, mark: parsed.mark }
 }
 
 /**
@@ -298,7 +309,7 @@ export async function applyTagToTagged(
   try {
     const { data: rows, error } = await client
       .from('tags')
-      .select('id, name, category, emoji, post_count')
+      .select('id, name, category, mark, post_count')
       .in('name', [target.name, condition.name])
     if (error) throw new Error(`Could not read the tags: ${error.message}`)
 
@@ -310,7 +321,7 @@ export async function applyTagToTagged(
     let targetTag = (rows ?? []).find((tag) => tag.name === target.name)
     if (!targetTag) {
       const [id] = await ensureTagIds(client, [target.name])
-      targetTag = { id, name: target.name, category: 'general', emoji: null, post_count: 0 }
+      targetTag = { id, name: target.name, category: 'general', mark: null, post_count: 0 }
     }
     const targetId = targetTag.id
 

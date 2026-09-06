@@ -11,11 +11,11 @@
 -- spelled out even though `general` is the column default — it is a property of the tag,
 -- not of the insert, and the next line added here will want a different one.
 --
--- The two emoji are the whole of what `TAG_EMOJI` used to hold in code, moved to the
+-- The two marks are the whole of what `TAG_EMOJI` used to hold in code, moved to the
 -- column that replaced it. They seed a fresh board and nothing else: `do nothing` leaves
 -- a board that already has these tags exactly as it found it, so on a live board the
 -- glyph is set on the Tags screen like any other.
-insert into public.tags (name, category, emoji)
+insert into public.tags (name, category, mark)
 values
   ('school_uniform', 'general', null),
   ('panties', 'clothes', '🩲'),

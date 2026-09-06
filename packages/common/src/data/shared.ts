@@ -247,7 +247,7 @@ export async function searchTags(
 
   const { data } = await client
     .from('tags')
-    .select('id, name, category, emoji, post_count')
+    .select('id, name, category, mark, post_count')
     .like('name', `${needle}%`)
     .order('post_count', { ascending: false })
     .order('name')
@@ -270,9 +270,9 @@ export async function listTags(client: BooruClient, limit = 200): Promise<Tag[]>
     // The one read that asks for `category2`, because the desktop app's tag picker is the
     // one thing that groups by it and this is the read behind it. Autocomplete and the
     // post page's tag list leave that column alone rather than carry a field they never
-    // draw. `emoji` is the other way round and every read carries it — it is drawn in
+    // draw. `mark` is the other way round and every read carries it — it is drawn in
     // front of the name wherever a name is drawn.
-    .select('id, name, category, category2, emoji, post_count')
+    .select('id, name, category, category2, mark, post_count')
     .order('post_count', { ascending: false })
     .order('name')
     .limit(limit)

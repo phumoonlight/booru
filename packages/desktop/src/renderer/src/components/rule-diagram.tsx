@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { asRating, RATING_COLOR, RATING_LABEL } from '@common/search'
 import { categoryColor, type Tag } from '@common/tags'
 import { BUTTON } from './buttons'
+import { TagMark } from './category-tag-field'
 import { useImplications } from '../implications'
 import { useRecommendations } from '../recommendations'
 import type { ImplicationRules } from '../../../shared/implications'
@@ -20,7 +21,7 @@ import type { ImplicationRules } from '../../../shared/implications'
  * both explains and edits invites an edit made on a picture rather than on a tag.
  *
  * The board's tags come in from the screen behind, which already has them, so every name
- * here can be drawn in its category's colour and with its own emoji — the same way it is
+ * here can be drawn in its category's colour and behind its own mark — the same way it is
  * drawn in the grid, the picker and on a post. A tree of identically grey names is a tree
  * you have to read word by word; coloured, the shape of a rule that reaches from a
  * character into a dozen general tags is visible before any of it is read. It is also the
@@ -140,7 +141,7 @@ export function RuleDiagram({ onClose, tags }: { onClose: () => void; tags: Tag[
 }
 
 /**
- * One tag name, in its category's colour and behind its own emoji — as the grid, the
+ * One tag name, in its category's colour and behind its own mark — as the grid, the
  * picker and a post's chips draw it.
  *
  * The stored spelling, underscores and all, rather than `tagLabel`: this is a view of a
@@ -168,7 +169,7 @@ function TagName({ name, index }: { name: string; index: Map<string, Tag> | null
 
   return (
     <span className={`font-mono text-xs ${categoryColor(tag.category)}`}>
-      {tag.emoji && <span aria-hidden>{tag.emoji} </span>}
+      <TagMark mark={tag.mark} />{tag.mark && ' '}
       {name}
     </span>
   )
