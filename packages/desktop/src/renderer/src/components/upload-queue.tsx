@@ -464,18 +464,22 @@ export function UploadQueue({
           // Nothing local: this came from a browser, and what crossed is an address.
           void stageUrls(imageUrlsFrom(event.dataTransfer))
         }}
-        className="flex flex-col gap-4"
+        className="flex min-h-full flex-col gap-4"
       >
         {/* The only thing above the drop zone: the rating is the field on a card whose
             consequences are not on this screen — two of the four tiers decide whether the
             post is in the board's listing at all — so the explanation is one press away
-            from where the choice is made. */}
+            from where the choice is made.
+
+            Pinned to the top of the screen rather than centred with the drop zone below
+            it: an empty queue used to float this in the middle of the window, where a
+            standing reference reads as part of the thing you are about to do. */}
         <div className="flex justify-end">
           <button
             type="button"
             onClick={() => setRatingGuide(true)}
             title="What the four ratings mean, and what choosing one does"
-            className="min-h-9 rounded-lg border border-border px-3 text-xs text-muted transition-colors hover:border-accent hover:text-foreground"
+            className={BUTTON_SM}
           >
             <span aria-hidden>ℹ️</span> About rating
           </button>
@@ -493,6 +497,8 @@ export function UploadQueue({
           onClick={() => void window.api.chooseFiles().then(stage)}
           disabled={working}
           className={`flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed text-center disabled:opacity-50 ${
+            items.length === 0 ? 'my-auto w-full' : ''
+          } ${
             items.length > 0 ? 'px-4 py-4' : 'px-6 py-12'
           } ${dragging ? 'border-accent bg-accent/10' : 'border-border bg-surface hover:border-accent'}`}
         >

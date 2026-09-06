@@ -19,6 +19,13 @@ export type RuleStore<T> = {
   use: () => T
   /** Writes the whole set and takes main's normalised answer as the new truth. */
   save: (next: T) => Promise<void>
+  /**
+   * Reads the file again, for the one thing that changes it without going through `save`:
+   * an import on the settings screen, which replaces whole sections on the main side. The
+   * comment above says there is no staleness to refresh away, and that is true of
+   * everything else — this is the exception it was written before.
+   */
+  reload: () => Promise<void>
 }
 
 export function createRuleStore<T extends object>(
@@ -70,6 +77,10 @@ export function createRuleStore<T extends object>(
       rules = await write(next)
       reading = Promise.resolve()
       announce()
+    },
+    reload: async () => {
+      reading = null
+      await ensureRead()
     },
   }
 }

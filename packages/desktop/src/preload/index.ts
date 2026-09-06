@@ -44,6 +44,8 @@ const api: PostAppApi = {
   // and the renderer pushes on every queue change, so a reply would be noise.
   reportQueue: (state: QueueState) => ipcRenderer.send('queue:state', state),
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
+  exportSettings: () => ipcRenderer.invoke('settings:export'),
+  importSettings: () => ipcRenderer.invoke('settings:import'),
   openDataFolder: () => ipcRenderer.invoke('shell:open-data-folder'),
 }
 

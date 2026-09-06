@@ -310,6 +310,10 @@ export function Browse({
         onSaved={() => setStale(true)}
         onDeleted={closeAndReload}
         onClose={close}
+        // Typing a number in the heading goes straight there, whether or not the grid
+        // behind holds it — the grid is a search, and a post you have the id for is
+        // usually one you were sent rather than one you found.
+        onJump={(id) => setEditing(id)}
         onPrev={previous ? () => setEditing(previous.id) : null}
         onNext={
           next

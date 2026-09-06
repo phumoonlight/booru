@@ -16,6 +16,7 @@ import { loadRecommendations, saveRecommendations } from './recommendations'
 import { previewFile, stageFiles } from './staging'
 import { downloadImages } from './download'
 import { setQueueState } from './queue-guard'
+import { exportSave, importSave } from './transfer'
 import {
   cachedIndex,
   cachedSuggestions,
@@ -472,6 +473,17 @@ export function registerIpc(): void {
     const parsed = queueStateSchema.safeParse(state)
     if (parsed.success) setQueueState(parsed.data)
   })
+
+  /**
+   * `save.json` out to a file, and back in from one. Both open a picker on the main side —
+   * the renderer has no filesystem and this is the only way it could name a path.
+   *
+   * No argument either way: what is exported is the whole file and what is imported is
+   * whatever of it this build recognises, so there is nothing for the window to decide.
+   * `main/transfer.ts` has why the import is section-by-section rather than a copy.
+   */
+  ipcMain.handle('settings:export', async () => exportSave())
+  ipcMain.handle('settings:import', async () => importSave())
 
   /** Shows `save.json` in Explorer/Finder — the settings screen's "where is this?". */
   ipcMain.handle('shell:open-data-folder', async (): Promise<void> => revealSaveFile())

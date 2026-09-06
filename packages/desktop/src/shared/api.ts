@@ -43,6 +43,12 @@ export type PreferencesInput = {
   browser: string
 }
 
+/** What an export or an import answers with — `main/transfer.ts`. */
+export type TransferResult =
+  | { ok: true; path: string; message: string }
+  | { ok: false; error: string }
+  | { ok: false; cancelled: true }
+
 export type AppStatus = {
   /**
    * False only if this build was made without the project's values, which the build
@@ -205,6 +211,13 @@ export type PostAppApi = {
   /** Tells main what the queue holds, so closing the window can ask before dropping it. */
   reportQueue: (state: QueueState) => void
   openExternal: (url: string) => Promise<void>
+  /**
+   * `save.json` out to a file, and back in from one. Each opens its own picker on the
+   * main side, so neither takes a path — the renderer has no filesystem to name one with.
+   * `cancelled` is the dismissed picker, which is not a failure and is not reported as one.
+   */
+  exportSettings: () => Promise<TransferResult>
+  importSettings: () => Promise<TransferResult>
   /** Reveals `save.json` — preferences and tag rules — in the OS file manager. */
   openDataFolder: () => Promise<void>
 }

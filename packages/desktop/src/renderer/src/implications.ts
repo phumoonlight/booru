@@ -10,3 +10,4 @@ const store = createRuleStore<ImplicationRules>(
 
 export const useImplications = store.use
 export const saveImplications = store.save
+export const reloadImplications = store.reload

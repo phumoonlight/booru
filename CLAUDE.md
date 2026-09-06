@@ -188,7 +188,12 @@ is bad at — see [packages/desktop/README.md](packages/desktop/README.md). It i
   else; only the main bundle gets the `define`, so no key is compiled into a file the
   window loads.
 - **`save.json` holds preferences and both sets of tag rules, and nothing else**
-  (`main/save-file.ts`). Plain readable text on purpose: it can be inspected, hand-edited
+  (`main/save-file.ts`), and the settings screen can **write it out and read it back**
+  (`main/transfer.ts`). Export is a byte copy — it is meant to be the file. Import is
+  section by section through the same `normalize…` the IPC channels use, so it can only
+  produce a file this build could have written, and a section the file lacks is left alone
+  rather than cleared. It is also the one thing that changes the rules without going
+  through `save`, which is why `rule-store.ts` grew a `reload`. Plain readable text on purpose: it can be inspected, hand-edited
   and copied, and there is nothing secret left in it. `userData` is pinned in
   `main/index.ts` rather than defaulting to the app's display name, so renaming the app
   doesn't move the settings — `pubooru-desktop` packaged, `pubooru-desktop-dev` in a

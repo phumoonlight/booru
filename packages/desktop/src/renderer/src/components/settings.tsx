@@ -6,6 +6,8 @@ import type {
   PreferencesInput,
 } from '../../../shared/api'
 import { BUTTON_ON_SURFACE, BUTTON_SM } from './buttons'
+import { reloadImplications } from '../implications'
+import { reloadRecommendations } from '../recommendations'
 
 /**
  * Spelled out here rather than imported from `main/cpu.ts`, which owns the behaviour:
@@ -52,6 +54,49 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
     browser: status.browser.chosen,
   })
   const [editingThreads, setEditingThreads] = useState(false)
+  const [transferring, setTransferring] = useState(false)
+  const [transferred, setTransferred] = useState<{ ok: boolean; text: string } | null>(null)
+
+  /**
+   * Export or import `save.json`. Both open their picker on the main side, so there is
+   * nothing to pass and nothing to validate here.
+   *
+   * A dismissed picker says nothing at all — it is the answer to a question you asked and
+   * then withdrew, and a line reporting it is a line to dismiss in turn.
+   *
+   * An import replaces sections of a file three things in this window are holding a copy
+   * of: the two rule stores, which read once per launch, and the preference fields above,
+   * seeded from what main is running with. All three are re-read rather than left to
+   * disagree with the file until the next restart.
+   */
+  async function transfer(direction: 'export' | 'import') {
+    setTransferring(true)
+    setTransferred(null)
+    const result =
+      direction === 'export' ? await window.api.exportSettings() : await window.api.importSettings()
+    setTransferring(false)
+
+    if (!result.ok && 'cancelled' in result) return
+    if (!result.ok) {
+      setTransferred({ ok: false, text: result.error })
+      return
+    }
+
+    if (direction === 'import') {
+      await Promise.all([reloadImplications(), reloadRecommendations()])
+      // Re-seeded from what main is now running with, exactly as `useState` seeded it —
+      // `onChanged` refreshes the status App holds, but these fields are state and would
+      // otherwise keep showing the numbers from before the import until a restart.
+      const next = await window.api.getStatus()
+      setValues({
+        encodeThreads: next.cpu.threads,
+        encodePriority: next.cpu.priority,
+        browser: next.browser.chosen,
+      })
+      onChanged()
+    }
+    setTransferred({ ok: true, text: result.message })
+  }
 
   async function save(patch: Partial<PreferencesInput>) {
     const updated = { ...values, ...patch }
@@ -110,9 +155,29 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
           </p>
         )}
 
-        <div className="flex">
-          {/* The folder is a path nobody would guess. The file holds the two settings
-              below and the tag rules — no keys, and nothing secret at all now. */}
+        {/* Everything you can do to `save.json` as a file, in one row. The folder is a
+            path nobody would guess, which is the whole reason the other two exist: moving
+            settings to a laptop, or keeping a copy of a few hundred tag rules before
+            trying something, was four steps through a folder you had to be shown. */}
+        <div className="flex flex-wrap items-center gap-1">
+          <button
+            type="button"
+            onClick={() => void transfer('export')}
+            disabled={transferring}
+            title="Write preferences and tag rules to a file you choose"
+            className={BUTTON_SM}
+          >
+            <span aria-hidden>📤</span> Export settings
+          </button>
+          <button
+            type="button"
+            onClick={() => void transfer('import')}
+            disabled={transferring}
+            title="Read preferences and tag rules back from a file"
+            className={BUTTON_SM}
+          >
+            <span aria-hidden>📥</span> Import settings
+          </button>
           <button
             type="button"
             onClick={() => void window.api.openDataFolder()}
@@ -121,6 +186,20 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
             <span aria-hidden>📁</span> Open data folder
           </button>
         </div>
+
+        {/* Nothing in the file is secret — the service-role key is compiled into the
+            bundle, not stored — and that is worth saying, since a file called "settings"
+            from an app that writes to a database sounds like it should not leave. */}
+        <p className="text-xs text-muted">
+          Preferences and both sets of tag rules, as plain JSON. Nothing secret is in it:
+          the board’s keys are compiled into the app, not saved here. An import takes only
+          the sections the file has, and leaves the rest alone.
+        </p>
+        {transferred && (
+          <p className={`text-sm ${transferred.ok ? 'text-muted' : 'text-[#ff5d5f]'}`}>
+            {transferred.text}
+          </p>
+        )}
       </div>
 
       {/* How hard this machine works while the queue runs — the only thing on this screen

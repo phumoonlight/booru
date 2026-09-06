@@ -193,19 +193,19 @@ export function App() {
             }
           >
             {/* The empty drop zone is the whole screen's content, so it sits in the
-                middle of it rather than hugging the header. `my-auto` rather than
-                `justify-center`: once the queue is taller than the window the auto
-                margins collapse to zero, where centring would push the first rows off
-                the top of a scroller, out of reach. */}
-            <div className="my-auto">
-              <UploadQueue
+                middle of it rather than hugging the header — but the row above it does
+                not, which is why the centring is `my-auto` on the drop zone inside
+                `UploadQueue` and not a wrapper around the whole of it. `my-auto` rather
+                than `justify-center` for the same reason it always was: once the queue is
+                taller than the window the auto margins collapse to zero, where centring
+                would push the first rows off the top of a scroller, out of reach. */}
+            <UploadQueue
                 status={status}
-                onReview={(postId) => {
-                  setReviewing(postId)
-                  setView('browse')
-                }}
-              />
-            </div>
+              onReview={(postId) => {
+                setReviewing(postId)
+                setView('browse')
+              }}
+            />
           </div>
         )}
       </main>

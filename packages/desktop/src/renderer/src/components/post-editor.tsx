@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { RATING_COLOR, RATING_LABEL, RATINGS, type Rating } from '@common/search'
 import type { Post } from '@common/data/posts'
+import { BUTTON, BUTTON_SM } from './buttons'
 import { CategoryTagField } from './category-tag-field'
 import type { TagSeed } from './tag-seed'
 import { invalidateTags } from './tag-index'
@@ -34,6 +35,7 @@ export function PostEditor({
   onClose,
   onPrev = null,
   onNext = null,
+  onJump = null,
 }: {
   postId: number
   siteUrl: string
@@ -48,6 +50,12 @@ export function PostEditor({
    */
   onPrev?: (() => void) | null
   onNext?: (() => void) | null
+  /**
+   * Open a post by number, typed into the heading. The grid behind this screen may not
+   * hold it — that is the point of typing one — so this is a different thing from
+   * `onPrev`/`onNext`, which step within what was searched.
+   */
+  onJump?: ((id: number) => void) | null
 }) {
   const [post, setPost] = useState<Post | null>(null)
   const [thumb, setThumb] = useState('')
@@ -166,12 +174,8 @@ export function PostEditor({
         <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
           Post {postId} is not on the board any more.
         </p>
-        <button
-          type="button"
-          onClick={onClose}
-          className="mx-auto mt-4 block min-h-9 rounded-lg border border-border px-4 text-sm hover:bg-surface"
-        >
-          Back
+        <button type="button" onClick={onClose} className={`${BUTTON} mx-auto mt-4`}>
+          <span aria-hidden>⬅️</span> Back
         </button>
       </div>
     )
@@ -179,40 +183,38 @@ export function PostEditor({
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 pt-4 pb-25">
-      <div className="flex items-baseline justify-between gap-2">
-        <div className="flex items-baseline gap-2">
-          {/* Beside the number rather than under the picture: it is the number that
-              changes when one is pressed. Both stay on screen at the ends of the grid,
-              disabled — a control that disappears is one you have to look for. */}
-          <div className="flex items-center gap-1">
-            <NavButton label="Previous post (←)" glyph="‹" onClick={onPrev} />
-            <NavButton label="Next post (→)" glyph="›" onClick={onNext} />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          {/* Back leads the row, where the way out of a screen is looked for. It used to
+              sit at the far end of the header, which put the control that leaves furthest
+              from the hand and the two that stay closest. */}
+          <button type="button" onClick={onClose} className={BUTTON_SM}>
+            <span aria-hidden>⬅️</span> Back
+          </button>
+          <PostNumber id={postId} onJump={onJump} />
+          {/* After the number rather than before it, because it is the number they
+              change: pressed, the thing that moves is the next word along. Both stay on
+              screen at the ends of the grid, disabled — a control that disappears is one
+              you have to look for. */}
+          <div className="flex items-center">
+            <NavButton label="Previous post (←)" glyph="◀️" onClick={onPrev} />
+            <NavButton label="Next post (→)" glyph="▶️" onClick={onNext} />
           </div>
-          <h1 className="text-lg font-bold tracking-tight">Post #{postId}</h1>
           {/* Everything here writes as it is used, so this line is the whole feedback the
               screen gives: what happened to the last edit, and nothing else. */}
           <span className="text-xs text-muted">
             {status === 'saving' ? 'saving…' : status === 'saved' ? 'saved' : ''}
           </span>
         </div>
-        <div className="flex items-center gap-3">
-          {siteUrl && (
-            <button
-              type="button"
-              onClick={() => void window.api.openExternal(`${siteUrl}/posts/${postId}`)}
-              className="text-xs text-muted transition-colors hover:text-foreground"
-            >
-              🖼️ Open on the board
-            </button>
-          )}
+        {siteUrl && (
           <button
             type="button"
-            onClick={onClose}
-            className="text-xs text-muted transition-colors hover:text-foreground"
+            onClick={() => void window.api.openExternal(`${siteUrl}/posts/${postId}`)}
+            className={BUTTON_SM}
           >
-            ← Back
+            <span aria-hidden>🖼️</span> Open on the board
           </button>
-        </div>
+        )}
       </div>
 
       {post === null ? (
@@ -303,10 +305,80 @@ function NavButton({
       disabled={onClick === null}
       title={label}
       aria-label={label}
-      className="flex h-7 w-7 items-center justify-center rounded border border-border text-sm text-muted transition-colors enabled:hover:border-accent enabled:hover:text-foreground disabled:opacity-30"
+      // Drawn like every other button in the window — no box, a ground on hover — but
+      // square, since it is a glyph with no words beside it. The old ‹ › were typographic
+      // characters in the text colour and read as punctuation next to the heading.
+      className="flex size-8 shrink-0 items-center justify-center rounded-lg text-sm transition-colors hover:bg-surface disabled:opacity-30 disabled:hover:bg-transparent"
     >
       <span aria-hidden>{glyph}</span>
     </button>
+  )
+}
+
+/**
+ * The heading, and a way to reach a post by its number.
+ *
+ * It reads as the title until it is clicked, at which point it is the box it always was —
+ * no border at rest, so the screen is not asking to be typed in. Reaching a post by id is
+ * the thing this window is most often opened for (you have the number from an upload,
+ * from the board, from a report), and doing it meant going Back, clearing the search,
+ * typing the number, pressing Search and clicking the one result.
+ *
+ * Enter commits, Escape puts the current number back, and blur does neither — a number
+ * half-typed and then clicked away from is not a request to go anywhere. Nothing is
+ * validated beyond "a positive integer": whether that post exists is the editor's own
+ * question, and it already answers it with "not on the board any more".
+ */
+function PostNumber({ id, onJump }: { id: number; onJump: ((id: number) => void) | null }) {
+  const [typed, setTyped] = useState('')
+  const editing = typed !== ''
+
+  if (!onJump) return <h1 className="text-lg font-bold tracking-tight">Post #{id}</h1>
+
+  const go = () => {
+    const next = Number(typed.replace(/^#/, '').trim())
+    setTyped('')
+    if (Number.isSafeInteger(next) && next > 0 && next !== id) onJump(next)
+  }
+
+  return (
+    <h1 className="flex items-center text-lg font-bold tracking-tight">
+      <label htmlFor="post-number">Post&nbsp;#</label>
+      <input
+        id="post-number"
+        value={editing ? typed : String(id)}
+        onChange={(event) => setTyped(event.target.value || ' ')}
+        onFocus={(event) => {
+          setTyped(String(id))
+          event.target.select()
+        }}
+        onBlur={() => setTyped('')}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            go()
+            event.currentTarget.blur()
+          }
+          if (event.key === 'Escape') {
+            setTyped('')
+            event.currentTarget.blur()
+          }
+        }}
+        title="Type a post number and press Enter"
+        aria-label="Post number — type another and press Enter to open it"
+        spellCheck={false}
+        // Sized to the digits it holds so the heading does not reserve a gap after it,
+        // and `field-sizing` is what keeps that true for a five-digit board without
+        // measuring anything.
+        //
+        // Focused, it grows an underline rather than a ring. A box drawn round the number
+        // makes the heading look like a form the moment it is clicked, and this is a
+        // heading that happens to be typeable — a rule under the digits says "this text
+        // is the field" without turning the title row into one. The border is there at
+        // rest in `transparent`, so focusing shifts nothing.
+        className="w-14 [field-sizing:content] border-b border-transparent bg-transparent px-1 outline-none focus:border-accent"
+      />
+    </h1>
   )
 }
 
