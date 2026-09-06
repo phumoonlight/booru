@@ -20,10 +20,21 @@ export function About({ status }: { status: AppStatus }) {
   const { app, electron, chrome } = status.versions
 
   return (
-    <div className="mx-auto flex w-full max-w-xl flex-col gap-5 px-4 py-8">
+    <div className="mx-auto flex w-full max-w-xl flex-col gap-5 px-4 pt-8 pb-25">
       <div>
         <h1 className="text-lg font-bold tracking-tight">Pubooru Desktop</h1>
-        <p className="mt-1 text-sm text-muted">Version {app}</p>
+        <p className="mt-1 flex items-center gap-2 text-sm text-muted">
+          Version {app}
+          {/* Only on a checkout run by `desktop:dev`. An installed copy shows nothing at
+              all rather than a "Release" badge saying the ordinary thing — the tag is
+              here to catch the moment you are reading the wrong window's version, or
+              wondering where a tag rule went (a dev run keeps its own `save.json`). */}
+          {status.development && (
+            <span className="rounded border border-[#ead084] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#ead084]">
+              Development
+            </span>
+          )}
+        </p>
       </div>
 
       <p className="text-sm text-muted">

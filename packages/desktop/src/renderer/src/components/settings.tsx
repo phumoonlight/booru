@@ -5,6 +5,7 @@ import type {
   EncodePriority,
   PreferencesInput,
 } from '../../../shared/api'
+import { BUTTON_ON_SURFACE, BUTTON_SM } from './buttons'
 
 /**
  * Spelled out here rather than imported from `main/cpu.ts`, which owns the behaviour:
@@ -76,7 +77,7 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-xl flex-col gap-8 px-4 py-8">
+    <div className="mx-auto flex w-full max-w-xl flex-col gap-8 px-4 pt-8 pb-25">
       <div className="flex flex-col gap-4">
         <div>
           <h1 className="flex gap-1 text-lg font-bold tracking-tight">
@@ -115,7 +116,7 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
           <button
             type="button"
             onClick={() => void window.api.openDataFolder()}
-            className="min-h-9 text-xs text-muted underline-offset-2 hover:text-foreground hover:underline"
+            className={BUTTON_SM}
           >
             <span aria-hidden>📁</span> Open data folder
           </button>
@@ -395,7 +396,7 @@ function Field({
           <button
             type="button"
             onClick={onEdit}
-            className="min-h-8 shrink-0 whitespace-nowrap text-xs text-muted underline-offset-2 hover:text-foreground hover:underline"
+            className={`${BUTTON_ON_SURFACE} whitespace-nowrap`}
           >
             <span aria-hidden>✏️</span> {value ? 'Edit' : 'Set'}
           </button>
@@ -449,13 +450,13 @@ function Editor({
       <button
         type="button"
         onClick={onCancel}
-        className="min-h-8 shrink-0 px-1 text-xs text-muted underline-offset-2 hover:text-foreground hover:underline"
+        className={BUTTON_ON_SURFACE}
       >
         Cancel
       </button>
       <button
         type="submit"
-        className="min-h-8 shrink-0 whitespace-nowrap text-xs text-muted underline-offset-2 hover:text-foreground hover:underline"
+        className={`${BUTTON_ON_SURFACE} whitespace-nowrap`}
       >
         <span aria-hidden>💾</span> Save
       </button>

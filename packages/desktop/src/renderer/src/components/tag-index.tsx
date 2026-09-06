@@ -10,7 +10,12 @@ import {
   type TagCategory,
 } from '@common/tags'
 import { tagLabel } from '@common/search'
+import { BUTTON, BUTTON_ON_SURFACE, BUTTON_SUBMIT_ON_SURFACE, buttonToggle } from './buttons'
 import { invalidateTagNames } from './category-tag-field'
+import { RuleDiagram } from './rule-diagram'
+import { TagRuleEditor, toggleRuleTag, type RuleKind } from './tag-rule-editor'
+import { saveImplications, useImplications } from '../implications'
+import { saveRecommendations, useRecommendations } from '../recommendations'
 
 /**
  * The last index read, kept outside React on purpose. This screen is unmounted whenever
@@ -35,7 +40,7 @@ export function invalidateTags(): void {
 
 /**
  * The board's tags, as the website's /tags page draws them: grouped by category in
- * artist → copyright → character → general → meta order, A–Z inside each group, with the
+ * the `TAG_CATEGORIES` order, A–Z inside each group, with the
  * post count in a fixed slot on the right. Same read, same cap — `listTags` in
  * `@common/data/shared` backs both.
  *
@@ -44,17 +49,34 @@ export function invalidateTags(): void {
  * nowhere to simply look. Sorted by label rather than by count for the same reason the
  * web page is: you arrive holding a name.
  *
- * Clicking a tag opens its editor: rename it, recategorize it, delete it, or open it on
- * the board. Those were the website's /tags/manage screen until the board lost its
- * login — the site holds an anon key and the schema has no write policy for it, so the
- * vocabulary is managed here or nowhere. The two operations that are not about one
- * existing tag — creating a name up front, and applying a tag to everything already
- * carrying another — sit above the list, where they are not attached to whichever row
- * happens to be under the pointer.
+ * Clicking a tag opens its editor: rename it, recategorize it, delete it, write its rules,
+ * or open it on the board. That same click is also how a rule is *filled in*: with the
+ * panel open and one of its two Choose buttons pressed, the grid stops being a list of
+ * tags to manage and becomes the picker for the rule being written — see `pickTag` below.
+ *
+ * Managing a tag was the website's /tags/manage screen until the board lost its login —
+ * the site holds an anon key and the schema has no write policy for it, so the vocabulary
+ * is managed here or nowhere. The two operations that are not about one existing tag —
+ * creating a name up front, and applying a tag to everything already carrying another —
+ * sit in the header row, where they are not attached to whichever row happens to be under
+ * the pointer.
  */
-export function TagIndex({ siteUrl }: { siteUrl: string }) {
+export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
   const [editing, setEditing] = useState<Tag | null>(null)
   const [panel, setPanel] = useState<'none' | 'create' | 'apply'>('none')
+  const [diagram, setDiagram] = useState(false)
+  // Which of the open tag's two rules the grid is currently filling in, or null for the
+  // grid's ordinary job. It lives here rather than in the panel because the two halves of
+  // the gesture are in different components — the button that starts it is in the panel,
+  // and the tags it is answered with are the list below.
+  const [picking, setPicking] = useState<RuleKind | null>(null)
+  // Narrows the grid, which is what makes picking from it practical on a board with a few
+  // hundred tags — the box it replaced was an autocomplete, and browsing to a name is only
+  // better than typing one while the name is on screen. It earns its place outside picking
+  // too: finding the tag to rename was the same scroll.
+  const [filter, setFilter] = useState('')
+  const implications = useImplications()
+  const recommendations = useRecommendations()
   const [tags, setTags] = useState<Tag[] | null>(cached?.tags ?? null)
   const [fetchedAt, setFetchedAt] = useState<number | null>(cached?.at ?? null)
   // Starts true when there is nothing cached, because the effect below is about to read
@@ -80,7 +102,7 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
   }, [])
 
   async function refresh() {
-    setEditing(null)
+    openTag(null)
     setLoading(true)
     // Both copies, or the button lies: main keeps the index for a day (`main/tag-cache.ts`)
     // and would hand back the same list this screen is already showing. 🔄 means "read the
@@ -105,12 +127,63 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
   const subcategoriesIn = (category: TagCategory): string[] =>
     subcategoryOrder((tags ?? []).filter((tag) => tag.category === category).map((t) => t.category2))
 
-  const groups = categoryOrder((tags ?? []).map((tag) => tag.category))
+  /**
+   * What a click on a tag in the grid means, which depends on what the panel is asking.
+   *
+   * Ordinarily it opens that tag. While a rule is being filled in it toggles that tag in
+   * the rule instead — and it *toggles*, so the same row that added it takes it off again
+   * and the grid can be read as the answer rather than as a list of things already done.
+   * The open tag is inert: a tag implying itself is the one rule that can never fire.
+   */
+  function pickTag(tag: Tag) {
+    if (!picking || !editing) {
+      setEditing(tag)
+      setPicking(null)
+      return
+    }
+    if (tag.name === editing.name) return
+    if (picking === 'implies') {
+      void saveImplications(toggleRuleTag(implications, editing.name, tag.name))
+    } else {
+      void saveRecommendations(toggleRuleTag(recommendations, editing.name, tag.name))
+    }
+  }
+
+  /** Closing the panel, or opening another tag's, ends any pick with it. */
+  function openTag(tag: Tag | null) {
+    setEditing(tag)
+    setPicking(null)
+  }
+
+  // Escape leaves the pick without leaving the panel — the hand is on the list, not on
+  // the Done button, which is the whole point of the gesture.
+  useEffect(() => {
+    if (!picking) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPicking(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [picking])
+
+  // The names already in the rule being filled in, so the grid can mark them
+  const picked = new Set(
+    picking && editing
+      ? (picking === 'implies' ? implications : recommendations)[editing.name] ?? []
+      : []
+  )
+
+  // Matched against the stored spelling with spaces read as underscores, so the box takes
+  // `blue archive` and `blue_archive` alike — the same courtesy the tag picker's does.
+  const typed = filter.trim().toLowerCase().replace(/ /g, '_')
+  const shown = typed ? (tags ?? []).filter((tag) => tag.name.includes(typed)) : (tags ?? [])
+
+  const groups = categoryOrder(shown.map((tag) => tag.category))
     .map(
       (category) =>
         [
           category,
-          (tags ?? [])
+          shown
             .filter((tag) => tag.category === category)
             .sort((a, b) => tagLabel(a.name).localeCompare(tagLabel(b.name))),
         ] as [TagCategory, Tag[]]
@@ -118,9 +191,14 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
     .filter(([, group]) => group.length > 0)
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-4">
-      <div className="flex items-baseline gap-2">
-        <h1 className="text-lg font-bold tracking-tight">Tags</h1>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 pt-4 pb-25">
+      {/* One row for everything that is not a tag: what this screen is, how old its list
+          is, the box that narrows it, the two operations that are not about a row you are
+          pointing at, and the two views of it. They were on two rows, one of bare links
+          and one of outlined buttons, which drew a line between things that are all just
+          "the controls" — and put the filter box a row away from the list it filters. */}
+      <div className="flex flex-wrap items-center gap-1">
+        <h1 className="mr-1 text-lg font-bold tracking-tight">Tags</h1>
         {/* What a cache owes you: how old it is. Time only — a list from an hour ago and
             one from Tuesday both just say "not now", and the date is never the answer to
             "should I press refresh". */}
@@ -129,44 +207,75 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
             as of {new Date(fetchedAt).toLocaleTimeString([], { timeStyle: 'short' })}
           </span>
         )}
-        {/* Browse's Refresh, spelled the same way and in the same corner: both screens
-            paint a remembered list, so the way to ask for a fresh one should not be a
-            labelled button on one and a bare glyph on the other. */}
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          disabled={loading}
-          title="Read the tag index again"
-          className="ml-auto min-h-9 rounded-lg border border-border px-3 text-sm transition-colors hover:bg-surface disabled:text-border"
-        >
-          <span aria-hidden className={loading ? 'inline-block animate-spin' : undefined}>
-            🔄
-          </span>{' '}
-          Refresh
-        </button>
-      </div>
-
-      <div className="flex gap-2">
         <button
           type="button"
           onClick={() => setPanel((current) => (current === 'create' ? 'none' : 'create'))}
-          className={`min-h-9 rounded-lg border px-3 text-sm transition-colors hover:bg-surface ${
-            panel === 'create' ? 'border-accent text-accent' : 'border-border text-muted'
-          }`}
+          title="Name a tag before anything carries it"
+          className={`${buttonToggle(panel === 'create')} ml-auto`}
         >
-          ➕ New tag
+          <span aria-hidden>➕</span>
+          New tag
         </button>
         <button
           type="button"
           onClick={() => setPanel((current) => (current === 'apply' ? 'none' : 'apply'))}
           title="Add one tag to every post that already has another"
-          className={`min-h-9 rounded-lg border px-3 text-sm transition-colors hover:bg-surface ${
-            panel === 'apply' ? 'border-accent text-accent' : 'border-border text-muted'
-          }`}
+          className={buttonToggle(panel === 'apply')}
         >
-          🧩 Apply by tag
+          <span aria-hidden>🧩</span>
+          Apply by tag
+        </button>
+        {/* The rules are written one tag at a time, on the panel a row opens — which is
+            the right place to write one and the wrong place to see what they add up to,
+            since an implication chains through tags that are rows of their own. This is
+            the other view of the same file. Top right, away from the rows: it is about
+            all of them and none in particular. */}
+        <button
+          type="button"
+          onClick={() => setDiagram(true)}
+          title="Every tag rule on this machine, drawn as the chains they make"
+          className={BUTTON}
+        >
+          <span aria-hidden>🗺️</span>
+          Rule map
         </button>
       </div>
+
+      {diagram && <RuleDiagram onClose={() => setDiagram(false)} tags={tags} />}
+
+      {/* A browser's toolbar, and Browse has the same one: reload at the head of the row,
+          then the box, filling everything left. Refresh sat in the far corner of the title
+          row, a screen's width from the timestamp it answers, with the filter box on a row
+          of its own stopping short of the edge for no reason. */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          disabled={loading}
+          title="Read the tag index again"
+          className={BUTTON}
+        >
+          {/* Faded, not spun. A spinner on a single glyph is a lot of motion in the corner
+              of the eye for a read that is usually over before it is noticed, and an emoji
+              rotating about its own box wobbles. Dimming says the same thing quietly. */}
+          <span aria-hidden className={`transition-opacity ${loading ? 'opacity-30' : ''}`}>
+            🔄
+          </span>
+          Refresh
+        </button>
+        {/* Narrows the grid below, and nothing else — no request, no submit. The list is
+            already in memory, which is the only reason a box that filters on every
+            keystroke is cheaper than the autocomplete it replaces. It keeps its border,
+            being the one thing here you type into rather than press. */}
+        <input
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          placeholder="blue_hair"
+          spellCheck={false}
+          className={`${FIELD} flex-1 font-mono`}
+        />
+      </div>
+
 
       {panel === 'create' && (
         <CreateTag subcategoriesIn={subcategoriesIn} onDone={() => void refresh()} />
@@ -179,9 +288,11 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
         <EditTag
           key={editing.id}
           tag={editing}
-          siteUrl={siteUrl}
+          onBrowse={onBrowse}
           subcategoriesIn={subcategoriesIn}
-          onClose={() => setEditing(null)}
+          picking={picking}
+          onPick={setPicking}
+          onClose={() => openTag(null)}
           onDone={() => void refresh()}
         />
       )}
@@ -192,7 +303,7 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
         </p>
       ) : groups.length === 0 ? (
         <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
-          No tags yet — they are created by uploads.
+          {typed ? `No tag matches “${typed}”.` : 'No tags yet — they are created by uploads.'}
         </p>
       ) : (
         groups.map(([category, group]) => {
@@ -216,7 +327,10 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
                   tags={loose}
                   category={category}
                   editingId={editing?.id ?? null}
-                  onSelect={setEditing}
+                  onSelect={pickTag}
+                  picking={picking !== null}
+                  picked={picked}
+                  triggerName={picking ? editing?.name ?? null : null}
                 />
               )}
               {subgroups.map(([name, list]) => (
@@ -236,7 +350,10 @@ export function TagIndex({ siteUrl }: { siteUrl: string }) {
                     tags={list}
                     category={category}
                     editingId={editing?.id ?? null}
-                    onSelect={setEditing}
+                    onSelect={pickTag}
+                    picking={picking !== null}
+                    picked={picked}
+                    triggerName={picking ? editing?.name ?? null : null}
                   />
                 </div>
               ))}
@@ -260,38 +377,69 @@ function TagGrid({
   category,
   editingId,
   onSelect,
+  picking = false,
+  picked,
+  triggerName = null,
 }: {
   tags: Tag[]
   category: TagCategory
   editingId: number | null
   onSelect: (tag: Tag) => void
+  /** The grid is answering a rule rather than opening a tag — see `pickTag`. */
+  picking?: boolean
+  /** Names already in the rule being filled in. */
+  picked?: Set<string>
+  /** The tag the rule is about, which cannot be an answer to it. */
+  triggerName?: string | null
 }) {
   return (
     <ul className="grid grid-cols-2 overflow-hidden rounded-lg border border-border sm:grid-cols-3 lg:grid-cols-4">
-      {tags.map((tag) => (
-        <li key={tag.id} className="-mb-px -mr-px border-b border-r border-border">
-          <button
-            type="button"
-            onClick={() => onSelect(tag)}
-            title={`Manage ${tagLabel(tag.name)}`}
-            className={`flex min-h-9 w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface ${
-              editingId === tag.id ? 'bg-surface' : ''
-            } ${categoryColor(category)}`}
-          >
-            {/* Ahead of the name and outside the truncation, so a long tag loses its own
-                tail rather than the glyph that identifies it fastest. */}
-            {tag.emoji && (
-              <span aria-hidden className="shrink-0 leading-none">
-                {tag.emoji}
+      {tags.map((tag) => {
+        const chosen = picked?.has(tag.name) ?? false
+        const trigger = picking && tag.name === triggerName
+
+        return (
+          <li key={tag.id} className="-mb-px -mr-px border-b border-r border-border">
+            <button
+              type="button"
+              onClick={() => onSelect(tag)}
+              disabled={trigger}
+              title={
+                trigger
+                  ? `${tagLabel(tag.name)} is the tag this rule is about`
+                  : picking
+                    ? chosen
+                      ? `Take ${tagLabel(tag.name)} back off the rule`
+                      : `Add ${tagLabel(tag.name)} to the rule`
+                    : `Manage ${tagLabel(tag.name)}`
+              }
+              className={`flex min-h-9 w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface disabled:opacity-30 disabled:hover:bg-transparent ${
+                chosen ? 'bg-accent/10' : editingId === tag.id && !picking ? 'bg-surface' : ''
+              } ${categoryColor(category)}`}
+            >
+              {/* Ahead of the name and outside the truncation, so a long tag loses its own
+                  tail rather than the glyph that identifies it fastest. */}
+              {tag.emoji && (
+                <span aria-hidden className="shrink-0 leading-none">
+                  {tag.emoji}
+                </span>
+              )}
+              <span className="min-w-0 flex-1 truncate">{tagLabel(tag.name)}</span>
+              {/* While picking, the fixed right-hand slot says whether this tag is in the
+                  rule instead of how many posts carry it. Membership is the only thing
+                  being decided, and it is what the count's column is worth during it — a
+                  ✓ in a place the eye already scans beats a tick tucked beside the name. */}
+              <span
+                className={`w-8 shrink-0 text-right text-xs tabular-nums ${
+                  picking && chosen ? 'text-accent' : 'text-muted'
+                }`}
+              >
+                {picking ? (chosen ? '✓' : trigger ? '' : '＋') : tag.post_count}
               </span>
-            )}
-            <span className="min-w-0 flex-1 truncate">{tagLabel(tag.name)}</span>
-            <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted">
-              {tag.post_count}
-            </span>
-          </button>
-        </li>
-      ))}
+            </button>
+          </li>
+        )
+      })}
     </ul>
   )
 }
@@ -360,8 +508,7 @@ const FIELD =
  * its accent text, which is also how the header items above the list are drawn — the same
  * hover ground under both.
  */
-const SUBMIT =
-  'min-h-9 rounded-lg px-4 text-sm text-accent transition-colors hover:bg-background disabled:opacity-50'
+const SUBMIT = BUTTON_SUBMIT_ON_SURFACE
 
 /**
  * The category, as the menu both forms use.
@@ -434,7 +581,7 @@ function SubcategoryField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
-        placeholder="subgroup (optional)"
+        placeholder="dress color"
         spellCheck={false}
         className={`${FIELD} min-w-32 flex-1`}
       />
@@ -484,7 +631,7 @@ function CreateTag({
         <input
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="tag_name"
+          placeholder="blue_archive"
           spellCheck={false}
           className={`${FIELD} min-w-40 flex-1 font-mono`}
         />
@@ -550,7 +697,7 @@ function ApplyTag({ onDone }: { onDone: () => void }) {
         <input
           value={target}
           onChange={(event) => setTarget(event.target.value)}
-          placeholder="tag to add"
+          placeholder="swimsuit"
           spellCheck={false}
           className={`${FIELD} min-w-32 flex-1 font-mono`}
         />
@@ -558,7 +705,7 @@ function ApplyTag({ onDone }: { onDone: () => void }) {
         <input
           value={condition}
           onChange={(event) => setCondition(event.target.value)}
-          placeholder="existing tag"
+          placeholder="bikini"
           spellCheck={false}
           className={`${FIELD} min-w-32 flex-1 font-mono`}
         />
@@ -587,14 +734,18 @@ function ApplyTag({ onDone }: { onDone: () => void }) {
  */
 function EditTag({
   tag,
-  siteUrl,
+  onBrowse,
   subcategoriesIn,
+  picking,
+  onPick,
   onClose,
   onDone,
 }: {
   tag: Tag
-  siteUrl: string
+  onBrowse: (query: string) => void
   subcategoriesIn: (category: TagCategory) => string[]
+  picking: RuleKind | null
+  onPick: (kind: RuleKind | null) => void
   onClose: () => void
   onDone: () => void
 }) {
@@ -605,6 +756,19 @@ function EditTag({
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  // Opens by itself for a tag that already has rules — the panel then shows what this
+  // machine does with the tag as well as what the board knows about it, which is the
+  // whole reason the rules moved here. A tag with none stays a four-field row.
+  //
+  // null is "nobody has said", not "closed", so the default can follow the rules rather
+  // than the moment: they are read from disk once per window, and seeding `useState` from
+  // a count that has not landed yet would leave the very first tag opened in a session
+  // folded shut with rules in it. Once toggled, the toggle wins.
+  const implications = useImplications()
+  const recommendations = useRecommendations()
+  const ruleCount = (implications[tag.name]?.length ?? 0) + (recommendations[tag.name]?.length ?? 0)
+  const [toggled, setToggled] = useState<boolean | null>(null)
+  const showRules = toggled ?? ruleCount > 0
 
   async function save() {
     setBusy(true)
@@ -669,27 +833,44 @@ function EditTag({
       title={`${tagLabel(tag.name)} · ${tag.post_count} post${tag.post_count === 1 ? '' : 's'}`}
       actions={
         <>
+          {/* Leads the row because it is the one action here that is about this machine
+              rather than about the board, and because the count answers the question
+              before the panel is opened: a tag with no rules is most tags. */}
+          <button
+            type="button"
+            onClick={() => {
+              if (showRules) onPick(null)
+              setToggled(!showRules)
+            }}
+            className={`${BUTTON_ON_SURFACE} ${showRules ? 'text-accent' : ''}`}
+          >
+            🔗 Rules{ruleCount > 0 ? ` (${ruleCount})` : ''}
+          </button>
           <button
             type="button"
             onClick={() => setConfirming(true)}
             disabled={busy || confirming}
-            className="min-h-8 px-2 text-xs text-muted transition-colors hover:text-[#ff5d5f] disabled:opacity-40"
+            className={`${BUTTON_ON_SURFACE} hover:text-[#ff5d5f]`}
           >
-            🗑️ Delete tag
+            🗑️ Delete
           </button>
-          {siteUrl && (
-            <button
-              type="button"
-              onClick={() => void window.api.openExternal(`${siteUrl}/tags/${tag.id}`)}
-              className="min-h-8 px-2 text-xs text-muted transition-colors hover:text-foreground"
-            >
-              🖼️ On the board
-            </button>
-          )}
+          {/* Its posts, in this window rather than in the browser. It used to open
+              /tags/<id> on the site, which answered the question in a place that can only
+              read: the reason you look at what a tag is on is usually to fix one of them,
+              and every control for that is in Browse. Same question, and now the answer
+              is somewhere you can act on it. */}
+          <button
+            type="button"
+            onClick={() => onBrowse(tag.name)}
+            title={`Browse the posts tagged ${tagLabel(tag.name)}`}
+            className={BUTTON_ON_SURFACE}
+          >
+            🔍 Browse
+          </button>
           <button
             type="button"
             onClick={onClose}
-            className="min-h-8 px-2 text-xs text-muted transition-colors hover:text-foreground"
+            className={BUTTON_ON_SURFACE}
           >
             ❌ Close
           </button>
@@ -735,6 +916,17 @@ function EditTag({
       </div>
 
       {error && <p className="text-sm text-[#ff5d5f]">{error}</p>}
+
+      {/* This machine's rules about this tag, under the board's own facts about it, and
+          folded away until asked for. The panel is pinned to the top of a scroller so the
+          row you clicked stays in view; two tag boxes and a menu always open would make
+          it tall enough to be the view rather than a strip over it. The count on the
+          toggle is what makes it worth opening — or worth leaving shut.
+
+          Against `tag.name`, not the name being typed above: a rule is written against a
+          spelling that exists, and re-keying this on every keystroke in the name field
+          would throw away a half-typed rule per character. */}
+      {showRules && <TagRuleEditor tag={tag.name} picking={picking} onPick={onPick} />}
 
       {/* Drawn as what it is, like the post editor's. A tag is not only a row: deleting it
           takes it off every post carrying it, and that is the number worth reading before

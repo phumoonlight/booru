@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { RATING_COLOR, RATING_LABEL } from '@common/search'
 import type { Post } from '@common/data/posts'
 import { PostEditor } from './post-editor'
+import { BUTTON, BUTTON_SUBMIT, buttonToggle } from './buttons'
 
 /**
  * Browsing the board, and editing what you find.
@@ -24,6 +25,64 @@ import { PostEditor } from './post-editor'
 /** What the last visit was looking at. The view unmounts when another is in front of
  *  it, and coming back to an empty box after finding a post is a search typed twice. */
 let lastQuery = ''
+
+/**
+ * Points the next mount of Browse at a query, without being Browse.
+ *
+ * The Tags screen's "posts tagged this" goes through here: it is the same trick
+ * `lastQuery` already is, used deliberately rather than as a convenience, and it works
+ * because this view is mounted fresh every time it is switched to and reads `lastQuery`
+ * on the way up. The grid cache is left alone — the seed check below already refuses a
+ * cache held for a different query, and keeps one held for this exact query, which is the
+ * right answer both ways.
+ */
+export function browseFor(query: string): void {
+  lastQuery = query
+}
+
+/**
+ * How the grid is drawn. Module-level for the same reason the query is: this view is
+ * unmounted whenever another is in front of it, and a layout you chose two screens ago is
+ * not a thing you should have to choose again. Not persisted — it is a way of looking at
+ * the board for the next few minutes, not a setting, and `save.json` is for settings.
+ */
+type Layout = 'grid' | 'ratio'
+let layout: Layout = 'grid'
+
+/**
+ * Rows of a fixed height, each image as wide as its own shape makes it — and a ragged
+ * right edge, on purpose.
+ *
+ * It started as the website's justified rows (`src/components/post-grid.tsx`), where each
+ * row is stretched to fill the line exactly. That is the right answer for a page and the
+ * wrong one here: filling the line means the row's height is whatever the ratios in it
+ * happen to need, so a row that drew a wide panorama came out short and every thumbnail
+ * beside it shrank with it. Comparing two posts is most of what this screen is for, and
+ * it was comparing them at sizes decided by what else landed on their line.
+ *
+ * So nothing grows. `--row-h` is the height of every image on the screen, the width is
+ * `ratio × --row-h`, and whatever is left at the end of a line is left there. The gap at
+ * the right edge is the price, and it is a much smaller one than a grid whose scale
+ * wanders row by row.
+ */
+
+/** Thumbnails are bounded to 768×384 (`@common/imgcmp/for-thumbnail`), so a panorama's
+    thumb is at most 2:1 however wide the post is. Laying it out at the post's own ratio
+    would reserve width the image cannot fill. */
+const MAX_RATIO = 2
+
+function ratioOf(width: number, height: number): number {
+  return Math.min(width / Math.max(height, 1), MAX_RATIO)
+}
+
+/**
+ * The tile's width, and nothing else — no grow, no basis, no cap. The height comes from
+ * the image box's own `aspectRatio` against this width, which works out to exactly
+ * `--row-h` for every card on the screen.
+ */
+function itemStyle(width: number, height: number): CSSProperties {
+  return { width: `calc(${ratioOf(width, height)} * var(--row-h))` }
+}
 
 /**
  * And what it was looking *at*: the rows already read for `lastQuery`, chunks from Load
@@ -140,6 +199,9 @@ export function Browse({
   // is still the screen in front, and swapping it out was the old behaviour this replaced
   // — so the debt is noted here and paid on the way back out.
   const [stale, setStale] = useState(false)
+  // Mirrors the module-level `layout` into React so a press repaints; the module copy is
+  // what the next visit reads.
+  const [drawnAs, setDrawnAs] = useState<Layout>(layout)
 
   // The read is a request to the main process, not a state sync, so the answer sets
   // state from the callback rather than the effect body — the effect itself touches
@@ -267,7 +329,7 @@ export function Browse({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 pt-4 pb-25">
       <div className="flex items-baseline gap-2">
         <h1 className="text-lg font-bold tracking-tight">Browse</h1>
         <span className="text-xs text-muted">
@@ -280,38 +342,68 @@ export function Browse({
             as of {new Date(fetchedAt).toLocaleTimeString([], { timeStyle: 'short' })}
           </span>
         )}
-        {/* Right of the row, away from Search: this one asks the same question again
-            rather than a new one. */}
-        <button
-          type="button"
-          onClick={refresh}
-          disabled={loading}
-          title="Read these posts again"
-          className="ml-auto min-h-9 rounded-lg border border-border px-3 text-sm transition-colors hover:bg-surface disabled:text-border"
-        >
-          <span aria-hidden>🔄</span> Refresh
-        </button>
+        {/* Two ways of looking at the same rows, so a pair rather than one button whose
+            label is whichever one you are not in — that reads as a command and gets
+            pressed to get back to where you already were. */}
+        <div className="ml-auto flex items-center">
+          <LayoutButton
+            active={drawnAs === 'grid'}
+            onClick={() => {
+              layout = 'grid'
+              setDrawnAs('grid')
+            }}
+            emoji="🔳"
+            label="Grid"
+            title="Even columns, every thumbnail cropped square"
+          />
+          <LayoutButton
+            active={drawnAs === 'ratio'}
+            onClick={() => {
+              layout = 'ratio'
+              setDrawnAs('ratio')
+            }}
+            emoji="📐"
+            label="Ratio"
+            title="Each image at its own shape, in rows of equal height"
+          />
+        </div>
       </div>
 
+      {/* A browser's toolbar: reload at the head of the row, then the box, filling
+          everything left. Refresh was in the far corner of the title row, which put the
+          two controls that both mean "read the board" at opposite ends of the screen —
+          and left the box beside it stopping short of the edge for no reason. */}
       <form
         onSubmit={(event) => {
           event.preventDefault()
           submit(query.trim())
         }}
-        className="flex gap-2"
+        className="flex items-center gap-2"
       >
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={loading}
+          title="Read these posts again"
+          className={BUTTON}
+        >
+          {/* Faded, not spun. A spinner on a single glyph is a lot of motion in the corner
+              of the eye for a read that is usually over before it is noticed, and an emoji
+              rotating about its own box wobbles. Dimming says the same thing quietly. */}
+          <span aria-hidden className={`transition-opacity ${loading ? 'opacity-30' : ''}`}>
+            🔄
+          </span>
+          Refresh
+        </button>
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="tags, -excluded, rating:explicit"
+          placeholder="1girl blue_hair -solo rating:explicit"
           spellCheck={false}
           className="min-h-9 flex-1 rounded-lg border border-border bg-surface px-3 py-1.5 font-mono text-sm outline-none focus:border-accent"
         />
-        <button
-          type="submit"
-          className="min-h-9 rounded-lg border border-border px-3 text-sm transition-colors hover:bg-surface"
-        >
-          Search
+        <button type="submit" className={BUTTON_SUBMIT}>
+          <span aria-hidden>🔍</span> Search
         </button>
         {submitted !== '' && (
           <button
@@ -320,7 +412,7 @@ export function Browse({
               setQuery('')
               submit('')
             }}
-            className="min-h-9 rounded-lg border border-border px-3 text-sm text-muted transition-colors hover:bg-surface"
+            className={BUTTON}
           >
             Clear
           </button>
@@ -333,10 +425,24 @@ export function Browse({
         </p>
       ) : (
         <>
-          <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+          {/* Centred in the ratio layout: nothing stretches to fill a line any more, so the
+              slack is real and putting all of it on the right made every row look like it
+              had stopped short of something. Split between both edges it reads as a
+              margin. The square grid needs none of this — its columns already fill. */}
+          <ul
+            className={
+              drawnAs === 'ratio'
+                ? 'flex flex-wrap justify-center gap-2 [--row-h:9rem] sm:[--row-h:11rem] lg:[--row-h:13rem]'
+                : 'grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6'
+            }
+          >
             {posts.map((post) => (
-              <li key={post.id}>
-                <Card post={post} onOpen={() => setEditing(post.id)} />
+              <li
+                key={post.id}
+                className={drawnAs === 'ratio' ? 'shrink-0' : undefined}
+                style={drawnAs === 'ratio' ? itemStyle(post.width, post.height) : undefined}
+              >
+                <Card post={post} layout={drawnAs} onOpen={() => setEditing(post.id)} />
               </li>
             ))}
           </ul>
@@ -345,7 +451,7 @@ export function Browse({
               type="button"
               onClick={() => void loadMore()}
               disabled={loading}
-              className="mx-auto min-h-9 rounded-lg border border-border px-4 text-sm transition-colors hover:bg-surface disabled:text-border"
+              className={`${BUTTON} mx-auto`}
             >
               {loading ? 'Loading…' : `Load ${CHUNK} more`}
             </button>
@@ -361,7 +467,15 @@ export function Browse({
  * hold a few hundred rows after enough scrolling, and fetching them all up front would
  * stall the first screenful behind the last.
  */
-function Card({ post, onOpen }: { post: Post; onOpen: () => void }) {
+function Card({
+  post,
+  layout: drawnAs,
+  onOpen,
+}: {
+  post: Post
+  layout: Layout
+  onOpen: () => void
+}) {
   const [src, setSrc] = useState(thumbnails.get(post.file_name) ?? '')
 
   useEffect(() => {
@@ -382,7 +496,20 @@ function Card({ post, onOpen }: { post: Post; onOpen: () => void }) {
       title={`Edit post ${post.id}`}
       className="group flex w-full flex-col overflow-hidden rounded-lg border border-border bg-surface text-left transition-colors hover:border-accent"
     >
-      <div className="grid aspect-square place-items-center overflow-hidden bg-background">
+      {/* Square in the grid, the image's own shape in a ratio row — the only thing the
+          two layouts differ in. Against the tile's fixed `ratio × --row-h` width this
+          resolves to exactly `--row-h` tall, which is what keeps the row even. The strip below is the same either way: a caption
+          burned over the picture reads worse on a dark thumbnail than beside it, and a
+          card that changes what it *is* between layouts makes the toggle feel like two
+          screens rather than two ways of looking at one. */}
+      <div
+        className={`grid place-items-center overflow-hidden bg-background ${
+          drawnAs === 'ratio' ? '' : 'aspect-square'
+        }`}
+        style={
+          drawnAs === 'ratio' ? { aspectRatio: ratioOf(post.width, post.height) } : undefined
+        }
+      >
         {src ? (
           <img src={src} alt={`Post ${post.id}`} className="h-full w-full object-cover" />
         ) : (
@@ -393,6 +520,40 @@ function Card({ post, onOpen }: { post: Post; onOpen: () => void }) {
         <span className="text-muted">#{post.id}</span>
         <span className={RATING_COLOR[post.rating]}>{RATING_LABEL[post.rating]}</span>
       </span>
+    </button>
+  )
+}
+
+/**
+ * One half of the layout pair. Drawn like the Refresh beside it — glyph, word, underline
+ * on hover — with the current one in accent rather than boxed, since a border here would
+ * put two more rectangles in a title row that already has none.
+ */
+function LayoutButton({
+  active,
+  onClick,
+  emoji,
+  label,
+  title,
+}: {
+  active: boolean
+  onClick: () => void
+  emoji: string
+  label: string
+  title: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-pressed={active}
+      className={buttonToggle(active)}
+    >
+      <span aria-hidden className={active ? undefined : 'opacity-60'}>
+        {emoji}
+      </span>
+      <span className={active ? 'font-semibold' : undefined}>{label}</span>
     </button>
   )
 }

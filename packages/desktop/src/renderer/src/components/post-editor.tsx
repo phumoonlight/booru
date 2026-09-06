@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { RATING_COLOR, RATING_LABEL, RATINGS, type Rating } from '@common/search'
 import type { Post } from '@common/data/posts'
 import { CategoryTagField } from './category-tag-field'
-import type { TagSeed } from './tag-field'
+import type { TagSeed } from './tag-seed'
 import { invalidateTags } from './tag-index'
 
 /**
@@ -162,7 +162,7 @@ export function PostEditor({
 
   if (missing) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 py-4">
+      <div className="mx-auto w-full max-w-3xl px-4 pt-4 pb-25">
         <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
           Post {postId} is not on the board any more.
         </p>
@@ -178,7 +178,7 @@ export function PostEditor({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-4">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 pt-4 pb-25">
       <div className="flex items-baseline justify-between gap-2">
         <div className="flex items-baseline gap-2">
           {/* Beside the number rather than under the picture: it is the number that

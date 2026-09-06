@@ -8,7 +8,7 @@
 /* The exceptions, and each has to be named: the category colours in the shared package's
    tags.ts (`categoryColor`, including its plain-foreground fallback) and `RATING_COLOR`
    in its search.ts are Tailwind classes, worn by the tag
-   index, the tag field and the implication rules. Class names are only ever found by
+   index, the tag picker, the rule editor and the rule map. Class names are only ever found by
    reading files, so a map imported from outside the scanned tree compiles to nothing at
    all — the categories came out plain grey rather than wrong, which is the kind of miss
    no type checker can catch. The ratings were worse than that: four of the six share a

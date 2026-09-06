@@ -3,10 +3,23 @@
  * the display order, and the only ones the desktop app will write.
  *
  * This list is the display order too, so it reads the way the Tags screen does: who made
- * it, then who is in it, then the subject from the head down, then the two catch-alls.
- * The middle group is the board's own vocabulary rather than Danbooru's four — a booru's
- * categories are a statement about what it is for, and the code only ever needed a colour
- * per name.
+ * it, then who is in it, then what they look like, then what they are wearing and
+ * carrying, then what they are doing, then the two catch-alls. The middle group is the board's own vocabulary
+ * rather than Danbooru's four — a booru's categories are a statement about what it is for,
+ * and the code only ever needed a colour per name.
+ *
+ * It has been re-cut once already: `head`, `exposure` and `posture` went, `sexual` became
+ * `nsfw`, and `appearance`, `accessories` and `action` arrived. `head` and `body` were one division
+ * drawn in the wrong place — a hair colour and an eye colour are both what someone looks
+ * like — and `exposure` was `nsfw` under another name. `posture` only ever held half of
+ * what a subject is doing, the standing-and-sitting half, with the rest scattered through
+ * `general`.
+ *
+ * **A retired name keeps working.** Nothing migrates: a tag still filed under `head` is
+ * an unknown category, which `categoryOrder` sorts after the known ones and
+ * `categoryColor` draws plain rather than dropping — so it stays on the screen, stays
+ * searchable, and is visibly the odd one out until somebody moves it. Losing the colour
+ * is the point; that is how you find them.
  *
  * There was a `color` category. It went because a colour is never what a tag *is*:
  * `pink_dress` is a dress and `blonde_hair` is hair, and filing them by their adjective
@@ -21,12 +34,12 @@ export const TAG_CATEGORIES = [
   'artist',
   'copyright',
   'character',
-  'head',
+  'appearance',
   'body',
   'clothes',
-  'exposure',
-  'posture',
-  'sexual',
+  'accessories',
+  'action',
+  'nsfw',
   'general',
   'meta',
 ] as const
@@ -149,12 +162,17 @@ const KNOWN_COLOR: Record<KnownCategory, string> = {
   artist: 'text-[#ff8a8b]',
   copyright: 'text-[#c797ff]',
   character: 'text-[#35c64a]',
-  head: 'text-[#ff9f43]',
+  // The three that replaced a category keep its hex, so a board that has been re-filed
+  // looks like the one you knew rather than a new palette to learn.
+  appearance: 'text-[#ff9f43]',
   body: 'text-[#e3ad8a]',
   clothes: 'text-[#45c8c0]',
-  exposure: 'text-[#ff87c8]',
-  posture: 'text-[#b6d94c]',
-  sexual: 'text-[#e8506e]',
+  // `exposure`'s pink, freed when that category went and reused rather than retired: the
+  // palette is ten hand-picked hues that stay apart on a dark ground, and inventing an
+  // eleventh is how two categories end up looking alike.
+  accessories: 'text-[#ff87c8]',
+  action: 'text-[#b6d94c]',
+  nsfw: 'text-[#e8506e]',
   general: 'text-[#4fa3e3]',
   meta: 'text-[#ead084]',
 }
@@ -163,12 +181,14 @@ const KNOWN_LABEL: Record<KnownCategory, string> = {
   artist: 'Artist',
   copyright: 'Copyright',
   character: 'Character',
-  head: 'Head',
+  appearance: 'Appearance',
   body: 'Body',
   clothes: 'Clothes',
-  exposure: 'Exposure',
-  posture: 'Posture',
-  sexual: 'Sexual',
+  accessories: 'Accessories',
+  action: 'Action',
+  // Spelled the way it is everywhere else on a board, in caps — "Nsfw" from the generic
+  // capitalizer would read as a word rather than the label it is.
+  nsfw: 'NSFW',
   general: 'General',
   meta: 'Meta',
 }

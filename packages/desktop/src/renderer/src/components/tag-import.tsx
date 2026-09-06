@@ -3,7 +3,7 @@ import { RATING_COLOR, RATING_LABEL, tagLabel } from '@common/search'
 import { categoryColor } from '@common/tags'
 import type { Post } from '@common/data/posts'
 import { readPosts, thumbnailFor } from './browse'
-import type { TagSeed } from './tag-field'
+import type { TagSeed } from './tag-seed'
 
 /**
  * Copying one post's tags onto a staged file.
@@ -106,7 +106,7 @@ export function TagImport({
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="a post number, or tags — the same search as Browse"
+          placeholder="1247, or 1girl blue_hair"
           spellCheck={false}
           autoFocus
           className="min-h-9 flex-1 rounded-lg border border-border bg-surface px-3 py-1.5 font-mono text-sm outline-none focus:border-accent"

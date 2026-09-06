@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { searchHref } from '@common/search'
 import { About } from './components/about'
-import { Browse } from './components/browse'
-import { TagRules } from './components/tag-rules'
+import { Browse, browseFor } from './components/browse'
 import { Settings } from './components/settings'
 import { TagIndex } from './components/tag-index'
 import { UploadQueue } from './components/upload-queue'
 import type { AppStatus } from '../../shared/api'
 
 /**
- * Six screens, one of them always mounted. There is no login and no setup step: which
+ * Five screens, one of them always mounted. There is no login and no setup step: which
  * board this build talks to was decided when it was built and compiled in
  * (`main/config.ts`), and the board itself has no accounts any more — this app writes
  * with the service-role key in its own bundle, which is why it is the only thing that
@@ -22,9 +21,7 @@ import type { AppStatus } from '../../shared/api'
  */
 export function App() {
   const [status, setStatus] = useState<AppStatus | null>(null)
-  const [view, setView] = useState<
-    'upload' | 'browse' | 'tags' | 'rules' | 'settings' | 'about'
-  >('upload')
+  const [view, setView] = useState<'upload' | 'browse' | 'tags' | 'settings' | 'about'>('upload')
   // A post the queue asked to review after uploading it. Held here because it is the one
   // thing one screen sends another, and cleared by any ordinary navigation — otherwise
   // Browse would reopen that editor the next time it is opened for its own reasons.
@@ -78,19 +75,28 @@ export function App() {
     ) : view === 'browse' ? (
       <Browse siteUrl={status.siteUrl} initialEdit={reviewing} />
     ) : view === 'tags' ? (
-      <TagIndex siteUrl={status.siteUrl} />
-    ) : view === 'rules' ? (
-      <TagRules siteUrl={status.siteUrl} />
+      // Its posts, on a tag's panel, hands the query to Browse and switches to it —
+      // `browseFor` seeds the module-level box that view mounts from, so this is one
+      // call rather than another id threaded through `App` the way `reviewing` is.
+      <TagIndex
+        onBrowse={(query) => {
+          browseFor(query)
+          setReviewing(null)
+          setView('browse')
+        }}
+      />
     ) : null
 
-  const go = (target: typeof view) => {
+  /**
+   * The only thing a nav item does. Pressing the one you were already on used to throw
+   * you back to the queue, which made the header's own answer to "where am I" also a way
+   * of leaving — and a second press aimed at a screen that was slow to paint landed you
+   * somewhere you had not asked for. Upload is reached by pressing Upload, like every
+   * other screen.
+   */
+  const go = (target: typeof view) => () => {
     setReviewing(null)
     setView(target)
-  }
-
-  const toggle = (target: typeof view) => () => {
-    setReviewing(null)
-    setView((current) => (current === target ? 'upload' : target))
   }
 
   return (
@@ -122,7 +128,7 @@ export function App() {
               here that is the app's actual job, so it leads the row. */}
           <button
             type="button"
-            onClick={() => go('upload')}
+            onClick={go('upload')}
             className={navClass(view === 'upload')}
           >
             <span aria-hidden>📤</span>
@@ -133,36 +139,29 @@ export function App() {
               there. The website cannot — it holds a key that only reads. */}
           <button
             type="button"
-            onClick={toggle('browse')}
+            onClick={go('browse')}
             title="Find a post and edit or delete it"
             className={navClass(view === 'browse')}
           >
             <span aria-hidden>🔍</span>
             Browse
           </button>
-          <button type="button" onClick={toggle('tags')} className={navClass(view === 'tags')}>
+          {/* Tag rules used to be the item beside this one. They are inside it now: a
+              rule is written about a tag, and this is the screen with every tag on it —
+              click a row and its rules are on the same panel as its name, with the whole
+              map of them behind one button in that screen's corner. One less nav item
+              for what was always one habit. */}
+          <button type="button" onClick={go('tags')} className={navClass(view === 'tags')}>
             <span aria-hidden>🏷️</span>
             Tags
           </button>
-          {/* Beside Tags because it is about tags, and because the two answer the same
-              question from opposite ends: what does the board call this, and what should
-              this one drag in with it. */}
-          <button
-            type="button"
-            onClick={toggle('rules')}
-            title="Tags that bring other tags with them"
-            className={navClass(view === 'rules')}
-          >
-            <span aria-hidden>🔗</span>
-            Tag rules
-          </button>
-          <button type="button" onClick={toggle('about')} className={navClass(view === 'about')}>
+          <button type="button" onClick={go('about')} className={navClass(view === 'about')}>
             <span aria-hidden>ℹ️</span>
             About
           </button>
           <button
             type="button"
-            onClick={toggle('settings')}
+            onClick={go('settings')}
             className={navClass(view === 'settings' || !status.configured)}
           >
             <span aria-hidden>⚙️</span>
@@ -171,7 +170,14 @@ export function App() {
         </div>
       </header>
 
-      {/* The frame never scrolls; the queue inside it does */}
+      {/* The frame never scrolls; the queue inside it does.
+
+          Every screen inside carries `pb-25` — 100px of nothing under its last row. A
+          scroller that ends flush with the window makes the last item look cut off rather
+          than final, and there is nowhere left to put the pointer. It is on each screen
+          rather than here because `py-*` is `padding-block` and `pb-*` is
+          `padding-bottom`: two properties setting the same value, decided by whichever
+          lands later in the stylesheet, so the shorthand is split instead of overridden. */}
       <main className="min-h-0 flex-1 overflow-y-auto">
         {over}
 
@@ -183,7 +189,7 @@ export function App() {
         {status.configured && (
           <div
             className={
-              over ? 'hidden' : 'mx-auto flex min-h-full w-full max-w-6xl flex-col px-4 py-4'
+              over ? 'hidden' : 'mx-auto flex min-h-full w-full max-w-6xl flex-col px-4 pt-4 pb-25'
             }
           >
             {/* The empty drop zone is the whole screen's content, so it sits in the

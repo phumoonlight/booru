@@ -116,6 +116,7 @@ export function registerIpc(): void {
         electron: process.versions.electron,
         chrome: process.versions.chrome,
       },
+      development: !app.isPackaged,
       limits: DESKTOP_UPLOAD_LIMITS,
       tagCache: tagCacheStatus(),
       // The settings screen needs the machine's core count to bound the field it offers,

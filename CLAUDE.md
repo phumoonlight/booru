@@ -211,8 +211,8 @@ only wall time. Both are process-wide, applied before the first encode and re-ap
 save. A POSIX host won't let a niced-down process raise itself back, so low → normal
 takes a restart; Windows, which this is packaged for, will.
 
-**Views** — `App.tsx` holds `'upload' | 'browse' | 'tags' | 'rules' | 'settings' |
-'about'`, with settings forced open only for a bundle built with no project. Nothing sits
+**Views** — `App.tsx` holds `'upload' | 'browse' | 'tags' | 'settings' | 'about'`, with
+settings forced open only for a bundle built with no project. Nothing sits
 behind a session, because there is none.
 
 - **Open site** is the header item that is not a view: it opens the board in the browser
@@ -221,7 +221,15 @@ behind a session, because there is none.
   About used to throw away a staged, half-tagged queue and orphan an upload in flight.
 - **Browse** is the website's gallery, moved here. It runs `@common/data/search`, so a
   query means the same thing in both windows. Its query lives in a module-level `let` —
-  coming back to an empty box after finding a post is a search typed twice.
+  coming back to an empty box after finding a post is a search typed twice — and so does
+  its **layout**: 🔳 Grid (even columns, cropped square) or 📐 Ratio — one height for every
+  image (`--row-h`), width from the ratio, and a ragged right edge. **Not** the website's
+  justified rows, which it started as: stretching a row to fill the line makes its height
+  depend on which ratios landed on it, so one panorama shrank every thumbnail beside it,
+  and comparing two posts at sizes decided by their neighbours is the thing this screen
+  is for. `MAX_RATIO` is a fact about the stored thumbnail (768×384), not a layout choice.
+  Neither the layout nor the query is persisted — a way of looking at the board for the
+  next few minutes is not a setting.
 - **`CategoryTagField` is the one tag editor**, on the queue card, the Apply-to-all bar
   and the post editor: staging a post and editing one differ in when the write happens,
   not in what a tag is. It replaced a free-text box that had to guess a category and so
@@ -232,9 +240,10 @@ behind a session, because there is none.
   made. It holds the board's names in a module-level cache shared by every field on
   screen, separate from the Tags screen's: that one carries `post_count` and is dropped on
   every post save, this one holds names and categories, so only `invalidateTagNames()`
-  from the Tags screen's own refresh drops it. `TagField` (free text) is
-  now the Tag rules screen's and nothing else — what is typed there is a rule, not a
-  post's tag.
+  from the Tags screen's own refresh drops it. Nothing in the app types a tag
+  name freehand any more: `TagField`, the free-text box with an autocomplete that the tag
+  rules used, went when the rules moved onto the Tags grid, leaving `tag-seed.ts` holding
+  the `TagSeed` type four modules still import from it.
 - **The rules apply where a post is made.** `seedsToInput` appends implications at upload,
   which is the only place the two lists meet; the queue card shows them under the rows and
   names the rule that lifted a rating. The post editor takes recommendations (a press
@@ -249,9 +258,19 @@ behind a session, because there is none.
   The screen stays open — Back is the way out, and the grid's stale row is re-read then
   rather than on the save, so correcting a rating twice is two clicks and not two
   searches. Delete is the exception: nothing is left to look at.
-- **Tags** lists and manages: click a row for rename / recategorize / delete, with New tag
-  and Apply by tag above the list, those being the two operations not about a row you are
-  pointing at. The category menu is `TAG_CATEGORIES` — **adding one is a line there plus
+- **Tags** lists and manages: click a row for rename / recategorize / delete **and that
+  tag's rules**. Two rows carry the controls: New tag, Apply by tag and Rule map on
+  the title line, then a toolbar of Refresh and a full-width filter box, which is Browse's
+  search bar drawn the same way — the first three being what is not about a row you are pointing at,
+  and the filter being what makes a few hundred tags browsable now that the grid is also a
+  picker. Every button is unbordered (`HEADER_LINK` / `headerToggle`, shared with Browse); the box
+  keeps its border, being the one thing you type into. **The grid has two
+  meanings**: ordinarily a click opens that tag, and while a rule on the open tag is being
+  filled in (`picking` in `TagIndex`) a click toggles that tag in the rule instead, with
+  the count column showing ✓/＋ rather than a number for as long as that lasts. **Its
+  posts** hands the tag name to Browse via `browseFor` and switches to it, rather than
+  opening `/tags/<id>` in a browser — the reason to ask what a tag is on is usually to fix
+  one of them, and only this window can. The category menu is `TAG_CATEGORIES` — **adding one is a line there plus
   a colour**, and no migration, since the column is free-form text. Reads don't assume
   the list (`categoryOrder` puts an unknown category after the known ones rather than
   dropping its tags); writes do (`z.enum(TAG_CATEGORIES)` on both IPC channels). Each drops the cached index. Its list is cached in a module-level `let`
@@ -262,9 +281,23 @@ behind a session, because there is none.
   of a copy that cannot reach its board. It carries what `app:status` reports, since the
   renderer has no `process` and a packaged app ships no manifest.
 
-**Tag rules** — two kinds, both the app's and neither the board's, on one screen
-(`tag-rules.tsx`), because they are one habit with two answers to "this tag is on the
-post, what else should be?". Both are `{ tag: [name, …] }` sections of `save.json`, both
+**Tag rules** — two kinds, both the app's and neither the board's, and **not a screen**:
+they sit on the panel of whichever tag the Tags screen has open (`tag-rule-editor.tsx`),
+because a rule is written *about* a tag and the screen with every tag on it — spelling,
+category, count — was the other one. They had their own screen whose first box named the
+trigger; that box was the whole problem, since the name it asked you to type was already
+on the list next door. The trigger is now the row that was clicked, so a rule has a left
+side that cannot be misspelled. **The right side is not typed either** — Choose turns the
+grid below into the picker and a click ticks a tag into the rule — so a rule can only name
+tags the board has, which is the rule everywhere a post is tagged and is now true here, on
+the one screen where coining the missing one is a button away. What that costs is the form
+that wrote several rules at once (`white_bra black_bra red_bra → bra`), now three
+selections, and a rule written ahead of the tag it names, which sat silent anyway.
+`rule-diagram.tsx` is the other half: 🗺️ Rule map, top right of Tags, draws every rule at
+once as the forest it is — implications chain, and one row per rule is exactly what hides
+that. Read-only, because a screen that both explains and edits invites an edit made on a
+picture rather than on a tag. Both rule sets are one habit with two answers to "this tag
+is on the post, what else should be?". Both are `{ tag: [name, …] }` sections of `save.json`, both
 parsed by a `normalize…` that doubles as the IPC validation (stricter than a zod schema
 of the same shape, since every name must match `TAG_PATTERN`), and both reach the window
 through one module-level store (`renderer/src/rule-store.ts`) rather than React state —
@@ -279,8 +312,8 @@ file read per keystroke.
   **floor**: `raisedRating` only lifts a row, so a later rule can't talk an explicit post
   back down. The tag field shows what they imply *under* the box, never in it — the box
   is the record of what was typed by hand — and the implied line is derived every render,
-  never state. `tagsToInput(value, rules)` is the one place the two lists join. The rules
-  screen's own boxes pass `applyImplications={false}`: a name typed there is the name
+  never state. `tagsToInput(value, rules)` is the one place the two lists join. The rule
+  editor's own boxes pass `applyImplications={false}`: a name typed there is the name
   itself, not a post carrying it.
 - **Recommendations are only offered.** `panties → black_panties bow_panties`: what
   *usually* goes with a tag is a question only the person looking at the picture can
@@ -372,12 +405,23 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
 
 - **Buckets are `posts` and `post-thumbnails`.** Paths derive from `posts.file_name`
   (the md5 of the uploaded bytes), never stored.
-- **Both encoders are lossy AVIF at quality 50** (`@common/imgcmp/`). The thumbnail is
-  384px tall, width capped at 768 for panoramas, `mitchell` kernel — the grid scales by
-  row height, so height is the bound that matters. `THUMB_MAX_HEIGHT` and the grid's
-  `MAX_ROW × --row-h` are one decision and must move together. The post image is kept only when it
-  beats the uploaded bytes, otherwise the original is stored byte-for-byte. Lossless was
-  measured and rejected on size (3.6MB from a 1.9MB JPEG).
+- **Both encoders are lossy AVIF** (`@common/imgcmp/`). The thumbnail is 384px tall,
+  width capped at 768 for panoramas, `mitchell` kernel, always quality 50 — the web grid
+  scales by row height, so height is the bound that matters, and `THUMB_MAX_HEIGHT` and
+  that grid's `MAX_ROW × --row-h` are one decision and must move together. The post image
+  is kept only when it beats the uploaded bytes, otherwise the original is stored
+  byte-for-byte. Lossless was measured and rejected on size (3.6MB from a 1.9MB JPEG).
+- **The post image's quality is a ramp on its longer side** (`postQualityFor`): 50 at
+  1920px and above, rising in a straight line to 100 at 1280px and below — 1600px is 75,
+  1440px is 88. Quality 50 is the right trade for something the resize is already taking
+  detail from and the wrong one for an image that arrives at the size it will be looked at
+  — nothing is thrown away, so every artefact is seen at 1:1, and there are far fewer
+  pixels to pay for. A ramp rather than steps because the argument strengthens gradually
+  and steps put a cliff between two uploads a pixel apart. Landscape, portrait and square
+  all reduce to `Math.max(width, height)`, which is what the code says; unreadable
+  dimensions take the floor, not the ceiling. Nothing above the floor can bloat a post:
+  the only path that keeps the AVIF without comparing it to the uploaded bytes is an image
+  over `POST_MAX_DIMENSION`, which is over 1920 and so on the floor.
 - **The stored post image is bounded to 2048 on both sides** (`POST_MAX_DIMENSION`).
   Above it the AVIF is not competing on bytes — it is the only version inside the cap, so
   it is kept however it measures, and the row records the *stored* size, not the uploaded
@@ -396,6 +440,29 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   already says.
 - No component library. Plain Tailwind against the CSS variables in `globals.css`
   (`background`, `surface`, `border`, `muted`, `accent`). Dark theme only.
+- **A button is an emoji, its words, and no box.** `renderer/src/components/buttons.ts`
+  is the only place that spells one, and a new control takes a constant from there rather
+  than a class list of its own. No border and no ground at rest; **hover adds a ground and
+  lifts the text** to `foreground`, together — that ground is the hit area appearing under
+  the pointer, which is what the border was drawing all along and only ever needed to draw
+  while you were pointing at it. It replaced an underline on hover, which said "link", and
+  these are not links: they run searches, unfold panels, delete tags.
+  - The ground must be a step from whatever the button sits on, so there are two:
+    `BUTTON` / `BUTTON_SM` (`hover:bg-surface`) for the page, `BUTTON_ON_SURFACE`
+    (`hover:bg-background`) inside a panel or a bordered row. Two `hover:bg-*` utilities
+    in one class list is a coin toss decided by stylesheet order, which is why they are
+    separate constants and why `buttonToggle(active)` swaps the colour into the shape
+    instead of appending one.
+  - `buttonToggle` is accent while what it opened is open — the whole of what an outline
+    used to say. `BUTTON_SUBMIT` is accent always, for the control that finishes a form.
+  - **The exception is text that genuinely is a link** — a URL or a post number in a line
+    of prose, in About, Settings and a finished upload. Those stay `text-accent
+    hover:underline`, because they go somewhere and a person should know that before
+    clicking.
+- **A placeholder is an example, not a description.** `blue_hair`, not "filter tags";
+  `1girl blue_hair -solo rating:explicit`, not "tags, -excluded, rating:explicit". The
+  label and the heading already say what a box is for, and a box saying it a third time
+  teaches nothing — an example shows the spelling, the separator and the grammar at once.
 - **Prefer an emoji to a drawn icon**, and pick a fancy one where a fancy one fits — 🔄,
   ➕, 🧩, 📋, ✅, 🗑️, 🖼️. They cost no SVG, no component and no import, they carry colour
   the palette otherwise has none of, and a control that is one glyph beside its own words

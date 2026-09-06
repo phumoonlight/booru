@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RATING_COLOR, RATING_LABEL, RATINGS, tagLabel, type Rating } from '@common/search'
+import { BUTTON_SM } from './buttons'
 import { ArrowDownIcon, ArrowUpIcon, TrashIcon } from './icons'
 import { ImageViewer } from './image-viewer'
 import { categoryColor } from '@common/tags'
 import { CategoryTagField, seedsToInput } from './category-tag-field'
-import type { TagSeed } from './tag-field'
+import type { TagSeed } from './tag-seed'
 import { invalidateTags } from './tag-index'
 import { invalidateBrowse } from './browse'
 import { TagImport } from './tag-import'
@@ -966,7 +967,7 @@ function Duplicate({
               type="button"
               onClick={() => onReview(postId)}
               title="Open that post in the editor"
-              className="text-xs text-muted underline-offset-2 transition-colors hover:text-foreground hover:underline"
+              className={BUTTON_SM}
             >
               ✏️ Review tags
             </button>
@@ -1023,7 +1024,7 @@ function Uploaded({
             type="button"
             onClick={() => onReview(postId)}
             title="Open this post in the editor"
-            className="text-xs text-muted underline-offset-2 transition-colors hover:text-foreground hover:underline"
+            className={BUTTON_SM}
           >
             ✏️ Review tags
           </button>

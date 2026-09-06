@@ -83,7 +83,7 @@ for your own board. Treat the installer accordingly: anyone who has it can write
 |---|---|
 | `src/main` | the process that does the work — clients, config, staging, the IPC handlers |
 | `src/preload` | the bridge; the only thing the window can reach |
-| `src/renderer` | the React window: the upload queue, browse, tags, tag rules, settings, about |
+| `src/renderer` | the React window: the upload queue, browse, tags (and their rules), settings, about |
 | `src/shared/api.ts` | the types across the bridge, imported by all three |
 | `src/shared/implications.ts` | rules the app applies: what they are, and the pure code that applies them |
 | `src/shared/recommendations.ts` | rules the app only offers, same shape |

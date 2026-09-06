@@ -57,6 +57,15 @@ export type AppStatus = {
   supabaseUrl: string
   /** What the About screen shows, and what a bug report needs: the app and the runtime under it. */
   versions: { app: string; electron: string; chrome: string }
+  /**
+   * `!app.isPackaged` — a checkout run by `desktop:dev`, not an installed copy. About
+   * says so beside the version, because the two look identical otherwise and they are not
+   * the same thing: a dev run reads `save.json` from its own `userData`
+   * (`pubooru-desktop-dev`), so its rules and settings are somebody else's, and the
+   * version it reports is whatever the working tree currently says rather than what was
+   * shipped. Read in main, since the renderer has no `process` to ask.
+   */
+  development: boolean
   limits: { maxFileSize: number; maxFileSizeLabel: string; maxPixels: number }
   /** The cached tag index behind autocomplete: how many names, and when they were read. */
   tagCache: { count: number; at: number | null }

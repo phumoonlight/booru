@@ -14,7 +14,7 @@ import { impliedTags, type ImplicationRules } from '../../../shared/implications
 import { recommendedTags } from '../../../shared/recommendations'
 import { useImplications } from '../implications'
 import { useRecommendations } from '../recommendations'
-import type { TagSeed } from './tag-field'
+import type { TagSeed } from './tag-seed'
 
 /**
  * A post's tags, grouped by category, with a picker per row.
@@ -445,7 +445,7 @@ function TagPicker({
         value={filter}
         onChange={(event) => setFilter(event.target.value.toLowerCase())}
         onKeyDown={(event) => event.key === 'Escape' && onClose()}
-        placeholder={`filter ${categoryLabel(category).toLowerCase()} tags`}
+        placeholder="blue_hair"
         spellCheck={false}
         className="min-h-8 rounded-lg border border-border bg-background px-2 font-mono text-xs outline-none focus:border-accent"
       />
