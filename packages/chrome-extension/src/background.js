@@ -33,6 +33,36 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
     return
   }
 
+  /**
+   * Saving the picture, which is the other thing only this side can do.
+   *
+   * `<a download>` is ignored across origins and every board serves its images from a
+   * different host than its pages, so the anchor would navigate to the file rather than
+   * save it — which is the right-click dance this replaces. `chrome.downloads` has no
+   * such rule and needs no host access, since it is the browser fetching rather than the
+   * page.
+   */
+  if (message.type === 'download') {
+    // Answered rather than dropped: the button is showing a spinner until it hears back,
+    // and "no" is a better thing to hear than nothing.
+    if (typeof message.url !== 'string' || !/^https?:\/\//i.test(message.url)) {
+      respond({ ok: false })
+      return
+    }
+    // `saveAs` opens the dialog rather than dropping the file in the download folder:
+    // pictures being sourced are filed somewhere on purpose, and picking the folder is
+    // the whole reason a person would have been right-clicking. The dialog opens on the
+    // last folder used, so a run of saves into one place is one choice and then Enter.
+    chrome.downloads.download(
+      { url: message.url, filename: message.filename, saveAs: true },
+      () => {
+        // A refused download sets `lastError`, and reading it is what marks it handled.
+        respond({ ok: !chrome.runtime.lastError })
+      }
+    )
+    return true
+  }
+
   if (typeof message.site !== 'string' || !message.site) return
 
   if (message.type === 'query') {

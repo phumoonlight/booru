@@ -817,6 +817,9 @@ const BOARDS = [
       if (query.get('page') !== 'post' || query.get('s') !== 'view') return null
       return digits(query.get('id'))
     },
+    // The stored file, as opposed to the sample the page is showing you. Both boards put
+    // a link to it on the post, so this is recognising one rather than deriving it.
+    original: /\/images\/[\da-f]{2}\/[\da-f]{2}\/[\da-f]{32}\./i,
   },
   {
     key: 'konachan',
@@ -826,6 +829,8 @@ const BOARDS = [
       const match = url.pathname.match(/^\/post\/show\/(\d+)/)
       return match ? Number(match[1]) : null
     },
+    // `/jpeg/<md5>/…` is moebooru's re-encode of a large png and is deliberately not this.
+    original: /\/image\/[\da-f]{32}/i,
   },
 ]
 
@@ -1084,6 +1089,30 @@ function buildDock() {
       .label { position: relative }
       .state { position: relative; margin-left: auto; font-size: 11px; opacity: .55; letter-spacing: .04em }
       #note { padding: 5px 10px 6px; font-size: 11px; opacity: .45 }
+      /* The dock's button, drawn the same way, because it is the same kind of thing:
+         one glyph you press, floating over a page it does not belong to. */
+      #save {
+        all: unset;
+        box-sizing: border-box;
+        position: fixed;
+        width: 32px;
+        height: 32px;
+        display: grid;
+        place-items: center;
+        font-size: 15px;
+        border-radius: 50%;
+        pointer-events: auto;
+        cursor: pointer;
+        color: #e6e6ea;
+        background: #14141a;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, .18), 0 8px 24px rgba(0, 0, 0, .5);
+        /* Out of the way until pointed at, unlike the dock's — it sits on top of the
+           picture it saves, and the picture is what the page is for. */
+        opacity: .4;
+        transition: opacity .12s ease;
+      }
+      #save:hover { opacity: 1 }
+      #save[hidden] { display: none }
     </style>
     <div id="dock">
       <div id="menu" hidden>
@@ -1114,6 +1143,7 @@ function buildDock() {
       </div>
       <button id="fab" aria-label="Booru explorer" title="Booru explorer">📖</button>
     </div>
+    <button id="save" hidden aria-label="Save the original" title="Save the original">⬇️</button>
   `
   document.documentElement.appendChild(dockHost)
   wireDock()
@@ -1166,6 +1196,140 @@ function repaintDock() {
         ? 'No posts on this page.'
         : `Post ${current}.`
       : `${read} of ${ids.length} read on this page.`
+}
+
+// ------------------------------------------------------------------ saving it
+
+/**
+ * The post's own picture, on a post's own page. Both boards call it `#image`, and a
+ * video post is the one that isn't — Gelbooru swaps in a player and moebooru a bare
+ * `<video>`. The last resort is whatever is biggest, since a post page has exactly one
+ * thing on it worth being big.
+ */
+let mediaCache = null
+
+function postMedia() {
+  if (postIdOf(location.href) === null) return null
+  // Held onto, because the placing asks on every frame of a scroll and the fallback below
+  // is a walk of every picture on the page. `isConnected` is what catches a board that
+  // replaced it — moebooru swaps the element to switch between sample and original.
+  if (mediaCache && mediaCache.isConnected) return mediaCache
+  mediaCache = document.querySelector('#image, #gelcomVideoPlayer')
+  if (mediaCache) return mediaCache
+  let best = null
+  for (const element of document.querySelectorAll('img, video')) {
+    const width = element.clientWidth
+    if (width < 400) continue
+    if (!best || width > best.clientWidth) best = element
+  }
+  mediaCache = best
+  return mediaCache
+}
+
+/**
+ * The file the board stores, rather than the sample it is showing.
+ *
+ * Both boards link to it from the post — "Original image" on Gelbooru, "Download larger
+ * version" on Konachan — so this recognises that link rather than deriving an address and
+ * guessing at its extension. The displayed picture is the last resort, and on a post
+ * small enough to have no sample it is also the right answer.
+ */
+function originalHref(media) {
+  const shown = media ? media.currentSrc || media.src : ''
+  if (shown && board.original.test(shown)) return shown
+  for (const anchor of document.links) {
+    if (board.original.test(anchor.href)) return anchor.href
+  }
+  return shown || null
+}
+
+/**
+ * `<board>-<post>.<ext>`, which is short and says where the file came from. The board's
+ * own name is either an md5 or, on moebooru, the post's whole tag list — one unreadable
+ * and the other unwieldy, and both of them worse than the number that finds the post
+ * again.
+ */
+function saveName(url, id) {
+  const path = url.split(/[?#]/)[0]
+  const dot = path.lastIndexOf('.')
+  const ext = dot > path.lastIndexOf('/') ? path.slice(dot + 1).toLowerCase() : 'jpg'
+  return `${board.key}-${id}.${/^[a-z\d]{1,5}$/.test(ext) ? ext : 'jpg'}`
+}
+
+// `#save`'s own width, which the placing has to know and CSS cannot tell it.
+const SAVE_SIZE = 32
+// How much of it hangs off the corner. Mostly outside, so it is on the picture's edge
+// rather than on the picture — but not clear of it, since a post page has no margin to
+// rely on and a button floating in a gap that isn't there would land on the sidebar.
+const SAVE_OUT = Math.round(SAVE_SIZE * 0.6)
+
+/**
+ * Parked on the picture's top-left corner, which is why it is placed rather than
+ * inserted: a button put *inside* the board's markup has to be given a positioned
+ * ancestor, and rearranging the one element the page exists to show is not worth a
+ * button. It follows on scroll instead, and hides when the corner leaves the window.
+ */
+function placeSave() {
+  const save = dockPart('save')
+  if (!save) return
+  const media = postMedia()
+  if (!media) {
+    save.hidden = true
+    return
+  }
+  const box = media.getBoundingClientRect()
+  if (box.width < 1 || box.bottom < 8 || box.top > innerHeight - 8) {
+    save.hidden = true
+    return
+  }
+  save.hidden = false
+  // Clamped into the window, because the corner it belongs to can be scrolled past it or
+  // sit against the left edge, and a button drawn off-screen is a button that is gone.
+  const left = Math.max(4, box.left - SAVE_OUT)
+  const top = Math.min(Math.max(4, box.top - SAVE_OUT), innerHeight - SAVE_SIZE - 4)
+  save.style.left = `${Math.round(left)}px`
+  save.style.top = `${Math.round(top)}px`
+}
+
+let placeQueued = false
+function queuePlaceSave() {
+  if (placeQueued) return
+  placeQueued = true
+  requestAnimationFrame(() => {
+    placeQueued = false
+    placeSave()
+  })
+}
+
+/**
+ * The button says what happened by changing its glyph, there being nowhere else to say
+ * it: one circle sitting on a picture has no room for a word, and a message anywhere
+ * further away would be answering a question about something you are pointing at.
+ */
+let glyphRevert = 0
+
+function saveGlyph(glyph) {
+  const save = dockPart('save')
+  if (!save) return
+  save.textContent = glyph
+  // One timer, not one per state. The dialog is open for as long as a person takes over
+  // it, so the ⏳ regularly outlives its own 1.6s — and its revert firing just after the
+  // ✅ landed would take the answer away a moment after it arrived.
+  clearTimeout(glyphRevert)
+  if (glyph === '⬇️') return
+  glyphRevert = setTimeout(() => saveGlyph('⬇️'), 1600)
+}
+
+function saveNow() {
+  const id = postIdOf(location.href)
+  const url = originalHref(postMedia())
+  if (id === null || !url) return saveGlyph('🚫')
+  saveGlyph('⏳')
+  send({ type: 'download', url, filename: saveName(url, id) }, (answer) => {
+    // The dialog is the browser's, so "handed over" is as much as this can honestly
+    // report — a person who cancels it knows they cancelled it.
+    saveGlyph(answer && answer.ok ? '✅' : '⚠️')
+  })
 }
 
 function setMarking(next) {
@@ -1256,6 +1420,9 @@ function wireDock() {
     send({ type: 'options' })
     closeMenu()
   })
+
+  dockPart('save').addEventListener('click', saveNow)
+  placeSave()
 }
 
 // ------------------------------------------------------- marking, and the page
@@ -1343,6 +1510,14 @@ if (board) {
     idle(() => {
       rescanQueued = false
       scan()
+      // The picture is usually laid out after the scan that first found it, and on
+      // Gelbooru it resizes itself once more when the "resized" notice is dismissed.
+      queuePlaceSave()
     })
   }).observe(document.documentElement, { childList: true, subtree: true })
+
+  // The corner is a viewport position, so it moves with everything that moves the page.
+  addEventListener('scroll', queuePlaceSave, { passive: true, capture: true })
+  addEventListener('resize', queuePlaceSave, { passive: true })
+  addEventListener('load', queuePlaceSave)
 }

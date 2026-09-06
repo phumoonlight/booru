@@ -112,9 +112,37 @@ Brave and Chrome, unpacked:
 2. Developer mode on
 3. **Load unpacked** → pick `packages/chrome-extension`
 
+## Saving the picture
+
+On a post's own page a ⬇️ button sits on the top-left corner of the picture — the dock's
+button drawn smaller, because it is the same kind of thing. Clicking it opens the save
+dialog on the board's **original** file, not the sample the page is showing you, so filing
+something is one click and a folder rather than right click, open in new tab, wait for the
+full size, right click again.
+
+It **straddles** the corner rather than sitting inside it: mostly outside the picture, so
+it is on the edge rather than on the thing you are looking at, but not clear of it, since
+a post page has no margin to rely on and a button floating in a gap that isn't there would
+land on the sidebar. It is placed rather than inserted — following the corner on scroll,
+clamped into the window, and hidden when that corner scrolls past — so nothing about the
+board's own markup is rearranged. It sits at 40% until pointed at, and says what happened
+by changing its glyph, ⏳ then ✅ or ⚠️, there being no room beside one circle for a word.
+
+Both boards link to the original from the post — "Original image" on Gelbooru, "Download
+larger version" on Konachan — so the address is recognised rather than derived, and no
+extension has to be guessed at. A post small enough to have no sample is showing its
+original already, and that is what gets saved. The file is named `<board>-<post>.<ext>`:
+the board's own name is either an md5 or the post's whole tag list, one unreadable and the
+other unwieldy, and both worse than the number that finds the post again.
+
+The dialog is deliberate rather than a straight drop into the download folder — pictures
+being sourced get filed somewhere on purpose, and choosing the folder is the reason you
+were right-clicking. Chrome opens it on the last folder used, so a run of saves is one
+choice and then Enter.
+
 ## Permissions
 
-Two, both of which Chrome installs without a warning, and no host access at all:
+Three, and no host access at all:
 
 - **`storage`** — the marking on/off switch and which side the button sits on. These
   answer for the extension rather than for a board, so unlike the hover mode and size
@@ -122,6 +150,12 @@ Two, both of which Chrome installs without a warning, and no host access at all:
   somewhere both boards and the settings page can see.
 - **`unlimitedStorage`** — read history has no ceiling but the one you give it, and
   hitting a quota mid-mark would lose marks silently.
+- **`downloads`** — the Save button. This is the one Chrome warns about, as "Manage your
+  downloads"; the other two install silently. There is no way around it: `<a download>` is
+  ignored across origins and every board serves its pictures from a different host than
+  its pages, so an anchor navigates to the file instead of saving it — which is the
+  right-click dance the button exists to replace. `chrome.downloads` has the browser fetch
+  it instead, which needs no host access.
 
 Neither the content script nor the worker asks for host access: a content script declared
 in `matches` needs none, and nothing here calls `fetch`. Previews are `<img>` elements,
