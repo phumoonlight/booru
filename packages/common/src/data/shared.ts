@@ -81,7 +81,7 @@ export async function findPostIdsByFileNames(
  *
  * If tagging fails the post is deleted again rather than left half-tagged, counters
  * included — the delete goes through `deletePostRow`, so whatever links did land are
- * counted back down.
+ * counted back down. A name the board has no tag for is one of the ways it fails.
  */
 export async function createPostWithTags(
   client: BooruClient,
@@ -153,29 +153,37 @@ export async function deletePostRow(client: BooruClient, postId: number): Promis
 }
 
 /**
- * Ids for `names`, creating any tag that isn't on the board yet. `ignoreDuplicates`
- * makes the write an `on conflict do nothing`, so an existing tag keeps its category
- * and its post_count — only genuinely new names get a row.
+ * Ids for `names`, every one of which must already be a tag on the board. A name that
+ * isn't ends the write, naming the ones it couldn't find.
+ *
+ * It used to coin the missing ones with an `on conflict do nothing` upsert, which cost
+ * two things. The visible one: a typo in a tag field became a tag, in an app where
+ * naming one is otherwise the Tags screen's job — that screen has the whole vocabulary
+ * on it, so a near-duplicate is seen before it is made. The quiet one: Postgres draws
+ * the identity default *before* it tests the conflict, so every tag a post already had
+ * burned a `tags.id` and threw the row away. A twenty-tag post spent twenty ids on each
+ * save, and the post editor writes on every control use, so re-tagging a handful of
+ * posts opened gaps of hundreds in the id column.
  */
-export async function ensureTagIds(client: BooruClient, names: string[]): Promise<number[]> {
+export async function resolveTagIds(client: BooruClient, names: string[]): Promise<number[]> {
   if (names.length === 0) return []
 
-  const { error } = await client
-    .from('tags')
-    .upsert(
-      names.map((name) => ({ name })),
-      { onConflict: 'name', ignoreDuplicates: true }
-    )
-  if (error) throw new Error(`Could not create tags: ${error.message}`)
+  const { data, error } = await client.from('tags').select('id, name').in('name', names)
+  if (error) throw new Error(`Could not read tags: ${error.message}`)
 
-  const { data, error: readError } = await client.from('tags').select('id').in('name', names)
-  if (readError) throw new Error(`Could not read tags: ${readError.message}`)
-  return (data ?? []).map((row) => row.id)
+  const found = new Map((data ?? []).map((row) => [row.name as string, row.id as number]))
+  const missing = names.filter((name) => !found.has(name))
+  if (missing.length > 0) {
+    throw new Error(
+      `Not a tag on this board: ${missing.join(', ')} — create it on the Tags screen first.`
+    )
+  }
+  return names.map((name) => found.get(name) as number)
 }
 
 /**
- * Makes `names` the post's exact tag set: creates any missing tag, drops the links
- * that are no longer wanted, adds the ones that are.
+ * Makes `names` the post's exact tag set: drops the links that are no longer wanted,
+ * adds the ones that are. Every name has to be a tag already — see `resolveTagIds`.
  *
  * Returns the tags whose link count actually moved — the ones dropped plus the ones
  * added — which is what the caller hands `syncTagPostCounts`. That is why the wanted
@@ -188,7 +196,7 @@ async function setPostTags(
   postId: number,
   names: string[]
 ): Promise<number[]> {
-  const wanted = await ensureTagIds(client, names)
+  const wanted = await resolveTagIds(client, names)
 
   // On a fresh post this comes back empty, which is why create and update share this
   const { data: linked, error: linkedError } = await client

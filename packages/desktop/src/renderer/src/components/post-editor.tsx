@@ -148,8 +148,8 @@ export function PostEditor({
       setError(result.error)
       return
     }
-    // The edit may have moved a tag's post_count or coined one; the Tags screen's copy of
-    // the index is now wrong about it.
+    // The edit may have moved a tag's post_count; the Tags screen's copy of the index is
+    // now wrong about it.
     invalidateTags()
     setStatus('saved')
     onSaved()

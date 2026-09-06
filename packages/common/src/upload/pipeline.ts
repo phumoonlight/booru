@@ -3,7 +3,7 @@ import sharp, { type Metadata } from 'sharp'
 import { z } from 'zod'
 import { POST_MAX_DIMENSION, compressImgForPost } from '@common/imgcmp/for-post'
 import { compressImgForThumbnail } from '@common/imgcmp/for-thumbnail'
-import { createPostWithTags, findPostIdByFileName } from '@common/data/shared'
+import { createPostWithTags, findPostIdByFileName, resolveTagIds } from '@common/data/shared'
 import { POSTS_BUCKET, THUMBNAILS_BUCKET, postImagePath, thumbnailPath } from '@common/storage'
 import { RATINGS, type Rating } from '@common/search'
 import { parseTagInput } from '@common/tags'
@@ -162,6 +162,17 @@ export async function createPostFromImage(
   const existingPostId = await findPostIdByFileName(client, md5)
   if (existingPostId !== null) {
     return { ok: false, error: 'This image already exists', existingPostId }
+  }
+
+  // A tag the board doesn't have fails the insert at the bottom of this function, which
+  // by then has cost a full encode and two storage uploads to undo. The same question
+  // asked here, next to the other one this function asks the board, costs one small
+  // select on the way past and turns a mistyped or stale tag into an error before any
+  // pixels are decoded. The insert still checks — this is an early out, not the rule.
+  try {
+    await resolveTagIds(client, metadata.tags)
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Unknown tags' }
   }
 
   // Unlike the post image below there is no fallback here — a post with no

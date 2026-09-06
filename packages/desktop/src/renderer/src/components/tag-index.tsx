@@ -604,8 +604,9 @@ function SubcategoryField({
 
 /**
  * Name a tag before anything carries it — an artist or a series, with the category
- * already right. Uploads coin tags as a side effect of applying them, so this is only
- * ever the other order, and the tag starts on no posts.
+ * already right. This is now the only way a tag comes into being: a post write resolves
+ * the names it was given and fails on one the board doesn't have, rather than coining it
+ * on the way past. So the order is always this one, and the tag starts on no posts.
  */
 function CreateTag({
   subcategoriesIn,

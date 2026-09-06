@@ -76,7 +76,8 @@ export async function savePost(
     return { ok: false, error: error instanceof Error ? error.message : 'Could not save the post.' }
   }
 
-  // An edit can coin a tag, which is the one the next post is about to want.
+  // An edit can't coin a tag any more, but it moves post_counts, and the cached index
+  // carries those.
   clearTagCache()
   return { ok: true }
 }

@@ -73,16 +73,23 @@ structure further down.
    No trigger does it any more.
 6. **Preserve the unwind in `createPostWithTags()`** — there is no transaction; it
    deletes the post it inserted if tagging fails.
-7. **A Tailwind class in `packages/common` needs an `@source` line** in
+7. **No write path coins a tag.** `resolveTagIds` (`@common/data/shared`) reads the names
+   it is given and throws naming the ones the board has no row for, so creating a post,
+   editing one and Apply by tag all fail on a name that isn't a tag yet. Creating one is
+   ➕ New tag on the desktop Tags screen and nothing else. This is a correctness fix as
+   well as a UI one: the old `on conflict do nothing` upsert made Postgres draw the
+   identity default before testing the conflict, so every tag a post already had spent a
+   `tags.id` on every save.
+8. **A Tailwind class in `packages/common` needs an `@source` line** in
    `packages/desktop/src/renderer/src/styles.css`, or it compiles to nothing in the
    desktop build. Currently the category colours behind `categoryColor` (`@common/tags`),
    its plain-foreground fallback included, and `RATING_COLOR` (`@common/search`). The failure can be *partial*, where a hex shared with another
    scanned constant happens to survive.
-8. **`searchHref()` is the only thing that spells the listing's path.** Tag links,
+9. **`searchHref()` is the only thing that spells the listing's path.** Tag links,
    facets and the feed all derive from it.
-9. **Re-measure with `npm run bench:avif` before changing a constant in
+10. **Re-measure with `npm run bench:avif` before changing a constant in
    `@common/imgcmp/`.** Those numbers were measured, not chosen.
-10. **Bumping `packages/desktop/package.json` and writing
+11. **Bumping `packages/desktop/package.json` and writing
     `packages/desktop/changelog/<version>.md` are one change.** About reads the version,
     so drift makes the app lie about itself.
 
@@ -309,7 +316,8 @@ grid below into the picker and a click ticks a tag into the rule — so a rule c
 tags the board has, which is the rule everywhere a post is tagged and is now true here, on
 the one screen where coining the missing one is a button away. What that costs is the form
 that wrote several rules at once (`white_bra black_bra red_bra → bra`), now three
-selections, and a rule written ahead of the tag it names, which sat silent anyway.
+selections, and a rule written ahead of the tag it names — which used to sit silent and
+now fails the upload that fires it, since no write path coins a tag any more.
 `rule-diagram.tsx` is the other half: 🗺️ Rule map, top right of Tags, draws every rule at
 once as the forest it is — implications chain, and one row per rule is exactly what hides
 that. Read-only, because a screen that both explains and edits invites an edit made on a

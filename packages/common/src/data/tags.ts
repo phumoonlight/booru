@@ -1,6 +1,5 @@
 import type { BooruClient } from '@common/supabase/types'
 import { syncTagPostCounts } from '@common/data/counters'
-import { ensureTagIds } from '@common/data/shared'
 import {
   markColor,
   normalizeSubcategory,
@@ -283,10 +282,13 @@ export type ApplyTagResult = {
  * would otherwise be opening each post in turn. An implication, in practice: `swimsuit`
  * for everything tagged `bikini`.
  *
- * The condition tag has to exist, because a name nobody has used matches no posts and
- * "applied to 0 posts" is a worse answer than "no such tag" for what is nearly always a
- * typo. The target is created if it is new, the way an upload creates the tags it
- * applies — naming it first only buys it a category.
+ * Both tags have to exist. For the condition that was always true — a name nobody has
+ * used matches no posts, and "applied to 0 posts" is a worse answer than "no such tag"
+ * for what is nearly always a typo. The target used to be coined here if it was new,
+ * which made these two boxes the last place in the app where typing a name created a
+ * tag: a slip in the target box would have put a `general` tag nobody meant onto every
+ * matching post at once. Naming a tag is the Tags screen's job, and the grid is right
+ * underneath this panel.
  *
  * Posts that already carry the target are filtered out rather than inserted and left to
  * the unique constraint: the point is the count that comes back. "Added to 3 posts, 41
@@ -318,10 +320,12 @@ export async function applyTagToTagged(
       return { ok: false, error: `${condition.name} is not a tag on this board.` }
     }
 
-    let targetTag = (rows ?? []).find((tag) => tag.name === target.name)
+    const targetTag = (rows ?? []).find((tag) => tag.name === target.name)
     if (!targetTag) {
-      const [id] = await ensureTagIds(client, [target.name])
-      targetTag = { id, name: target.name, category: 'general', mark: null, post_count: 0 }
+      return {
+        ok: false,
+        error: `${target.name} is not a tag on this board — create it first.`,
+      }
     }
     const targetId = targetTag.id
 

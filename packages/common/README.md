@@ -31,7 +31,7 @@ where the file is.
 | `supabase/types.ts` | `BooruClient`, the client type every function here takes |
 | `data/posts.ts` | the `Post` row shape, `POST_COLUMNS`, and the single-post reads |
 | `data/search.ts` | `searchPosts` — the whole query, tag resolution and cursor |
-| `data/shared.ts` | the post write path, `ensureTagIds`, tag-name search, `listTags` |
+| `data/shared.ts` | the post write path, `resolveTagIds`, tag-name search, `listTags` |
 | `data/tags.ts` | managing the vocabulary: create, rename, recategorize, delete, apply-by-tag |
 | `data/counters.ts` | `syncTagPostCounts` — recompute, never increment |
 | `imgcmp/for-post.ts` | lossy AVIF (q50) for the stored image, bounded to `POST_MAX_DIMENSION` |
