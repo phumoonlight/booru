@@ -462,7 +462,7 @@ export function Browse({
             }}
             className={BUTTON}
           >
-            Clear
+            <span aria-hidden>🧹</span> Clear
           </button>
         )}
       </form>
