@@ -122,16 +122,23 @@ export function TagRuleEditor({
             alone, which is `raisedRating` and is said here rather than left to be
             discovered. The one thing on this panel still chosen from a menu, because a
             rating is not among the tags in the grid and never could be. It writes on
-            change — there is no rule to compose, only a value to set. */}
+            change — there is no rule to compose, only a value to set.
+
+            Disabled while that write is out, unlike the chips beside it. A chip is a
+            list you add to, so pressing a second one mid-write is a second thing to do;
+            this is one value, and its `value` is `floor` — which is still the old rating
+            until the board answers. An open menu during a write would offer the previous
+            state as the current one, and a second choice would be made against it. */}
         <label className="flex flex-col gap-1 text-xs text-muted">
           Raise rating to at least
           <select
             value={floor}
+            disabled={savingImplies}
             onChange={(event) => {
               const next = event.target.value as Rating | ''
               void saveImplication(tag, [...impliedTags, ...(next ? [ratingToken(next)] : [])])
             }}
-            className={`min-h-9 rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-accent ${
+            className={`min-h-9 rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-accent disabled:opacity-50 ${
               floor ? RATING_COLOR[floor] : ''
             }`}
           >
@@ -193,9 +200,10 @@ export function TagRuleEditor({
  * so the heading row does not reflow the moment a chip is pressed — it is a word
  * appearing, not a layout changing.
  *
- * Nothing is disabled while it shows. Pressing a second chip during the first write is a
- * reasonable thing to do, and the store keeps the answer to the later of the two rather
- * than whichever round trip happens to land last.
+ * The chips stay live while it shows — pressing a second one during the first write is a
+ * second thing to do, and the store keeps the answer to the later of the two rather than
+ * whichever round trip happens to land last. The rating menu is the exception and
+ * disables itself; the comment beside it says why.
  */
 function Saving({ on }: { on: boolean }) {
   return (
