@@ -8,12 +8,20 @@
  * rather than Danbooru's four — a booru's categories are a statement about what it is for,
  * and the code only ever needed a colour per name.
  *
- * It has been re-cut once already: `head`, `exposure` and `posture` went, `sexual` became
- * `nsfw`, and `appearance`, `accessories` and `action` arrived. `head` and `body` were one division
+ * It has been re-cut twice. The first cut retired `head`, `exposure` and `posture` and
+ * brought in `appearance`, `accessories` and `action`: `head` and `body` were one division
  * drawn in the wrong place — a hair colour and an eye colour are both what someone looks
- * like — and `exposure` was `nsfw` under another name. `posture` only ever held half of
- * what a subject is doing, the standing-and-sitting half, with the rest scattered through
- * `general`.
+ * like — and `exposure` was the sexual category under another name. `posture` only ever
+ * held half of what a subject is doing, the standing-and-sitting half, with the rest
+ * scattered through `general`.
+ *
+ * The second added `pov` and put `sexual` back, undoing the rename to `nsfw`. `pov` is
+ * where the camera is rather than what is in front of it — `from_above`, `pov_hands`,
+ * `dutch_angle` — which is a fact about the picture and not about the subject, so it sat
+ * in `general` with everything else the list had no word for. `nsfw` was the wrong word
+ * for a category: it says how a board should treat a tag, which the rating column already
+ * says per post, where `sexual` says what the tag is about, which is what every other
+ * name here does.
  *
  * **A retired name keeps working.** Nothing migrates: a tag still filed under `head` is
  * an unknown category, which `categoryOrder` sorts after the known ones and
@@ -39,7 +47,8 @@ export const TAG_CATEGORIES = [
   'clothes',
   'accessories',
   'action',
-  'nsfw',
+  'pov',
+  'sexual',
   'general',
   'meta',
 ] as const
@@ -174,7 +183,11 @@ const KNOWN_COLOR: Record<KnownCategory, string> = {
   // eleventh is how two categories end up looking alike.
   accessories: 'text-[#ff87c8]',
   action: 'text-[#b6d94c]',
-  nsfw: 'text-[#e8506e]',
+  // The eleventh hue, and it had to be found rather than freed: 206 (general) to 268
+  // (copyright) was the one gap on the wheel wide enough to drop a colour into without
+  // it reading as a shade of a neighbour.
+  pov: 'text-[#8f9dff]',
+  sexual: 'text-[#e8506e]',
   general: 'text-[#4fa3e3]',
   meta: 'text-[#ead084]',
 }
@@ -188,9 +201,10 @@ const KNOWN_LABEL: Record<KnownCategory, string> = {
   clothes: 'Clothes',
   accessories: 'Accessories',
   action: 'Action',
-  // Spelled the way it is everywhere else on a board, in caps — "Nsfw" from the generic
-  // capitalizer would read as a word rather than the label it is.
-  nsfw: 'NSFW',
+  // In caps, the way it is written everywhere: "Pov" from the generic capitalizer would
+  // read as a word rather than the initialism it is.
+  pov: 'POV',
+  sexual: 'Sexual',
   general: 'General',
   meta: 'Meta',
 }
