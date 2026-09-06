@@ -37,7 +37,10 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-  createDesktopShortcut: true
+  # Start menu only. A desktop shortcut is the installer deciding what belongs on your
+  # desktop, and this is an app you open when you have images to upload rather than one
+  # you keep in front of you — the Start menu is where you go looking for that.
+  createDesktopShortcut: false
   createStartMenuShortcut: true
   shortcutName: Pubooru Desktop
 
