@@ -24,9 +24,10 @@ import {
   tagCacheStatus,
   TAG_INDEX_LIMIT,
 } from './tag-cache'
+import { clearBrowseCache, readBrowseCache, writeBrowseCache } from './browse-cache'
 import { boardClient } from './supabase'
 import { loadPost, removePost, savePost, thumbnailDataUrl, type LoadedPost } from './manage'
-import type { AppStatus, PreferencesInput, TagSuggestion } from '../shared/api'
+import type { AppStatus, BrowseCacheFile, PreferencesInput, TagSuggestion } from '../shared/api'
 import type { ImplicationRules } from '../shared/implications'
 import type { RecommendationRules } from '../shared/recommendations'
 import type { Tag } from '@common/tags'
@@ -57,6 +58,18 @@ const postIdSchema = z.number().int().positive()
 const browseSchema = z.object({
   query: z.string().max(500).optional().default(''),
   after: z.number().int().positive().optional(),
+})
+
+/**
+ * The grid the window is holding, on its way to disk. A row is a post this process handed
+ * out in the first place, so the check is the envelope rather than the shape of a post:
+ * enough that a file written from here can only be read back as a grid, and not a second
+ * definition of `Post` to keep in step with the first.
+ */
+const browseCacheSchema = z.object({
+  query: z.string().max(500),
+  hasMore: z.boolean(),
+  posts: z.array(z.looseObject({ id: z.number().int().positive() })).max(2000),
 })
 
 const savePostSchema = z.object({
@@ -228,6 +241,25 @@ export function registerIpc(): void {
    * there is nothing to confirm and nothing to wait for.
    */
   ipcMain.handle('tags:clear-cache', async (): Promise<void> => clearTagCache())
+
+  /**
+   * The browse grid across restarts — `main/browse-cache.ts`. The window keeps its own
+   * copy for the life of the process and only comes here on the way up and on the way
+   * past: reading once at startup, writing whenever the rows on screen change, and
+   * dropping when 🔄 or a new search says what it holds is no longer what it wants.
+   */
+  ipcMain.handle('browse:read-cache', async (): Promise<BrowseCacheFile | null> => readBrowseCache())
+
+  ipcMain.handle('browse:write-cache', async (_event, raw: unknown): Promise<void> => {
+    const parsed = browseCacheSchema.safeParse(raw)
+    // A grid that will not parse is one this build could not have drawn, so nothing is
+    // written and the copy already on disk stands.
+    if (!parsed.success) return
+    const { query, posts, hasMore } = parsed.data
+    writeBrowseCache({ at: Date.now(), query, posts: posts as PostPage['posts'], hasMore })
+  })
+
+  ipcMain.handle('browse:clear-cache', async (): Promise<void> => clearBrowseCache())
 
   /**
    * The tag implication rules, which are this machine's and not the board's — no session

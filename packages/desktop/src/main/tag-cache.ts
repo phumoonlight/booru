@@ -1,8 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { app } from 'electron'
 import { listTags } from '@common/data/shared'
 import type { Tag } from '@common/tags'
+import { dropCache, isFresh, readCache, writeCache } from './app-cache'
 import { boardClient } from './supabase'
 
 /**
@@ -22,16 +20,13 @@ import { boardClient } from './supabase'
  * free too.
  *
  * On disk rather than in memory because a day-long life means nothing to a process that
- * is closed at teatime; in its own file rather than in `save.json` because that file is
- * settings, meant to be read and hand-edited, and this is derived data that can be thrown
- * away at any moment without losing anything.
+ * is closed at teatime; in the `app-cache` folder rather than in `save.json` because that
+ * file is settings, meant to be read and hand-edited, and this is derived data that can
+ * be thrown away at any moment without losing anything. The folder and the day it is kept
+ * for are `main/app-cache.ts`, shared with the browse grid.
  */
 
-const CACHE_FILE = 'tag-cache.json'
-
-/** A day, as asked for. Long enough to cover a session, short enough that a tag someone
- *  else added shows up without anyone having to know this cache exists. */
-const TTL = 24 * 60 * 60 * 1000
+const CACHE_FILE = 'tags.json'
 
 /**
  * Far above any board this app is pointed at, and a limit rather than no limit because
@@ -51,42 +46,19 @@ let memory: CacheFile | null | undefined
 /** One fill at a time, however many lookups arrive while it runs. */
 let filling: Promise<CacheFile | null> | null = null
 
-function cachePath(): string {
-  return join(app.getPath('userData'), CACHE_FILE)
-}
-
 function readFile(): CacheFile | null {
-  const file = cachePath()
-  if (!existsSync(file)) return null
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'))
-    if (!parsed || typeof parsed !== 'object') return null
-    const { at, tags } = parsed as Partial<CacheFile>
-    // A cache that won't parse is a cache that isn't there. Nothing here is worth a
-    // crash, and the fix is one read from the board.
-    if (typeof at !== 'number' || !Array.isArray(tags)) return null
-    // A copy written before `category2` or `mark` existed has no such key, and serving it
-    // would draw every tag ungrouped and glyphless for up to a day with nothing to explain
-    // it. Both columns are on the row they belong to, so an entry that never carried one is
-    // not a tag "with no subgroup" or "with no mark" — it is a cache from a different
-    // version of this file.
-    if (tags.length > 0 && !('category2' in tags[0] && 'mark' in tags[0])) return null
-    return { at, tags }
-  } catch {
-    return null
-  }
-}
+  const parsed = readCache(CACHE_FILE)
+  if (!parsed) return null
 
-function writeFile(cache: CacheFile): void {
-  try {
-    const file = cachePath()
-    mkdirSync(dirname(file), { recursive: true })
-    // Not indented: nobody edits this by hand, and the whitespace would be most of it
-    writeFileSync(file, JSON.stringify(cache), 'utf8')
-  } catch (error) {
-    // A cache that cannot be written still works for this run, which is most of its value
-    console.error('Could not write the tag cache:', error instanceof Error ? error.message : error)
-  }
+  const { at, tags } = parsed as Partial<CacheFile>
+  if (typeof at !== 'number' || !Array.isArray(tags)) return null
+  // A copy written before `category2` or `mark` existed has no such key, and serving it
+  // would draw every tag ungrouped and glyphless for up to a day with nothing to explain
+  // it. Both columns are on the row they belong to, so an entry that never carried one is
+  // not a tag "with no subgroup" or "with no mark" — it is a cache from a different
+  // version of this file.
+  if (tags.length > 0 && !('category2' in tags[0] && 'mark' in tags[0])) return null
+  return { at, tags }
 }
 
 /**
@@ -98,7 +70,7 @@ function writeFile(cache: CacheFile): void {
  */
 async function ensureTags(): Promise<CacheFile | null> {
   if (memory === undefined) memory = readFile()
-  if (memory && Date.now() - memory.at < TTL) return memory
+  if (memory && isFresh(memory.at)) return memory
   if (filling) return filling
 
   filling = (async () => {
@@ -113,7 +85,7 @@ async function ensureTags(): Promise<CacheFile | null> {
       // a minute ago is not, and overwriting on one is how a cache goes blank for a day.
       if (tags.length === 0 && memory && memory.tags.length > 0) return memory
       memory = { at: Date.now(), tags }
-      writeFile(memory)
+      writeCache(CACHE_FILE, memory)
       return memory
     } catch {
       return memory ?? null
@@ -160,11 +132,7 @@ export async function cachedIndex(): Promise<Tag[] | null> {
  */
 export function clearTagCache(): void {
   memory = null
-  try {
-    rmSync(cachePath(), { force: true })
-  } catch {
-    // Nothing to do about it, and the in-memory copy is gone either way
-  }
+  dropCache(CACHE_FILE)
 }
 
 /** What the settings screen shows: how much is held, and how old it is. */

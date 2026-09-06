@@ -6,6 +6,7 @@ import { RATINGS, type Rating } from '@common/search'
 import type { Tag } from '@common/tags'
 import { boardClient } from './supabase'
 import { clearTagCache } from './tag-cache'
+import { dropThumb, readThumb, writeThumb } from './thumb-cache'
 import { loadConfig } from './config'
 
 /**
@@ -112,6 +113,11 @@ export async function removePost(id: number): Promise<ManageOutcome> {
   if (image.error) console.error('Could not remove the post image:', image.error.message)
   if (thumb.error) console.error('Could not remove the thumbnail:', thumb.error.message)
 
+  // The cached copy on disk, which is otherwise the one thing that would still draw this
+  // post — the name is the md5, so nothing will ever ask for it again either.
+  thumbnails.delete(post.file_name)
+  dropThumb(post.file_name)
+
   clearTagCache()
   return { ok: true }
 }
@@ -130,9 +136,17 @@ export async function removePost(id: number): Promise<ManageOutcome> {
  */
 const thumbnails = new Map<string, string>()
 
+/** Memory, then `app-cache/thumbs` (`main/thumb-cache.ts`), then the board — each step
+ *  filling in the ones before it, and only the last one costing anything. */
 export async function thumbnailDataUrl(fileName: string): Promise<string> {
   const cached = thumbnails.get(fileName)
   if (cached) return cached
+
+  const stored = readThumb(fileName)
+  if (stored) {
+    thumbnails.set(fileName, stored)
+    return stored
+  }
 
   const config = loadConfig()
   if (!config) return ''
@@ -143,6 +157,7 @@ export async function thumbnailDataUrl(fileName: string): Promise<string> {
     if (!response.ok) return ''
 
     const bytes = Buffer.from(await response.arrayBuffer())
+    writeThumb(fileName, bytes)
     const dataUrl = `data:image/avif;base64,${bytes.toString('base64')}`
     thumbnails.set(fileName, dataUrl)
     return dataUrl

@@ -23,7 +23,9 @@ import { BUTTON, BUTTON_SUBMIT, buttonToggle } from './buttons'
  */
 
 /** What the last visit was looking at. The view unmounts when another is in front of
- *  it, and coming back to an empty box after finding a post is a search typed twice. */
+ *  it, and coming back to an empty box after finding a post is a search typed twice. It
+ *  outlives the window too, coming back with the stored grid below — the same argument one
+ *  day further out, since the app is closed far more often than this view is. */
 let lastQuery = ''
 
 /**
@@ -43,8 +45,9 @@ export function browseFor(query: string): void {
 /**
  * How the grid is drawn. Module-level for the same reason the query is: this view is
  * unmounted whenever another is in front of it, and a layout you chose two screens ago is
- * not a thing you should have to choose again. Not persisted — it is a way of looking at
- * the board for the next few minutes, not a setting, and `save.json` is for settings.
+ * not a thing you should have to choose again. Not written out, unlike the rows and the
+ * query: those are a cache of what the board said, droppable and dated, and this is a
+ * preference — which would make it `save.json`'s, and it is not worth being one.
  */
 type Layout = 'grid' | 'ratio'
 let layout: Layout = 'grid'
@@ -93,6 +96,10 @@ function itemStyle(width: number, height: number): CSSProperties {
  *
  * A cache that can go stale needs a way to say so, which is the 🔄 beside the title, and
  * `invalidateBrowse()` for the one moment the app knows it is wrong.
+ *
+ * It is also written out, so the grid survives the window closing — `main/browse-cache.ts`
+ * holds it for a day, which is as long as rows anyone would recognise are worth drawing.
+ * This copy is still the one every render reads; the file is only how it starts.
  */
 let cached: { query: string; posts: Post[]; hasMore: boolean; at: number } | null = null
 
@@ -100,15 +107,44 @@ function remember(query: string, posts: Post[], hasMore: boolean): void {
   // `at` is the last read, Load more included: what the line beside the title answers is
   // "how old is what I am looking at", and a chunk that landed a second ago is part of it.
   cached = { query, posts, hasMore, at: Date.now() }
+  // And through to `app-cache/browse-cache.json`, so the same rows survive the window
+  // closing. Not awaited: the grid is already drawn from the copy above, and a write that
+  // fails costs the next launch a read it was going to be able to do anyway.
+  void window.api.writeBrowseCache({ query, posts, hasMore })
 }
 
 /**
  * Drops the remembered grid without reading anything, so the next visit asks the board.
  * Called when an upload lands — the one change this window makes that the grid cannot
- * see, an edit being something it walked into the editor to do.
+ * see, an edit being something it walked into the editor to do — and by 🔄, which is the
+ * one way a person says it.
+ *
+ * The file goes with it. A cache in two places that can be invalidated in one is a cache
+ * that comes back from the dead on the next launch.
  */
 export function invalidateBrowse(): void {
   cached = null
+  void window.api.clearBrowseCache()
+}
+
+/**
+ * The stored grid, back into the two module-level `let`s above, before anything renders.
+ *
+ * It has to happen first because `Browse` reads them synchronously on the way up — the
+ * seed is what stops the mount running a search it did not need — and the file is behind
+ * an IPC round trip. `App` awaits this alongside its first status read, which it is
+ * already showing "Starting…" for, so the cost is nothing and the grid is either there or
+ * not by the time any screen exists.
+ *
+ * The query comes back with the rows. Without it the box would be empty and the seed
+ * check below would reject a cache held for a query nobody is asking any more, which is
+ * the same as not having stored it.
+ */
+export async function hydrateBrowseCache(): Promise<void> {
+  const file = await window.api.readBrowseCache()
+  if (!file) return
+  cached = { query: file.query, posts: file.posts, hasMore: file.hasMore, at: file.at }
+  lastQuery = file.query
 }
 
 /**
@@ -136,6 +172,15 @@ export async function thumbnailFor(fileName: string): Promise<string> {
 }
 
 const CHUNK = 24
+
+/** How old the grid is: the time, and the date as well once it is no longer today's. */
+function readAt(at: number): string {
+  const when = new Date(at)
+  const time = when.toLocaleTimeString([], { timeStyle: 'short' })
+  return when.toDateString() === new Date().toDateString()
+    ? time
+    : `${when.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`
+}
 
 /**
  * A query that is nothing but a post number, or null.
@@ -339,12 +384,11 @@ export function Browse({
         <span className="text-xs text-muted">
           {loading ? 'reading…' : `${posts.length} post${posts.length === 1 ? '' : 's'}`}
         </span>
-        {/* What a cache owes you, same as the Tags screen: how old the grid is, in time
-            only — the date is never the answer to "should I press refresh". */}
+        {/* What a cache owes you, same as the Tags screen: how old the grid is. The time
+            alone was enough while it died with the window; it is kept for a day now, so a
+            grid read yesterday says so rather than claiming to be from this morning. */}
         {fetchedAt !== null && (
-          <span className="text-xs text-muted">
-            as of {new Date(fetchedAt).toLocaleTimeString([], { timeStyle: 'short' })}
-          </span>
+          <span className="text-xs text-muted">as of {readAt(fetchedAt)}</span>
         )}
         {/* Two ways of looking at the same rows, so a pair rather than one button whose
             label is whichever one you are not in — that reads as a command and gets

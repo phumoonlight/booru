@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { searchHref } from '@common/search'
 import { About } from './components/about'
-import { Browse, browseFor } from './components/browse'
+import { Browse, browseFor, hydrateBrowseCache } from './components/browse'
 import { Settings } from './components/settings'
 import { TagIndex } from './components/tag-index'
 import { UploadQueue } from './components/upload-queue'
@@ -36,7 +36,11 @@ export function App() {
   // body, and a window closed mid-answer is left alone.
   useEffect(() => {
     let alive = true
-    void window.api.getStatus().then((next) => {
+    // The stored browse grid comes up behind the same "Starting…" as the status. It has
+    // to be read before anything renders: `Browse` seeds itself from that copy on the way
+    // up, synchronously, and a grid that arrives a tick later is a grid that arrives after
+    // the search it was meant to save has already been sent.
+    void Promise.all([window.api.getStatus(), hydrateBrowseCache()]).then(([next]) => {
       if (alive) setStatus(next)
     })
     return () => {

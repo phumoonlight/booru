@@ -233,8 +233,11 @@ behind a session, because there is none.
   depend on which ratios landed on it, so one panorama shrank every thumbnail beside it,
   and comparing two posts at sizes decided by their neighbours is the thing this screen
   is for. `MAX_RATIO` is a fact about the stored thumbnail (768×384), not a layout choice.
-  Neither the layout nor the query is persisted — a way of looking at the board for the
-  next few minutes is not a setting.
+  The query and the rows it found are written out for a day (`main/browse-cache.ts`), so
+  the window opens on the grid it closed on; the layout is not, being a preference rather
+  than a copy of what the board said. Thumbnails stay in memory on both sides of the
+  bridge — a screenful of `data:` URLs is megabytes of base64 — so a restart redraws the
+  grid's shape at once and fills the pictures back in.
 - **`CategoryTagField` is the one tag editor**, on the queue card, the Apply-to-all bar
   and the post editor: staging a post and editing one differ in when the write happens,
   not in what a tag is. It replaced a free-text box that had to guess a category and so
@@ -334,11 +337,29 @@ both `tags:list` and `tags:suggest`. Autocomplete was a query per pause in typin
 over twenty images is hundreds of requests asking a question whose answer moves only when
 someone uploads. A whole board of names and counts is a few hundred kilobytes, so it is
 read once and prefix-matched in memory with the ordering the SQL used (`post_count desc`,
-ties by name). Its own file, not `save.json`: that one is settings, this is derived data
-droppable at any moment. It *is* dropped after every upload and every tag edit, by the
-settings screen's Clear cache and by the Tags screen's 🔄. A failed refill keeps serving
+ties by name). Its own file in `app-cache/`, not `save.json`: that one is settings, this
+is derived data droppable at any moment. It *is* dropped after every upload and every tag
+edit, by the settings screen's Clear cache and by the Tags screen's 🔄. A failed refill keeps serving
 the stale copy rather than nothing, and a read that comes back at `CACHE_LIMIT` is
 treated as "there may be more", so suggestions fall back to querying.
+
+**The cache folder** (`main/app-cache.ts`) — `app-cache/` in `userData`, holding
+`tags.json`, `browse.json` and `thumbs/`. Everything in it is a copy of what the board
+already has, so the folder can be deleted at any moment and the only cost is the next read
+— which is the line between it and `save.json`, where losing a file loses something. The
+two JSON files are stamped `{ at, … }` and stale after a day; what stale *means* is each
+cache's own, the tag index serving a day-old copy rather than nothing when a refill fails
+and the browse grid simply being dropped. A person invalidates either with a 🔄 —
+Browse's, which re-reads the board, or the Tags screen's.
+
+**Thumbnails** (`main/thumb-cache.ts`) — `app-cache/thumbs/<file_name>.avif`, the stored
+file byte-for-byte. `thumbnailDataUrl` reads memory, then here, then the board, so the
+grid `browse.json` brings back also comes back with its pictures. **Nothing expires and
+nothing is invalidated**: the name is the md5 of the bytes, so a file found under it *is*
+that image — the same reasoning the in-memory maps already run on. That is also why it is
+a folder of bytes rather than base64 in the JSON, which would be a third bigger and
+rewritten whole every time one arrived. Bounded by the board, one small file per post, and
+`removePost` sweeps up the only name that can ever stop meaning an image.
 
 **DNS** (`main/dns.ts`) — it resolves like a browser, not like the host. Every open-web
 fetch it makes is an address dragged out of a browser, and a browser on DoH will happily

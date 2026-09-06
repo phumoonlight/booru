@@ -82,6 +82,13 @@ export type AppStatus = {
 }
 
 /**
+ * The browse grid as it is kept on disk for a day (`main/browse-cache.ts`). The query
+ * travels with the rows because it is what they answer: a grid drawn under a query that
+ * did not produce it is the one way this cache could lie.
+ */
+export type BrowseCacheFile = { at: number; query: string; posts: Post[]; hasMore: boolean }
+
+/**
  * A file the main process has looked at: within the limits, decodable, and already
  * carrying the small preview the queue paints. `main/staging.ts` produces these.
  */
@@ -167,6 +174,12 @@ export type PostAppApi = {
   suggestTags: (query: string) => Promise<TagSuggestion[]>
   /** Throws away the cached tag index; the next lookup reads the board again. */
   clearTagCache: () => Promise<void>
+  /** The browse grid from the last session, if it is less than a day old — `main/browse-cache.ts`. */
+  readBrowseCache: () => Promise<BrowseCacheFile | null>
+  /** Hands the rows on screen to disk, stamped with the moment they are written. */
+  writeBrowseCache: (cache: { query: string; posts: Post[]; hasMore: boolean }) => Promise<void>
+  /** Drops the stored grid, so the next launch reads the board instead of drawing this. */
+  clearBrowseCache: () => Promise<void>
   /** This machine's tag implication rules — `shared/implications.ts` has what they are. */
   listImplications: () => Promise<ImplicationRules>
   /** Writes the whole rule set, answering with what was stored after normalising. */
