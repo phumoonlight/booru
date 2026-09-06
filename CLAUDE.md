@@ -233,6 +233,11 @@ behind a session, because there is none.
   depend on which ratios landed on it, so one panorama shrank every thumbnail beside it,
   and comparing two posts at sizes decided by their neighbours is the thing this screen
   is for. `MAX_RATIO` is a fact about the stored thumbnail (768×384), not a layout choice.
+  **Its box completes tags** — up to five names under it, from the same cached index the
+  tag fields use, matched on the word the caret is in: a `-` in front is the query's, not
+  the word's, and a `rating:` token is offered nothing. The list is derived as it is drawn
+  rather than stored, so it can be briefly short but never briefly wrong, and five is a
+  spelling aid — the whole vocabulary is the Tags screen, one click away.
   The query and the rows it found are written out for a day (`main/browse-cache.ts`), so
   the window opens on the grid it closed on; the layout is not, being a preference rather
   than a copy of what the board said. Thumbnails stay in memory on both sides of the
