@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { defineConfig, loadEnv } from 'electron-vite'
 import react from '@vitejs/plugin-react'
@@ -45,35 +44,6 @@ const REQUIRED_ENV = [
   'NEXT_PUBLIC_SITE_URL',
 ] as const
 
-/**
- * The number in `build-id`, read at build time and compiled in beside the board's values.
- *
- * It is what About shows, in place of a version. `package.json`'s version is still what
- * electron-builder stamps on an installer, but it stopped being the thing on screen: it
- * moved only when someone remembered to move it, and a release number that says the same
- * thing across three weeks of changes answers "which build is this" with a shrug. A
- * counter raised by every change under `packages/desktop` answers it exactly.
- *
- * A missing or unreadable file fails the build, the way a missing environment value does.
- * A build that could not say which build it is has nothing useful to put on the screen,
- * and defaulting to 0 would put the same wrong answer on every copy.
- */
-function buildId(): number {
-  const file = resolve(__dirname, 'build-id')
-  let raw: string
-  try {
-    raw = readFileSync(file, 'utf8')
-  } catch {
-    throw new Error(`packages/desktop cannot be built without ${file} — it holds one number.`)
-  }
-
-  const id = Number(raw.trim())
-  if (!Number.isInteger(id) || id < 1) {
-    throw new Error(`${file} must hold a whole number of 1 or more, not “${raw.trim()}”.`)
-  }
-  return id
-}
-
 /** What the example file ships, which is not a value — a placeholder left in is a miss. */
 function isPlaceholder(value: string): boolean {
   return value.startsWith('YOUR_') || value.includes('YOUR_PROJECT_REF')
@@ -115,10 +85,7 @@ export default defineConfig(({ mode }) => ({
     // Main only. The renderer has no keys and is not about to get any: it is handed the
     // project URL to display and nothing else, and a `define` over there would compile
     // the service-role key into a file the window loads.
-    define: {
-      __BUILD_ENV__: JSON.stringify(buildEnv(mode)),
-      __BUILD_ID__: JSON.stringify(buildId()),
-    },
+    define: { __BUILD_ENV__: JSON.stringify(buildEnv(mode)) },
     build: { rollupOptions: { input: resolve(__dirname, 'src/main/index.ts') } },
   },
   preload: {

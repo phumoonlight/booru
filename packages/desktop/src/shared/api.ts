@@ -62,21 +62,18 @@ export type AppStatus = {
   /** The project this build talks to. Shown on the settings screen; no key ever is. */
   supabaseUrl: string
   /**
-   * Which build this is, in place of a version — the counter in
-   * `packages/desktop/build-id`, raised by every change under `packages/desktop` and
-   * compiled in. `package.json`'s version still names an installer; it stopped being what
-   * About shows, because it moved at a release and the app changes far more often.
+   * What the About screen shows, and what a bug report needs: the app and the runtime
+   * under it. `versions.app` is `app.getVersion()` — `packages/desktop/package.json`,
+   * raised by every change there and stamped on the installer by electron-builder.
    */
-  buildId: number
-  /** What a bug report needs: the runtime under the app, which is as often the culprit. */
-  versions: { electron: string; chrome: string }
+  versions: { app: string; electron: string; chrome: string }
   /**
    * `!app.isPackaged` — a checkout run by `desktop:dev`, not an installed copy. About
-   * says so beside the build id, because the two look identical otherwise and they are
-   * not the same thing: a dev run reads `save.json` from its own `userData`
-   * (`pubooru-desktop-dev`), so its settings are somebody else's, and the build it reports
-   * is whatever the working tree currently says rather than what was shipped. Read in
-   * main, since the renderer has no `process` to ask.
+   * says so beside the version, because the two look identical otherwise and they are not
+   * the same thing: a dev run reads `save.json` from its own `userData`
+   * (`pubooru-desktop-dev`), so its settings are somebody else's, and the version it
+   * reports is whatever the working tree currently says rather than what was shipped.
+   * Read in main, since the renderer has no `process` to ask.
    */
   development: boolean
   limits: { maxFileSize: number; maxFileSizeLabel: string; maxPixels: number }

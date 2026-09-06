@@ -119,7 +119,6 @@ can never go stale.
   fails packaging with "version is a range, not a fixed version".
 - The installer's icon is `build/icon.ico`, named in [`electron-builder.yml`](electron-builder.yml).
   Without one a packaged build wears Electron's.
-- Every change here raises the integer in [`build-id`](build-id). The build reads it and
-  About shows it where a version used to be, so a build that was not bumped looks exactly
-  like the one before it. `package.json`'s version still names an installer and is on no
-  screen.
+- Every change here raises the version in [`package.json`](package.json). About shows it
+  and electron-builder stamps it on the installer, so a build that was not bumped looks
+  exactly like the one before it.

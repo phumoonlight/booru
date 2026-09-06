@@ -32,22 +32,6 @@ export type AppConfig = {
 /** Replaced at build time by `define`. Nothing else in the app may read it. */
 declare const __BUILD_ENV__: AppConfig
 
-/** The number in `packages/desktop/build-id`, likewise compiled in. */
-declare const __BUILD_ID__: number
-
-/**
- * Which build this is — the counter raised by every change under `packages/desktop`,
- * shown by About where a version number used to be.
- *
- * Compiled in rather than read at runtime for the reason the board's values are: a
- * packaged app ships no file the renderer could read, and `app.getVersion()` answers a
- * different question — what electron-builder stamped on the installer, which now moves
- * only at a release.
- */
-export function buildId(): number {
-  return typeof __BUILD_ID__ === 'number' ? __BUILD_ID__ : 0
-}
-
 /**
  * The same test `isSupabaseConfigured()` makes on the web. The build already refuses
  * placeholders and blanks, so this only catches a bundle built some other way — but a

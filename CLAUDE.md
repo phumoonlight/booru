@@ -89,11 +89,10 @@ structure further down.
    facets and the feed all derive from it.
 10. **Re-measure with `npm run bench:avif` before changing a constant in
    `@common/imgcmp/`.** Those numbers were measured, not chosen.
-11. **Every change under `packages/desktop` raises the number in
-    `packages/desktop/build-id`.** One line, one integer, no exceptions — a doc fix in
-    that folder counts. `electron.vite.config.ts` reads it at build time and About shows
-    it in place of a version, so a build that was not bumped is indistinguishable from
-    the one before it. The build fails if the file is missing or unreadable.
+11. **Every change under `packages/desktop` raises the version in
+    `packages/desktop/package.json`.** About reads it (`app.getVersion()`) and
+    electron-builder stamps it on the installer, so a build that was not bumped is
+    indistinguishable from the one before it — on screen and on disk alike.
 
 ## Layering
 
@@ -429,18 +428,14 @@ number just made. The renderer pushes its counts on every change rather than mai
 at close time: a `close` handler vetoes synchronously or not at all, so it cancels the
 close and re-issues it as `destroy()` if the answer is yes.
 
-**Build id** — `packages/desktop/build-id`, one integer, raised by every change under
-`packages/desktop`. `electron.vite.config.ts` reads it and `define`s `__BUILD_ID__` into
-the main bundle beside the board's four values; `buildId()` in `main/config.ts` is the
-only reader, and About draws it where a version number used to be.
+**Version** — `packages/desktop/package.json`, raised by every change under
+`packages/desktop`. It is read at runtime by `app.getVersion()` rather than compiled in,
+because that is the number electron-builder actually stamped on the copy being run, and
+About draws it.
 
-It replaced a version and a changelog folder. `package.json`'s version still names an
-installer, and nothing on screen reads it: a release number is the honest answer to "what
-shipped" and a useless one to "is this the copy with the fix in it", which is the question
-actually being asked of a desktop app that changes between releases. The changelog went
-with it — notes written per release describe a cadence this app does not have, and the
-reasoning they carried is better placed in the commit and beside the code, where it
-already was.
+There is no changelog. A file per release described a cadence this app does not have —
+the version moves whenever the app does — and the reasoning those notes carried is better
+placed in the commit and beside the code, where it already was.
 
 ## Database
 

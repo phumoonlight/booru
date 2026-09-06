@@ -8,7 +8,7 @@ import { createPostFromImage, parsePostMetadata } from '@common/upload/pipeline'
 import { TAG_CATEGORIES } from '@common/tags'
 import { DESKTOP_UPLOAD_LIMITS } from './limits'
 import { CPU_COUNT, DEFAULT_ENCODE_PRIORITY, DEFAULT_ENCODE_THREADS } from './cpu'
-import { buildId, loadConfig, revealSaveFile } from './config'
+import { loadConfig, revealSaveFile } from './config'
 import { loadPreferences, savePreferences } from './preferences'
 import { listBrowsers, openUrl } from './browser'
 import { loadRules, saveRule } from './rules'
@@ -131,11 +131,10 @@ export function registerIpc(): void {
       configured: config !== null,
       siteUrl: config?.siteUrl ?? '',
       supabaseUrl: config?.supabaseUrl ?? '',
-      // Compiled in by `electron.vite.config.ts`, which reads `packages/desktop/build-id`
-      // — a packaged app ships no file the renderer could read it out of.
-      buildId: buildId(),
-      // Read here rather than baked in: the renderer has no `process` to ask.
+      // Read here rather than baked into the bundle: the renderer has no `process`, and
+      // `app.getVersion()` is the version electron-builder actually stamped on the copy.
       versions: {
+        app: app.getVersion(),
         electron: process.versions.electron,
         chrome: process.versions.chrome,
       },
