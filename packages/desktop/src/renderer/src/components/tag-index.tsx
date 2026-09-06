@@ -15,11 +15,11 @@ import { TagMark, invalidateTagNames } from './category-tag-field'
 import { FIELD, Panel } from './panel'
 import { RuleDiagram } from './rule-diagram'
 import { TagCatalogs } from './tag-catalogs'
-import { TagRuleEditor, toggleRuleTag, type RuleKind } from './tag-rule-editor'
+import { TagRuleEditor, toggleRuleName, type RuleKind } from './tag-rule-editor'
 import { toggleCatalogTag } from '../../../shared/catalogs'
 import { saveCatalogs, useCatalogs } from '../catalogs'
-import { saveImplications, useImplications } from '../implications'
-import { saveRecommendations, useRecommendations } from '../recommendations'
+import { reloadImplications, saveImplication, useImplications } from '../implications'
+import { reloadRecommendations, saveRecommendation, useRecommendations } from '../recommendations'
 
 /**
  * What a click on the tag grid is currently answering, when it is not simply opening a tag.
@@ -128,6 +128,10 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
     // Creating, renaming and deleting all land here, and they are the only things that can
     // change the names the tag pickers offer — this is where that copy is dropped too.
     invalidateTagNames()
+    // And the rules, which are rows keyed by tag id: a rename carries every rule naming
+    // that tag and a delete takes them with it, both on the board and both invisible to a
+    // window still holding the names from before.
+    await Promise.all([reloadImplications(), reloadRecommendations()])
     const next = await window.api.listTags()
     cached = { tags: next, at: Date.now() }
     setTags(next)
@@ -167,9 +171,12 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
     }
     if (tag.name === picking.tag) return
     if (picking.into === 'implies') {
-      void saveImplications(toggleRuleTag(implications, picking.tag, tag.name))
+      void saveImplication(picking.tag, toggleRuleName(implications[picking.tag] ?? [], tag.name))
     } else {
-      void saveRecommendations(toggleRuleTag(recommendations, picking.tag, tag.name))
+      void saveRecommendation(
+        picking.tag,
+        toggleRuleName(recommendations[picking.tag] ?? [], tag.name)
+      )
     }
   }
 

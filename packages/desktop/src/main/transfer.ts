@@ -1,8 +1,6 @@
 import { copyFileSync, readFileSync } from 'node:fs'
 import { app, dialog } from 'electron'
 import type { TransferResult } from '../shared/api'
-import { normalizeRules } from '../shared/implications'
-import { normalizeRecommendations } from '../shared/recommendations'
 import { normalizeCatalogs } from '../shared/catalogs'
 import { loadPreferences, savePreferences } from './preferences'
 import { savePath, writeSection } from './save-file'
@@ -14,8 +12,13 @@ import { savePath, writeSection } from './save-file'
  * whole point of dropping the encryption. What it did not have was a way to *find* it: the
  * data folder is a path nobody would guess, and "open the folder, copy the file, put it on
  * the other machine, find the folder there" is four steps to move settings between a
- * desktop and a laptop, or to keep a copy of a few hundred tag rules before trying
+ * desktop and a laptop, or to keep a copy of a few hundred catalog entries before trying
  * something.
+ *
+ * The tag rules used to travel this way too. They are the board's now — moving them
+ * between machines is what a shared table already does, and a settings file carrying a
+ * copy would be a second answer to which rules are real. A file written by a version that
+ * had them still imports; those two sections are simply not read.
  *
  * Two buttons on the settings screen instead. Nothing in the file is secret — the
  * service-role key is compiled into the bundle, not stored — so an export is safe to put
@@ -117,16 +120,6 @@ export async function importSave(): Promise<TransferResult> {
   const document = parsed as Record<string, unknown>
   const took: string[] = []
 
-  if ('implications' in document) {
-    const rules = normalizeRules(document.implications)
-    writeSection('implications', rules)
-    took.push(count(Object.keys(rules).length, 'implication'))
-  }
-  if ('recommendations' in document) {
-    const rules = normalizeRecommendations(document.recommendations)
-    writeSection('recommendations', rules)
-    took.push(count(Object.keys(rules).length, 'recommendation'))
-  }
   if ('catalogs' in document) {
     const catalogs = normalizeCatalogs(document.catalogs)
     writeSection('catalogs', catalogs)

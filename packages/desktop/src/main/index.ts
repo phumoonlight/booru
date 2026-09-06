@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow } from 'electron'
 import { registerIpc } from './ipc'
 import { cleanupDownloads } from './download'
-import { dropStoredConfig, dropStoredLogin } from './config'
+import { dropStoredConfig, dropStoredLogin, dropStoredRules } from './config'
 import { configureDns } from './dns'
 import { openUrl } from './browser'
 import { confirmClose, queueIsWorthKeeping } from './queue-guard'
@@ -130,6 +130,8 @@ void app.whenReady().then(() => {
   // from its own bundle, so that copy is deleted rather than left lying about.
   dropStoredConfig()
   dropStoredLogin()
+  // And the tag rules, which are rows on the board now — see `dropStoredRules`.
+  dropStoredRules()
   // Before the first drag can be fetched: images come in as addresses from a browser
   // that may well resolve them over a DNS this machine does not use (`main/dns.ts`).
   configureDns()

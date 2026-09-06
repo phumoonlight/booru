@@ -234,6 +234,10 @@ export async function setTagMark(
  * deleted. Other tags on those posts keep every link they had.
  */
 export async function deleteTag(client: BooruClient, id: number): Promise<TagOutcome> {
+  // `post_tags` first because that foreign key does not cascade, and the delete below
+  // would be refused with it still pointing here. `tag_rules` needs no such step: both of
+  // its keys cascade, so a deleted tag takes every rule naming it — which is the whole
+  // reason those rules are rows and not names in a file.
   const { error: linkError } = await client.from('post_tags').delete().eq('tag_id', id)
   if (linkError) return { ok: false, error: `Delete failed: ${linkError.message}` }
 

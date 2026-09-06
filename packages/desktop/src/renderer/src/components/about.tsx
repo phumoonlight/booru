@@ -1,13 +1,18 @@
 import type { AppStatus } from '../../../shared/api'
 
 /**
- * What version am I running, and what is this thing. The window has no menu bar
+ * Which build am I running, and what is this thing. The window has no menu bar
  * (`autoHideMenuBar`), so the About box every desktop app keeps under Help has to be a
  * screen like the other two.
  *
- * Electron and Chromium sit beside the app's own version because a rendering or a
- * file-dialog bug is theirs as often as it is ours, and asking for them after the fact
- * means asking someone to find a devtools console.
+ * A build id rather than a version, because the version moved at a release and the app
+ * changes between them: "2.4.0" was the honest answer to "what shipped" and a useless one
+ * to "is this the copy with the fix in it". The number here is raised by every change
+ * under `packages/desktop`.
+ *
+ * Electron and Chromium sit beside it because a rendering or a file-dialog bug is theirs
+ * as often as it is ours, and asking for them after the fact means asking someone to find
+ * a devtools console.
  */
 /**
  * Hard-coded rather than read from package.json: the packaged app ships no manifest the
@@ -17,18 +22,18 @@ import type { AppStatus } from '../../../shared/api'
 const REPO_URL = 'https://github.com/phumoonlight/booru'
 
 export function About({ status }: { status: AppStatus }) {
-  const { app, electron, chrome } = status.versions
+  const { electron, chrome } = status.versions
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col gap-5 px-4 pt-8 pb-25">
       <div>
         <h1 className="text-lg font-bold tracking-tight">Pubooru Desktop</h1>
         <p className="mt-1 flex items-center gap-2 text-sm text-muted">
-          Version {app}
+          Build {status.buildId}
           {/* Only on a checkout run by `desktop:dev`. An installed copy shows nothing at
               all rather than a "Release" badge saying the ordinary thing — the tag is
-              here to catch the moment you are reading the wrong window's version, or
-              wondering where a tag rule went (a dev run keeps its own `save.json`). */}
+              here to catch the moment you are reading the wrong window's build, or
+              wondering where a catalog went (a dev run keeps its own `save.json`). */}
           {status.development && (
             <span className="rounded border border-[#ead084] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#ead084]">
               Development

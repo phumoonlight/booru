@@ -2,8 +2,7 @@ import type { Rating } from '@common/search'
 import type { Tag, TagCategory } from '@common/tags'
 import type { Post, PostPage } from '@common/data/posts'
 import type { UploadResult } from '@common/upload/pipeline'
-import type { ImplicationRules } from './implications'
-import type { RecommendationRules } from './recommendations'
+import type { RuleKind, TagRules } from '@common/data/rules'
 import type { TagCatalogs } from './catalogs'
 
 /**
@@ -62,15 +61,22 @@ export type AppStatus = {
   siteUrl: string
   /** The project this build talks to. Shown on the settings screen; no key ever is. */
   supabaseUrl: string
-  /** What the About screen shows, and what a bug report needs: the app and the runtime under it. */
-  versions: { app: string; electron: string; chrome: string }
+  /**
+   * Which build this is, in place of a version — the counter in
+   * `packages/desktop/build-id`, raised by every change under `packages/desktop` and
+   * compiled in. `package.json`'s version still names an installer; it stopped being what
+   * About shows, because it moved at a release and the app changes far more often.
+   */
+  buildId: number
+  /** What a bug report needs: the runtime under the app, which is as often the culprit. */
+  versions: { electron: string; chrome: string }
   /**
    * `!app.isPackaged` — a checkout run by `desktop:dev`, not an installed copy. About
-   * says so beside the version, because the two look identical otherwise and they are not
-   * the same thing: a dev run reads `save.json` from its own `userData`
-   * (`pubooru-desktop-dev`), so its rules and settings are somebody else's, and the
-   * version it reports is whatever the working tree currently says rather than what was
-   * shipped. Read in main, since the renderer has no `process` to ask.
+   * says so beside the build id, because the two look identical otherwise and they are
+   * not the same thing: a dev run reads `save.json` from its own `userData`
+   * (`pubooru-desktop-dev`), so its settings are somebody else's, and the build it reports
+   * is whatever the working tree currently says rather than what was shipped. Read in
+   * main, since the renderer has no `process` to ask.
    */
   development: boolean
   limits: { maxFileSize: number; maxFileSizeLabel: string; maxPixels: number }
@@ -181,13 +187,19 @@ export type PostAppApi = {
   writeBrowseCache: (cache: { query: string; posts: Post[]; hasMore: boolean }) => Promise<void>
   /** Drops the stored grid, so the next launch reads the board instead of drawing this. */
   clearBrowseCache: () => Promise<void>
-  /** This machine's tag implication rules — `shared/implications.ts` has what they are. */
-  listImplications: () => Promise<ImplicationRules>
-  /** Writes the whole rule set, answering with what was stored after normalising. */
-  saveImplications: (rules: ImplicationRules) => Promise<ImplicationRules>
-  /** The rules that are offered rather than applied — `shared/recommendations.ts`. */
-  listRecommendations: () => Promise<RecommendationRules>
-  saveRecommendations: (rules: RecommendationRules) => Promise<RecommendationRules>
+  /**
+   * The board's tag rules of one kind — `'implies'` is applied by itself
+   * (`shared/implications.ts`), `'recommends'` is only offered
+   * (`shared/recommendations.ts`). One pair of channels rather than two, because the
+   * two sets differ in what the window does with them and not in their shape.
+   */
+  listRules: (kind: RuleKind) => Promise<TagRules>
+  /**
+   * Writes one tag's whole rule — the panel that edits a rule has exactly one tag open —
+   * and answers with the set as it now stands after normalising. An empty list deletes
+   * the rule.
+   */
+  saveRule: (kind: RuleKind, tag: string, names: string[]) => Promise<TagRules>
   /** The named sets of tags this machine keeps — `shared/catalogs.ts` has what they are. */
   listCatalogs: () => Promise<TagCatalogs>
   saveCatalogs: (catalogs: TagCatalogs) => Promise<TagCatalogs>

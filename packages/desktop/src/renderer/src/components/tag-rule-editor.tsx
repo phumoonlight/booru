@@ -9,38 +9,27 @@ import {
   type Rating,
 } from '@common/search'
 import { BUTTON_ON_SURFACE } from './buttons'
-import { saveImplications, useImplications } from '../implications'
-import { saveRecommendations, useRecommendations } from '../recommendations'
-import type { ImplicationRules } from '../../../shared/implications'
+import type { RuleKind } from '@common/data/rules'
+import { saveImplication, useImplications } from '../implications'
+import { saveRecommendation, useRecommendations } from '../recommendations'
 
-/** Which of a tag's two rules is being written. */
-export type RuleKind = 'implies' | 'recommends'
+/** Which of a tag's two rules is being written — the table's `kind` column, exactly. */
+export type { RuleKind }
 
 /**
- * Adds or removes one name from a tag's rule, dropping the rule once nothing is left of
- * it — which is how the last ✕, and the last un-tick in the grid, delete one.
+ * One tag's rule with `name` added or taken out. An empty answer deletes the rule, which
+ * is how the last ✕ and the last un-tick in the grid remove one.
  *
- * A rating token is never touched: it is a consequence of a different kind, it is set by
- * the menu rather than picked from the list, and `normalizeRules` keeps it last anyway.
+ * A rating token rides in the same list and is never toggled: it is a consequence of a
+ * different kind, set by the menu rather than picked from the grid, so it passes through
+ * untouched.
  *
  * Exported because the two halves of a pick live in different components — the panel
  * starts it, the grid in `tag-index.tsx` answers it — and the writing has to mean the
  * same thing from both.
  */
-export function toggleRuleTag<T extends Record<string, string[]>>(
-  rules: T,
-  tag: string,
-  name: string
-): T {
-  const current = rules[tag] ?? []
-  const next = current.includes(name)
-    ? current.filter((entry) => entry !== name)
-    : [...current, name]
-
-  const out = { ...rules }
-  if (next.length > 0) (out as Record<string, string[]>)[tag] = next
-  else delete out[tag]
-  return out
+export function toggleRuleName(current: string[], name: string): string[] {
+  return current.includes(name) ? current.filter((entry) => entry !== name) : [...current, name]
 }
 
 /**
@@ -61,8 +50,10 @@ export function toggleRuleTag<T extends Record<string, string[]>>(
  * away. What it costs is a rule written ahead of the tag it names; that was never worth
  * much, since such a rule sits silent until the tag exists.
  *
- * The file is unchanged — the same two sections of `save.json`, written by the same two
- * stores. What moved is where the writing happens.
+ * The rules themselves live on the board now, on `tag_rules`, so a rule survives a
+ * rename of either tag it names and goes when one of them does. What this panel sends is
+ * one tag's whole list — the tag whose panel is open, which is the only one it can have
+ * an opinion about.
  */
 export function TagRuleEditor({
   tag,
@@ -99,26 +90,19 @@ export function TagRuleEditor({
               worth explaining here, and it belongs behind the glyph that means exactly
               that, on both columns, said properly. */}
           <Tip label="What an implication is">
-            Put this tag on a post and these go on too, by themselves. They can bring their
-            own tags along as well. A rating here can only push a post <em>up</em> — it
-            never lowers one.
+            Put this tag on a post and these go on too, by themselves. They can bring their own tags
+            along as well. A rating here can only push a post <em>up</em> — it never lowers one.
           </Tip>
         </div>
 
         <RuleChips
           names={impliedTags}
           empty="Nothing yet."
-          onRemove={(name) => void saveImplications(toggleRuleTag(implications, tag, name))}
+          onRemove={(name) => void saveImplication(tag, toggleRuleName(impliedNow, name))}
           label={(name) => `Stop ${tag} adding ${name}`}
         />
 
-        <ChooseButton
-          kind="implies"
-          picking={picking}
-          onPick={onPick}
-          tag={tag}
-          verb="imply"
-        />
+        <ChooseButton kind="implies" picking={picking} onPick={onPick} tag={tag} verb="imply" />
 
         {/* A floor, not a setting: it lifts an image rated lower and leaves a higher one
             alone, which is `raisedRating` and is said here rather than left to be
@@ -131,11 +115,7 @@ export function TagRuleEditor({
             value={floor}
             onChange={(event) => {
               const next = event.target.value as Rating | ''
-              const rules: ImplicationRules = { ...implications }
-              const list = [...impliedTags, ...(next ? [ratingToken(next)] : [])]
-              if (list.length > 0) rules[tag] = list
-              else delete rules[tag]
-              void saveImplications(rules)
+              void saveImplication(tag, [...impliedTags, ...(next ? [ratingToken(next)] : [])])
             }}
             className={`min-h-9 rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-accent ${
               floor ? RATING_COLOR[floor] : ''
@@ -166,8 +146,8 @@ export function TagRuleEditor({
             {/* No rating here, and there never was one: a rating is not a chip you press,
                 and the implications opposite already cover the case where it should move
                 on its own. */}
-            Put this tag on a post and these are <em>offered</em> as buttons. Nothing is
-            added until you press one — for tags that usually go together, not always.
+            Put this tag on a post and these are <em>offered</em> as buttons. Nothing is added until
+            you press one — for tags that usually go together, not always.
           </Tip>
         </div>
 
@@ -177,7 +157,7 @@ export function TagRuleEditor({
           names={offeredNow}
           dashed
           empty="Nothing yet."
-          onRemove={(name) => void saveRecommendations(toggleRuleTag(recommendations, tag, name))}
+          onRemove={(name) => void saveRecommendation(tag, toggleRuleName(offeredNow, name))}
           label={(name) => `Stop ${tag} offering ${name}`}
         />
 

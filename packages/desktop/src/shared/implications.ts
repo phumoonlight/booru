@@ -9,31 +9,34 @@ import { TAG_PATTERN } from '@common/tags'
  *
  * A rule may also imply a **rating**, written as a `rating:e2` token in the same list as
  * the implied tags rather than in a field of its own. That is the board's own grammar —
- * a rating spelled among tags is what `?query=` carries — so the file stays one list per
- * tag and the screen stays one row per rule. An implied rating is a **floor**, never a
+ * a rating spelled among tags is what `?query=` carries — so a rule stays one list per
+ * tag and the screen stays one row per rule. The table cannot store it as a row, the
+ * thing implied not being a tag, so it is `tags.implied_rating` and this list is where it
+ * is folded back in. An implied rating is a **floor**, never a
  * setting: `panties → rating:e2` will raise a general post to E2 and will not touch one
  * already at E5, because the tag that earned the higher rating is rarely the tag whose
  * rule fired last.
  *
- * The rules are this machine's, not the board's: there is no table for them and no way
- * to write one from here, and a rule is only ever consulted while a queue is being
- * tagged. The board sees nothing but the tags and the rating it would have seen if you
- * had set every one of them yourself.
+ * The rules are the board's — `tag_rules`, read and written through
+ * `@common/data/rules.ts` — but *applying* one is still only this app's business, and
+ * only ever while a queue is being tagged. A post carries the tags and the rating it
+ * would have carried if you had set every one of them yourself; nothing on the board
+ * records that a rule was involved.
  *
- * Pure, and in `shared/` because both sides need it: main normalises what it stores,
- * the window applies it as you type.
+ * What is here is pure, and in `shared/` because both sides need it: main normalises what
+ * it stores, the window applies it as you type.
  */
 export type ImplicationRules = Record<string, string[]>
 
 /**
- * The stored shape, parsed rather than trusted — `save.json` is a file the user is
- * invited to hand-edit, so anything that isn't a rule is dropped rather than allowed to
- * become a tag nobody typed. This is the validation for the IPC channel too: it is
- * stricter than a zod schema of the same shape, since a name must also match
- * `TAG_PATTERN`, which is the rule the board itself enforces.
+ * The shape, parsed rather than trusted. It is the validation for the IPC channel that
+ * writes a rule — stricter than a zod schema of the same shape, since a name must also
+ * match `TAG_PATTERN`, which is the rule the board itself enforces — and it still takes a
+ * whole map, because it long predates the write being one tag at a time and a map of one
+ * is the cheapest way to ask it about a single list.
  *
- * Keys come out sorted, so the file stays something you can read down, and a rule keeps
- * at most one `rating:` token — the highest, since a floor of E1 under a floor of E3 is
+ * Keys come out sorted, which costs nothing and makes a map read twice read the same
+ * way, and a rule keeps at most one `rating:` token — the highest, since a floor of E1 under a floor of E3 is
  * not a second rule, it is the same one written twice.
  */
 export function normalizeRules(input: unknown): ImplicationRules {

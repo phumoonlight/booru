@@ -17,15 +17,15 @@ import { TAG_PATTERN } from '@common/tags'
  * `rating:e2` token simply fails `TAG_PATTERN` on the colon and is dropped with the rest
  * of the nonsense.
  *
- * Same file, same shape, same machine: the `recommendations` section of `save.json`.
+ * Same shape and the same table: the `'recommends'` rows of `tag_rules`.
  */
 export type RecommendationRules = Record<string, string[]>
 
 /**
- * The stored shape, parsed rather than trusted — `save.json` is a file the user is
- * invited to hand-edit. Also the validation for the IPC channel, and stricter than a zod
- * schema of the same shape would be, since every name must match the board's own
- * `TAG_PATTERN`. Keys come out sorted so the file stays readable down the page.
+ * The shape, parsed rather than trusted, and the validation for the IPC channel that
+ * writes a rule — stricter than a zod schema of the same shape would be, since every name
+ * must match the board's own `TAG_PATTERN`. Keys come out sorted, which costs nothing and
+ * makes a map read down the page twice running read the same way.
  */
 export function normalizeRecommendations(input: unknown): RecommendationRules {
   const out: RecommendationRules = {}

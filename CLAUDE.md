@@ -89,9 +89,11 @@ structure further down.
    facets and the feed all derive from it.
 10. **Re-measure with `npm run bench:avif` before changing a constant in
    `@common/imgcmp/`.** Those numbers were measured, not chosen.
-11. **Bumping `packages/desktop/package.json` and writing
-    `packages/desktop/changelog/<version>.md` are one change.** About reads the version,
-    so drift makes the app lie about itself.
+11. **Every change under `packages/desktop` raises the number in
+    `packages/desktop/build-id`.** One line, one integer, no exceptions — a doc fix in
+    that folder counts. `electron.vite.config.ts` reads it at build time and About shows
+    it in place of a version, so a build that was not bumped is indistinguishable from
+    the one before it. The build fails if the file is missing or unreadable.
 
 ## Layering
 
@@ -194,19 +196,20 @@ is bad at — see [packages/desktop/README.md](packages/desktop/README.md). It i
   is how a finished post gets opened. `main/config.ts` reads `__BUILD_ENV__` and nothing
   else; only the main bundle gets the `define`, so no key is compiled into a file the
   window loads.
-- **`save.json` holds preferences, both sets of tag rules and the tag catalogs, and
-  nothing else**
+- **`save.json` holds preferences and the tag catalogs, and nothing else**
   (`main/save-file.ts`), and the settings screen can **write it out and read it back**
   (`main/transfer.ts`). Export is a byte copy — it is meant to be the file. Import is
   section by section through the same `normalize…` the IPC channels use, so it can only
   produce a file this build could have written, and a section the file lacks is left alone
-  rather than cleared. It is also the one thing that changes the rules without going
-  through `save`, which is why `rule-store.ts` grew a `reload`. Plain readable text on purpose: it can be inspected, hand-edited
+  rather than cleared — and the tag rules are no longer among the sections it carries.
+  Plain readable text on purpose: it can be inspected, hand-edited
   and copied, and there is nothing secret left in it. `userData` is pinned in
   `main/index.ts` rather than defaulting to the app's display name, so renaming the app
   doesn't move the settings — `pubooru-desktop` packaged, `pubooru-desktop-dev` in a
-  checkout, so `desktop:dev` runs from its own rules and both can be open at once. A file
-  that won't parse is treated as absent, costing the settings and never a crash.
+  checkout, so `desktop:dev` runs from its own preferences and both can be open at once. A
+  file that won't parse is treated as absent, costing the settings and never a crash. The
+  two rule sections an older version wrote are deleted on the way past
+  (`dropStoredRules`), the way the login and the stored keys were.
 - **The settings screen is a readout, two settings and a cache.** Connection shows the
   project and board URLs, never the keys. Compression is the only editable part;
   `main/preferences.ts` applies as it writes, so a change takes the next image rather than
@@ -305,7 +308,7 @@ behind a session, because there is none.
   of a copy that cannot reach its board. It carries what `app:status` reports, since the
   renderer has no `process` and a packaged app ships no manifest.
 
-**Tag rules** — two kinds, both the app's and neither the board's, and **not a screen**:
+**Tag rules** — two kinds, both the **board's** now, and **not a screen**:
 they sit on the panel of whichever tag the Tags screen has open (`tag-rule-editor.tsx`),
 because a rule is written *about* a tag and the screen with every tag on it — spelling,
 category, count — was the other one. They had their own screen whose first box named the
@@ -322,12 +325,27 @@ now fails the upload that fires it, since no write path coins a tag any more.
 once as the forest it is — implications chain, and one row per rule is exactly what hides
 that. Read-only, because a screen that both explains and edits invites an edit made on a
 picture rather than on a tag. Both rule sets are one habit with two answers to "this tag
-is on the post, what else should be?". Both are `{ tag: [name, …] }` sections of `save.json`, both
-parsed by a `normalize…` that doubles as the IPC validation (stricter than a zod schema
-of the same shape, since every name must match `TAG_PATTERN`), and both reach the window
-through one module-level store (`renderer/src/rule-store.ts`) rather than React state —
-the tag field consults them on every keystroke, and a round trip per keystroke would be a
-file read per keystroke.
+is on the post, what else should be?". Both are rows on **`tag_rules`**, one table with a
+`kind` column — the two differ in what the app does with a row and not at all in its
+shape; the column is a `smallint`, 0 implies and 1 recommends, and `RULE_KIND` in
+`@common/data/rules.ts` is the only place either number is spelled — both parsed on the way in by a `normalize…` that doubles as the IPC validation
+(stricter than a zod schema of the same shape, since every name must match
+`TAG_PATTERN`), and both reach the window through one module-level store
+(`renderer/src/rule-store.ts`) rather than React state — the tag field consults them on
+every keystroke, and a round trip per keystroke would be a query per keystroke.
+
+They were two `{ tag: [name, …] }` sections of `save.json` until they moved. A file could
+not do three things a table does: a rule naming a tag that was later **renamed** went
+quietly dead and stayed dead, a rule naming a **deleted** tag did the same, and the rules
+were one machine's — a reinstall started with none. Rows are tag **ids**, so a rename
+carries every rule that names it and a delete takes them with it; `@common/data/rules.ts`
+is the only place ids and names meet, because everything above it — the store, the
+diagram, the picker — is written in names. What it costs is that a window which cannot
+reach the board has no rules, which the store treats as none rather than as a failure to
+render. An implied **rating** cannot be a row, so it is `tags.implied_rating`, one per tag,
+folded back into the implied list as a `rating:` token on the way out. A write sends one
+tag's whole list — the panel editing a rule has exactly that tag open — and the Tags
+screen's 🔄, which is also where a rename or a delete lands, re-reads both sets.
 
 - **Implications are applied.** `white_bra → bra`: the specific tag is the one you
   remember to type, the broad one is the one that gets forgotten, so the post never comes
@@ -349,9 +367,11 @@ file read per keystroke.
   ratings: a rating is not a chip you press, and `TAG_PATTERN` drops the token on its
   colon for free.
 
-**Tag catalogs** — the third section of `save.json` and the third answer to "what else
-goes on this post?", `{ name: [tag, …] }` like the two rule sets, same `normalize…`
-doubling as the IPC validation, same module-level store. What makes it a different thing
+**Tag catalogs** — the other section of `save.json` and the third answer to "what else
+goes on this post?", `{ name: [tag, …] }` like the two rule sets were, same `normalize…`
+doubling as the IPC validation, same module-level store. Still a file, because a catalog
+is a way of working rather than a fact about a tag — and it is written whole, which is why
+`createRuleStore` is parameterized on what a write takes. What makes it a different thing
 is *who asks*: an implication fires by itself and a recommendation offers itself, and a
 catalog does neither until it is picked **by name** — so it holds what is true of a set of
 images rather than of a tag, which is what no rule can say. It is built on the Tags screen
@@ -409,16 +429,25 @@ number just made. The renderer pushes its counts on every change rather than mai
 at close time: a `close` handler vetoes synchronously or not at all, so it cancels the
 close and re-issues it as `destroy()` if the answer is yes.
 
-**Changelog** — a file per version in `packages/desktop/changelog/`. Keep entries short:
-a heading, then `### Added` / `### Changed` / `### Fixed` bullets of a line or two,
-written as what a user would notice. Reasoning belongs in the commit and beside the code.
+**Build id** — `packages/desktop/build-id`, one integer, raised by every change under
+`packages/desktop`. `electron.vite.config.ts` reads it and `define`s `__BUILD_ID__` into
+the main bundle beside the board's four values; `buildId()` in `main/config.ts` is the
+only reader, and About draws it where a version number used to be.
+
+It replaced a version and a changelog folder. `package.json`'s version still names an
+installer, and nothing on screen reads it: a release number is the honest answer to "what
+shipped" and a useless one to "is this the copy with the fix in it", which is the question
+actually being asked of a desktop app that changes between releases. The changelog went
+with it — notes written per release describe a cadence this app does not have, and the
+reasoning they carried is better placed in the commit and beside the code, where it
+already was.
 
 ## Database
 
 Full reference: [docs/database-schema.md](docs/database-schema.md).
 
 - **Storage, then one per table, then a column at a time** — `20260826090000_storage_buckets.sql`,
-  then `posts` → `tags` → `post_tags` in foreign-key order. Each table's file holds its
+  then `posts` → `tags` → `post_tags` → `tag_rules` in foreign-key order. Each table's file holds its
   columns, indexes **and** RLS policies. Schema changes from here are **always** a new
   timestamped file, never a dashboard edit and never an edit to the squashed four once
   pushed anywhere real.

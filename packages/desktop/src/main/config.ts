@@ -32,6 +32,22 @@ export type AppConfig = {
 /** Replaced at build time by `define`. Nothing else in the app may read it. */
 declare const __BUILD_ENV__: AppConfig
 
+/** The number in `packages/desktop/build-id`, likewise compiled in. */
+declare const __BUILD_ID__: number
+
+/**
+ * Which build this is — the counter raised by every change under `packages/desktop`,
+ * shown by About where a version number used to be.
+ *
+ * Compiled in rather than read at runtime for the reason the board's values are: a
+ * packaged app ships no file the renderer could read, and `app.getVersion()` answers a
+ * different question — what electron-builder stamped on the installer, which now moves
+ * only at a release.
+ */
+export function buildId(): number {
+  return typeof __BUILD_ID__ === 'number' ? __BUILD_ID__ : 0
+}
+
 /**
  * The same test `isSupabaseConfigured()` makes on the web. The build already refuses
  * placeholders and blanks, so this only catches a bundle built some other way — but a
@@ -80,6 +96,24 @@ export function dropStoredLogin(): void {
   clearSection('session')
   clearSection('credentials')
   console.info('Removed the stored login — the app no longer signs in.')
+}
+
+/**
+ * And the same again for the tag rules, which are the board's now rather than this
+ * machine's. A copy that upgraded from a version that kept them here has two sections
+ * nothing reads; leaving them would invite hand-editing a file the app has stopped
+ * looking at. The rules on the board are not touched — this only clears the local copy,
+ * which is why it says how many rules it is dropping rather than doing it silently.
+ */
+export function dropStoredRules(): void {
+  const implications = readSection<Record<string, unknown>>('implications')
+  const recommendations = readSection<Record<string, unknown>>('recommendations')
+  if (!implications && !recommendations) return
+
+  const kept = Object.keys(implications ?? {}).length + Object.keys(recommendations ?? {}).length
+  clearSection('implications')
+  clearSection('recommendations')
+  console.info(`Removed ${kept} locally stored tag rules — they live on the board now.`)
 }
 
 /**

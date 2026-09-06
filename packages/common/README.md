@@ -33,6 +33,7 @@ where the file is.
 | `data/search.ts` | `searchPosts` — the whole query, tag resolution and cursor |
 | `data/shared.ts` | the post write path, `resolveTagIds`, tag-name search, `listTags` |
 | `data/tags.ts` | managing the vocabulary: create, rename, recategorize, delete, apply-by-tag |
+| `data/rules.ts` | the tag rules — implications and recommendations, ids on the table and names above it |
 | `data/counters.ts` | `syncTagPostCounts` — recompute, never increment |
 | `imgcmp/for-post.ts` | lossy AVIF (q50) for the stored image, bounded to `POST_MAX_DIMENSION` |
 | `imgcmp/for-thumbnail.ts` | lossy AVIF thumbnail, 400px tall |

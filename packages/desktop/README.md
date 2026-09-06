@@ -63,10 +63,11 @@ those four values on first launch and kept them in `save.json`, which put a serv
 key on every machine that ran the app — a copy this version deletes on startup if it
 finds one.
 
-`save.json` now holds the compression preferences, the two sets of tag rules and the tag
-catalogs, and nothing else, as plain readable text — all three are `{ name: [tag, …] }`
-objects worth opening the file for once there are more of them than you want to type in
-one at a time. `desktop:dev` uses a folder of its own (`pubooru-desktop-dev` beside
+`save.json` now holds the compression preferences and the tag catalogs, and nothing else,
+as plain readable text — the catalogs being a `{ name: [tag, …] }` object worth opening the
+file for once there are more of them than you want to type in one at a time. The two sets
+of tag rules were in here too until they moved onto the board's `tag_rules` table, where a
+rule follows the tag it names through a rename and every install has the same ones. `desktop:dev` uses a folder of its own (`pubooru-desktop-dev` beside
 `pubooru-desktop`), so working on the app never disturbs the copy you use, and both can
 be open at once.
 
@@ -87,6 +88,7 @@ for your own board. Treat the installer accordingly: anyone who has it can write
 | `src/shared/api.ts` | the types across the bridge, imported by all three |
 | `src/shared/implications.ts` | rules the app applies: what they are, and the pure code that applies them |
 | `src/shared/recommendations.ts` | rules the app only offers, same shape |
+| `src/main/rules.ts` | reads and writes both sets on the board — `@common/data/rules.ts` underneath |
 | `src/shared/catalogs.ts` | named sets of tags, applied when asked for by name |
 
 The renderer holds no keys, no file access and no network. Every capability it has is one
@@ -117,5 +119,7 @@ can never go stale.
   fails packaging with "version is a range, not a fixed version".
 - The installer's icon is `build/icon.ico`, named in [`electron-builder.yml`](electron-builder.yml).
   Without one a packaged build wears Electron's.
-- Releases get a file each in [`changelog/`](changelog/), named for the version; the
-  number there, in `package.json` and on the About screen are the same number.
+- Every change here raises the integer in [`build-id`](build-id). The build reads it and
+  About shows it where a version used to be, so a build that was not bumped looks exactly
+  like the one before it. `package.json`'s version still names an installer and is on no
+  screen.

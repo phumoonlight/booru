@@ -57,7 +57,8 @@ served by the primary key, which Postgres reads backwards as cheaply as forwards
 `supabase/migrations/20260826100200_tags.sql`, plus
 `supabase/migrations/20260905120000_tags_category2.sql` and
 `supabase/migrations/20260906120000_tags_emoji.sql` and
-`supabase/migrations/20260906130000_tags_mark.sql`
+`supabase/migrations/20260906130000_tags_mark.sql` and
+`supabase/migrations/20260906140000_tag_rules.sql`
 
 | column | type | notes |
 | --- | --- | --- |
@@ -66,6 +67,7 @@ served by the primary key, which Postgres reads backwards as cheaply as forwards
 | `category` | `text not null default 'general'` | free-form; `TAG_CATEGORIES` in `@common/tags` is the ten the app writes, each with a colour and a place in the order |
 | `category2` | `text` (nullable) | a finer grouping *within* the category, free-form and usually null — read by the desktop tag picker and by nothing else |
 | `mark` | `text` (nullable) | what is drawn in front of the name — a colour or up to three glyphs — usually null; every read selects it |
+| `implied_rating` | `text` (nullable) | a rating **floor** carried by this tag — see [`tag_rules`](#tag_rules) |
 | `post_count` | `int not null default 0` | denormalized, see [Counters](#counters) |
 | `created_at` | `timestamptz not null default now()` | |
 
@@ -107,6 +109,58 @@ lookup); `tags_name_prefix_idx (name text_pattern_ops)` for autocomplete;
   colour the list had not heard of, and could not be corrected on the one tag it got wrong.
   Both the list and the guess are gone; a dot is asked for now.
 
+## `tag_rules`
+
+`supabase/migrations/20260906140000_tag_rules.sql`
+
+The two answers to "this tag is on the post, what else should be?". An **implication** is
+applied by itself (`white_bra` means the post is also a `bra`); a **recommendation** is
+only offered, as a chip to press. `@common/data/rules.ts` reads and writes both; the
+desktop app is the only thing that consults them.
+
+| column | type | notes |
+| --- | --- | --- |
+| `tag_id` | `bigint not null → tags.id on delete cascade` | the tag that triggers the rule |
+| `kind` | `smallint not null` | `check (kind in (0, 1))` — **0 implies, 1 recommends** |
+| `target_tag_id` | `bigint not null → tags.id on delete cascade` | the tag the rule names |
+| | PK `(tag_id, kind, target_tag_id)` | |
+| | `check (tag_id <> target_tag_id)` | a tag implying itself can never do anything |
+
+**Indexes:** the PK and nothing else. It orders `tag_id, kind` first, which is how one
+tag's panel reads its own rules, and the whole set is read at once into the desktop app's
+rule store anyway. There is deliberately no index on `target_tag_id`: only the cascade
+reads that way, on a table of a few hundred rows.
+
+**No `created_at`**, alone among the tables. Nothing asks when a rule was written — the
+whole set is read at once and drawn in tag order — and the column would be one more thing
+to keep true for no reader.
+
+**Invariants**
+
+- **Both foreign keys are named**, `tag_rules_tag_id_fkey` and
+  `tag_rules_target_tag_id_fkey`, because both point at `tags` and PostgREST needs the
+  constraint name to tell the two embeds apart. `listTagRules` asks for
+  `tags!tag_rules_tag_id_fkey(name)` by that exact spelling.
+- **`target`, not `implied`.** One column serves both kinds, and only one of them implies
+  anything: on a `kind = 1` row it is a tag that gets offered, not one that gets added.
+- **Rows are ids, the app is names.** Everything above `@common/data/rules.ts` — the rule
+  store the tag field consults on every keystroke, the rule diagram, the picker — is
+  written in tag names; the table stores ids so a rename carries its rules and a delete
+  takes them. That file is the one place the two spellings meet.
+- **A rule can only name a tag that exists**, which the foreign keys now enforce and
+  `resolveTagIds` refuses before them. This is the same rule the post write paths follow.
+- **The rating floor is not a row.** `tags.implied_rating` holds it: one per tag, since a
+  floor under a floor is the same rule written twice. `listTagRules` folds it back into the
+  implied list as a `rating:` token, which is the grammar `?query=` uses and the shape
+  every helper above expects. It **raises** a post and never lowers one (`raisedRating`).
+- **`kind` is a number and the app is words.** `RULE_KIND` in `@common/data/rules.ts` is
+  the only place `0` and `1` are written; the check constraint is the other half of that
+  pair. Everything above that file — the IPC channels, the panel, the diagram — says
+  `'implies'` or `'recommends'`, so a row read straight out of the table is the one place
+  the meaning has to be looked up.
+- **Cycles are not a constraint.** `a → b → a` is storable; `impliedTags` walks with a
+  `seen` set, so such a pair is useless rather than fatal.
+
 ## `post_tags`
 
 `supabase/migrations/20260826100300_post_tags.sql`
@@ -138,6 +192,7 @@ Enabled on every table, with a select policy and **nothing else**:
 | `posts` | public | — | — | — |
 | `tags` | public | — | — | — |
 | `post_tags` | public | — | — | — |
+| `tag_rules` | public | — | — | — |
 
 | bucket | public | policy |
 | --- | --- | --- |

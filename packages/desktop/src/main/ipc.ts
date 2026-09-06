@@ -8,11 +8,10 @@ import { createPostFromImage, parsePostMetadata } from '@common/upload/pipeline'
 import { TAG_CATEGORIES } from '@common/tags'
 import { DESKTOP_UPLOAD_LIMITS } from './limits'
 import { CPU_COUNT, DEFAULT_ENCODE_PRIORITY, DEFAULT_ENCODE_THREADS } from './cpu'
-import { loadConfig, revealSaveFile } from './config'
+import { buildId, loadConfig, revealSaveFile } from './config'
 import { loadPreferences, savePreferences } from './preferences'
 import { listBrowsers, openUrl } from './browser'
-import { loadImplications, saveImplications } from './implications'
-import { loadRecommendations, saveRecommendations } from './recommendations'
+import { loadRules, saveRule } from './rules'
 import { loadCatalogs, saveCatalogs } from './catalogs'
 import { previewFile, stageFiles } from './staging'
 import { downloadImages } from './download'
@@ -29,8 +28,7 @@ import { clearBrowseCache, readBrowseCache, writeBrowseCache } from './browse-ca
 import { boardClient } from './supabase'
 import { loadPost, removePost, savePost, thumbnailDataUrl, type LoadedPost } from './manage'
 import type { AppStatus, BrowseCacheFile, PreferencesInput, TagSuggestion } from '../shared/api'
-import type { ImplicationRules } from '../shared/implications'
-import type { RecommendationRules } from '../shared/recommendations'
+import type { TagRules } from '@common/data/rules'
 import type { TagCatalogs } from '../shared/catalogs'
 import type { Tag } from '@common/tags'
 import type { PostPage } from '@common/data/posts'
@@ -97,6 +95,10 @@ const markSchema = z.string().max(96)
 // The known list, which is also the only list with a colour and a place in the display
 // order. A category outside it can only arrive by hand-editing the table.
 const categorySchema = z.enum(TAG_CATEGORIES)
+// Which of the two rule sets a channel is talking about. The same two strings the table's
+// `kind` column is checked against, so an unknown one is refused here rather than by a
+// constraint violation three calls later.
+const ruleKindSchema = z.enum(['implies', 'recommends'])
 
 const queueStateSchema = z.object({
   pending: z.number().int().nonnegative(),
@@ -129,10 +131,11 @@ export function registerIpc(): void {
       configured: config !== null,
       siteUrl: config?.siteUrl ?? '',
       supabaseUrl: config?.supabaseUrl ?? '',
-      // Read here rather than baked into the bundle: the renderer has no `process`, and
-      // `app.getVersion()` is the version electron-builder actually stamped on the copy.
+      // Compiled in by `electron.vite.config.ts`, which reads `packages/desktop/build-id`
+      // — a packaged app ships no file the renderer could read it out of.
+      buildId: buildId(),
+      // Read here rather than baked in: the renderer has no `process` to ask.
       versions: {
-        app: app.getVersion(),
         electron: process.versions.electron,
         chrome: process.versions.chrome,
       },
@@ -268,31 +271,27 @@ export function registerIpc(): void {
   ipcMain.handle('browse:clear-cache', async (): Promise<void> => clearBrowseCache())
 
   /**
-   * The tag implication rules, which are this machine's and not the board's — no session
-   * is needed to read or write them, and nothing here reaches Supabase.
+   * The tag rules, which are the board's now rather than this machine's — they moved off
+   * `save.json` and onto `tag_rules`, so they follow a rename, die with a delete, and are
+   * the same rules on every install.
    *
-   * `saveImplications` is the whole rule set every time rather than one rule at a time.
-   * The set is small, the file is rewritten either way, and a screen that sends what it
-   * is showing cannot drift from what is stored.
+   * `rules:save` writes one tag's whole list rather than the whole map. The panel that
+   * edits a rule has exactly one tag open, so that is what it was always sending; what
+   * changed is that the write now touches that tag alone instead of rewriting a file.
    */
-  ipcMain.handle('implications:list', async (): Promise<ImplicationRules> => loadImplications())
-
-  // No zod here: `normalizeRules` inside is the parse, and a stricter one — it holds
-  // every name to the board's own `TAG_PATTERN`, which a schema of this shape would not.
   ipcMain.handle(
-    'implications:save',
-    async (_event, raw: unknown): Promise<ImplicationRules> => saveImplications(raw)
+    'rules:list',
+    async (_event, kind: unknown): Promise<TagRules> => loadRules(ruleKindSchema.parse(kind))
   )
 
-  /** The same two channels for the rules that are offered rather than applied. */
+  // Only the kind and the trigger are checked here. The list itself goes through
+  // `normalizeRules` inside, which is the parse and a stricter one — it holds every name
+  // to the board's own `TAG_PATTERN`, which a schema of this shape would not, and the
+  // write beneath it refuses any name the board has no tag for.
   ipcMain.handle(
-    'recommendations:list',
-    async (): Promise<RecommendationRules> => loadRecommendations()
-  )
-
-  ipcMain.handle(
-    'recommendations:save',
-    async (_event, raw: unknown): Promise<RecommendationRules> => saveRecommendations(raw)
+    'rules:save',
+    async (_event, kind: unknown, tag: unknown, raw: unknown): Promise<TagRules> =>
+      saveRule(ruleKindSchema.parse(kind), z.string().parse(tag), raw)
   )
 
   /**
