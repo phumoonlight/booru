@@ -9,5 +9,6 @@ const store = createRuleStore(
 )
 
 export const useImplications = store.use
+export const useImplicationsSaving = store.useSaving
 export const saveImplication = store.save
 export const reloadImplications = store.reload

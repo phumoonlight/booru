@@ -26,6 +26,12 @@ import { useEffect, useSyncExternalStore } from 'react'
 export type RuleStore<T, W extends unknown[]> = {
   /** The rules, kicking the first read if nothing has done it yet. */
   use: () => T
+  /**
+   * Whether a write is in flight. A rule used to be a line in a local file and landed
+   * before the click finished; it is a round trip to the board now, and a panel that
+   * looks identical during it is a panel you press twice.
+   */
+  useSaving: () => boolean
   /** Writes, and takes the answer that comes back as the new truth. */
   save: (...args: W) => Promise<void>
   /** Reads the set again, for everything that moves it without going through `save`. */
@@ -39,6 +45,13 @@ export function createRuleStore<T extends object, W extends unknown[]>(
 ): RuleStore<T, W> {
   let rules: T = empty
   let reading: Promise<void> | null = null
+  // How many writes are in flight, not whether one is: two controls on the panel can be
+  // used in the same breath, and a boolean would go quiet when the first of them answered
+  let writing = 0
+  // Which write is the latest. Clicks outrun round trips, so an earlier answer arriving
+  // after a later one must not become the truth — the post editor's `writeId`, for the
+  // reason it has one
+  let writeId = 0
   const listeners = new Set<() => void>()
 
   const announce = (): void => {
@@ -77,9 +90,17 @@ export function createRuleStore<T extends object, W extends unknown[]>(
       }, [])
       return snapshot
     },
+    useSaving: () => useSyncExternalStore(subscribe, () => writing > 0),
     save: async (...args: W) => {
+      const id = ++writeId
+      writing += 1
+      announce()
       try {
-        rules = await write(...args)
+        const next = await write(...args)
+        // A later write has already been sent, so this answer is one edit behind: its
+        // own answer is what the screen should end on
+        if (id !== writeId) return
+        rules = next
         reading = Promise.resolve()
         announce()
       } catch (error) {
@@ -88,8 +109,12 @@ export function createRuleStore<T extends object, W extends unknown[]>(
         // post editor does with a control whose write failed: the screen must not go on
         // showing a rule that was never stored.
         console.error('Could not write the rule:', error instanceof Error ? error.message : error)
+        if (id !== writeId) return
         reading = null
         await ensureRead()
+      } finally {
+        writing -= 1
+        announce()
       }
     },
     reload: async () => {

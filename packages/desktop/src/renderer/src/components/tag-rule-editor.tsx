@@ -10,8 +10,12 @@ import {
 } from '@common/search'
 import { BUTTON_ON_SURFACE } from './buttons'
 import type { RuleKind } from '@common/data/rules'
-import { saveImplication, useImplications } from '../implications'
-import { saveRecommendation, useRecommendations } from '../recommendations'
+import { saveImplication, useImplications, useImplicationsSaving } from '../implications'
+import {
+  saveRecommendation,
+  useRecommendations,
+  useRecommendationsSaving,
+} from '../recommendations'
 
 /** Which of a tag's two rules is being written — the table's `kind` column, exactly. */
 export type { RuleKind }
@@ -67,6 +71,10 @@ export function TagRuleEditor({
 }) {
   const implications = useImplications()
   const recommendations = useRecommendations()
+  // Per rule set, not one flag for the panel: the two columns are written by separate
+  // controls, and a word under the wrong heading says the wrong thing happened.
+  const savingImplies = useImplicationsSaving()
+  const savingRecommends = useRecommendationsSaving()
 
   const impliedNow = implications[tag] ?? []
   // The rating rides in the same list as the tags (`shared/implications.ts` has why), so
@@ -93,6 +101,12 @@ export function TagRuleEditor({
             Put this tag on a post and these go on too, by themselves. They can bring their own tags
             along as well. A rating here can only push a post <em>up</em> — it never lowers one.
           </Tip>
+          {/* Every control in this column writes on use, so this word is the whole
+              feedback it gives — the same line the post editor draws, for the same reason.
+              A rule is a round trip to the board now rather than a line in a local file,
+              and a panel that looks identical while one is in flight is a panel you press
+              twice. */}
+          <Saving on={savingImplies} />
         </div>
 
         <RuleChips
@@ -149,6 +163,7 @@ export function TagRuleEditor({
             Put this tag on a post and these are <em>offered</em> as buttons. Nothing is added until
             you press one — for tags that usually go together, not always.
           </Tip>
+          <Saving on={savingRecommends} />
         </div>
 
         {/* Dashed, against the implications' solid: one of these lists goes on the post
@@ -170,6 +185,26 @@ export function TagRuleEditor({
         />
       </section>
     </div>
+  )
+}
+
+/**
+ * The one word this panel says back. Drawn always and faded rather than mounted on demand,
+ * so the heading row does not reflow the moment a chip is pressed — it is a word
+ * appearing, not a layout changing.
+ *
+ * Nothing is disabled while it shows. Pressing a second chip during the first write is a
+ * reasonable thing to do, and the store keeps the answer to the later of the two rather
+ * than whichever round trip happens to land last.
+ */
+function Saving({ on }: { on: boolean }) {
+  return (
+    <span
+      aria-live="polite"
+      className={`text-xs text-muted transition-opacity ${on ? '' : 'opacity-0'}`}
+    >
+      saving…
+    </span>
   )
 }
 

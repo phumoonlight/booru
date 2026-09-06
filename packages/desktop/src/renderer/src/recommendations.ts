@@ -9,5 +9,6 @@ const store = createRuleStore(
 )
 
 export const useRecommendations = store.use
+export const useRecommendationsSaving = store.useSaving
 export const saveRecommendation = store.save
 export const reloadRecommendations = store.reload
