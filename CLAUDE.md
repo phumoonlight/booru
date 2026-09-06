@@ -327,9 +327,10 @@ picture rather than on a tag. Both rule sets are one habit with two answers to "
 is on the post, what else should be?". Both are rows on **`tag_rules`**, one table with a
 `kind` column — the two differ in what the app does with a row and not at all in its
 shape; the column is a `smallint`, 0 implies and 1 recommends, and `RULE_KIND` in
-`@common/data/rules.ts` is the only place either number is spelled — both parsed on the way in by a `normalize…` that doubles as the IPC validation
-(stricter than a zod schema of the same shape, since every name must match
-`TAG_PATTERN`), and both reach the window through one module-level store
+`@common/data/rules.ts` is the only place either number is spelled — both parsed on the
+way in by a `normalize…` that doubles as the IPC validation (stricter than a zod schema of
+the same shape, since every name must match `TAG_PATTERN`), and both reach the window
+through one module-level store
 (`renderer/src/rule-store.ts`) rather than React state — the tag field consults them on
 every keystroke, and a round trip per keystroke would be a query per keystroke.
 
@@ -442,8 +443,8 @@ placed in the commit and beside the code, where it already was.
 Full reference: [docs/database-schema.md](docs/database-schema.md).
 
 - **Storage, then one per table, then a column at a time** — `20260826090000_storage_buckets.sql`,
-  then `posts` → `tags` → `post_tags` → `tag_rules` in foreign-key order. Each table's file holds its
-  columns, indexes **and** RLS policies. Schema changes from here are **always** a new
+  then `posts` → `tags` → `post_tags` → `tag_rules` in foreign-key order. Each table's
+  file holds its columns, indexes **and** RLS policies. Schema changes from here are **always** a new
   timestamped file, never a dashboard edit and never an edit to the squashed four once
   pushed anywhere real.
 - **`supabase/seed.sql` is data, not schema.** It runs on `db:reset` and
@@ -580,6 +581,10 @@ current.
 | `search_posts`, `create_post_with_tags`, `update_post_with_tags`, `increment_post_view` | plpgsql is hard to edit and reports opaquely |
 | `docs/future.md` | A roadmap that had to be kept in step with a build that outgrew it |
 | The `@web` alias into the website's `src/` | Made the site's internal layout part of the desktop build; where a file sits answers "is this shared?" now |
+| `ensureTagIds` — the `on conflict do nothing` upsert every post write ran | Coined a tag from a typo, in an app where naming one is the Tags screen's job; and Postgres draws the identity default before it tests the conflict, so every tag a post already had spent a `tags.id` on every save |
+| The `implications` and `recommendations` sections of `save.json` | Keyed by name, so a rule died silently when the tag it named was renamed or deleted, and the rules were one machine's — `tag_rules` is keyed by id |
+| `packages/desktop/changelog/` | A file per release, for a cadence this app does not have; the reasoning belongs in the commit and beside the code |
+| `packages/desktop/build-id` | A second number saying what `package.json`'s version already said, and the version has the advantage of being what electron-builder stamped on the copy actually running |
 
 Two rewrites were run by hand against the live project rather than as migrations, the
 columns being free-form: the rating scale (`general, e1..e5` → four names → the letters)
