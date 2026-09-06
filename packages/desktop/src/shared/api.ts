@@ -191,9 +191,12 @@ export type PostAppApi = {
   /**
    * Browse the board. The same query grammar the website's search bar uses — one
    * implementation, in `@common/data/search` — so a query means the same thing in both
-   * windows. `after` is the feed's cursor: strictly older than that post.
+   * windows. `after` is the feed's cursor: strictly older than that post, and `perPage`
+   * is the grid's own screenful — omitted, the read falls back to the website's page
+   * size, which is a page's decision and not this window's.
    */
-  searchPosts: (options: { query?: string; after?: number }) => Promise<PostPage>
+  searchPosts: (options: { query?: string; after?: number; perPage?: number }) =>
+    Promise<PostPage>
   /** One post and its tags, for the editor. */
   getPost: (id: number) => Promise<LoadedPost | null>
   /** Rewrites a post's rating, source and whole tag set. */

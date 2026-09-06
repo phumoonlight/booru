@@ -58,6 +58,10 @@ const postIdSchema = z.number().int().positive()
 const browseSchema = z.object({
   query: z.string().max(500).optional().default(''),
   after: z.number().int().positive().optional(),
+  // How big a screenful is belongs to the window drawing it, not to this process and not
+  // to `@common/data/search`, whose default is the website's page size. Bounded here
+  // because the number arrives from the renderer.
+  perPage: z.number().int().min(1).max(100).optional(),
 })
 
 /**
@@ -341,7 +345,11 @@ export function registerIpc(): void {
 
     const supabase = boardClient()
     if (!supabase) return empty
-    return searchPosts(supabase, { query: parsed.data.query, after: parsed.data.after })
+    return searchPosts(supabase, {
+      query: parsed.data.query,
+      after: parsed.data.after,
+      perPage: parsed.data.perPage,
+    })
   })
 
   /** One post and its tags — what the editor opens with. */

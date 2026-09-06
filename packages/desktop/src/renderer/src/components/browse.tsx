@@ -173,7 +173,12 @@ export async function thumbnailFor(fileName: string): Promise<string> {
   return url
 }
 
-const CHUNK = 24
+/**
+ * A screenful, and what Load more adds — passed on every read, because the default on the
+ * other side is `POSTS_PER_PAGE`, the *website's* page size. This used to be a label
+ * only: the button said 24 and the read that ran behind it came back with ten.
+ */
+const CHUNK = 20
 
 /**
  * Five names under the box, and no more.
@@ -235,7 +240,7 @@ export async function readPosts(query: string): Promise<{ posts: Post[]; hasMore
     const loaded = await window.api.getPost(id)
     if (loaded) return { posts: [loaded.post], hasMore: false }
   }
-  return window.api.searchPosts({ query })
+  return window.api.searchPosts({ query, perPage: CHUNK })
 }
 
 export function Browse({
@@ -280,10 +285,13 @@ export function Browse({
   // rows again, and a dependency that compares equal never fires.
   const [nonce, setNonce] = useState(0)
 
-  // True for exactly one render: the mount that was seeded from the cache. The effect
-  // below runs on mount whatever state was seeded with, and this is what stops it turning
-  // the seed into the read it was meant to save.
-  const seeded = useRef(seed !== null)
+  // What the rows on screen were read for. The effect below runs on mount whatever state
+  // was seeded with, and this is what stops it turning the seed into the read it was meant
+  // to save. A key rather than a flag flipped once: StrictMode mounts this view twice, so
+  // a one-shot flag is spent by the first run and the second replaces a grid of several
+  // chunks with a fresh first one — which is exactly what visiting Tags and coming back
+  // used to do.
+  const readFor = useRef<string | null>(seed !== null ? `${lastQuery}:0` : null)
 
   // Autocomplete for the box below. The names come from the same cached index the tag
   // fields use (`main/tag-cache.ts`), so a keystroke is a prefix match in memory rather
@@ -296,22 +304,20 @@ export function Browse({
   const box = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (seeded.current) {
-      seeded.current = false
-      return
-    }
-    let alive = true
+    const key = `${submitted}:${nonce}`
+    if (readFor.current === key) return
+    readFor.current = key
     void readPosts(submitted).then((page) => {
       remember(submitted, page.posts, page.hasMore)
-      if (!alive) return
+      // A reply the screen has moved on from is dropped here rather than by a flag the
+      // cleanup clears: StrictMode tears the first mount's effect down immediately, and a
+      // flag would cancel the only read this view ever runs.
+      if (readFor.current !== key) return
       setPosts(page.posts)
       setHasMore(page.hasMore)
       setFetchedAt(cached?.at ?? null)
       setLoading(false)
     })
-    return () => {
-      alive = false
-    }
   }, [submitted, nonce])
 
   // A leading `-` excludes the tag it names, so it is part of the query and not of the
@@ -369,7 +375,11 @@ export function Browse({
     const last = posts[posts.length - 1]
     if (!last) return []
     setLoading(true)
-    const page = await window.api.searchPosts({ query: submitted, after: last.id })
+    const page = await window.api.searchPosts({
+      query: submitted,
+      after: last.id,
+      perPage: CHUNK,
+    })
     // Appended, never replaced: a chunk landing must not reflow rows already scrolled past.
     setPosts((current) => {
       const next = [...current, ...page.posts]
@@ -643,7 +653,15 @@ export function Browse({
               disabled={loading}
               className={`${BUTTON} mx-auto`}
             >
-              {loading ? 'Loading…' : `Load ${CHUNK} more`}
+              {loading ? (
+                <>
+                  <span aria-hidden>⏳</span> Loading…
+                </>
+              ) : (
+                <>
+                  <span aria-hidden>⬇️</span> Load {CHUNK} more
+                </>
+              )}
             </button>
           )}
         </>
