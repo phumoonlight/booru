@@ -37,12 +37,19 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-  # Start menu only. A desktop shortcut is the installer deciding what belongs on your
-  # desktop, and this is an app you open when you have images to upload rather than one
-  # you keep in front of you — the Start menu is where you go looking for that.
-  createDesktopShortcut: false
+  # Both on, and both then asked about: these two are compile-time !defines that decide
+  # what the installer is *able* to make, and the checkboxes on build/installer.nsh's own
+  # page decide what a given run keeps. Turning either off here would take the question
+  # away and, less obviously, stop the uninstaller removing that link at all.
+  createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: Pubooru Desktop
+  # The welcome and finish pages' side image, replacing NSIS's blue arrow. It is picked up
+  # by that filename with no option here, and the format is not a preference: NSIS reads an
+  # uncompressed 24-bit BMP at exactly 164x314 and fails the build on anything else, PNG
+  # included. build/installer-sidebar.png is what it was made from, kept beside it because
+  # the BMP is the unreadable one — re-crop from the PNG rather than editing the bitmap.
+  installerSidebar: build/installerSidebar.bmp
 
 mac:
   target:
