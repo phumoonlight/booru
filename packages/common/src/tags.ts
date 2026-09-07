@@ -4,24 +4,40 @@
  *
  * This list is the display order too, so it reads the way the Tags screen does: who made
  * it, then who is in it, then what they look like, then what they are wearing and
- * carrying, then what they are doing, then the two catch-alls. The middle group is the board's own vocabulary
+ * carrying and how much of it is still on, then what they are doing, then the two
+ * catch-alls. The middle group is the board's own vocabulary
  * rather than Danbooru's four — a booru's categories are a statement about what it is for,
  * and the code only ever needed a colour per name.
  *
- * It has been re-cut twice. The first cut retired `head`, `exposure` and `posture` and
+ * It has been re-cut three times. The first cut retired `head`, `exposure` and `posture` and
  * brought in `appearance`, `accessories` and `action`: `head` and `body` were one division
  * drawn in the wrong place — a hair colour and an eye colour are both what someone looks
  * like — and `exposure` was the sexual category under another name. `posture` only ever
  * held half of what a subject is doing, the standing-and-sitting half, with the rest
  * scattered through `general`.
  *
- * The second added `pov` and put `sexual` back, undoing the rename to `nsfw`. `pov` is
- * where the camera is rather than what is in front of it — `from_above`, `pov_hands`,
- * `dutch_angle` — which is a fact about the picture and not about the subject, so it sat
- * in `general` with everything else the list had no word for. `nsfw` was the wrong word
- * for a category: it says how a board should treat a tag, which the rating column already
- * says per post, where `sexual` says what the tag is about, which is what every other
- * name here does.
+ * The second put `sexual` back, undoing the rename to `nsfw`: `nsfw` was the wrong word
+ * for a category, since it says how a board should treat a tag, which the rating column
+ * already says per post, where `sexual` says what the tag is about, which is what every
+ * other name here does. That cut also brought in a `pov` category — where the camera is
+ * rather than what is in front of it, `from_above`, `pov_hands`, `dutch_angle` — and it
+ * was taken back out again: every other name here answers "what is in the picture", and
+ * one that answers "how was it taken" is a second question the list was not sorting by.
+ * `general` is where those tags were and where they stay.
+ *
+ * The third brought `exposure` back, and it is the old name meaning a narrower thing:
+ * clothing that is not doing a garment's job, both halves of one idea — coming off
+ * (`unbuttoned`, `pulled_down`, `half_undressed`) and still on but not covering
+ * (`see-through`, `open_shirt`, `wet_clothes`). What retired it the first time was that
+ * it had become a second `sexual`, and that is the line it now has to hold: `sexual` is
+ * what a tag is *about*, where this is the state a garment is in — a see-through blouse
+ * on a `general` post is still see-through. Neither half is `clothes`, which files what a
+ * garment *is* and would have to file the same dress twice to hold this; neither is
+ * `body`, since what is on show is the point rather than the skin itself. Reusing the
+ * name rather than coining one costs nothing and buys something: a tag left filed under
+ * `exposure` since the first cut is a known category again, with the meaning it probably
+ * had. The hue is `pov`'s, freed one commit after it was found — the old pink is
+ * `accessories`' now and is not being taken back.
  *
  * **A retired name keeps working.** Nothing migrates: a tag still filed under `head` is
  * an unknown category, which `categoryOrder` sorts after the known ones and
@@ -46,8 +62,8 @@ export const TAG_CATEGORIES = [
   'body',
   'clothes',
   'accessories',
+  'exposure',
   'action',
-  'pov',
   'sexual',
   'general',
   'meta',
@@ -180,13 +196,14 @@ const KNOWN_COLOR: Record<KnownCategory, string> = {
   clothes: 'text-[#45c8c0]',
   // `exposure`'s pink, freed when that category went and reused rather than retired: the
   // palette is ten hand-picked hues that stay apart on a dark ground, and inventing an
-  // eleventh is how two categories end up looking alike.
+  // eleventh is how two categories end up looking alike. It stays here now that the name
+  // is back — a hex belongs to whatever is wearing it, and moving one re-teaches a colour
+  // for the sake of a footnote.
   accessories: 'text-[#ff87c8]',
+  // 236, the gap between general's 206 and copyright's 268 — found for `pov` and reused
+  // rather than retired when that category went, the way `exposure`'s pink was.
+  exposure: 'text-[#8f9dff]',
   action: 'text-[#b6d94c]',
-  // The eleventh hue, and it had to be found rather than freed: 206 (general) to 268
-  // (copyright) was the one gap on the wheel wide enough to drop a colour into without
-  // it reading as a shade of a neighbour.
-  pov: 'text-[#8f9dff]',
   sexual: 'text-[#e8506e]',
   general: 'text-[#4fa3e3]',
   meta: 'text-[#ead084]',
@@ -200,10 +217,8 @@ const KNOWN_LABEL: Record<KnownCategory, string> = {
   body: 'Body',
   clothes: 'Clothes',
   accessories: 'Accessories',
+  exposure: 'Exposure',
   action: 'Action',
-  // In caps, the way it is written everywhere: "Pov" from the generic capitalizer would
-  // read as a word rather than the initialism it is.
-  pov: 'POV',
   sexual: 'Sexual',
   general: 'General',
   meta: 'Meta',
