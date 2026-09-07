@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import './globals.css'
+import { Analytics } from '@/components/analytics'
 import { SITE_DESCRIPTION, SITE_NAME, siteUrl } from '@/lib/site'
 
 const geistSans = Geist({
@@ -54,6 +56,9 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {/* Navigation lives in the sticky SearchHeader each page renders */}
         <main className="flex-1 pb-8">{children}</main>
+        {/* Both no-op off Vercel, so a local run and a self-host stay silent */}
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   )
