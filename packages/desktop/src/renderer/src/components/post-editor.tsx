@@ -170,7 +170,7 @@ export function PostEditor({
 
   if (missing) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 pt-4 pb-25">
+      <div className="mx-auto w-full max-w-6xl px-4 pt-4 pb-25">
         <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
           Post {postId} is not on the board any more.
         </p>
@@ -182,7 +182,7 @@ export function PostEditor({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 pt-4 pb-25">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 pt-4 pb-25">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {/* Back leads the row, where the way out of a screen is looked for. It used to

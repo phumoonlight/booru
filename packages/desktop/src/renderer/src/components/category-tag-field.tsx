@@ -54,9 +54,11 @@ let index: Tag[] | null = null
  * is, whatever else it is of, and the notes about the file — each of them a tag or two,
  * decided and done.
  *
- * The left is `appearance`, the long sectioned half you work down a row at a time, with
- * `artist` above it. Splitting them this way is what keeps the two columns roughly the same
- * height while a post is being tagged, rather than a full column and an empty one.
+ * The left is `appearance` alone, the long sectioned half you work down a row at a time.
+ * `artist` sits with the short answers on the right — it is one tag looked up once, and on
+ * the left it only pushed the half that is already the taller one down by a row. Splitting
+ * them this way is what keeps the two columns roughly the same height while a post is being
+ * tagged, rather than a full column and an empty one.
  *
  * A category outside `TAG_CATEGORIES` — one retired by a re-cut and not yet re-filed — lands
  * on the left, which is as good a place as any and is visibly not where you expected it.
@@ -68,6 +70,7 @@ let index: Tag[] | null = null
 const SEARCH_FROM = 10
 
 const RIGHT_COLUMN = new Set([
+  'artist',
   'copyright',
   'character',
   'activity',
