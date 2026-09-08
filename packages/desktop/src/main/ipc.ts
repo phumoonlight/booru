@@ -5,7 +5,7 @@ import { listTags, searchTags } from '@common/data/shared'
 import * as manageTags from '@common/data/tags'
 import { searchPosts } from '@common/data/search'
 import { createPostFromImage, parsePostMetadata } from '@common/upload/pipeline'
-import { TAG_CATEGORIES } from '@common/tags'
+import { TAG_CATEGORIES, parseTagInput } from '@common/tags'
 import { DESKTOP_UPLOAD_LIMITS } from './limits'
 import { CPU_COUNT, DEFAULT_ENCODE_PRIORITY, DEFAULT_ENCODE_THREADS } from './cpu'
 import { loadConfig, revealSaveFile } from './config'
@@ -13,11 +13,13 @@ import { loadPreferences, savePreferences } from './preferences'
 import { listBrowsers, openUrl } from './browser'
 import { loadRules, saveRule } from './rules'
 import { loadCatalogs, saveCatalogs } from './catalogs'
+import { loadFormSections, saveFormSections } from './form-sections'
 import { previewFile, stageFiles } from './staging'
 import { downloadImages } from './download'
-import { setQueueState } from './queue-guard'
+import { setStagedState } from './close-guard'
 import { exportSave, importSave } from './transfer'
 import {
+  bumpTagCounts,
   cachedIndex,
   cachedSuggestions,
   clearTagCache,
@@ -27,6 +29,7 @@ import {
 import { clearBrowseCache, readBrowseCache, writeBrowseCache } from './browse-cache'
 import { boardClient } from './supabase'
 import { loadPost, removePost, savePost, thumbnailDataUrl, type LoadedPost } from './manage'
+import type { FormSections } from '@common/data/form-sections'
 import type { AppStatus, BrowseCacheFile, PreferencesInput, TagSuggestion } from '../shared/api'
 import type { TagRules } from '@common/data/rules'
 import type { TagCatalogs } from '../shared/catalogs'
@@ -84,9 +87,9 @@ const savePostSchema = z.object({
 })
 
 const tagNameSchema = z.string().max(64)
-// Free text, not an enum: there is no list of subgroups — see `tags.category2`'s
-// migration. `setTagSubcategory` normalizes what gets through, and '' clears the column.
-const subcategorySchema = z.string().max(64)
+// A ceiling, not the rule: `normalizeFormSection` settles the spelling of what gets
+// through, and the unique constraint on `(category, name)` settles the rest.
+const sectionSchema = z.string().max(64)
 // A ceiling, not a rule: `readTagMark` is what decides a mark is a colour, or up to three
 // glyphs, and not a bracket — and it answers a message the field can show. This only keeps
 // a paste of a paragraph from reaching the board at all — generous, because three ZWJ
@@ -95,14 +98,37 @@ const markSchema = z.string().max(96)
 // The known list, which is also the only list with a colour and a place in the display
 // order. A category outside it can only arrive by hand-editing the table.
 const categorySchema = z.enum(TAG_CATEGORIES)
-// Which of the two rule sets a channel is talking about. The same two strings the table's
+// Which of the three rule sets a channel is talking about. The same strings the table's
 // `kind` column is checked against, so an unknown one is refused here rather than by a
 // constraint violation three calls later.
+// The five shapes one edit to the sections can take. A discriminated union rather than five
+// channels — see the handler. It has to name every member of `FormSectionEdit`: a shape
+// missing here is refused at the bridge, which is a channel error rather than the typed
+// failure the panel knows how to show.
+const sectionEditSchema = z.discriminatedUnion('do', [
+  z.object({ do: z.literal('create'), category: categorySchema, name: sectionSchema }),
+  z.object({ do: z.literal('rename'), id: z.number().int().positive(), name: sectionSchema }),
+  z.object({ do: z.literal('delete'), id: z.number().int().positive() }),
+  z.object({
+    do: z.literal('reorder'),
+    category: categorySchema,
+    ids: z.array(z.number().int().positive()).max(200),
+  }),
+  z.object({
+    do: z.literal('deps'),
+    id: z.number().int().positive(),
+    mode: z.enum(['any', 'all']),
+    // Names, checked against the board by `resolveTagIds` inside — which refuses one it has
+    // no tag for, the same refusal a post write and a tag rule make.
+    names: z.array(z.string().max(64)).max(100),
+  }),
+])
+
 const ruleKindSchema = z.enum(['implies', 'recommends'])
 
-const queueStateSchema = z.object({
-  pending: z.number().int().nonnegative(),
-  uploaded: z.number().int().nonnegative(),
+const stagedStateSchema = z.object({
+  staged: z.boolean(),
+  uploaded: z.boolean(),
   busy: z.boolean(),
 })
 
@@ -294,6 +320,24 @@ export function registerIpc(): void {
   )
 
   /**
+   * The rows the tag form draws under a category, their order, and what each waits for —
+   * `tag_form_section`. One edit per write, in five shapes: a row has an id, so creating,
+   * renaming, deleting, reordering and setting a condition are things done to a row rather
+   * than five ways of restating a list. `normalizeFormSection` and `resolveTagIds` inside
+   * are the parse.
+   */
+  ipcMain.handle('sections:list', async (): Promise<FormSections> => loadFormSections())
+
+  // One channel for the four things you can do to a section, because they are four shapes
+  // of one edit and the union is the schema. Four channels would be four handlers saying
+  // "read the client, apply, read back".
+  ipcMain.handle('sections:save', async (_event, edit: unknown) => {
+    const parsed = sectionEditSchema.safeParse(edit)
+    if (!parsed.success) throw new Error('That is not an edit to a section.')
+    return saveFormSections(parsed.data)
+  })
+
+  /**
    * The named tag sets, the third section of the same file and the same two channels —
    * `normalizeCatalogs` inside is the parse, as it is for both rule sets.
    */
@@ -338,9 +382,12 @@ export function registerIpc(): void {
       metadata.metadata,
       DESKTOP_UPLOAD_LIMITS
     )
-    // A post creates tags and moves counts, so the cached index is now wrong in exactly
-    // the way that matters: the tag just coined is the one you are about to type again.
-    if (result.ok) clearTagCache()
+    // An upload moves `post_count` and moves nothing else — it cannot coin a tag, so no
+    // name, category, mark or section in the cached index can have changed. The counts of
+    // the tags it applied are patched in place rather than the whole index being thrown
+    // away: dropping it meant the next tag field re-read the entire board, once per
+    // upload. `bumpTagCounts` has why +1 is exact and needs no query.
+    if (result.ok) bumpTagCounts(parseTagInput(parsed.data.tags).tags, 1)
     return result
   })
 
@@ -403,7 +450,7 @@ export function registerIpc(): void {
 
   ipcMain.handle(
     'tags:create',
-    async (_event, name: unknown, category: unknown, subcategory: unknown) => {
+    async (_event, name: unknown, category: unknown, section: unknown) => {
       const supabase = boardClient()
       if (!supabase) return { ok: false as const, error: 'Not set up yet' }
       const parsedName = tagNameSchema.safeParse(name)
@@ -415,7 +462,7 @@ export function registerIpc(): void {
         supabase,
         parsedName.data,
         parsedCategory.data,
-        subcategorySchema.safeParse(subcategory).data ?? ''
+        z.number().int().positive().nullable().safeParse(section).data ?? null
       )
       if (result.ok) clearTagCache()
       return result
@@ -449,19 +496,21 @@ export function registerIpc(): void {
   })
 
   /**
-   * The subgroup a tag sits in inside its category. Its own channel rather than a field on
-   * `tags:set-category`, because the two move independently: recategorizing a tag is a
-   * claim about what it is, and this is only about where it is drawn in the picker.
+   * Which row of the tag form the tag sits on inside its category. Its own channel rather
+   * than a field on `tags:set-category`, because the two move independently — moving a tag
+   * to another category is a claim about what it is, and this is only about where the form
+   * draws it.
    */
-  ipcMain.handle('tags:set-category2', async (_event, id: unknown, subcategory: unknown) => {
+  ipcMain.handle('tags:set-section', async (_event, id: unknown, sectionId: unknown) => {
     const supabase = boardClient()
     if (!supabase) return { ok: false as const, error: 'Not set up yet' }
     const parsedId = postIdSchema.safeParse(id)
-    const parsed = subcategorySchema.safeParse(subcategory)
+    // Null is the answer for "on no row", which is what the menu's empty option sends.
+    const parsed = z.number().int().positive().nullable().safeParse(sectionId)
     if (!parsedId.success) return { ok: false as const, error: 'No such tag' }
-    if (!parsed.success) return { ok: false as const, error: 'That subgroup name is too long.' }
+    if (!parsed.success) return { ok: false as const, error: 'No such section' }
 
-    const result = await manageTags.setTagSubcategory(supabase, parsedId.data, parsed.data)
+    const result = await manageTags.setTagFormSection(supabase, parsedId.data, parsed.data)
     if (result.ok) clearTagCache()
     return result
   })
@@ -516,13 +565,14 @@ export function registerIpc(): void {
   })
 
   /**
-   * The queue's size, pushed on every change. `on`, not `handle`: nothing is returned and
-   * nothing waits for it. Parsed like everything else here, and a message that doesn't fit
-   * the shape is dropped rather than left to make the close dialog lie about the count.
+   * What the upload screen holds, pushed on every change. `on`, not `handle`: nothing is
+   * returned and nothing waits for it. Parsed like everything else here, and a message
+   * that doesn't fit the shape is dropped rather than left to make the close dialog lie
+   * about what would be lost.
    */
-  ipcMain.on('queue:state', (_event, state: unknown) => {
-    const parsed = queueStateSchema.safeParse(state)
-    if (parsed.success) setQueueState(parsed.data)
+  ipcMain.on('upload:state', (_event, state: unknown) => {
+    const parsed = stagedStateSchema.safeParse(state)
+    if (parsed.success) setStagedState(parsed.data)
   })
 
   /**

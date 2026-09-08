@@ -23,20 +23,3 @@ export function TrashIcon() {
   )
 }
 
-export function ArrowUpIcon() {
-  return (
-    <svg {...BASE}>
-      <path d="M12 19V5" />
-      <path d="M5 12l7-7 7 7" />
-    </svg>
-  )
-}
-
-export function ArrowDownIcon() {
-  return (
-    <svg {...BASE}>
-      <path d="M12 5v14" />
-      <path d="M19 12l-7 7-7-7" />
-    </svg>
-  )
-}

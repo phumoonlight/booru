@@ -1,6 +1,6 @@
 {
   "name": "desktop",
-  "version": "2.6.3",
+  "version": "4.2.1",
   "private": true,
   "description": "Pubooru desktop uploader — the upload page, run locally so image compression uses a real CPU",
   "main": "./out/main/index.js",

@@ -273,16 +273,43 @@ export async function searchTags(
  * because you arrive at an index holding a name, not a size.
  */
 export async function listTags(client: BooruClient, limit = 200): Promise<Tag[]> {
-  const { data } = await client
+  const { data, error } = await client
     .from('tags')
-    // The one read that asks for `category2`, because the desktop app's tag picker is the
-    // one thing that groups by it and this is the read behind it. Autocomplete and the
-    // post page's tag list leave that column alone rather than carry a field they never
-    // draw. `mark` is the other way round and every read carries it — it is drawn in
-    // front of the name wherever a name is drawn.
-    .select('id, name, category, category2, mark, post_count')
+    // The one read that asks about the form section, because the desktop tag form is the
+    // one thing that draws it and this is the read behind it. Autocomplete and the post
+    // page's tag list leave it alone rather than carry a field they never use. `mark` is
+    // the other way round and every read carries it — it is drawn in front of the name
+    // wherever a name is drawn.
+    //
+    // The name is embedded rather than joined by hand above: a section is an id on the row
+    // and a word on the screen, and this is the one place the two meet — the same split the
+    // tag rules make. Both come back, the id to write with and the name to group by.
+    //
+    // **The constraint is named** because there are two ways from `tags` to
+    // `tag_form_section`: this column, and the many-to-many PostgREST infers through
+    // `tag_form_section_dep`. Without the hint the embed is ambiguous and the whole read
+    // fails — which is how the Tags screen once went blank saying "no tags yet", the error
+    // having been swallowed by the `data ?? []` below. It is checked now.
+    .select(
+      'id, name, category, mark, post_count, form_section_id, tag_form_section!tags_form_section_id_fkey(name)'
+    )
     .order('post_count', { ascending: false })
     .order('name')
     .limit(limit)
-  return data ?? []
+
+  // Thrown rather than answered with an empty list. A read that fails and a board with no
+  // tags are not the same thing, and the screens cannot tell them apart: "no tags yet" is
+  // what a broken query looked like for as long as it took to notice. Every other read in
+  // this file is a page that degrades; this one is the vocabulary.
+  if (error) throw new Error(`Could not read the tags: ${error.message}`)
+
+  // Flattened here so nothing above ever handles the embed's shape. A tag on no section has
+  // no embedded row, which is null either way.
+  return (data ?? []).map(({ tag_form_section, ...tag }) => ({
+    ...tag,
+    // PostgREST types a one-to-one embed as an array, which it is not: the foreign key is
+    // on this row, so there is at most one. Through `unknown` because the two shapes do not
+    // overlap enough for the compiler to take it on trust.
+    form_section: (tag_form_section as unknown as { name: string } | null)?.name ?? null,
+  })) as Tag[]
 }

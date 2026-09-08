@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { PostAppApi, PreferencesInput, QueueState, UploadRequest } from '../shared/api'
+import type { PostAppApi, PreferencesInput, StagedState, UploadRequest } from '../shared/api'
 
 /**
  * The bridge. Nothing but these functions crosses into the page — no `ipcRenderer`, no
@@ -26,6 +26,8 @@ const api: PostAppApi = {
   clearBrowseCache: () => ipcRenderer.invoke('browse:clear-cache'),
   listRules: (kind) => ipcRenderer.invoke('rules:list', kind),
   saveRule: (kind, tag, names) => ipcRenderer.invoke('rules:save', kind, tag, names),
+  listFormSections: () => ipcRenderer.invoke('sections:list'),
+  saveFormSections: (edit) => ipcRenderer.invoke('sections:save', edit),
   listCatalogs: () => ipcRenderer.invoke('catalogs:list'),
   saveCatalogs: (catalogs) => ipcRenderer.invoke('catalogs:save', catalogs),
   uploadPost: (request: UploadRequest) => ipcRenderer.invoke('post:upload', request),
@@ -34,18 +36,17 @@ const api: PostAppApi = {
   savePost: (request) => ipcRenderer.invoke('posts:save', request),
   deletePost: (id) => ipcRenderer.invoke('posts:delete', id),
   postThumbnail: (fileName) => ipcRenderer.invoke('posts:thumbnail', fileName),
-  createTag: (name, category, subcategory) =>
-    ipcRenderer.invoke('tags:create', name, category, subcategory),
+  createTag: (name, category, sectionId) =>
+    ipcRenderer.invoke('tags:create', name, category, sectionId),
   renameTag: (id, name) => ipcRenderer.invoke('tags:rename', id, name),
   setTagCategory: (id, category) => ipcRenderer.invoke('tags:set-category', id, category),
-  setTagSubcategory: (id, subcategory) =>
-    ipcRenderer.invoke('tags:set-category2', id, subcategory),
+  setTagFormSection: (id, sectionId) => ipcRenderer.invoke('tags:set-section', id, sectionId),
   setTagMark: (id, mark) => ipcRenderer.invoke('tags:set-mark', id, mark),
   deleteTag: (id) => ipcRenderer.invoke('tags:delete', id),
   applyTagToTagged: (target, condition) => ipcRenderer.invoke('tags:apply', target, condition),
   // The one channel with nothing to answer: main only reads it when the window closes,
-  // and the renderer pushes on every queue change, so a reply would be noise.
-  reportQueue: (state: QueueState) => ipcRenderer.send('queue:state', state),
+  // and the renderer pushes on every change, so a reply would be noise.
+  reportStaged: (state: StagedState) => ipcRenderer.send('upload:state', state),
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   exportSettings: () => ipcRenderer.invoke('settings:export'),
   importSettings: () => ipcRenderer.invoke('settings:import'),

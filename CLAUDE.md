@@ -232,8 +232,16 @@ behind a session, because there is none.
 
 - **Open site** is the header item that is not a view: it opens the board in the browser
   via `searchHref('')` and is never drawn active, because it goes somewhere else.
-- **The queue is hidden, not unmounted**, when another view is in front. Glancing at
-  About used to throw away a staged, half-tagged queue and orphan an upload in flight.
+- **Upload is one image at a time** (`upload-form.tsx`). It was a queue — drop a folder,
+  tag twenty cards, upload top to bottom, with reorder arrows, a fold per card, a done
+  tick and an Apply-to-all bar. All of that was machinery for keeping twenty half-tagged
+  images straight, and tagging is per image however they are stacked: the queue postponed
+  the slow part rather than removing it, and what it bought (one press of Upload for
+  twenty posts) cost twenty cards of state nothing wrote down. Dropping several files
+  takes the first and says so; staging over an image with tags typed into it asks first,
+  the same question the ✕ asks.
+- **The upload form is hidden, not unmounted**, when another view is in front. Glancing at
+  About used to throw away a staged, half-tagged image and orphan an upload in flight.
 - **Browse** is the website's gallery, moved here. It runs `@common/data/search`, so a
   query means the same thing in both windows. Its query lives in a module-level `let` —
   coming back to an empty box after finding a post is a search typed twice — and so does
@@ -253,12 +261,49 @@ behind a session, because there is none.
   than a copy of what the board said. Thumbnails stay in memory on both sides of the
   bridge — a screenful of `data:` URLs is megabytes of base64 — so a restart redraws the
   grid's shape at once and fills the pictures back in.
-- **`CategoryTagField` is the one tag editor**, on the queue card, the Apply-to-all bar
-  and the post editor: staging a post and editing one differ in when the write happens,
+- **`CategoryTagField` is the one tag editor**, on the upload form and the post editor:
+  staging a post and editing one differ in when the write happens,
   not in what a tag is. It replaced a free-text box that had to guess a category and so
-  coined every new tag as general. Every category gets a row including the empty ones —
-  that row's ＋ is the only way to put a first tag in it — and the picker offers only that
-  category's tags — **and only tags that exist**: naming one is the Tags screen's job,
+  coined every new tag as general. **A row is a category and a section** — Appearance, then
+  `hair color`, `hair styles`, `clothes`, `accessory` indented under it (`tags.form_section`,
+  free text, and the rows are whatever the board's tags name — A–Z, so a section exists
+  exactly as long as a tag says so). The website has no such division
+  and never will: it shows the category, which is what a tag *is*, where a row is where
+  your hand goes, and one Appearance row holding four kinds of thing is a row you read
+  before you can aim at it. It is also where the four categories cut in the fourth re-cut
+  went — `body`, `clothes`, `accessories`, `exposure` were the wrong division for a board
+  and the right one for a form. **Two columns, assigned rather than flowed**: `RIGHT_COLUMN`
+  holds copyright, character, activity, sexual, general and meta — the answers that come from
+  looking once, a tag or two each — and the left holds `appearance`, the long sectioned half
+  you work down, with artist above it. The split is about how much work each holds, so
+  the columns stay roughly level while a post is tagged. A grid of two explicit columns, not
+  CSS columns or `grid-flow-row`, since those pick a side by height and would move a category
+  across the moment a picker opened.
+  **A section can have dependencies**, which is the one thing on the field that depends on
+  the rest of the post: none and the row is always drawn, `any` and it waits for one of its
+  tags, `all` for every one (`dependenciesMet`, on `tag_form_section_dep`). `blue archive`
+  under Character waits for `blue_archive`; `hair color` waits for nothing. Implied tags
+  count, since the person tagging cannot tell a typed tag from an implied one without
+  reading the line below the box. A row the post already has a tag on is drawn whatever its
+  condition says — a row that vanishes takes a tag you can no longer see or remove, and the
+  post editor would save it straight back.
+
+  This replaced two things. **Form groups** (`tag_rules` kind 2) hid tags *inside* a picker,
+  so the row was still drawn with a ＋ that opened onto nothing and could not say why. And
+  Character used to match its sections against the post's copyright tags by name in code,
+  which was exactly one dependency in `any` mode, hardcoded for one pair of categories.
+  **A category is a heading, not a row**: it wears its own
+  colour — the one it has in the grid, the picker and on a post — and has no ＋, because a
+  tag is offered through its section or not at all. So a tag with no section is not offered
+  anywhere, which is the point: an unfiled tag is one the vocabulary has not decided about,
+  and that is decided on the Tags screen rather than here with a picture in front of you.
+  It is still *drawn* on the category's own row if the post already carries it — a chip
+  that existed and was visible nowhere would be a tag you cannot take off, which the post
+  editor would then save straight back. A category with no sections and nothing unfiled is
+  not drawn at all, and a board with no sections anywhere says so in one line rather than
+  as eight empty headings. The picker a row opens offers that
+  row's tags alone — **and only tags that exist**: naming one is the Tags screen's job,
+  which is also the only place a new *section* is named,
   where the whole vocabulary is on screen and a near-duplicate is visible before it is
   made. It holds the board's names in a module-level cache shared by every field on
   screen, separate from the Tags screen's: that one carries `post_count` and is dropped on
@@ -268,7 +313,7 @@ behind a session, because there is none.
   rules used, went when the rules moved onto the Tags grid, leaving `tag-seed.ts` holding
   the `TagSeed` type four modules still import from it.
 - **The rules apply where a post is made.** `seedsToInput` appends implications at upload,
-  which is the only place the two lists meet; the queue card shows them under the rows and
+  which is the only place the two lists meet; the upload form shows them under the rows and
   names the rule that lifted a rating. The post editor takes recommendations (a press
   commits) but not implications, since nothing there would be writing them.
 - **A finished upload reads its post back** and lists what it actually carries, with
@@ -281,16 +326,34 @@ behind a session, because there is none.
   The screen stays open — Back is the way out, and the grid's stale row is re-read then
   rather than on the save, so correcting a rating twice is two clicks and not two
   searches. Delete is the exception: nothing is left to look at.
-- **Tags** lists and manages: click a row for rename / recategorize / delete **and that
-  tag's rules**. Two rows carry the controls: New tag, Apply by tag, Catalogs and Rule map on
+- **Tags** lists and manages: click a row for rename / recategorize / delete, **which row
+  of the form it sits on** (a menu of that category's rows), **and that tag's rules**.
+  🧱 **Sections** is the panel beside Catalogs: one category at a time, its rows and their
+  order, with the name editable in place, a **drag** by the grip to reorder, and ➕ to name
+  one before anything is on it. The upload queue reached the opposite conclusion about drags
+  and it is not a contradiction: a queue card was most of the window, so the target was
+  off-screen as often as not; these are ten one-line rows all visible at once, which is the
+  case a drag is for. What it costs is the keyboard. Order is why `tag_form_section` is a table — A–Z is an index's order, not a form's —
+  and **ids are why a row can be renamed**: the name was the key for one revision, and
+  correcting a spelling made a different section while every tag on the old one fell off the
+  form. `tags.form_section_id` points at a row, so a rename carries them. **Categories are folded**, a heading and its
+  count until clicked: a few hundred tags is a screen you scroll past rather than read, and
+  the category you came for is the one thing you already know. Filtering or picking forces
+  every one open — both are moments when the answer is a tag you cannot see yet, and a
+  filter matching four tags in three folded categories looks like a filter matching nothing
+  — with the fold remembered underneath, so clearing the box puts back what you had open.
+  Unfolding is `display` and never a read: the whole index is already in memory. The grid is split by section the way
+  the form is, because this is where a section is set — a section down to one tag, or a tag
+  nobody filed, is only visible with the category laid out that way. It is *not* split by
+  section's condition, which belongs to the section and is read on the Sections panel. Two rows carry the controls: New tag, Apply by tag, Catalogs and Rule map on
   the title line, then a toolbar of Refresh and a full-width filter box, which is Browse's
   search bar drawn the same way — the first three being what is not about a row you are pointing at,
   and the filter being what makes a few hundred tags browsable now that the grid is also a
   picker. Every button is unbordered (`HEADER_LINK` / `headerToggle`, shared with Browse); the box
   keeps its border, being the one thing you type into. **The grid has two
-  meanings**: ordinarily a click opens that tag, and while a rule on the open tag or a
-  catalog is being filled in (`picking` in `TagIndex`, a union of the two) a click toggles
-  that tag in *that* instead, with
+  meanings**: ordinarily a click opens that tag, and while one of the open tag's three
+  rules or a catalog is being filled in (`picking` in `TagIndex`, a union of the two) a
+  click toggles that tag in *that* instead, with
   the count column showing ✓/＋ rather than a number for as long as that lasts. The
   catalogs panel and a tag's own both pin to the top of the scroller, so `showPanel` makes
   them take turns and ends any pick with the panel that was answering it. **Its
@@ -329,12 +392,12 @@ is on the post, what else should be?". Both are rows on **`tag_rules`**, one tab
 shape; the column is a `smallint`, 0 implies and 1 recommends, and `RULE_KIND` in
 `@common/data/rules.ts` is the only place either number is spelled — both parsed on the
 way in by a `normalize…` that doubles as the IPC validation (stricter than a zod schema of
-the same shape, since every name must match `TAG_PATTERN`), and both reach the window
+the same shape, since every name must match `TAG_PATTERN`), and both reaching the window
 through one module-level store
 (`renderer/src/rule-store.ts`) rather than React state — the tag field consults them on
 every keystroke, and a round trip per keystroke would be a query per keystroke.
 
-They were two `{ tag: [name, …] }` sections of `save.json` until they moved. A file could
+Two of them were `{ tag: [name, …] }` sections of `save.json` until they moved. A file could
 not do three things a table does: a rule naming a tag that was later **renamed** went
 quietly dead and stayed dead, a rule naming a **deleted** tag did the same, and the rules
 were one machine's — a reinstall started with none. Rows are tag **ids**, so a rename
@@ -376,10 +439,10 @@ is *who asks*: an implication fires by itself and a recommendation offers itself
 catalog does neither until it is picked **by name** — so it holds what is true of a set of
 images rather than of a tag, which is what no rule can say. It is built on the Tags screen
 (`tag-catalogs.tsx`, ➕ New names one, 👆 Choose fills it from the grid, 📋 From a post
-fills it from a post via the queue's own `TagImport`) and applied from `CategoryTagField`'s
-`catalogs` prop, which puts 📚 Catalogs on the heading row of every tag field — queue card,
-Apply to all, post editor — so it reaches a post being made and one already on the board
-alike. **Names only**: no rating, for the recommendations' reason, and no category, which
+fills it from a post via the upload form's own `TagImport`) and applied from
+`CategoryTagField`'s `catalogs` prop, which puts 📚 Catalogs on the heading row of every tag
+field — the upload form and the post editor — so it reaches a post being made and one
+already on the board alike. **Names only**: no rating, for the recommendations' reason, and no category, which
 is looked up in the board's index when the catalog is applied — a stored one would be a
 lie the first time a tag is recategorized. A name the index doesn't have is skipped rather
 than coined, and the menu's `＋n` counts what a press would actually add. **An empty
@@ -392,10 +455,23 @@ over twenty images is hundreds of requests asking a question whose answer moves 
 someone uploads. A whole board of names and counts is a few hundred kilobytes, so it is
 read once and prefix-matched in memory with the ordering the SQL used (`post_count desc`,
 ties by name). Its own file in `app-cache/`, not `save.json`: that one is settings, this
-is derived data droppable at any moment. It *is* dropped after every upload and every tag
-edit, by the settings screen's Clear cache and by the Tags screen's 🔄. A failed refill keeps serving
-the stale copy rather than nothing, and a read that comes back at `CACHE_LIMIT` is
-treated as "there may be more", so suggestions fall back to querying.
+is derived data droppable at any moment. It is dropped by any write that changes a tag
+*row* — creating, renaming, recategorizing, re-sectioning, marking, deleting, applying one
+tag across another's posts — by the settings screen's Clear cache and by the Tags screen's
+🔄. A failed refill keeps serving the stale copy rather than nothing, and a read that comes
+back at `CACHE_LIMIT` is treated as "there may be more", so suggestions fall back to
+querying.
+
+**An upload does not drop it — it patches the counts** (`bumpTagCounts`). Dropping was by
+some way the most expensive thing this app did repeatedly: an upload moves `post_count` and
+moves nothing else, since no write path coins a tag, so throwing away a few hundred rows of
+names, categories, marks and sections to learn a handful of numbers meant the next tag
+field re-read the whole board — once per upload, now that one image is staged at a time.
+The arithmetic needs no query and is exact: the post is new, a duplicate having been
+refused at staging, and its tag list is deduped, so every tag on it gained exactly one post
+— the same number `syncTagPostCounts` recomputed on the board. The `at` stamp is left
+alone, since patching counts does not make the copy newer about anything else and touching
+it would postpone the daily read that catches a rename made from another install.
 
 **The cache folder** (`main/app-cache.ts`) — `app-cache/` in `userData`, holding
 `tags.json`, `browse.json` and `thumbs/`. Everything in it is a copy of what the board
@@ -423,11 +499,11 @@ names Google and Cloudflare in `secure` mode; `automatic` only upgrades when the
 reaches only Chromium's stack (the drag downloads) — Supabase goes over Node's `fetch`
 and the OS resolver, which is what makes a DoH-only setting safe.
 
-**Closing asks, if the queue holds anything** (`main/queue-guard.ts`). A staged row is
+**Closing asks, if the upload form holds anything** (`main/close-guard.ts`). A staged image is
 hand-typed tags that exist nowhere else; an uploaded one is the only copy of the post
-number just made. The renderer pushes its counts on every change rather than main asking
-at close time: a `close` handler vetoes synchronously or not at all, so it cancels the
-close and re-issues it as `destroy()` if the answer is yes.
+number just made. The renderer pushes what it holds on every change rather than main
+asking at close time: a `close` handler vetoes synchronously or not at all, so it cancels
+the close and re-issues it as `destroy()` if the answer is yes.
 
 **Version** — `packages/desktop/package.json`, raised by every change under
 `packages/desktop`. It is read at runtime by `app.getVersion()` rather than compiled in,
@@ -562,8 +638,8 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   Import is worse than silence.
   The exception is a control drawn *only* as a glyph and repeated down a list, where a
   stroked icon at a known size is steadier than a font the OS chooses: that is what
-  `renderer/src/components/icons.tsx` is for (the queue's bin and its two reorder arrows),
-  and it stays a small file. If a new one is not one of those, it is an emoji.
+  `renderer/src/components/icons.tsx` is for (the upload form's bin), and it stays a small
+  file. If a new one is not one of those, it is an emoji.
 - Mobile-first: design at 375px, scale up with `sm:`/`md:`/`lg:`. 44px tap targets.
 
 ## History
@@ -585,6 +661,10 @@ current.
 | The `implications` and `recommendations` sections of `save.json` | Keyed by name, so a rule died silently when the tag it named was renamed or deleted, and the rules were one machine's — `tag_rules` is keyed by id |
 | `packages/desktop/changelog/` | A file per release, for a cadence this app does not have; the reasoning belongs in the commit and beside the code |
 | `packages/desktop/build-id` | A second number saying what `package.json`'s version already said, and the version has the advantage of being what electron-builder stamped on the copy actually running |
+| The upload **queue** — `upload-queue.tsx`, the reorder arrows, the per-card fold, the done tick, the Apply-to-all bar | Machinery for keeping twenty half-tagged images straight. Tagging is per image however they are stacked, so the queue postponed the slow part rather than removing it, and charged twenty cards of unsaved state for one press of Upload |
+| `tags.category2` and everything spelling it — `Subcategory`, `normalizeSubcategory`, `subcategoryLabel`, `subcategoryOrder`, `setTagSubcategory`, `tags:set-category2` | A heading *inside* one picker: it could divide a category and never shorten one, since every subgroup was drawn whatever the post was about. What divides one now is `tag_form_section`, a row of the form with its own ＋; what makes a row come and go is that row's own dependencies |
+| **Form groups** — `tag_rules` kind 2, `shared/groups.ts`, `renderer/src/groups.ts`, the Form group panel and the rule map's third section | The right question in the wrong place. A group hid tags *inside* a row, so the row was still drawn, still had its ＋, and opened onto a picker that was empty for reasons the picker could not state — and the rule was written on the tag it hung off, which is the one screen where you are not thinking about the form. `tag_form_section_dep` says it about the whole row instead |
+| The hardcoded Character↔copyright match (`LINKED_CATEGORY` / `LINKING_CATEGORY` / `OTHER_SECTION`) | One dependency, in `any` mode, spelled in code for one pair of categories. It is a row you can see and change now |
 
 Two rewrites were run by hand against the live project rather than as migrations, the
 columns being free-form: the rating scale (`general, e1..e5` → four names → the letters)

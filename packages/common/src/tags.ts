@@ -3,47 +3,51 @@
  * the display order, and the only ones the desktop app will write.
  *
  * This list is the display order too, so it reads the way the Tags screen does: who made
- * it, then who is in it, then what they look like, then what they are wearing and
- * carrying and how much of it is still on, then what they are doing, then the two
- * catch-alls. The middle group is the board's own vocabulary
- * rather than Danbooru's four — a booru's categories are a statement about what it is for,
- * and the code only ever needed a colour per name.
+ * it, then who is in it, then what they look like, then what they are doing, then the two
+ * catch-alls. It is the board's own vocabulary rather than Danbooru's four — a booru's
+ * categories are a statement about what it is for, and the code only ever needed a colour
+ * per name.
  *
- * It has been re-cut three times. The first cut retired `head`, `exposure` and `posture` and
- * brought in `appearance`, `accessories` and `action`: `head` and `body` were one division
- * drawn in the wrong place — a hair colour and an eye colour are both what someone looks
- * like — and `exposure` was the sexual category under another name. `posture` only ever
- * held half of what a subject is doing, the standing-and-sitting half, with the rest
- * scattered through `general`.
+ * It has been re-cut four times, and it is shorter than it has ever been. The first cut
+ * retired `head`, `exposure` and `posture` for `appearance`, `accessories` and `action`:
+ * `head` and `body` were one division drawn in the wrong place — a hair colour and an eye
+ * colour are both what someone looks like — and `exposure` was the sexual category under
+ * another name. `posture` held only the standing-and-sitting half of what a subject is
+ * doing, the rest being scattered through `general`.
  *
- * The second put `sexual` back, undoing the rename to `nsfw`: `nsfw` was the wrong word
- * for a category, since it says how a board should treat a tag, which the rating column
- * already says per post, where `sexual` says what the tag is about, which is what every
- * other name here does. That cut also brought in a `pov` category — where the camera is
- * rather than what is in front of it, `from_above`, `pov_hands`, `dutch_angle` — and it
- * was taken back out again: every other name here answers "what is in the picture", and
- * one that answers "how was it taken" is a second question the list was not sorting by.
- * `general` is where those tags were and where they stay.
+ * The second put `sexual` back, undoing a rename to `nsfw`: `nsfw` says how a board should
+ * treat a tag, which the rating column already says per post, where `sexual` says what the
+ * tag is *about*, which is what every other name here does. That cut also brought in a
+ * `pov` category — where the camera is rather than what is in front of it — and took it
+ * out again: every other name answers "what is in the picture", and one that answers "how
+ * was it taken" is a second question the list was not sorting by. `general` holds those.
  *
- * The third brought `exposure` back, and it is the old name meaning a narrower thing:
- * clothing that is not doing a garment's job, both halves of one idea — coming off
- * (`unbuttoned`, `pulled_down`, `half_undressed`) and still on but not covering
- * (`see-through`, `open_shirt`, `wet_clothes`). What retired it the first time was that
- * it had become a second `sexual`, and that is the line it now has to hold: `sexual` is
- * what a tag is *about*, where this is the state a garment is in — a see-through blouse
- * on a `general` post is still see-through. Neither half is `clothes`, which files what a
- * garment *is* and would have to file the same dress twice to hold this; neither is
- * `body`, since what is on show is the point rather than the skin itself. Reusing the
- * name rather than coining one costs nothing and buys something: a tag left filed under
- * `exposure` since the first cut is a known category again, with the meaning it probably
- * had. The hue is `pov`'s, freed one commit after it was found — the old pink is
- * `accessories`' now and is not being taken back.
+ * The third brought `exposure` back for a narrower thing, the state a garment is in. The
+ * fourth took it away again, and `body`, `clothes` and `accessories` with it — **four of
+ * the twelve at once, and every one of them a question about the same subject answered in
+ * a different box.** A dress is `clothes`, its being open is `exposure`, the bow on it is
+ * `accessories` and the skin under it is `body`: the same picture was filed four times and
+ * the boundary between the four had to be argued every time, which is a category list
+ * doing the tagger's thinking badly rather than sparing it. They were also the half of the
+ * vocabulary that grew without limit, and a category that keeps growing is the one a
+ * picker cannot show. `general` takes all of it.
  *
- * **A retired name keeps working.** Nothing migrates: a tag still filed under `head` is
- * an unknown category, which `categoryOrder` sorts after the known ones and
- * `categoryColor` draws plain rather than dropping — so it stays on the screen, stays
- * searchable, and is visibly the odd one out until somebody moves it. Losing the colour
- * is the point; that is how you find them.
+ * That would have been a return to one flat list a year ago. It is not one now, because a
+ * category is no longer the only thing that narrows a picker: the form groups on
+ * `tag_rules` hide their members until the tag they hang off is on the post, so the
+ * narrowing happens per post rather than per category, and the list here can be short
+ * without the picker being long. Cutting the four is what that made affordable.
+ *
+ * The fourth cut also renamed `action` to `activity`. Same category and the same hue — a
+ * rename, not a re-file — and the noun is the better one: `activity` reads as what a
+ * subject is *doing*, where `action` reads as a single moment of it and invited a tag
+ * about the shot rather than about the subject.
+ *
+ * **A retired name keeps working.** Nothing migrates: a tag still filed under `head`,
+ * `clothes` or `action` is an unknown category, which `categoryOrder` sorts after the
+ * known ones and `categoryColor` draws plain rather than dropping — so it stays on the
+ * screen, stays searchable, and is visibly the odd one out until somebody moves it.
+ * Losing the colour is the point; that is how you find them.
  *
  * There was a `color` category. It went because a colour is never what a tag *is*:
  * `pink_dress` is a dress and `blonde_hair` is hair, and filing them by their adjective
@@ -59,11 +63,7 @@ export const TAG_CATEGORIES = [
   'copyright',
   'character',
   'appearance',
-  'body',
-  'clothes',
-  'accessories',
-  'exposure',
-  'action',
+  'activity',
   'sexual',
   'general',
   'meta',
@@ -71,6 +71,79 @@ export const TAG_CATEGORIES = [
 
 /** One of the above. Use it where the known set is genuinely the whole domain. */
 export type KnownCategory = (typeof TAG_CATEGORIES)[number]
+
+/**
+ * How the desktop tag form cuts a category into rows — `tags.form_section`, whose
+ * migration has the whole argument.
+ *
+ * **The website never sees these.** It draws the category, one heading, as it always has.
+ * The form has a different job: a category answers "what is this tag", which is the right
+ * question for a page listing a board's vocabulary and the wrong one for a row you are
+ * trying to put your hand on. One Appearance row holding hair colours, hair styles,
+ * garments and jewellery is a row you have to read; four rows under an Appearance heading
+ * are four places to aim.
+ *
+ * It is also where the categories cut in the fourth re-cut went. `body`, `clothes`,
+ * `accessories` and `exposure` were four boxes for one subject and they are one category
+ * now — but the finer division was never wrong *for the form*, which is the only place it
+ * was ever doing work. So the form still has it, and the board does not.
+ *
+ * **The list is whatever the tags carry**, not a constant in this file. It started as one
+ * and it was the wrong shape for the thing: how a category wants dividing is a judgement
+ * about one board's own vocabulary, made while looking at it, and a fixed list makes that
+ * a code change and a new build — the same objection that keeps `tags.category` free-form
+ * text. What a constant bought was an order and a row that could be drawn while empty; the
+ * order is A–Z instead, and an empty section is not a thing that can exist, since a section
+ * comes into being by being typed onto a tag on the Tags screen. Near-duplicate spellings
+ * are what the datalist on that field is for.
+ *
+ * A category whose tags name no section is one row in the form, exactly as it always was.
+ */
+
+/**
+ * A typed-in section as it is stored: trimmed, its inner runs of space collapsed, and
+ * lowercased, with an empty one becoming null.
+ *
+ * Lowercased for the same reason tag names are — `Hair Color` and `hair color` are one
+ * section typed twice, and two rows in the form under the same heading is exactly the
+ * failure a free-text column has to be defended against. Unlike a tag name it may hold
+ * spaces: it is a label a person reads, never a name anything searches for, so nothing
+ * here has to match `TAG_PATTERN`.
+ */
+export function normalizeFormSection(raw: string): string | null {
+  const value = raw.trim().replace(/\s+/g, ' ').toLowerCase()
+  return value === '' ? null : value
+}
+
+/**
+ * The rows to draw under a category: the ones the board lists, in the order it lists them,
+ * then anything the tags name that the board does not, A–Z.
+ *
+ * `listed` is `form_sections` for this category — authored, ordered, and drawn whether or
+ * not anything is on it, since a row's ＋ is how the first tag gets onto it. `used` is the
+ * sections the tags actually carry; null is not one of them, being the category's own row
+ * above them, which is why it is dropped rather than sorted first.
+ *
+ * The second half is the same courtesy `categoryOrder` does a category outside
+ * `TAG_CATEGORIES`, and for the same reason: a tag naming a section the table has never
+ * heard of — because it was deleted, or typed before the table existed — is drawn at the end
+ * rather than dropping out of the form. Reads never assume the list.
+ */
+export function orderFormSections(
+  listed: readonly string[],
+  used: Iterable<string | null | undefined>
+): string[] {
+  const known = new Set(listed)
+  const extra = [...new Set([...used].filter((value): value is string => !!value))]
+    .filter((value) => !known.has(value))
+    .sort()
+  return [...listed, ...extra]
+}
+
+/** What a person reads on a section row. Capitalized, as an unknown category is. */
+export function formSectionLabel(section: string): string {
+  return section.charAt(0).toUpperCase() + section.slice(1)
+}
 
 /**
  * Any category a tag may carry, which is any string: the column is free-form text and
@@ -103,55 +176,31 @@ export type Tag = {
   name: string
   category: TagCategory
   /**
-   * A finer grouping inside the category, or null — `tags.category2`, whose migration has
-   * why it exists. Optional rather than required because most reads do not ask for the
-   * column: only `listTags` selects it, since the desktop app's tag picker is the only
-   * thing that draws it, and a type that promised it everywhere would be a lie about the
-   * post page's own tag list.
-   */
-  category2?: Subcategory
-  /**
    * What is drawn in front of the name, or null — `tags.mark`, whose migration has why it
    * exists. Either a glyph or a colour, never both: `markColor` decides which by looking
    * at it, and `readTagMark` decides what may be written.
    *
-   * Required rather than optional, unlike `category2` above it: every read asks for this
-   * column, because a tag is drawn with its mark wherever it is drawn at all and a list
-   * that quietly dropped it would look like a tag that has none.
+   * Required rather than optional: every read asks for this column, because a tag is
+   * drawn with its mark wherever it is drawn at all and a list that quietly dropped it
+   * would look like a tag that has none.
    */
   mark: string | null
+  /**
+   * Which row of the desktop tag form this tag is offered on, or null for none —
+   * `tags.form_section_id`, whose migration has why it is an id.
+   *
+   * The id is what is written; the name beside it is what everything above the data layer
+   * groups and draws by, embedded by `listTags` rather than looked up per tag. The same
+   * split as the tag rules: rows are ids so a rename carries them, and the screens are
+   * written in names.
+   *
+   * Both optional, because most reads do not ask: only `listTags` selects them, the desktop
+   * form and the desktop Tags screen being the only things that draw them, and a type
+   * promising them everywhere would be a lie about the post page's own tag list.
+   */
+  form_section_id?: number | null
+  form_section?: string | null
   post_count: number
-}
-
-/** A subgroup name, or nothing. Any string, the way `TagCategory` is any string. */
-export type Subcategory = string | null
-
-/**
- * A typed-in subgroup as it is stored: trimmed, its inner runs of space collapsed, and
- * lowercased, with an empty one becoming null.
- *
- * Lowercased for the same reason tag names are — `Dress Color` and `dress color` are one
- * subgroup typed twice, and two blocks in the picker with the same heading is exactly the
- * failure this column is meant to fix. Unlike a tag name it may hold spaces: it is a
- * heading a person reads, not a name anything searches for, so nothing here has to match
- * `TAG_PATTERN`.
- */
-export function normalizeSubcategory(raw: string): Subcategory {
-  const value = raw.trim().replace(/\s+/g, ' ').toLowerCase()
-  return value === '' ? null : value
-}
-
-/** What a person reads above a subgroup's block. Capitalized, as with an unknown category. */
-export function subcategoryLabel(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1)
-}
-
-/**
- * The subgroups present in a category, A–Z. The ungrouped tags are not one of these —
- * they are the block above them, which is why null is dropped rather than sorted first.
- */
-export function subcategoryOrder(values: Iterable<Subcategory | undefined>): string[] {
-  return [...new Set([...values].filter((value): value is string => !!value))].sort()
 }
 
 export const TAG_PATTERN = /^[a-z0-9_().-]+$/
@@ -189,21 +238,11 @@ const KNOWN_COLOR: Record<KnownCategory, string> = {
   artist: 'text-[#ff8a8b]',
   copyright: 'text-[#c797ff]',
   character: 'text-[#35c64a]',
-  // The three that replaced a category keep its hex, so a board that has been re-filed
-  // looks like the one you knew rather than a new palette to learn.
+  // Kept its hex through every re-cut, so a board that has been re-filed looks like the
+  // one you knew rather than a new palette to learn. The same goes for `activity` below,
+  // which is `action` renamed and not a new category.
   appearance: 'text-[#ff9f43]',
-  body: 'text-[#e3ad8a]',
-  clothes: 'text-[#45c8c0]',
-  // `exposure`'s pink, freed when that category went and reused rather than retired: the
-  // palette is ten hand-picked hues that stay apart on a dark ground, and inventing an
-  // eleventh is how two categories end up looking alike. It stays here now that the name
-  // is back — a hex belongs to whatever is wearing it, and moving one re-teaches a colour
-  // for the sake of a footnote.
-  accessories: 'text-[#ff87c8]',
-  // 236, the gap between general's 206 and copyright's 268 — found for `pov` and reused
-  // rather than retired when that category went, the way `exposure`'s pink was.
-  exposure: 'text-[#8f9dff]',
-  action: 'text-[#b6d94c]',
+  activity: 'text-[#b6d94c]',
   sexual: 'text-[#e8506e]',
   general: 'text-[#4fa3e3]',
   meta: 'text-[#ead084]',
@@ -214,11 +253,7 @@ const KNOWN_LABEL: Record<KnownCategory, string> = {
   copyright: 'Copyright',
   character: 'Character',
   appearance: 'Appearance',
-  body: 'Body',
-  clothes: 'Clothes',
-  accessories: 'Accessories',
-  exposure: 'Exposure',
-  action: 'Action',
+  activity: 'Activity',
   sexual: 'Sexual',
   general: 'General',
   meta: 'Meta',

@@ -8,18 +8,24 @@ describes them; when the two disagree, the migrations win and this file is the b
 
 ```
 posts >─── post_tags ───< tags ───< tag_rules >─── tags
+
+tags >─── tag_form_section ───< tag_form_section_dep >─── tags
 ```
 
-Four tables, no functions, no triggers. There is no `profiles` table: the board has no
+`tags.form_section_id` points at a section (`on delete set null`); a section's dependencies
+point back at tags.
+
+Six tables, no functions, no triggers. There is no `profiles` table: the board has no
 accounts. Every write is made by the desktop app (`packages/desktop`) on a service-role
 client built from a key compiled into its own bundle; the website holds the anon key and
-only reads — and it reads three of the four, `tag_rules` being consulted only where a post
-is tagged.
+only reads — and it reads three of the six: `tag_rules`, `tag_form_section` and
+`tag_form_section_dep` are the desktop tag form's, consulted only where a post is tagged.
 
 Migration order is foreign-key order: `20260826090000_storage_buckets` →
 `100100_posts` → `100200_tags` → `100300_post_tags` → `20260906140000_tag_rules`. Each
 table's file holds its columns, indexes **and** RLS policies, so nothing about one table
-is spread across migrations.
+is spread across migrations. Everything after those is a column or a constraint at a time,
+in its own timestamped file.
 
 ---
 
@@ -57,18 +63,20 @@ served by the primary key, which Postgres reads backwards as cheaply as forwards
 ## `tags`
 
 `supabase/migrations/20260826100200_tags.sql`, plus
-`supabase/migrations/20260905120000_tags_category2.sql` and
 `supabase/migrations/20260906120000_tags_emoji.sql` and
 `supabase/migrations/20260906130000_tags_mark.sql` and
-`supabase/migrations/20260906140000_tag_rules.sql`
+`supabase/migrations/20260906140000_tag_rules.sql` and
+`supabase/migrations/20260908120100_tags_drop_category2.sql` and
+`supabase/migrations/20260908130000_tags_form_section.sql`
 
 | column | type | notes |
 | --- | --- | --- |
 | `id` | `bigint` PK identity | `/tags/[id]` is addressed by this, so a rename never breaks a link |
 | `name` | `text unique not null` | `check (name ~ '^[a-z0-9_().-]+$')` — lowercase `snake_case` |
-| `category` | `text not null default 'general'` | free-form; `TAG_CATEGORIES` in `@common/tags` is the ten the app writes, each with a colour and a place in the order |
-| `category2` | `text` (nullable) | a finer grouping *within* the category, free-form and usually null — read by the desktop tag picker and by nothing else |
+| `category` | `text not null default 'general'` | free-form; `TAG_CATEGORIES` in `@common/tags` is the eight the app writes, each with a colour and a place in the order |
+
 | `mark` | `text` (nullable) | what is drawn in front of the name — a colour or up to three glyphs — usually null; every read selects it |
+| `form_section_id` | `smallint` (nullable) `→ tag_form_section.id on delete set null` | which row of the **desktop tag form** the tag is offered on; null is no row, which is not offered at all. The website never reads it |
 | `implied_rating` | `text` (nullable) | a rating **floor** carried by this tag, stored as the letter like `posts.rating` — see [`tag_rules`](#tag_rules) |
 | `post_count` | `int not null default 0` | denormalized, see [Counters](#counters) |
 | `created_at` | `timestamptz not null default now()` | |
@@ -88,11 +96,26 @@ lookup); `tags_name_prefix_idx (name text_pattern_ops)` for autocomplete;
   grouped list (`categoryOrder`) — reads never assume the list. Writes do:
   `z.enum(TAG_CATEGORIES)` guards the two IPC channels that set this column, so one can
   only arrive by hand-editing the table.
-- `category2` is cosmetic and local: `listTags` is the only read that selects it, the
-  desktop app's tag picker is the only thing that draws it, and nothing about search,
-  storage or a post's own page knows it exists. There is no list of valid values —
-  `normalizeSubcategory` in `@common/tags` lowercases and space-collapses what is typed so
-  that a subgroup has one spelling, and `''` clears the column back to null.
+- **`category` is what the website shows; `form_section` is how the desktop form cuts it
+  up.** The site draws one Appearance heading, as it always has; the form draws Appearance
+  and then `hair color`, `hair styles`, `clothes`, `accessory` as rows under it, each with
+  its own picker and its own ＋. Two views of one column and neither is a lie — a category
+  says what a tag *is*, a row is a place to put your hand.
+- **`form_section_id`, not a name.** The sections are
+  [`tag_form_section`](#tag_form_section) and this points at one by id, so renaming a row
+  carries every tag on it. `listTags` embeds the name beside the id, which is the one place
+  the two meet — everything above it groups and draws by name, the way it does for the tag
+  rules. Null is no row, which means the tag is **not offered in the form at all**: a
+  category has no ＋ of its own.
+- **A section travels with its tag through a recategorization.** `setTagCategory` leaves
+  the column alone: there is no list for the value to be outside of, and a `dress` moved to
+  another category belongs on the `clothes` row wherever it lands. The edit panel writes
+  both, so a move that should also re-file it says so in the field.
+- There was a `category2`, and this is not it restored — it is the same idea aimed at a
+  different thing. That one was a heading *inside* one picker, dropped because a heading
+  cannot shorten a category. What narrows a picker now is the form groups on
+  [`tag_rules`](#tag_rules), which hide per post; `form_section` only decides which row a
+  tag is drawn on.
 - `mark` is cosmetic and the opposite of local: every tag read selects it, because a tag
   is drawn with its mark wherever it is drawn at all and a read that left the column out
   would render a tag that has one as a tag that has none. It replaced a `TAG_EMOJI` record
@@ -113,12 +136,18 @@ lookup); `tags_name_prefix_idx (name text_pattern_ops)` for autocomplete;
 
 ## `tag_rules`
 
-`supabase/migrations/20260906140000_tag_rules.sql`
+`supabase/migrations/20260906140000_tag_rules.sql`, plus
+`supabase/migrations/20260908120000_tag_rules_groups.sql`
 
 The two answers to "this tag is on the post, what else should be?". An **implication** is
 applied by itself (`white_bra` means the post is also a `bra`); a **recommendation** is
 only offered, as a chip to press. `@common/data/rules.ts` reads and writes both; the
 desktop app is the only thing that consults them.
+
+There was a third, `kind = 2`, the **form group**: the tags the form should offer once this
+tag is on the post, and hide otherwise. It was the right question in the wrong place — it
+hid tags *inside* a row, so the row was still drawn with a ＋ that opened onto nothing — and
+it is [`tag_form_section_dep`](#tag_form_section) now, said about the whole row.
 
 | column | type | notes |
 | --- | --- | --- |
@@ -167,6 +196,57 @@ to keep true for no reader.
   the meaning has to be looked up.
 - **Cycles are not a constraint.** `a → b → a` is storable; `impliedTags` walks with a
   `seen` set, so such a pair is useless rather than fatal.
+
+## `tag_form_section`
+
+`supabase/migrations/20260908140000_form_sections.sql`, replaced by
+`supabase/migrations/20260908150000_tag_form_section_ids.sql`
+
+The rows the **desktop tag form** draws under a category, and their order. `hair color`,
+`hair styles`, `clothes` under Appearance. The website has never heard of them: it draws
+the category, one heading.
+
+| column | type | notes |
+| --- | --- | --- |
+| `id` | `smallint` PK identity | what `tags.form_section_id` points at, so a rename carries every tag on the row |
+| `category` | `text not null` | which category it divides — free-form, like `tags.category` |
+| `name` | `text not null` | the row's label, lowercased and space-collapsed by `normalizeFormSection` |
+| `position` | `smallint not null default 0` | where it sits under its category, low first, ties by name |
+| `deps_mode` | `text not null default 'any'` | `check in ('any', 'all')` — whether the row needs one of its dependencies on the post, or all |
+| `created_at` | `timestamptz not null default now()` | |
+| | `unique (category, name)` | `clothes` under two categories is two rows, and neither is the other |
+
+`tag_form_section_dep` holds what a row waits for: `(section_id, tag_id)`, both cascading.
+A section with no rows there has no condition and is always drawn, which is most of them.
+Tag **ids**, so a rename carries the dependency and a delete takes it — the same reasoning
+as `tag_rules`, and only safe because no write path coins a tag.
+
+**Indexes:** the primary key and the unique constraint. The whole table is read at once
+into the window's store, the way the tag rules are.
+
+**Invariants**
+
+- **The id is the identity; the name is a label.** It was keyed by `(category, name)` for
+  exactly one revision, and renaming exposed why that was wrong: the name *was* the
+  section, so correcting a spelling made a different one and every tag on the old row fell
+  quietly off the form. The same lesson `tag_rules` learned moving off `save.json`.
+- **`tags.form_section_id` is `on delete set null`.** Deleting a row takes it out of the
+  form and puts its tags back on no row at all — a re-file rather than a loss, and the same
+  answer the free-text column gave, said structurally instead of by the read being
+  forgiving.
+- **A category's rows are written one edit at a time**, not as a list: create, rename,
+  delete and reorder (`FormSectionEdit`). A list of names cannot express a rename, which is
+  the whole reason the list-shaped write went.
+- **A condition belongs to the row, not to a tag.** `blue archive` under Character waits for
+  `blue_archive`; `hair color` waits for nothing. This is where form groups went: they said
+  the same thing on the tag that triggered them and hid tags *inside* a row, leaving the row
+  drawn with a ＋ that opened onto an empty picker. Implied tags satisfy a dependency, and a
+  row the post already has a tag on is drawn whatever its condition says.
+- **An empty section is the point.** It is drawn in the form with its ＋ and nothing on it,
+  which is how the first tag gets filed into a new row — the one thing free text on each tag
+  could not do. The other half is the order.
+- **Order is `position`, then `name`.** The tie-break makes a table written by hand, every
+  position left at its default, come out alphabetical rather than in insertion order.
 
 ## `post_tags`
 
@@ -326,6 +406,7 @@ pushed anywhere real.
 comments, pools, notes, tag_aliases, post_votes, moderation queue / audit log, wiki
 pages, favorites, public accounts.
 
-Tag implications and recommendations *do* exist, but as the desktop app's own rules in
-`save.json` rather than as tables — they are one person's habits, not the board's
-vocabulary. See [packages/desktop/README.md](../packages/desktop/README.md).
+Tag implications, recommendations and form groups *do* exist — as
+[`tag_rules`](#tag_rules), keyed by tag id so a rename carries them and a delete takes
+them. Only the desktop app reads them. See
+[packages/desktop/README.md](../packages/desktop/README.md).

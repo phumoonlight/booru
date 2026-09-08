@@ -52,12 +52,13 @@ function readFile(): CacheFile | null {
 
   const { at, tags } = parsed as Partial<CacheFile>
   if (typeof at !== 'number' || !Array.isArray(tags)) return null
-  // A copy written before `category2` or `mark` existed has no such key, and serving it
-  // would draw every tag ungrouped and glyphless for up to a day with nothing to explain
-  // it. Both columns are on the row they belong to, so an entry that never carried one is
-  // not a tag "with no subgroup" or "with no mark" — it is a cache from a different
-  // version of this file.
-  if (tags.length > 0 && !('category2' in tags[0] && 'mark' in tags[0])) return null
+  // A copy written before `mark` or `form_section` existed has no such key, and serving it
+  // would draw every tag glyphless, or every one of them on its category's own row, for up
+  // to a day with nothing to explain it. Both columns are on the row they belong to, so an
+  // entry that never carried one is not a tag "with no mark" or "on no section" — it is a
+  // cache from a different version of this file. A copy carrying a key this version no
+  // longer reads, like the old `category2`, is harmless the other way round.
+  if (tags.length > 0 && !('mark' in tags[0] && 'form_section' in tags[0])) return null
   return { at, tags }
 }
 
@@ -126,9 +127,59 @@ export async function cachedIndex(): Promise<Tag[] | null> {
 }
 
 /**
- * Drops it. Two callers: the button on the settings screen, for a cache that has somehow
- * gone wrong, and every finished upload — a post creates tags and moves counts, which is
- * the one moment this is certainly out of date.
+ * Adds `delta` to the counts of these tags, in place.
+ *
+ * This exists because dropping the whole index was the wrong answer to a finished upload,
+ * and by far the most expensive thing this app did over and over. An upload moves
+ * `post_count` and moves nothing else — no write path coins a tag any more
+ * (`resolveTagIds` refuses a name the board has no row for), so a post cannot introduce a
+ * name, a category, a mark or a section. Throwing away a few hundred rows of *those* to
+ * learn a handful of numbers meant the next tag field or Tags screen re-read the entire
+ * board, and with one image staged at a time that was one full read per upload.
+ *
+ * **The arithmetic is exact, so no query is needed.** The post is new — a duplicate is
+ * refused at staging, before this — and its tag list is deduped on the way in, so every
+ * tag on it gained exactly one post. That is the same number `syncTagPostCounts`
+ * recomputed on the board, arrived at without asking.
+ *
+ * A name the cache does not hold is skipped rather than added: an entry with no category
+ * or mark would be a tag drawn wrong everywhere this list is drawn, and a tag the cache
+ * has never seen is one the next daily read will bring in properly.
+ *
+ * The `at` stamp is deliberately left alone. Patching counts does not make the copy any
+ * newer about everything else, and touching it would postpone the daily read that is the
+ * only thing catching a rename made from another install.
+ */
+export function bumpTagCounts(names: string[], delta: number): void {
+  if (names.length === 0) return
+  // The file may hold a copy nothing has asked for yet this session. Patching memory
+  // alone would leave that one behind to be served, stale, for the rest of the day.
+  if (memory === undefined) memory = readFile()
+  if (!memory) return
+
+  const wanted = new Set(names)
+  let touched = false
+  for (const tag of memory.tags) {
+    if (!wanted.has(tag.name)) continue
+    tag.post_count = Math.max(0, tag.post_count + delta)
+    touched = true
+  }
+  if (!touched) return
+
+  // Kept in the order the read established — most used first — so a tag that overtakes
+  // another is in the right place for the autocomplete without a second sort on the way
+  // out. `cachedSuggestions` sorts its own matches anyway; this is for `cachedIndex`,
+  // which trusts the order and slices.
+  memory.tags.sort((a, b) => b.post_count - a.post_count || a.name.localeCompare(b.name))
+  writeCache(CACHE_FILE, memory)
+}
+
+/**
+ * Drops it. Two callers now: the button on the settings screen, for a cache that has
+ * somehow gone wrong, and every write that changes a tag *row* — creating, renaming,
+ * recategorizing, re-sectioning, marking, deleting, and applying one tag across another's
+ * posts. A finished upload no longer calls this; it patches the counts instead, which is
+ * all an upload can move — see `bumpTagCounts`.
  */
 export function clearTagCache(): void {
   memory = null

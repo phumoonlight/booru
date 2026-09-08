@@ -4,7 +4,7 @@ import { About } from './components/about'
 import { Browse, browseFor, hydrateBrowseCache } from './components/browse'
 import { Settings } from './components/settings'
 import { TagIndex } from './components/tag-index'
-import { UploadQueue } from './components/upload-queue'
+import { UploadForm } from './components/upload-form'
 import type { AppStatus } from '../../shared/api'
 
 /**
@@ -12,7 +12,7 @@ import type { AppStatus } from '../../shared/api'
  * board this build talks to was decided when it was built and compiled in
  * (`main/config.ts`), and the board itself has no accounts any more — this app writes
  * with the service-role key in its own bundle, which is why it is the only thing that
- * can. The window opens on the queue.
+ * can. The window opens on the upload form.
  *
  * Settings is forced open in one case only: a bundle built without those values, which
  * the build itself refuses to produce. About is the other exception to the screen order —
@@ -67,8 +67,8 @@ export function App() {
       active ? `text-foreground ${ACTIVE_BAR}` : 'text-muted hover:text-foreground'
     }`
 
-  // Anything that takes the window off the queue. Settings is forced open only when the
-  // build carries no project — it is the screen that says so.
+  // Anything that takes the window off the upload form. Settings is forced open only when
+  // the build carries no project — it is the screen that says so.
   const over =
     view === 'about' ? (
       <About status={status} />
@@ -93,9 +93,9 @@ export function App() {
 
   /**
    * The only thing a nav item does. Pressing the one you were already on used to throw
-   * you back to the queue, which made the header's own answer to "where am I" also a way
-   * of leaving — and a second press aimed at a screen that was slow to paint landed you
-   * somewhere you had not asked for. Upload is reached by pressing Upload, like every
+   * you back to the upload form, which made the header's own answer to "where am I" also
+   * a way of leaving — and a second press aimed at a screen that was slow to paint landed
+   * you somewhere you had not asked for. Upload is reached by pressing Upload, like every
    * other screen.
    */
   const go = (target: typeof view) => () => {
@@ -128,8 +128,8 @@ export function App() {
           <span />
         )}
         <div className="flex items-center gap-2">
-          {/* The queue, and the way back to it from every other screen — the one item
-              here that is the app's actual job, so it leads the row. */}
+          {/* The upload form, and the way back to it from every other screen — the one
+              item here that is the app's actual job, so it leads the row. */}
           <button
             type="button"
             onClick={go('upload')}
@@ -174,7 +174,7 @@ export function App() {
         </div>
       </header>
 
-      {/* The frame never scrolls; the queue inside it does.
+      {/* The frame never scrolls; the screen inside it does.
 
           Every screen inside carries `pb-25` — 100px of nothing under its last row. A
           scroller that ends flush with the window makes the last item look cut off rather
@@ -186,8 +186,8 @@ export function App() {
         {over}
 
         {/*
-          The queue is hidden rather than unmounted. Staging a dozen images, tagging half
-          of them and then glancing at About used to throw all of it away — and an upload
+          The upload form is hidden rather than unmounted. Staging an image, half tagging
+          it and then glancing at About used to throw all of that away — and an upload
           already in flight lost the component waiting for its answer.
         */}
         {status.configured && (
@@ -199,12 +199,13 @@ export function App() {
             {/* The empty drop zone is the whole screen's content, so it sits in the
                 middle of it rather than hugging the header — but the row above it does
                 not, which is why the centring is `my-auto` on the drop zone inside
-                `UploadQueue` and not a wrapper around the whole of it. `my-auto` rather
-                than `justify-center` for the same reason it always was: once the queue is
-                taller than the window the auto margins collapse to zero, where centring
-                would push the first rows off the top of a scroller, out of reach. */}
-            <UploadQueue
-                status={status}
+                `UploadForm` and not a wrapper around the whole of it. `my-auto` rather
+                than `justify-center` for the same reason it always was: once the staged
+                image and its fields are taller than the window the auto margins collapse
+                to zero, where centring would push the top of the form off the top of a
+                scroller, out of reach. */}
+            <UploadForm
+              status={status}
               onReview={(postId) => {
                 setReviewing(postId)
                 setView('browse')

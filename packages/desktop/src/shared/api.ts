@@ -2,6 +2,7 @@ import type { Rating } from '@common/search'
 import type { Tag, TagCategory } from '@common/tags'
 import type { Post, PostPage } from '@common/data/posts'
 import type { UploadResult } from '@common/upload/pipeline'
+import type { FormSectionEdit, FormSections } from '@common/data/form-sections'
 import type { RuleKind, TagRules } from '@common/data/rules'
 import type { TagCatalogs } from './catalogs'
 
@@ -130,16 +131,20 @@ export type UploadRequest = {
 }
 
 /**
- * What the window has staged, pushed to main whenever it changes. Closing the window is
- * the only thing that reads it — `main/queue-guard.ts` has why it is pushed rather than
- * asked for.
+ * What the upload screen is holding, pushed to main whenever it changes. Closing the
+ * window is the only thing that reads it — `main/close-guard.ts` has why it is pushed
+ * rather than asked for.
+ *
+ * Booleans rather than counts, since the screen stages one image at a time: what main has
+ * to decide is whether there is anything to lose, and "an image with tags typed into it"
+ * and "the number of the post just made" are the two things that are.
  */
-export type QueueState = {
-  /** Rows not uploaded yet: the ones carrying tags typed by hand and nothing else. */
-  pending: number
-  /** Rows that finished, still listed with their post numbers. */
-  uploaded: number
-  /** Whether a run is in flight right now. */
+export type StagedState = {
+  /** An image staged and not uploaded — tags typed by hand and held nowhere else. */
+  staged: boolean
+  /** A finished upload still on screen, with the post number it made. */
+  uploaded: boolean
+  /** Whether an upload is in flight right now. */
   busy: boolean
 }
 
@@ -187,8 +192,8 @@ export type PostAppApi = {
   /**
    * The board's tag rules of one kind — `'implies'` is applied by itself
    * (`shared/implications.ts`), `'recommends'` is only offered
-   * (`shared/recommendations.ts`). One pair of channels rather than two, because the
-   * two sets differ in what the window does with them and not in their shape.
+   * (`shared/recommendations.ts`). One pair of channels rather than two, because the two
+   * sets differ in what the window does with them and not in their shape.
    */
   listRules: (kind: RuleKind) => Promise<TagRules>
   /**
@@ -197,6 +202,14 @@ export type PostAppApi = {
    * the rule.
    */
   saveRule: (kind: RuleKind, tag: string, names: string[]) => Promise<TagRules>
+  /**
+   * The rows the tag form draws under a category, and their order — `tag_form_section` on
+   * the board. One write taking one edit: a section has an id, so creating, renaming,
+   * deleting and moving are four things done to a row rather than four ways of restating a
+   * list. `error` is a refusal the typist can fix — a name already taken, an empty one.
+   */
+  listFormSections: () => Promise<FormSections>
+  saveFormSections: (edit: FormSectionEdit) => Promise<{ sections: FormSections; error?: string }>
   /** The named sets of tags this machine keeps — `shared/catalogs.ts` has what they are. */
   listCatalogs: () => Promise<TagCatalogs>
   saveCatalogs: (catalogs: TagCatalogs) => Promise<TagCatalogs>
@@ -226,19 +239,24 @@ export type PostAppApi = {
    * `self` and `data:` and nothing else, which is a rule worth an IPC hop to keep.
    */
   postThumbnail: (fileName: string) => Promise<string>
-  /** `subcategory` is free text — '' for none. See `tags.category2`'s migration. */
-  createTag: (name: string, category: TagCategory, subcategory: string) => Promise<NamedOutcome>
+  /** `sectionId` is a row of `tag_form_section`, or null for none. */
+  createTag: (
+    name: string,
+    category: TagCategory,
+    sectionId: number | null
+  ) => Promise<NamedOutcome>
   renameTag: (id: number, name: string) => Promise<NamedOutcome>
   setTagCategory: (id: number, category: TagCategory) => Promise<Outcome>
-  /** Moves a tag into a subgroup of its category, or out of one with ''. */
-  setTagSubcategory: (id: number, subcategory: string) => Promise<Outcome>
+  /** Which row of the tag form the tag is offered on, or null for none. A rename of that
+   *  row carries the tag with it, which is why this is an id. */
+  setTagFormSection: (id: number, sectionId: number | null) => Promise<Outcome>
   /** Sets the glyphs drawn in front of the tag's name, or clears them with ''. */
   setTagMark: (id: number, mark: string) => Promise<Outcome>
   deleteTag: (id: number) => Promise<Outcome>
   /** Adds one tag to every post already carrying another. */
   applyTagToTagged: (target: string, condition: string) => Promise<ApplyTagOutcome>
-  /** Tells main what the queue holds, so closing the window can ask before dropping it. */
-  reportQueue: (state: QueueState) => void
+  /** Tells main what the upload screen holds, so closing can ask before dropping it. */
+  reportStaged: (state: StagedState) => void
   openExternal: (url: string) => Promise<void>
   /**
    * `save.json` out to a file, and back in from one. Each opens its own picker on the

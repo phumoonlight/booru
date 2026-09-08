@@ -7,9 +7,14 @@ import type { BooruClient } from '@common/supabase/types'
  *
  * Two kinds, one table (`20260906140000_tag_rules.sql` has why): an **implication** is
  * applied by itself — `white_bra` means the post is also a `bra` — and a
- * **recommendation** is only offered, as a chip to press. What the app does with a row
- * is the whole difference; the row is the same shape either way, so `kind` is a column
- * and this file is one set of functions.
+ * **recommendation** is only offered, as a chip to press. What the app does with a row is
+ * the whole difference; the row is the same shape either way, so `kind` is a column and
+ * this file is one set of functions.
+ *
+ * There was a third, the **form group**, which hid tags inside a picker until the tag they
+ * hung off was on the post. It is gone: the condition belongs on the form *row*, which is
+ * the thing that should appear and disappear, so it is `tag_form_section_dep` now — see
+ * `20260908160000_section_deps.sql`.
  *
  * They read and write **names**, not ids, because everything above this line is written
  * in names: the rule store the tag field consults on every keystroke, the map the rule
@@ -26,8 +31,8 @@ export type RuleKind = 'implies' | 'recommends'
  * reason: a screen, an IPC channel and a rule map read better in words, and the column is
  * a discriminator with exactly two values.
  *
- * These two numbers appear nowhere else. The check constraint in the migration is the
- * other half of the pair, so adding a third kind is a line here and a line there.
+ * These two numbers appear nowhere else. The check constraint in the migrations is the
+ * other half of the pair, so a third kind is a line here and a line there.
  */
 export const RULE_KIND: Record<RuleKind, number> = { implies: 0, recommends: 1 }
 

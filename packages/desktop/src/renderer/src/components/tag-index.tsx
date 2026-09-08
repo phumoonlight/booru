@@ -1,11 +1,11 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   TAG_CATEGORIES,
   categoryColor,
   categoryLabel,
   categoryOrder,
-  subcategoryLabel,
-  subcategoryOrder,
+  formSectionLabel,
+  orderFormSections,
   type Tag,
   type TagCategory,
 } from '@common/tags'
@@ -13,25 +13,29 @@ import { tagLabel } from '@common/search'
 import { BUTTON, BUTTON_ON_SURFACE, BUTTON_SUBMIT_ON_SURFACE, buttonToggle } from './buttons'
 import { TagMark, invalidateTagNames } from './category-tag-field'
 import { FIELD, Panel } from './panel'
+import { FormSectionsPanel } from './form-sections'
 import { RuleDiagram } from './rule-diagram'
 import { TagCatalogs } from './tag-catalogs'
 import { TagRuleEditor, toggleRuleName, type RuleKind } from './tag-rule-editor'
 import { toggleCatalogTag } from '../../../shared/catalogs'
 import { saveCatalogs, useCatalogs } from '../catalogs'
+import { editFormSections, reloadFormSections, useFormSections } from '../form-sections'
+import type { FormSection } from '@common/data/form-sections'
 import { reloadImplications, saveImplication, useImplications } from '../implications'
 import { reloadRecommendations, saveRecommendation, useRecommendations } from '../recommendations'
 
 /**
  * What a click on the tag grid is currently answering, when it is not simply opening a tag.
  *
- * Two things fill themselves in from the grid now — a tag's rules and a catalog — and they
- * are told apart by what the pick is *about*: a rule is about the tag whose panel is open,
- * a catalog is about a name that has nothing to do with any row. One at a time, because
- * there is one grid and a click has to mean one thing.
+ * Three things fill themselves in from the grid now — a tag's rules, a catalog, and a form
+ * section's dependencies — and they are told apart by what the pick is *about*: a rule is
+ * about the tag whose panel is open, a catalog is about a name that has nothing to do with
+ * any row. One at a time, because there is one grid and a click has to mean one thing.
  */
 type Picking =
   | { into: RuleKind; tag: string }
   | { into: 'catalog'; name: string }
+  | { into: 'section'; id: number }
 
 /**
  * The last index read, kept outside React on purpose. This screen is unmounted whenever
@@ -79,7 +83,10 @@ export function invalidateTags(): void {
  */
 export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
   const [editing, setEditing] = useState<Tag | null>(null)
-  const [panel, setPanel] = useState<'none' | 'create' | 'apply' | 'catalogs'>('none')
+  const [panel, setPanel] = useState<'none' | 'create' | 'apply' | 'catalogs' | 'sections'>('none')
+  // Which category the sections panel has open. Held here rather than inside it so
+  // reopening the panel comes back to the category you were dividing, not to Artist.
+  const [sectionCategory, setSectionCategory] = useState<TagCategory>('appearance')
   const [diagram, setDiagram] = useState(false)
   // What the grid is currently filling in, or null for its ordinary job. It lives here
   // rather than in the panel because the two halves of the gesture are in different
@@ -91,8 +98,14 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
   // better than typing one while the name is on screen. It earns its place outside picking
   // too: finding the tag to rename was the same scroll.
   const [filter, setFilter] = useState('')
+  // Which categories are unfolded. Plain state, not the module-level cache below: the
+  // screen unmounts whenever another view is in front, and coming back to it folded is the
+  // right default — the fold is about what you are looking at now, where the tag list is
+  // about what the board holds.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const implications = useImplications()
   const recommendations = useRecommendations()
+  const formSections = useFormSections()
   const catalogs = useCatalogs()
   const [tags, setTags] = useState<Tag[] | null>(cached?.tags ?? null)
   const [fetchedAt, setFetchedAt] = useState<number | null>(cached?.at ?? null)
@@ -100,19 +113,32 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
   // and this render is already the loading one. Setting it from inside the effect said
   // the same thing one render later, which is a cascading render React now lints for.
   const [loading, setLoading] = useState(cached === null)
+  // Why the list could not be read, or ''. `listTags` throws now rather than answering with
+  // an empty list — a refused query and a board with no tags are not the same thing — so
+  // this screen has to have somewhere to put the difference. Without it a failed read left
+  // `tags` null and "Loading…" on screen for good, with Refresh disabled by the same flag.
+  const [loadError, setLoadError] = useState('')
 
   // Only when there is nothing to show. Coming back to this screen paints the list it
   // painted last time, and the 🔄 beside the title is how you ask for a new one.
   useEffect(() => {
     if (cached) return
     let alive = true
-    void window.api.listTags().then((next) => {
-      cached = { tags: next, at: Date.now() }
-      if (!alive) return
-      setTags(next)
-      setFetchedAt(cached.at)
-      setLoading(false)
-    })
+    void window.api
+      .listTags()
+      .then((next) => {
+        cached = { tags: next, at: Date.now() }
+        if (!alive) return
+        setTags(next)
+        setFetchedAt(cached.at)
+      })
+      .catch((error: unknown) => {
+        if (!alive) return
+        setLoadError(error instanceof Error ? error.message : 'Could not read the tags.')
+      })
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
     return () => {
       alive = false
     }
@@ -131,22 +157,35 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
     // And the rules, which are rows keyed by tag id: a rename carries every rule naming
     // that tag and a delete takes them with it, both on the board and both invisible to a
     // window still holding the names from before.
-    await Promise.all([reloadImplications(), reloadRecommendations()])
-    const next = await window.api.listTags()
-    cached = { tags: next, at: Date.now() }
-    setTags(next)
-    setFetchedAt(cached.at)
-    setLoading(false)
+    await Promise.all([
+      reloadImplications(),
+      reloadRecommendations(),
+      reloadFormSections(),
+    ])
+    try {
+      const next = await window.api.listTags()
+      cached = { tags: next, at: Date.now() }
+      setTags(next)
+      setFetchedAt(cached.at)
+      setLoadError('')
+    } catch (error) {
+      // The list already on screen stands: a failed re-read is a reason to say so, not a
+      // reason to throw away the copy that is still the best answer anyone has.
+      setLoadError(error instanceof Error ? error.message : 'Could not read the tags.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   /**
-   * The subgroups already in use in a category — what the two forms offer while you type
-   * one. A subgroup only does its job when every tag in it spells it the same way, and the
+   * The sections already in use in a category — what the two forms offer while you type
+   * one. A section only does its job when every tag on it spells it the same way, and the
    * list of them exists nowhere but in the tags themselves, so the field that sets one has
    * to show what is already there or it is a free-text box inviting a near-duplicate.
    */
-  const subcategoriesIn = (category: TagCategory): string[] =>
-    subcategoryOrder((tags ?? []).filter((tag) => tag.category === category).map((t) => t.category2))
+  /** The rows this category has, for the menu on the two forms. The board's list and only
+   *  it: a tag is put on a section that exists, and making one is the Sections panel. */
+  const sectionsIn = (category: TagCategory): FormSection[] => formSections[category] ?? []
 
   /**
    * What a click on a tag in the grid means, which depends on what a panel is asking.
@@ -167,6 +206,22 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
     }
     if (picking.into === 'catalog') {
       void saveCatalogs(toggleCatalogTag(catalogs, picking.name, tag.name))
+      return
+    }
+    if (picking.into === 'section') {
+      // The section being filled in, found by id across every category: the panel has one
+      // category open, but the tags a row waits for need not be in it — Character's
+      // `blue archive` waits for a Copyright tag, which is the whole point.
+      const section = Object.values(formSections)
+        .flat()
+        .find((row) => row.id === picking.id)
+      if (!section) return
+      void editFormSections({
+        do: 'deps',
+        id: section.id,
+        mode: section.depsMode,
+        names: toggleRuleName(section.deps, tag.name),
+      })
       return
     }
     if (tag.name === picking.tag) return
@@ -212,24 +267,75 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
   }, [picking])
 
   // The names already in whatever is being filled in, so the grid can mark them
+  const ruleSet = { implies: implications, recommends: recommendations }
   const picked = new Set(
     picking === null
       ? []
       : picking.into === 'catalog'
         ? catalogs[picking.name] ?? []
-        : (picking.into === 'implies' ? implications : recommendations)[picking.tag] ?? []
+        : picking.into === 'section'
+          ? Object.values(formSections)
+              .flat()
+              .find((row) => row.id === picking.id)?.deps ?? []
+          : ruleSet[picking.into][picking.tag] ?? []
   )
 
-  // The tag a rule is being written about, which cannot be one of its own answers. A
-  // catalog has none — it is about a set of images, not about a tag.
-  const triggerName = picking && picking.into !== 'catalog' ? picking.tag : null
+  /**
+   * Why a tag cannot go into whatever is being filled in, or null if it can.
+   *
+   * Two cases, both circular in the same way. A **rule** cannot name the tag it is about: a
+   * tag implying itself is the one rule that can never fire. And a **section** cannot wait
+   * for a tag filed on itself — the row is hidden until its condition is met, so the tag
+   * that would meet it is a tag you can never reach. A catalog refuses nothing: it is about
+   * a set of images, not about a tag.
+   *
+   * Answered as the sentence the grid shows, so the reason is written once and lands in the
+   * title of the cell it is about.
+   */
+  const inertReason = (tag: Tag): string | null => {
+    if (!picking) return null
+    if (picking.into === 'catalog') return null
+    if (picking.into === 'section') {
+      return tag.form_section_id === picking.id
+        ? `${tagLabel(tag.name)} is on this row — a row cannot wait for a tag it holds`
+        : null
+    }
+    return tag.name === picking.tag ? `${tagLabel(tag.name)} is the tag this rule is about` : null
+  }
 
   // Matched against the stored spelling with spaces read as underscores, so the box takes
   // `blue archive` and `blue_archive` alike — the same courtesy the tag picker's does.
   const typed = filter.trim().toLowerCase().replace(/ /g, '_')
   const shown = typed ? (tags ?? []).filter((tag) => tag.name.includes(typed)) : (tags ?? [])
 
-  const groups = categoryOrder(shown.map((tag) => tag.category))
+  /**
+   * Whether a category's grids are drawn. Folded by default: a board of a few hundred tags
+   * is a screen you scroll past rather than read, and the category you came for is the one
+   * thing you already know.
+   *
+   * **Filtering and picking force every one open.** Both are moments when the answer is a
+   * tag you cannot see yet — a filter that matched four tags in three folded categories
+   * would look like a filter that matched nothing, and a rule being filled in from a folded
+   * grid is a screen with nothing to click. The fold is remembered underneath, so clearing
+   * the box puts back what you had open.
+   *
+   * Nothing here is a request: the whole index is already in memory, and unfolding is
+   * `display` and not a read. What made the board expensive was re-reading that index after
+   * every upload, which is `bumpTagCounts` in main and not this.
+   */
+  const showAll = typed !== '' || picking !== null
+  const isOpen = (category: TagCategory): boolean => showAll || expanded.has(category)
+
+  const toggle = (category: TagCategory): void =>
+    setExpanded((current) => {
+      const next = new Set(current)
+      if (!next.delete(category)) next.add(category)
+      return next
+    })
+
+  // `rows`, not `groups`: a group on this screen is a form group now, and the two would be
+  // one word for a category of tags and for one tag's rule about the form.
+  const rows = categoryOrder(shown.map((tag) => tag.category))
     .map(
       (category) =>
         [
@@ -289,6 +395,18 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
           <span aria-hidden>📚</span>
           Catalogs
         </button>
+        {/* Beside the other two that are about a set of things rather than the row under
+            the pointer. A section is a division of a category, made once and filed into,
+            so it belongs with the controls that are not about any one tag. */}
+        <button
+          type="button"
+          onClick={() => showPanel('sections')}
+          title="The rows the upload form draws under a category, and their order"
+          className={buttonToggle(panel === 'sections')}
+        >
+          <span aria-hidden>🧱</span>
+          Sections
+        </button>
         {/* The rules are written one tag at a time, on the panel a row opens — which is
             the right place to write one and the wrong place to see what they add up to,
             since an implication chains through tags that are rows of their own. This is
@@ -341,10 +459,20 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
       </div>
 
 
-      {panel === 'create' && (
-        <CreateTag subcategoriesIn={subcategoriesIn} onDone={() => void refresh()} />
-      )}
+      {panel === 'create' && <CreateTag sectionsIn={sectionsIn} onDone={() => void refresh()} />}
       {panel === 'apply' && <ApplyTag onDone={() => void refresh()} />}
+      {panel === 'sections' && (
+        <FormSectionsPanel
+          category={sectionCategory}
+          onCategory={(next) => {
+            setSectionCategory(next)
+            setPicking(null)
+          }}
+          picking={picking?.into === 'section' ? picking.id : null}
+          onPick={(id) => setPicking(id === null ? null : { into: 'section', id })}
+          onClose={() => showPanel('none')}
+        />
+      )}
       {panel === 'catalogs' && (
         <TagCatalogs
           tags={tags}
@@ -361,42 +489,80 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
           key={editing.id}
           tag={editing}
           onBrowse={onBrowse}
-          subcategoriesIn={subcategoriesIn}
+          sectionsIn={sectionsIn}
           // The rule editor knows about its own two kinds and nothing else; a catalog
           // pick is somebody else's business and reads to it as no pick at all.
-          picking={picking && picking.into !== 'catalog' ? picking.into : null}
+          picking={
+            picking && picking.into !== 'catalog' && picking.into !== 'section'
+              ? picking.into
+              : null
+          }
           onPick={(kind) => setPicking(kind ? { into: kind, tag: editing.name } : null)}
           onClose={() => openTag(null)}
           onDone={() => void refresh()}
         />
       )}
 
+      {loadError && (
+        <p className="rounded-lg border border-[#ff5d5f]/40 bg-[#ff5d5f]/10 px-4 py-3 text-sm text-[#ff5d5f]">
+          {loadError}
+        </p>
+      )}
+
       {tags === null ? (
         <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
-          Loading…
+          {loadError ? 'Nothing to show — 🔄 tries again.' : 'Loading…'}
         </p>
-      ) : groups.length === 0 ? (
+      ) : rows.length === 0 ? (
         <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
           {typed ? `No tag matches “${typed}”.` : 'No tags yet — they are created by uploads.'}
         </p>
       ) : (
-        groups.map(([category, group]) => {
-          // Split the same way the tag picker splits it, because this is where the split is
-          // decided: a subgroup that is a near-duplicate of another, or a tag left out of
-          // the one it belongs to, is only visible with the whole category laid out. A
-          // category with no subgroups renders exactly the one grid it always did.
-          const loose = group.filter((tag) => !tag.category2)
-          const subgroups = subcategoryOrder(group.map((tag) => tag.category2)).map(
-            (name) =>
-              [name, group.filter((tag) => tag.category2 === name)] as [string, Tag[]]
+        // Split the same way the tag form splits it, and from the same values: a section
+        // exists exactly as long as a tag says so, on both screens. This is where the split
+        // is decided, and a section down to one tag, a near-duplicate spelling, or a tag
+        // nobody filed is only visible with the whole category laid out this way.
+        //
+        // Not split by *form group*, though the field is: a group belongs to the tag it
+        // hangs off and is read on that tag's panel, and drawing one tag's rule across
+        // everybody else's rows would be a different claim entirely.
+        rows.map(([category, group]) => {
+          const loose = group.filter((tag) => !tag.form_section)
+          // The form's order, so the two screens read the same way down the page. Empty
+          // sections are left out here and drawn there: the form needs the row to file a
+          // first tag onto, and this screen is a picture of what the board holds.
+          const sections = orderFormSections(
+            (formSections[category] ?? []).map((section) => section.name),
+            group.map((tag) => tag.form_section)
           )
+            .map(
+              (section) =>
+                [section, group.filter((tag) => tag.form_section === section)] as [string, Tag[]]
+            )
+            .filter(([, list]) => list.length > 0)
+
+          const open = isOpen(category)
 
           return (
             <section key={category} className="flex flex-col gap-2">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
-                {categoryLabel(category)} ({group.length})
-              </h2>
-              {loose.length > 0 && (
+              {/* The heading is the control. A chevron beside a label that was already the
+                  obvious thing to press would be a second, smaller target for the same
+                  gesture — the whole line is the row, the way the drop zone on the upload
+                  form is the whole button. The count is what makes a folded category worth
+                  looking at rather than opening. */}
+              <button
+                type="button"
+                onClick={() => toggle(category)}
+                aria-expanded={open}
+                className="flex min-h-8 items-center gap-1.5 rounded text-left text-xs font-semibold uppercase tracking-wide text-muted transition-colors hover:bg-surface hover:text-foreground"
+              >
+                <span aria-hidden className="w-3">
+                  {open ? '▾' : '▸'}
+                </span>
+                <span className={categoryColor(category)}>{categoryLabel(category)}</span>
+                <span className="tabular-nums">({group.length})</span>
+              </button>
+              {open && loose.length > 0 && (
                 <TagGrid
                   tags={loose}
                   category={category}
@@ -404,33 +570,34 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
                   onSelect={pickTag}
                   picking={picking !== null}
                   picked={picked}
-                  triggerName={triggerName}
+                  inert={inertReason}
                 />
               )}
-              {subgroups.map(([name, list]) => (
-                <div
-                  key={name}
-                  // Inset on the left, and quieter than the category above it — a subgroup
-                  // is a division inside that heading, not a sibling of it, and the grid
-                  // stepping in is what says so at a glance. Only the left: the right edge
-                  // lines up with every other grid on the screen, so the step reads as an
-                  // indent rather than as a narrower table.
-                  className="flex flex-col gap-1 pl-3"
-                >
-                  <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                    {subcategoryLabel(name)} ({list.length})
-                  </h3>
-                  <TagGrid
-                    tags={list}
-                    category={category}
-                    editingId={editing?.id ?? null}
-                    onSelect={pickTag}
-                    picking={picking !== null}
-                    picked={picked}
-                    triggerName={triggerName}
-                  />
-                </div>
-              ))}
+              {open &&
+                sections.map(([section, list]) => (
+                  <div
+                    key={section}
+                    // Inset on the left, and quieter than the category above it — a section
+                    // is a division inside that heading, not a sibling of it, and the grid
+                    // stepping in is what says so at a glance. Only the left: the right edge
+                    // lines up with every other grid on the screen, so the step reads as an
+                    // indent rather than as a narrower table.
+                    className="flex flex-col gap-1 pl-3"
+                  >
+                    <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                      {formSectionLabel(section)} ({list.length})
+                    </h3>
+                    <TagGrid
+                      tags={list}
+                      category={category}
+                      editingId={editing?.id ?? null}
+                      onSelect={pickTag}
+                      picking={picking !== null}
+                      picked={picked}
+                      inert={inertReason}
+                    />
+                  </div>
+                ))}
             </section>
           )
         })
@@ -453,34 +620,39 @@ function TagGrid({
   onSelect,
   picking = false,
   picked,
-  triggerName = null,
+  inert,
 }: {
   tags: Tag[]
   category: TagCategory
   editingId: number | null
   onSelect: (tag: Tag) => void
-  /** The grid is answering a rule rather than opening a tag — see `pickTag`. */
+  /** The grid is answering a pick rather than opening a tag — see `pickTag`. */
   picking?: boolean
-  /** Names already in the rule being filled in. */
+  /** Names already in whatever is being filled in. */
   picked?: Set<string>
-  /** The tag the rule is about, which cannot be an answer to it. */
-  triggerName?: string | null
+  /**
+   * Why this tag cannot be picked into what is open, or null if it can. A predicate rather
+   * than a name, because the answer differs by what is being filled in — a rule cannot name
+   * the tag it is about, a section cannot wait for a tag it holds — and both are the same
+   * shape on screen: greyed, unclickable, and saying why.
+   */
+  inert?: (tag: Tag) => string | null
 }) {
   return (
     <ul className="grid grid-cols-2 overflow-hidden rounded-lg border border-border sm:grid-cols-3 lg:grid-cols-4">
       {tags.map((tag) => {
         const chosen = picked?.has(tag.name) ?? false
-        const trigger = picking && tag.name === triggerName
+        const refused = picking ? (inert?.(tag) ?? null) : null
 
         return (
           <li key={tag.id} className="-mb-px -mr-px border-b border-r border-border">
             <button
               type="button"
               onClick={() => onSelect(tag)}
-              disabled={trigger}
+              disabled={refused !== null}
               title={
-                trigger
-                  ? `${tagLabel(tag.name)} is the tag this rule is about`
+                refused !== null
+                  ? refused
                   : picking
                     ? chosen
                       ? `Take ${tagLabel(tag.name)} back off the rule`
@@ -504,7 +676,7 @@ function TagGrid({
                   picking && chosen ? 'text-accent' : 'text-muted'
                 }`}
               >
-                {picking ? (chosen ? '✓' : trigger ? '' : '＋') : tag.post_count}
+                {picking ? (chosen ? '✓' : refused !== null ? '' : '＋') : tag.post_count}
               </span>
             </button>
           </li>
@@ -564,48 +736,55 @@ function CategoryField({
 }
 
 /**
- * The subgroup, inside the category — `tags.category2`, whose migration has why it exists.
+ * Which row of the desktop tag form a tag is offered on, inside its category —
+ * `tags.form_section_id`, whose migration has why it is an id.
  *
- * Free text where the category is a menu, because there is no list to choose from: a
- * subgroup is one board's own habit about its own vocabulary, and a fixed list of them
- * would be a code change every time somebody had a new one. What keeps it from being a
- * near-duplicate factory is the datalist: the subgroups this category already uses are
- * offered as you type, so "dress color" is picked rather than typed a second way.
+ * A menu, and it has been three things now. A fixed list in code was wrong because how a
+ * category wants dividing is a judgement about one board's own vocabulary. Free text with a
+ * datalist was right about that and wrong about everything else: no order, no row until a
+ * tag was already on it, and a near-duplicate the first time somebody typed `hair colour`.
+ * The sections are rows on the board now, made and ordered on the 🧱 Sections panel, so this
+ * is a menu again — and this time the list it offers is one you wrote.
  *
- * Empty means none, which is what most tags are. Nothing validates the text — it is
- * lowercased and space-collapsed on the way in (`normalizeSubcategory`) and drawn as a
- * heading in the desktop picker, and nowhere else at all.
+ * Empty means no row at all, which is not the same as harmless: a tag on no section is not
+ * offered anywhere in the form. That is the point of it — an unfiled tag is one the
+ * vocabulary has not decided about — and it is why this menu says so rather than saying
+ * "none".
+ *
+ * Absent entirely for a category with no sections, rather than drawn empty: a menu whose
+ * only option is "nowhere" is a control that cannot do anything, and its absence says the
+ * same more quietly.
  */
-function SubcategoryField({
+function SectionField({
   value,
   onChange,
   options,
   disabled = false,
 }: {
-  value: string
-  onChange: (next: string) => void
-  options: string[]
+  value: number | null
+  onChange: (next: number | null) => void
+  options: FormSection[]
   disabled?: boolean
 }) {
-  const listId = useId()
+  if (options.length === 0) return null
 
   return (
-    <>
-      <input
-        list={listId}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        disabled={disabled}
-        placeholder="dress color"
-        spellCheck={false}
-        className={`${FIELD} min-w-32 flex-1`}
-      />
-      <datalist id={listId}>
-        {options.map((option) => (
-          <option key={option} value={option} />
-        ))}
-      </datalist>
-    </>
+    <select
+      // A section belonging to the category as *currently selected*, not as stored: moving
+      // a tag to another category takes its section off, so the menu is about where the tag
+      // is going.
+      value={options.some((section) => section.id === value) ? String(value) : ''}
+      onChange={(event) => onChange(event.target.value === '' ? null : Number(event.target.value))}
+      disabled={disabled}
+      className={`${FIELD} min-w-32 flex-1`}
+    >
+      <option value="">On no row — not offered</option>
+      {options.map((section) => (
+        <option key={section.id} value={section.id}>
+          {formSectionLabel(section.name)}
+        </option>
+      ))}
+    </select>
   )
 }
 
@@ -616,21 +795,21 @@ function SubcategoryField({
  * on the way past. So the order is always this one, and the tag starts on no posts.
  */
 function CreateTag({
-  subcategoriesIn,
+  sectionsIn,
   onDone,
 }: {
-  subcategoriesIn: (category: TagCategory) => string[]
+  sectionsIn: (category: TagCategory) => FormSection[]
   onDone: () => void
 }) {
   const [name, setName] = useState('')
   const [category, setCategory] = useState<TagCategory>('general')
-  const [subcategory, setSubcategory] = useState('')
+  const [section, setSection] = useState<number | null>(null)
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
 
   async function submit() {
     setBusy(true)
-    const result = await window.api.createTag(name, category, subcategory)
+    const result = await window.api.createTag(name, category, section)
     setBusy(false)
     if (result.ok) {
       setMessage({ ok: true, text: `Created ${tagLabel(result.name)}.` })
@@ -651,14 +830,21 @@ function CreateTag({
           spellCheck={false}
           className={`${FIELD} min-w-40 flex-1 font-mono`}
         />
-        <CategoryField value={category} onChange={setCategory} />
-        {/* Kept when the name is cleared below: naming five underwear tags in a row is what
-            this form is for, and re-typing the subgroup each time is the thing it saves. */}
-        <SubcategoryField
-          value={subcategory}
-          onChange={setSubcategory}
-          options={subcategoriesIn(category)}
+        {/* Both kept when the name is cleared below: naming five underwear tags in a row is
+            what this form is for, and re-picking the category and the row each time is what
+            it saves. */}
+        {/* Changing the category drops the row with it. A section belongs to one category —
+            `(category, name)` is unique on `tag_form_section` — so an id picked under
+            Appearance means nothing under General, and the menu only *hid* the stale value
+            while the state still held it, ready to be written by Create. */}
+        <CategoryField
+          value={category}
+          onChange={(next) => {
+            setCategory(next)
+            setSection(null)
+          }}
         />
+        <SectionField value={section} onChange={setSection} options={sectionsIn(category)} />
         <button
           type="button"
           onClick={() => void submit()}
@@ -751,7 +937,7 @@ function ApplyTag({ onDone }: { onDone: () => void }) {
 function EditTag({
   tag,
   onBrowse,
-  subcategoriesIn,
+  sectionsIn,
   picking,
   onPick,
   onClose,
@@ -759,7 +945,7 @@ function EditTag({
 }: {
   tag: Tag
   onBrowse: (query: string) => void
-  subcategoriesIn: (category: TagCategory) => string[]
+  sectionsIn: (category: TagCategory) => FormSection[]
   picking: RuleKind | null
   onPick: (kind: RuleKind | null) => void
   onClose: () => void
@@ -767,7 +953,7 @@ function EditTag({
 }) {
   const [name, setName] = useState(tag.name)
   const [category, setCategory] = useState<TagCategory>(tag.category)
-  const [subcategory, setSubcategory] = useState(tag.category2 ?? '')
+  const [section, setSection] = useState<number | null>(tag.form_section_id ?? null)
   const [mark, setMark] = useState(tag.mark ?? '')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -805,11 +991,14 @@ function EditTag({
         return
       }
     }
-    if (subcategory !== (tag.category2 ?? '')) {
-      const regrouped = await window.api.setTagSubcategory(tag.id, subcategory)
-      if (!regrouped.ok) {
+    // After the category, never before: `setTagCategory` clears the section, a section
+    // belonging to the category it is under. Written whenever either has moved, since a
+    // category change has just cleared whatever was stored.
+    if (section !== (tag.form_section_id ?? null) || category !== tag.category) {
+      const moved = await window.api.setTagFormSection(tag.id, section)
+      if (!moved.ok) {
         setBusy(false)
-        setError(regrouped.error)
+        setError(moved.error)
         return
       }
     }
@@ -840,7 +1029,7 @@ function EditTag({
   const changed =
     name !== tag.name ||
     category !== tag.category ||
-    subcategory !== (tag.category2 ?? '') ||
+    section !== (tag.form_section_id ?? null) ||
     mark !== (tag.mark ?? '')
 
   return (
@@ -917,13 +1106,24 @@ function EditTag({
           spellCheck={false}
           className={`${FIELD} min-w-40 flex-1 font-mono`}
         />
-        <CategoryField value={category} onChange={setCategory} disabled={busy} />
+        {/* Changing the category drops the row with it, for the reason `setTagCategory`
+            clears the column: a section belongs to one category, so an id picked under the
+            old one would be written back under the new one and file the tag onto a row
+            nothing draws. The menu hid it; the state kept it. */}
+        <CategoryField
+          value={category}
+          onChange={(next) => {
+            setCategory(next)
+            setSection(null)
+          }}
+          disabled={busy}
+        />
         {/* Offered from the category as currently selected, not as stored: moving a tag to
-            another category and into one of *that* category's subgroups is one edit. */}
-        <SubcategoryField
-          value={subcategory}
-          onChange={setSubcategory}
-          options={subcategoriesIn(category)}
+            another category and onto one of *that* category's rows is one edit. */}
+        <SectionField
+          value={section}
+          onChange={setSection}
+          options={sectionsIn(category)}
           disabled={busy}
         />
         <button

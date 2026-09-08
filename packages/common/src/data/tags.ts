@@ -1,13 +1,6 @@
 import type { BooruClient } from '@common/supabase/types'
 import { syncTagPostCounts } from '@common/data/counters'
-import {
-  markColor,
-  normalizeSubcategory,
-  parseTagInput,
-  type Subcategory,
-  type Tag,
-  type TagCategory,
-} from '@common/tags'
+import { markColor, parseTagInput, type Tag, type TagCategory } from '@common/tags'
 
 /**
  * Tag management: create, apply-by-tag, rename, recategorize, delete.
@@ -122,14 +115,14 @@ export async function createTag(
   client: BooruClient,
   rawName: string,
   category: TagCategory,
-  rawSubcategory = ''
+  sectionId: number | null = null
 ): Promise<TagOutcome<{ name: string }>> {
   const parsed = readTagName(rawName)
   if ('error' in parsed) return { ok: false, error: parsed.error }
 
   const { error } = await client
     .from('tags')
-    .insert({ name: parsed.name, category, category2: normalizeSubcategory(rawSubcategory) })
+    .insert({ name: parsed.name, category, form_section_id: sectionId })
   if (error) {
     if (error.code === UNIQUE_VIOLATION) return { ok: false, error: `${parsed.name} already exists.` }
     return { ok: false, error: `Could not create the tag: ${error.message}` }
@@ -168,39 +161,45 @@ export async function renameTag(
  * Recategorize one tag. Category is cosmetic — it only drives the colour and the
  * grouping — so the tag's name, id and post links are untouched and nothing has to be
  * recounted.
+ *
+ * **The form section goes with it.** A section belongs to a category — `(category, name)`
+ * is unique on `tag_form_section` — so the row a tag was drawn on does not exist in the
+ * category it is moving to. The desktop's edit panel sets both in one save, and this
+ * clearing is what makes the order of those two writes not matter: a category change never
+ * leaves a tag pointing at a row drawn under some other heading.
  */
 export async function setTagCategory(
   client: BooruClient,
   id: number,
   category: TagCategory
 ): Promise<TagOutcome> {
-  const { error } = await client.from('tags').update({ category }).eq('id', id)
+  const { error } = await client
+    .from('tags')
+    .update({ category, form_section_id: null })
+    .eq('id', id)
   if (error) return { ok: false, error: `Update failed: ${error.message}` }
   return { ok: true }
 }
 
 /**
- * Move a tag into a subgroup of its category, or out of one — `tags.category2`.
+ * Move a tag onto another row of the desktop tag form, or off every row with null —
+ * `tags.form_section_id`.
  *
- * Cosmetic in exactly the way the category is, and a little less than that: nothing but
- * the desktop app's tag picker reads this column, so a wrong value costs a block heading
- * and never a post, a link or a search. It is normalized rather than validated for the
- * same reason — there is no list of subgroups to be outside of, only a spelling to keep
- * to, which is what `normalizeSubcategory` is.
+ * An id, not a name. The section it points at can be renamed afterwards and this tag
+ * follows, which is the whole reason that table has ids; a name here would have been the
+ * tag's own copy of a spelling, going stale the moment the row it names is corrected.
+ *
+ * Nothing is validated beyond what the foreign key does: an id that is not a section is
+ * refused by the database rather than checked twice.
  */
-export async function setTagSubcategory(
+export async function setTagFormSection(
   client: BooruClient,
   id: number,
-  rawSubcategory: string
-): Promise<TagOutcome<{ category2: Subcategory }>> {
-  if (rawSubcategory.length > 64) {
-    return { ok: false, error: 'That subgroup name is too long — 64 characters at most.' }
-  }
-
-  const category2 = normalizeSubcategory(rawSubcategory)
-  const { error } = await client.from('tags').update({ category2 }).eq('id', id)
+  sectionId: number | null
+): Promise<TagOutcome> {
+  const { error } = await client.from('tags').update({ form_section_id: sectionId }).eq('id', id)
   if (error) return { ok: false, error: `Update failed: ${error.message}` }
-  return { ok: true, category2 }
+  return { ok: true }
 }
 
 /**
@@ -209,8 +208,8 @@ export async function setTagSubcategory(
  *
  * The most cosmetic write there is: it moves no post, no link and no count, and a wrong
  * value costs one mark at the front of a label. Its own channel rather than a field on
- * the category or the rename, for the same reason the subgroup has one — what a tag *is*,
- * where it is drawn and what it is drawn with are three separate decisions about the row.
+ * the category or the rename — what a tag *is* and what it is drawn with are two separate
+ * decisions about the row.
  */
 export async function setTagMark(
   client: BooruClient,

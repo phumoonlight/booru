@@ -19,10 +19,22 @@ export async function getTagById(id: number): Promise<Tag | null> {
   return tags.getTagById(createAnonClient(), id)
 }
 
-/** All tags, most used first — backs the /tags page. Query in shared.ts; the desktop
- *  app's Tags screen runs the same one. */
+/**
+ * All tags, most used first — backs the /tags page. Query in shared.ts; the desktop app's
+ * Tags screen runs the same one.
+ *
+ * `listTags` throws on a refused read, which is what the desktop wants: there it is the
+ * vocabulary, and an empty list said in its place was a bug that hid for a day. A page is
+ * the other case — a visitor gets more from an index that came up short than from a 500 —
+ * so the throw is caught here and left in the server log, where the truth belongs.
+ */
 export async function getTags(limit = 200): Promise<Tag[]> {
-  return listTags(createAnonClient(), limit)
+  try {
+    return await listTags(createAnonClient(), limit)
+  } catch (error) {
+    console.error('Could not read the tags:', error instanceof Error ? error.message : error)
+    return []
+  }
 }
 
 /** Groups tags into display order: the five known categories, then any others A–Z. */

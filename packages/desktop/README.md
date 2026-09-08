@@ -57,7 +57,7 @@ website treats the site URL as optional because Vercel supplies a deployment URL
 back on; nothing here does, and it is how a finished post gets opened on the board.
 
 Which board a copy talks to is therefore decided when it is built, not by whoever runs
-it. There is no setup screen and no login: the app opens on the upload queue, and
+it. There is no setup screen and no login: the app opens on the upload form, and
 Settings shows the project it was built for as a readout. Earlier versions asked for
 those four values on first launch and kept them in `save.json`, which put a service-role
 key on every machine that ran the app — a copy this version deletes on startup if it
@@ -84,11 +84,13 @@ for your own board. Treat the installer accordingly: anyone who has it can write
 |---|---|
 | `src/main` | the process that does the work — clients, config, staging, the IPC handlers |
 | `src/preload` | the bridge; the only thing the window can reach |
-| `src/renderer` | the React window: the upload queue, browse, tags (and their rules), settings, about |
+| `src/renderer` | the React window: the upload form, browse, tags (and their rules), settings, about |
 | `src/shared/api.ts` | the types across the bridge, imported by all three |
 | `src/shared/implications.ts` | rules the app applies: what they are, and the pure code that applies them |
 | `src/shared/recommendations.ts` | rules the app only offers, same shape |
+
 | `src/main/rules.ts` | reads and writes both sets on the board — `@common/data/rules.ts` underneath |
+| `src/main/form-sections.ts` | the rows the tag form draws under a category, their order, and what each waits for |
 | `src/shared/catalogs.ts` | named sets of tags, applied when asked for by name |
 
 The renderer holds no keys, no file access and no network. Every capability it has is one

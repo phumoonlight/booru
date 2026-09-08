@@ -19,7 +19,7 @@ import { boardClient } from './supabase'
  *
  * Main still only stores them. Applying an implication and offering a recommendation are
  * the tag field's job, in the window — `shared/implications.ts` and
- * `shared/recommendations.ts` are those two, unchanged by the move.
+ * `shared/recommendations.ts` are those two, neither of which main ever runs.
  */
 
 /** An unreachable board is no rules, never a thrown channel — the window carries on. */

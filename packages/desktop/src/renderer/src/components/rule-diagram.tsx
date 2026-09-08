@@ -73,10 +73,9 @@ export function RuleDiagram({ onClose, tags }: { onClose: () => void; tags: Tag[
         </div>
 
         <p className="max-w-2xl text-sm text-muted">
-          Everything the rules on this machine would add to a post. A tag is written where
-          it is typed; each step in is what that step drags in with it. Edit any of it by
-          clicking the tag on the Tags screen — nothing here is uploaded, and the board has
-          no rules of its own.
+          Every rule on the board, drawn together: what a tag drags onto a post, and what
+          it offers. A tag is written where it is typed, and each step in is what that step
+          brings. Edit any of it by clicking the tag on the Tags screen.
         </p>
 
         <section className="flex flex-col gap-3">
@@ -135,6 +134,7 @@ export function RuleDiagram({ onClose, tags }: { onClose: () => void; tags: Tag[
             </ul>
           )}
         </section>
+
       </div>
     </div>
   )

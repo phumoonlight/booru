@@ -3,15 +3,17 @@ import {
   categoryColor,
   categoryLabel,
   categoryOrder,
+  formSectionLabel,
+
   markColor,
-  subcategoryLabel,
-  subcategoryOrder,
   type Tag,
 } from '@common/tags'
 import { tagLabel } from '@common/search'
 import { impliedTags, type ImplicationRules } from '../../../shared/implications'
 import { recommendedTags } from '../../../shared/recommendations'
 import { useCatalogs } from '../catalogs'
+import { useFormSections } from '../form-sections'
+import type { FormSection } from '@common/data/form-sections'
 import { useImplications } from '../implications'
 import { useRecommendations } from '../recommendations'
 import type { TagSeed } from './tag-seed'
@@ -42,6 +44,58 @@ import type { TagSeed } from './tag-seed'
  * one of those that can happen from here.
  */
 let index: Tag[] | null = null
+
+/**
+ * The categories drawn in the right-hand column of the field.
+ *
+ * Named rather than left to the layout, and the names are a judgement about *how much work
+ * each holds* rather than about what kind of thing it is. These are the answers that come
+ * from looking once — what it is from, who is in it, what they are doing, how explicit it
+ * is, whatever else it is of, and the notes about the file — each of them a tag or two,
+ * decided and done.
+ *
+ * The left is `appearance`, the long sectioned half you work down a row at a time, with
+ * `artist` above it. Splitting them this way is what keeps the two columns roughly the same
+ * height while a post is being tagged, rather than a full column and an empty one.
+ *
+ * A category outside `TAG_CATEGORIES` — one retired by a re-cut and not yet re-filed — lands
+ * on the left, which is as good a place as any and is visibly not where you expected it.
+ */
+/**
+ * How many tags a row needs before its picker offers a search box. Below it the whole row
+ * is on screen already and a field would be one more thing between you and the chips.
+ */
+const SEARCH_FROM = 10
+
+const RIGHT_COLUMN = new Set([
+  'copyright',
+  'character',
+  'activity',
+  'sexual',
+  'general',
+  'meta',
+])
+
+/**
+ * Whether a section's condition is met by the tags on the post.
+ *
+ * A section with no dependencies has no condition and is always drawn, which is most of
+ * them — `hair color` is not about any one series. One with dependencies waits: `any` needs
+ * one of them on the post, `all` needs every one.
+ *
+ * This replaced two things at once. A **form group** (`tag_rules` kind 2) hid tags *inside*
+ * a picker, so the row was still drawn with a ＋ that opened onto nothing and could not say
+ * why. And Character used to match its sections against the post's copyright tags by name —
+ * `blue_archive` opening `blue archive` — which was exactly one dependency, in `any` mode,
+ * hardcoded for one pair of categories. Both are this now, written on the row they govern
+ * and visible on the Sections panel.
+ */
+function dependenciesMet(section: FormSection, have: Set<string>): boolean {
+  if (section.deps.length === 0) return true
+  return section.depsMode === 'all'
+    ? section.deps.every((name) => have.has(name))
+    : section.deps.some((name) => have.has(name))
+}
 let inflight: Promise<void> | null = null
 const listeners = new Set<() => void>()
 
@@ -131,10 +185,14 @@ export function CategoryTagField({
    */
   catalogs?: boolean
 }) {
-  const [adding, setAdding] = useState<string | null>(null)
+  // Which row's picker is open, or null. A row is a category *and* a section now, so the
+  // two together are what identifies one — a plain category would open Appearance's own
+  // picker and every one of its sections' at once.
+  const [adding, setAdding] = useState<{ category: string; section: string | null } | null>(null)
   const all = useTagIndex()
   const rules = useImplications()
   const recommendations = useRecommendations()
+  const formSections = useFormSections()
 
   const names = value.map((tag) => tag.name)
   const rows = categoryOrder(value.map((tag) => tag.category))
@@ -158,10 +216,34 @@ export function CategoryTagField({
   const markOf = (name: string): string | null =>
     (all ?? []).find((tag) => tag.name === name)?.mark ?? null
 
+  /**
+   * Which row a chosen tag is drawn on inside its category, or null for the category's own.
+   * Read off the board's index, like the mark, since a `TagSeed` is a name and a category.
+   *
+   * Nothing can go wrong here the way it could when the sections were a fixed list: the
+   * rows are derived from these same values, so every stored section has a row by
+   * construction and no chip can fall between two of them.
+   */
+  const slotOf = (name: string): string | null =>
+    (all ?? []).find((tag) => tag.name === name)?.form_section ?? null
+
   const add = (tag: TagSeed) => {
     if (value.some((t) => t.name === tag.name)) return
     onChange([...value, tag])
   }
+
+  /** Takes one off the post. A row draws a slice of `value`, so removing is the whole
+   *  list's business and not the row's. */
+  const remove = (name: string) => onChange(value.filter((tag) => tag.name !== name))
+
+  /**
+   * What a section's dependencies are tested against: everything the post carries, implied
+   * tags included. A rule that put `blue_archive` on is as good a reason to open its row as
+   * typing it was — the person tagging cannot tell which of the two happened without
+   * reading the implied line, and should not have to.
+   */
+  const satisfied = new Set([...names, ...implied])
+
 
   /**
    * A whole catalog at once. The names arrive without categories — that is `TagCatalogs`'s
@@ -184,6 +266,119 @@ export function CategoryTagField({
     onChange(next)
   }
 
+  /** One category: its heading, and a row per section it has. Named so both columns
+   *  can draw one — which column a category is in is a decision, not a flow. */
+  const renderCategory = (category: string) => {
+    // The rows this category offers, one per section it has — read off the board's
+    // whole index rather than off the tags on this post, since a row has to be there
+    // before anything is on it. Naming a *new* section is the Tags screen's job, which
+    // is the one thing this cannot show.
+    // The board's own rows, in the order it put them in — including one nothing is filed
+    // under yet, since a row's ＋ is how the first tag gets onto it. A section is drawn when
+    // its **dependencies are met**: none, and it is always there; some, and it waits for
+    // them. `hair color` is always drawn, `blue archive` when `blue_archive` is on the post.
+    const listed = formSections[category] ?? []
+
+    // A section the post already has a tag on is drawn whatever its condition says — the
+    // same carve-out the unfiled chips get, and for the same reason: a row that vanishes
+    // takes a tag you can no longer see or take off, and the post editor would save it
+    // straight back.
+    const onPost = new Set(
+      value.filter((tag) => tag.category === category).map((tag) => slotOf(tag.name))
+    )
+
+    const shown = listed
+      .filter((section) => dependenciesMet(section, satisfied) || onPost.has(section.name))
+      .map((section) => section.name)
+
+    // Anything a tag names that the board's list has never heard of — a row deleted while
+    // tags still pointed at it. Drawn at the end rather than lost, which is the same
+    // courtesy `categoryOrder` does an unknown category.
+    //
+    // Checked against the **whole** list, not against `shown`. This went through
+    // `orderFormSections` once, which appends whatever is missing from the list it is
+    // handed — so every section a tag was filed on came straight back after being hidden,
+    // and a dependency did nothing at all on the only rows that ever have tags. A row that
+    // is hidden and a row that no longer exists are not the same thing, and only the list
+    // knows which is which.
+    const known = new Set(listed.map((section) => section.name))
+    const unlisted = [
+      ...new Set(
+        (all ?? [])
+          .filter((tag) => tag.category === category)
+          .map((tag) => tag.form_section)
+          .filter((name): name is string => !!name && !known.has(name))
+      ),
+    ].sort()
+
+    const sections = [...shown, ...unlisted]
+
+    // **A tag with no section is not offered.** The category's own row lost its ＋: a
+    // row is a section now, and a category is the heading over its sections. What that
+    // costs is that a tag nobody has filed cannot be picked, which is the point — an
+    // unfiled tag is one the vocabulary has not decided about yet, and the Tags screen
+    // is where that is decided.
+    //
+    // It is still *shown* if the post already carries it. Not being offered is a
+    // statement about the picker; a chip that is on the post and drawn nowhere would be
+    // a tag you cannot see and cannot take off, which the post editor would then save
+    // straight back.
+    const orphans = value.filter(
+      (tag) => tag.category === category && slotOf(tag.name) === null
+    )
+
+    // A category with no sections and nothing unfiled on the post is not a heading over
+    // anything, so it is not drawn at all. Empty *sections* cannot happen — one exists
+    // only while a tag names it.
+    if (sections.length === 0 && orphans.length === 0) return null
+
+    return (
+      <div key={category} className="flex flex-col">
+        {/* The category itself: a heading, in its own colour, and whatever the post
+            carries that nothing has filed. No ＋ — there is nothing for it to add to. */}
+        <SectionRow
+          category={category}
+          section={null}
+          tags={orphans}
+          onRemove={remove}
+          markOf={markOf}
+          disabled={disabled}
+        />
+        {sections.map((section) => (
+          <SectionRow
+            key={section}
+            category={category}
+            section={section}
+            tags={value.filter(
+              (tag) => tag.category === category && slotOf(tag.name) === section
+            )}
+            onRemove={remove}
+            markOf={markOf}
+            disabled={disabled}
+            open={adding?.category === category && adding.section === section}
+            onToggle={() =>
+              setAdding((current) =>
+                current?.category === category && current.section === section
+                  ? null
+                  : { category, section }
+              )
+            }
+            picker={
+              <TagPicker
+                category={category}
+                section={section}
+                all={all}
+                exclude={names}
+                onPick={add}
+                onClose={() => setAdding(null)}
+              />
+            }
+          />
+        ))}
+      </div>
+    )
+  }
+
   return (
     <section className={`flex flex-col gap-1 ${disabled ? 'opacity-50' : ''}`}>
       <div className="flex min-h-7 items-center gap-2">
@@ -194,73 +389,41 @@ export function CategoryTagField({
         {actions}
       </div>
 
-      {rows.map((category) => (
-        <div key={category} className="flex flex-col">
-          <div className="flex items-baseline gap-1 py-0.5">
-            <span className="w-32 shrink-0 text-xs uppercase tracking-wide text-muted">
-              {categoryLabel(category)}
-            </span>
-            {/* Its own wrapping box, so a second line of tags starts where the first one
-                did rather than under the label. Baseline against the label, not centre:
-                what should line up is the two lots of text, and a chip is taller than its
-                own text by the remove button inside it. */}
-            <div className="flex flex-1 flex-wrap items-center gap-1">
-              {value
-                .filter((tag) => tag.category === category)
-                .map((tag) => (
-                  <span
-                    key={tag.name}
-                    // A bordered pill, the way the tags offered in the picker are: the
-                    // chosen ones sat on a fill with no edge, so a row of them read as one
-                    // band of surface rather than as several tags. Rounded fully to keep
-                    // the two apart all the same — offered is square, chosen is a pill.
-                    className={`flex items-center gap-1.5 rounded-full border border-border bg-surface pl-2.5 font-mono text-xs ${categoryColor(category)}`}
-                  >
-                    <TagMark mark={markOf(tag.name)} />
-                    {tagLabel(tag.name)}
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => onChange(value.filter((t) => t.name !== tag.name))}
-                      aria-label={`Remove ${tagLabel(tag.name)}`}
-                      className="flex min-h-7 items-center rounded-r-full pr-2.5 pl-1 text-muted hover:text-[#ff5d5f]"
-                    >
-                      ✕
-                    </button>
-                  </span>
-                ))}
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => setAdding(adding === category ? null : category)}
-                aria-label={`Add a ${categoryLabel(category)} tag`}
-                title={`Add a ${categoryLabel(category)} tag`}
-                className={`flex min-h-7 items-center rounded-full border px-2 text-xs transition-colors ${
-                  adding === category
-                    ? 'border-accent text-accent'
-                    : 'border-border text-muted hover:border-accent hover:text-foreground'
-                }`}
-              >
-                <span aria-hidden>➕</span>
-              </button>
-            </div>
-          </div>
+      {/*
+        Two columns, and which category goes in which is *named* rather than left to the
+        flow. The right-hand three are what a post is *of* — the series, who is in it, and
+        the notes about the file — and they are answered once, from the picture, usually
+        before anything else. The left is what is in the picture, which is the long half and
+        the one you work down. Splitting them by side is the difference between a form you
+        read top to bottom and one you fill in two passes, which is how tagging actually
+        goes.
 
-          {/* Left open on purpose: tagging is done in runs — a post gets three colours or
-              four pieces of clothing at once — and a picker that closed on each pick
-              charged a click to reopen for every tag after the first. Close and Escape are
-              the way out. */}
-          {adding === category && (
-            <TagPicker
-              category={category}
-              all={all}
-              exclude={names}
-              onPick={add}
-              onClose={() => setAdding(null)}
-            />
-          )}
+        A grid of two explicit columns rather than a flowing one: CSS columns and
+        `grid-flow-row` both decide sides by height, so a category would change columns the
+        moment a picker opened — the one thing here that changes height, and the moment you
+        are looking at it. `items-start` so a short column keeps its own height.
+      */}
+      <div className="grid items-start gap-x-6 sm:grid-cols-2">
+        <div className="flex flex-col">
+          {rows.filter((category) => !RIGHT_COLUMN.has(category)).map(renderCategory)}
         </div>
-      ))}
+        <div className="flex flex-col">
+          {rows.filter((category) => RIGHT_COLUMN.has(category)).map(renderCategory)}
+        </div>
+      </div>
+
+      {/* A board with no rows at all can offer nothing, since a category no longer has a ＋
+          of its own — which is a blank form and looks like a broken one. Said once, rather
+          than as an empty heading per category.
+          
+          Tested on the *sections*, not on whether any tag carries one: a row named and not
+          yet filled is exactly the state this notice must not appear in, and it is the
+          ordinary first step now that a section is made before anything goes on it. */}
+      {all !== null && Object.values(formSections).every((rows) => rows.length === 0) && (
+        <p className="py-2 text-xs text-muted">
+          No form rows yet — make one with 🧱 Sections on the Tags screen, then put tags on it.
+        </p>
+      )}
 
       {/*
         What the rules add, outside the rows on purpose: among them, a tag nobody chose
@@ -274,7 +437,7 @@ export function CategoryTagField({
           {/* Accent, where every category label is grey: these two rows are the only ones
               on the field that something other than you put there, and a rule that goes
               unnoticed is a rule you stop trusting. */}
-          <span className="w-32 shrink-0 text-xs font-semibold uppercase tracking-wide text-accent">
+          <span className="w-50 shrink-0 text-xs font-semibold uppercase tracking-wide text-accent">
             Implied
           </span>
           <div className="flex flex-1 flex-wrap items-baseline gap-1">
@@ -298,7 +461,7 @@ export function CategoryTagField({
       */}
       {offered.length > 0 && (
         <div className="flex items-baseline gap-1 pt-1">
-          <span className="w-32 shrink-0 text-xs font-semibold uppercase tracking-wide text-accent">
+          <span className="w-50 shrink-0 text-xs font-semibold uppercase tracking-wide text-accent">
             Recommended
           </span>
           <div className="flex flex-1 flex-wrap items-baseline gap-1">
@@ -318,6 +481,129 @@ export function CategoryTagField({
         </div>
       )}
     </section>
+  )
+}
+
+/**
+ * One row of the field: a label, the tags on it, and — for a section — a ＋ and the picker
+ * it opens.
+ *
+ * A row is a **form section**, and the category above them is a heading. The website has no
+ * such division and never will: it shows the category, which is what a tag *is*. This is
+ * where your hand goes, and a single Appearance row holding four kinds of thing is a row
+ * you have to read before you can aim at it. `tags.form_section` has the whole argument.
+ *
+ * **The category row cannot add.** It carries the colour, the name, and any tag the post
+ * already has that no section claims; its ＋ went with the decision that a tag is offered
+ * through its section or not at all. A tag nobody has filed is one the vocabulary has not
+ * decided about, and the Tags screen is where that is decided — not here, with a picture in
+ * front of you and a post half tagged.
+ */
+function SectionRow({
+  category,
+  section,
+  tags,
+  onRemove,
+  markOf,
+  disabled,
+  open = false,
+  onToggle,
+  picker,
+}: {
+  category: string
+  /** null is the category's own row: a heading, and whatever is on the post unfiled. */
+  section: string | null
+  /** The tags to draw here, already narrowed to this row by the caller. */
+  tags: TagSeed[]
+  /** Takes one off the post — the whole post, not just this row, which is the caller's. */
+  onRemove: (name: string) => void
+  markOf: (name: string) => string | null
+  disabled: boolean
+  open?: boolean
+  onToggle?: () => void
+  picker?: React.ReactNode
+}) {
+  const label = section === null ? categoryLabel(category) : formSectionLabel(section)
+
+  return (
+    <div className="flex flex-col">
+      <div className="flex items-baseline gap-1 py-0.5">
+        <span
+          // The category leads its group and wears its own colour — the same colour it has
+          // in the grid, the picker and on a post, which is how a category is recognised
+          // everywhere else and was the one thing this label was not saying. A section is a
+          // division inside that heading and steps in to say so, staying grey: it is a
+          // label of the board's own making, not one of the eight the app knows.
+          //
+          // The step is on the label alone — the chips stay in one column down the whole
+          // field, which is what makes it readable as a list of what the post carries
+          // rather than as an outline.
+          //
+          // **One line each.** A section is two or three words of somebody's own making —
+          // `underwear accessories` — and wrapping made a row two lines tall to hold a
+          // label, which put the ＋ beside it in a different place on every row and turned a
+          // column of targets into a ragged one. Wider than it was, so most names fit
+          // outright, and `truncate` with the whole name in `title` for the ones that do
+          // not: a row you aim at is worth more than a label you can read to the end.
+          title={label}
+          className={`w-50 shrink-0 truncate text-xs uppercase tracking-wide ${
+            section === null ? `font-semibold ${categoryColor(category)}` : 'pl-3 text-muted'
+          }`}
+        >
+          {label}
+        </span>
+        {/* Its own wrapping box, so a second line of tags starts where the first one
+            did rather than under the label. Baseline against the label, not centre:
+            what should line up is the two lots of text, and a chip is taller than its
+            own text by the remove button inside it. */}
+        <div className="flex flex-1 flex-wrap items-center gap-1">
+          {tags.map((tag) => (
+            <span
+              key={tag.name}
+              // A bordered pill, the way the tags offered in the picker are: the
+              // chosen ones sat on a fill with no edge, so a row of them read as one
+              // band of surface rather than as several tags. Rounded fully to keep
+              // the two apart all the same — offered is square, chosen is a pill.
+              className={`flex items-center gap-1.5 rounded-full border border-border bg-surface pl-2.5 font-mono text-xs ${categoryColor(category)}`}
+            >
+              <TagMark mark={markOf(tag.name)} />
+              {tagLabel(tag.name)}
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onRemove(tag.name)}
+                aria-label={`Remove ${tagLabel(tag.name)}`}
+                className="flex min-h-7 items-center rounded-r-full pr-2.5 pl-1 text-muted hover:text-[#ff5d5f]"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+          {onToggle && (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={onToggle}
+              aria-label={`Add a ${label} tag`}
+              title={`Add a ${label} tag`}
+              className={`flex min-h-7 items-center rounded-full border px-2 text-xs transition-colors ${
+                open
+                  ? 'border-accent text-accent'
+                  : 'border-border text-muted hover:border-accent hover:text-foreground'
+              }`}
+            >
+              <span aria-hidden>➕</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Left open on purpose: tagging is done in runs — a post gets three colours or
+          four pieces of clothing at once — and a picker that closed on each pick
+          charged a click to reopen for every tag after the first. Close and Escape are
+          the way out. */}
+      {open && picker}
+    </div>
   )
 }
 
@@ -424,11 +710,11 @@ function CatalogMenu({
 /**
  * The tags of one category, to pick from.
  *
- * It filters the index in memory rather than querying per keystroke — that index is
- * `main/tag-cache.ts`, a day-old copy of every name on the board, which is what makes
- * narrowing a category to a substring a local operation instead of a request per letter.
- * Counts are not drawn: they order the list, most used first, and that ordering is the
- * answer to what a number beside each name was being read for.
+ * It reads the index in memory rather than querying — that index is `main/tag-cache.ts`, a
+ * day-old copy of every name on the board, which is what makes narrowing a row to a
+ * substring a local operation instead of a request per letter. Counts are not drawn: they
+ * order the list, most used first, and that ordering is the answer to what a number beside
+ * each name was being read for.
  *
  * **It only offers what the board already has.** Coining a tag from here is gone: a tag
  * created while tagging is created in a hurry, by someone looking at a picture rather than
@@ -436,17 +722,19 @@ function CatalogMenu({
  * `twin_tails`. Naming one is the Tags screen's job, where the whole list is in front of
  * you and a near-duplicate is visible before you make it.
  *
- * **Subgroups split the list up**, each behind a rule and under its own heading —
- * `tags.category2`, set per tag on the Tags screen. Clothes on a real board is two hundred
- * names in one wrapped block whose useful part is the garments; `dress` and `uniform`
- * above a rule, then "dress color", then "underwear", is that block made readable. A tag
- * with no subgroup sits in the first block, which is where most tags belong, and a
- * category with no subgroups at all looks exactly as it did.
+ * **One row's tags, and no filtering beyond that.** The narrowing that used to happen here
+ * happens a level up now: a form section is drawn or not drawn by its own dependencies, so
+ * by the time a picker is open the question "which of these could apply" has already been
+ * answered by the row appearing at all.
  *
- * It used to guess this from the name instead: a tag starting with a colour word went
- * below the rule. That worked for `blue_dress` and for nothing else — `bra` and `panties`
- * belong together and share no prefix, and `blonde_hair` was filed as a variant of `hair`
- * when it is the only spelling that tag has. Grouping is a judgement about the vocabulary,
+ * Two mechanisms lived here and both went. `tags.category2` was a subgroup name typed onto
+ * each tag: it divided a category into fixed blocks and could not shorten one, since every
+ * block was drawn whatever the post was about. **Form groups** (`tag_rules` kind 2) then
+ * hid tags *inside* this list until the tag they hung off was on the post — the right
+ * question, still asked in the wrong place, because the row stayed drawn with a ＋ that
+ * opened onto nothing and could not say why. Before either, the split was *guessed* from
+ * the name: a tag starting with a colour word went below a rule, which worked for
+ * `blue_dress` and for nothing else. What a row holds is a judgement about the vocabulary,
  * so it is stored beside the vocabulary rather than re-derived here — as is the mark in
  * front of a name, which used to be half guessed from the name itself. See `TagMark`.
  */
@@ -492,12 +780,17 @@ export function TagMark({ mark }: { mark: string | null }) {
 
 function TagPicker({
   category,
+  section,
   all,
   exclude,
   onPick,
   onClose,
 }: {
   category: string
+  /** The row this was opened from — null is the category's own, holding what is on no
+   *  section. A picker offers one row's tags and no others: the ＋ you pressed is the
+   *  promise about where what you pick will land. */
+  section: string | null
   all: Tag[] | null
   exclude: string[]
   onPick: (tag: TagSeed) => void
@@ -511,31 +804,39 @@ function TagPicker({
   // same thing said twice; this way the box takes either spelling.
   const typed = filter.trim().toLowerCase().replace(/ /g, '_')
 
-  const { loose, grouped } = useMemo(() => {
+  /** Everything this row could offer, before anything is typed. */
+  const available = useMemo(() => {
     const taken = new Set(exclude)
-    const options = (all ?? [])
-      .filter((tag) => tag.category === category && !taken.has(tag.name))
-      .filter((tag) => (typed ? tag.name.includes(typed) : true))
-      .slice(0, 60)
-
-    // The index's own order — most used first — for the block that is most of the picking.
-    const loose = options.filter((tag) => !tag.category2)
-
-    // A-Z inside a subgroup, where the index order is the wrong one: a subgroup is a set of
-    // answers to one question, and `black_dress`, `blue_dress`, `red_dress` is read across
-    // rather than searched, which popularity order would scramble for no gain.
-    const grouped = subcategoryOrder(options.map((tag) => tag.category2)).map(
-      (name) =>
-        [
-          name,
-          options
-            .filter((tag) => tag.category2 === name)
-            .sort((a, b) => a.name.localeCompare(b.name)),
-        ] as [string, Tag[]]
+    return (all ?? []).filter(
+      (tag) =>
+        tag.category === category &&
+        !taken.has(tag.name) &&
+        // The row's own tags, and no others: the ＋ you pressed is a promise about where
+        // what you pick will land. That is the whole of the filtering now — what a row
+        // *is* is decided by the section's own dependencies, one level up, where the row
+        // either appears or does not.
+        (tag.form_section ?? null) === section
     )
+  }, [all, category, section, exclude])
 
-    return { loose, grouped }
-  }, [all, category, exclude, typed])
+  /**
+   * The box appears only once a row is long enough to be worth narrowing.
+   *
+   * A search field over eight chips is a field you look past on the way to the chips — and
+   * a box that takes focus the moment a picker opens turns a click into a click and a
+   * glance somewhere else. Sections exist to keep these lists short, so on most rows the
+   * whole answer is already on screen and the box would be furniture.
+   *
+   * Counted before the typing, and kept while there is anything in it: a box that vanished
+   * as its own filter narrowed the row past the line would take the word you were still
+   * typing with it.
+   */
+  const searchable = available.length >= SEARCH_FROM || typed !== ''
+
+  const options = useMemo(
+    () => (typed ? available.filter((tag) => tag.name.includes(typed)) : available).slice(0, 60),
+    [available, typed]
+  )
 
   /** A pick clears the filter and hands focus back, so the next tag is typed rather than
    *  clicked into. Leaving the word there would leave the list showing the one thing it
@@ -546,64 +847,61 @@ function TagPicker({
     onPick(tag)
   }
 
+  // Escape closes the picker whether or not there is a box to press it in. It used to be
+  // the input's own handler, which was fine while the input was always there.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   return (
-    <div className="mb-2 ml-32 flex flex-col gap-2 rounded-lg border border-border bg-surface p-2">
+    // Barely indented, on purpose. It used to line up with the chips, at the full 200px of
+    // the label column, which was worth it while a row was the width of the window; in half
+    // of one that is most of the panel spent on alignment, and a panel is not a row — its
+    // own border already says where it starts, and the ＋ that opened it is directly above.
+    <div className="mb-2 ml-4 flex flex-col gap-2 rounded-lg border border-border bg-surface p-2">
       {/* No Close button: the ➕ that opened this closes it, and it is drawn active while
           the picker is up. A second way out earns its place only where the first is hard
           to find, and that one is directly above. Escape works too. */}
-      <input
-        autoFocus
-        ref={inputRef}
-        value={filter}
-        onChange={(event) => setFilter(event.target.value.toLowerCase())}
-        onKeyDown={(event) => event.key === 'Escape' && onClose()}
-        placeholder="blue_hair"
-        spellCheck={false}
-        className="min-h-8 rounded-lg border border-border bg-background px-2 font-mono text-xs outline-none focus:border-accent"
-      />
+      {searchable && (
+        <input
+          autoFocus
+          ref={inputRef}
+          value={filter}
+          onChange={(event) => setFilter(event.target.value.toLowerCase())}
+          placeholder="blue_hair"
+          spellCheck={false}
+          className="min-h-8 rounded-lg border border-border bg-background px-2 font-mono text-xs outline-none focus:border-accent"
+        />
+      )}
 
       {all === null ? (
         <p className="px-1 py-2 text-xs text-muted">Reading tags…</p>
       ) : (
         // Every option on screen at once, however tall that makes the panel. It used to
-        // stop at 12rem and scroll, which put the subgroups — the whole reason the list is
-        // divided — below a fold in a box that was itself inside the page's scroll, so
-        // finding a tag meant a second scrollbar nested in the first one, and the headings
-        // that would have said where to look were the part hidden. What bounds this is the
-        // 60 options above, and the filter box for when that is not enough.
-        <div className="flex flex-col gap-2">
-          {/* The ungrouped tags, under no heading of their own: they are the category, whose
-              name is already on the row that opened this, and a second label would only push
-              the tags a line further down. */}
-          {loose.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {loose.map((tag) => (
-                <TagOption key={tag.id} tag={tag} category={category} onPick={pick} />
-              ))}
-            </div>
-          )}
-
-          {grouped.map(([name, group]) => (
-            // No rule between the blocks: the heading is already the break, and a line
-            // above every one of them turned a picker with several subgroups into a
-            // ruled table of two-word headings.
-            <div key={name} className="flex flex-col gap-1">
-              <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                {subcategoryLabel(name)}
-              </h3>
-              <div className="flex flex-wrap gap-1">
-                {group.map((tag) => (
-                  <TagOption key={tag.id} tag={tag} category={category} onPick={pick} />
-                ))}
-              </div>
-            </div>
+        // stop at 12rem and scroll, which put half the list below a fold in a box that was
+        // itself inside the page's scroll, so finding a tag meant a second scrollbar nested
+        // in the first. What bounds this is the 60 options above, and the filter box —
+        // when there is one — for when that is not enough.
+        //
+        // One flat block, no headings. It was divided by *form group* — a tag hidden until
+        // the tag it hung off was on the post — and that idea moved up a level to the
+        // section's own dependencies, where the whole row appears or does not. A picker
+        // showing a row's tags needs no further division; it is one row's worth of one
+        // category.
+        <div className="flex flex-wrap gap-1">
+          {options.map((tag) => (
+            <TagOption key={tag.id} tag={tag} category={category} onPick={pick} />
           ))}
 
-          {loose.length === 0 && grouped.length === 0 && (
+          {options.length === 0 && (
             <p className="px-1 py-2 text-xs text-muted">
               {typed
-                ? 'No tag in this category matches — new ones are named on the Tags screen.'
-                : 'No tags in this category yet.'}
+                ? 'No tag on this row matches — new ones are named on the Tags screen.'
+                : 'No tags on this row yet.'}
             </p>
           )}
         </div>

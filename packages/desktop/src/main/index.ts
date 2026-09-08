@@ -5,7 +5,7 @@ import { cleanupDownloads } from './download'
 import { dropStoredConfig, dropStoredLogin, dropStoredRules } from './config'
 import { configureDns } from './dns'
 import { openUrl } from './browser'
-import { confirmClose, queueIsWorthKeeping } from './queue-guard'
+import { confirmClose, stagedWorkIsWorthKeeping } from './close-guard'
 import { applyPreferences, loadPreferences } from './preferences'
 
 /**
@@ -63,7 +63,7 @@ function createWindow(): void {
   mainWindow.on('ready-to-show', () => mainWindow?.show())
 
   /**
-   * Closing with images still staged asks first (`main/queue-guard.ts`). The veto has to
+   * Closing with an image still staged asks first (`main/close-guard.ts`). The veto has to
    * be synchronous — a `close` handler that awaits has already let the window go — so the
    * close is cancelled outright and re-issued, as a `destroy`, only if the answer is yes.
    * `asking` is what stops a second × while the dialog is up from stacking another.
@@ -71,7 +71,7 @@ function createWindow(): void {
   let asking = false
   mainWindow.on('close', (event) => {
     const window = mainWindow
-    if (!window || !queueIsWorthKeeping()) return
+    if (!window || !stagedWorkIsWorthKeeping()) return
     event.preventDefault()
     if (asking) return
     asking = true
