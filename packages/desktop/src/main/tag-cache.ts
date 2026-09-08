@@ -1,7 +1,7 @@
 import { listTags } from '@common/data/shared'
 import type { Tag } from '@common/tags'
 import { dropCache, isFresh, readCache, writeCache } from './app-cache'
-import { boardClient } from './supabase'
+import { boardDb } from './db'
 
 /**
  * The board's tag index, kept on disk for a day.
@@ -75,13 +75,13 @@ async function ensureTags(): Promise<CacheFile | null> {
   if (filling) return filling
 
   filling = (async () => {
-    const supabase = boardClient()
+    const db = boardDb()
     // An unconfigured bundle has nothing to read with, and an empty cache would then be
     // written over a good one. The stale copy stands.
-    if (!supabase) return memory ?? null
+    if (!db) return memory ?? null
 
     try {
-      const tags = await listTags(supabase, CACHE_LIMIT)
+      const tags = await listTags(db, CACHE_LIMIT)
       // An empty board is a legitimate answer; an empty *reply* to a board that had tags
       // a minute ago is not, and overwriting on one is how a cache goes blank for a day.
       if (tags.length === 0 && memory && memory.tags.length > 0) return memory

@@ -91,7 +91,7 @@ export function clampEncodePriority(value: unknown): EncodePriority {
 
 /**
  * Sets the main process's scheduling priority — the whole process, because it does
- * nothing else expensive: IPC handlers, some Supabase calls, and the encoding. The
+ * nothing else expensive: IPC handlers, a few queries, and the encoding. The
  * window is a separate renderer process at normal priority, so the UI does not sink
  * with it. Output bytes are identical at every setting: priority is when the work runs,
  * not what it computes.

@@ -1,46 +1,49 @@
 # Database Schema
 
-**Source of truth:** `supabase/migrations/`, applied with `npm run db:push` (or
-`db:reset` / `db:reset:remote`, which also run `supabase/seed.sql`). This document
-describes them; when the two disagree, the migrations win and this file is the bug.
+**Source of truth:** `db/migrations/`, applied with `npm run db:push` (or `db:reset`,
+which drops `public` first) by `scripts/migrate.mjs`. This document describes them; when
+the two disagree, the migrations win and this file is the bug.
 
 **Shape:**
 
 ```
 posts >─── post_tags ───< tags ───< tag_rules >─── tags
 
-tags >─── tag_form_section ───< tag_form_section_dep >─── tags
+tags >─── tag_form_sections ───< tag_form_section_deps >─── tags
 ```
 
 `tags.form_section_id` points at a section (`on delete set null`); a section's dependencies
 point back at tags.
 
 Six tables, no functions, no triggers. There is no `profiles` table: the board has no
-accounts. Every write is made by the desktop app (`packages/desktop`) on a service-role
-client built from a key compiled into its own bundle; the website holds the anon key and
-only reads — and it reads three of the six: `tag_rules`, `tag_form_section` and
-`tag_form_section_dep` are the desktop tag form's, consulted only where a post is tagged.
+accounts. Every write is made by the desktop app (`packages/desktop`) as `booru_app`,
+from a connection string compiled into its own bundle; the website connects as
+`booru_web` and only reads — and it reads three of the six: `tag_rules`,
+`tag_form_sections` and `tag_form_section_deps` are the desktop tag form's, consulted only
+where a post is tagged.
 
-Migration order is foreign-key order: `20260826090000_storage_buckets` →
-`100100_posts` → `100200_tags` → `100300_post_tags` → `20260906140000_tag_rules`. Each
-table's file holds its columns, indexes **and** RLS policies, so nothing about one table
-is spread across migrations. Everything after those is a column or a constraint at a time,
-in its own timestamped file.
+`db/migrations/0001_baseline.sql` is the whole schema in foreign-key order — `posts` →
+`tag_form_sections` → `tags` → `tag_form_section_deps` → `post_tags` → `tag_rules` — ending
+with the role grants. It squashed the sixteen Supabase migrations, which is affordable
+because the board was emptied in the same move; what it drops is the create-then-drop of
+`form_sections` and of `tags.category2`, which described how the schema arrived rather
+than where it is. Everything from here is a new numbered file.
 
 ---
 
 ## `posts`
 
-`supabase/migrations/20260826100100_posts.sql`
+`db/migrations/0001_baseline.sql`
+
 
 | column | type | notes |
 | --- | --- | --- |
-| `id` | `bigint` PK, generated always as identity | booru-style numeric ids; also the sort key and the feed's cursor |
+| `id` | `integer` PK, generated always as identity | booru-style numeric ids; also the sort key and the feed's cursor. `integer`, not `bigint`, because postgres.js hands a `bigint` back as a *string* — see the baseline's note |
 | `file_name` | `text unique not null` | the name both stored files take. Value is the md5 of the uploaded bytes, which is what also makes it the dedup key |
 | `file_ext` | `text not null` | `check in ('jpg','png','gif','webp','avif')` |
 | `file_size` | `int not null` | bytes **as stored**, not as uploaded |
 | `width` / `height` | `int not null` | of the stored image, read by sharp |
-| `rating` | `text not null default 'g'` | `g` \| `s` \| `q` \| `e`. Free-form — no check constraint |
+| `rating` | `text not null default 'g'` | `g` \| `r` — General and R-18. Free-form, no check constraint, which is why collapsing the scale from four tiers needed no migration |
 | `source_url` | `text` | nullable |
 | `view_count` | `int not null default 0` | see [View counting](#view-counting) |
 | `created_at` | `timestamptz not null default now()` | |
@@ -52,9 +55,9 @@ served by the primary key, which Postgres reads backwards as cheaply as forwards
 **Invariants**
 
 - Storage paths are derived, never stored: `posts/{file_name}.{file_ext}` and
-  `post-thumbnails/{file_name}.avif` (`@common/storage`).
+  `thumbs/{file_name}.avif`, both in the one bucket (`@common/storage`).
 - `rating` is stored as one letter and written as a word. A query says
-  `rating:explicit`; `RATING_NAME` in `@common/search` is the only translation, `asRating`
+  `rating:r18`; `RATING_NAME` in `@common/search` is the only translation, `asRating`
   reads either form, `ratingToken` writes only the word. Free-form on purpose: a new tier
   is a code change, not a migration.
 - `file_size`, `width` and `height` describe the file that was stored. An image that
@@ -62,21 +65,22 @@ served by the primary key, which Postgres reads backwards as cheaply as forwards
 
 ## `tags`
 
-`supabase/migrations/20260826100200_tags.sql`, plus
-`supabase/migrations/20260906120000_tags_emoji.sql` and
-`supabase/migrations/20260906130000_tags_mark.sql` and
-`supabase/migrations/20260906140000_tag_rules.sql` and
-`supabase/migrations/20260908120100_tags_drop_category2.sql` and
-`supabase/migrations/20260908130000_tags_form_section.sql`
+`db/migrations/0001_baseline.sql`
+`db/migrations/0001_baseline.sql`
+`db/migrations/0001_baseline.sql`
+`db/migrations/0001_baseline.sql`
+`db/migrations/0001_baseline.sql`
+`db/migrations/0001_baseline.sql`
+
 
 | column | type | notes |
 | --- | --- | --- |
-| `id` | `bigint` PK identity | `/tags/[id]` is addressed by this, so a rename never breaks a link |
+| `id` | `integer` PK identity | `/tags/[id]` is addressed by this, so a rename never breaks a link |
 | `name` | `text unique not null` | `check (name ~ '^[a-z0-9_().-]+$')` — lowercase `snake_case` |
 | `category` | `text not null default 'general'` | free-form; `TAG_CATEGORIES` in `@common/tags` is the eight the app writes, each with a colour and a place in the order |
 
 | `mark` | `text` (nullable) | what is drawn in front of the name — a colour or up to three glyphs — usually null; every read selects it |
-| `form_section_id` | `smallint` (nullable) `→ tag_form_section.id on delete set null` | which row of the **desktop tag form** the tag is offered on; null is no row, which is not offered at all. The website never reads it |
+| `form_section_id` | `smallint` (nullable) `→ tag_form_sections.id on delete set null` | which row of the **desktop tag form** the tag is offered on; null is no row, which is not offered at all. The website never reads it |
 | `implied_rating` | `text` (nullable) | a rating **floor** carried by this tag, stored as the letter like `posts.rating` — see [`tag_rules`](#tag_rules) |
 | `post_count` | `int not null default 0` | denormalized, see [Counters](#counters) |
 | `created_at` | `timestamptz not null default now()` | |
@@ -102,7 +106,7 @@ lookup); `tags_name_prefix_idx (name text_pattern_ops)` for autocomplete;
   its own picker and its own ＋. Two views of one column and neither is a lie — a category
   says what a tag *is*, a row is a place to put your hand.
 - **`form_section_id`, not a name.** The sections are
-  [`tag_form_section`](#tag_form_section) and this points at one by id, so renaming a row
+  [`tag_form_sections`](#tag_form_sections) and this points at one by id, so renaming a row
   carries every tag on it. `listTags` embeds the name beside the id, which is the one place
   the two meet — everything above it groups and draws by name, the way it does for the tag
   rules. Null is no row, which means the tag is **not offered in the form at all**: a
@@ -136,8 +140,9 @@ lookup); `tags_name_prefix_idx (name text_pattern_ops)` for autocomplete;
 
 ## `tag_rules`
 
-`supabase/migrations/20260906140000_tag_rules.sql`, plus
-`supabase/migrations/20260908120000_tag_rules_groups.sql`
+`db/migrations/0001_baseline.sql`
+`db/migrations/0001_baseline.sql`
+
 
 The two answers to "this tag is on the post, what else should be?". An **implication** is
 applied by itself (`white_bra` means the post is also a `bra`); a **recommendation** is
@@ -147,13 +152,13 @@ desktop app is the only thing that consults them.
 There was a third, `kind = 2`, the **form group**: the tags the form should offer once this
 tag is on the post, and hide otherwise. It was the right question in the wrong place — it
 hid tags *inside* a row, so the row was still drawn with a ＋ that opened onto nothing — and
-it is [`tag_form_section_dep`](#tag_form_section) now, said about the whole row.
+it is [`tag_form_section_deps`](#tag_form_sections) now, said about the whole row.
 
 | column | type | notes |
 | --- | --- | --- |
-| `tag_id` | `bigint not null → tags.id on delete cascade` | the tag that triggers the rule |
+| `tag_id` | `integer not null → tags.id on delete cascade` | the tag that triggers the rule |
 | `kind` | `smallint not null` | `check (kind in (0, 1))` — **0 implies, 1 recommends** |
-| `target_tag_id` | `bigint not null → tags.id on delete cascade` | the tag the rule names |
+| `target_tag_id` | `integer not null → tags.id on delete cascade` | the tag the rule names |
 | | PK `(tag_id, kind, target_tag_id)` | |
 | | `check (tag_id <> target_tag_id)` | a tag implying itself can never do anything |
 
@@ -181,7 +186,7 @@ to keep true for no reader.
 - **A rule can only name a tag that exists**, which the foreign keys now enforce and
   `resolveTagIds` refuses before them. This is the same rule the post write paths follow.
 - **The floor is stored as a letter, listed as a token.** The column holds `g`/`s`/`q`/`e`
-  the way `posts.rating` does; the rule list above it carries `rating:explicit`, because
+  the way `posts.rating` does; the rule list above it carries `rating:r18`, because
   that is the grammar every helper there expects. `storedRating` in `@common/data/rules.ts`
   is the reader — `asRating` parses *tokens* and returns null for a bare `e`, so reading
   the column through it drops every floor silently.
@@ -197,10 +202,12 @@ to keep true for no reader.
 - **Cycles are not a constraint.** `a → b → a` is storable; `impliedTags` walks with a
   `seen` set, so such a pair is useless rather than fatal.
 
-## `tag_form_section`
+## `tag_form_sections`
 
-`supabase/migrations/20260908140000_form_sections.sql`, replaced by
-`supabase/migrations/20260908150000_tag_form_section_ids.sql`
+`db/migrations/0001_baseline.sql`
+, replaced by
+`db/migrations/0001_baseline.sql`
+
 
 The rows the **desktop tag form** draws under a category, and their order. `hair color`,
 `hair styles`, `clothes` under Appearance. The website has never heard of them: it draws
@@ -216,7 +223,7 @@ the category, one heading.
 | `created_at` | `timestamptz not null default now()` | |
 | | `unique (category, name)` | `clothes` under two categories is two rows, and neither is the other |
 
-`tag_form_section_dep` holds what a row waits for: `(section_id, tag_id)`, both cascading.
+`tag_form_section_deps` holds what a row waits for: `(section_id, tag_id)`, both cascading.
 A section with no rows there has no condition and is always drawn, which is most of them.
 Tag **ids**, so a rename carries the dependency and a delete takes it — the same reasoning
 as `tag_rules`, and only safe because no write path coins a tag.
@@ -250,12 +257,13 @@ into the window's store, the way the tag rules are.
 
 ## `post_tags`
 
-`supabase/migrations/20260826100300_post_tags.sql`
+`db/migrations/0001_baseline.sql`
+
 
 | column | type | notes |
 | --- | --- | --- |
-| `post_id` | `bigint not null → posts.id on delete cascade` | |
-| `tag_id` | `bigint not null → tags.id` | **no cascade** |
+| `post_id` | `integer not null → posts.id on delete cascade` | |
+| `tag_id` | `integer not null → tags.id` | **no cascade** |
 | | PK `(post_id, tag_id)` | |
 
 **Indexes:** PK covers post→tags; `post_tags_tag_post_idx (tag_id, post_id)` covers
@@ -270,25 +278,29 @@ tag→posts and makes the recount an index-only scan.
 
 ---
 
-## Row Level Security
+## Roles
 
-Enabled on every table, with a select policy and **nothing else**:
+There is no RLS. There was, on every table, with a select policy and nothing else — the
+only way to say "the anon key may read" when the key itself is public. There is no public
+key any more, so the boundary is drawn where Postgres draws boundaries:
 
-| table | select | insert | update | delete |
-| --- | --- | --- | --- | --- |
-| `posts` | public | — | — | — |
-| `tags` | public | — | — | — |
-| `post_tags` | public | — | — | — |
-| `tag_rules` | public | — | — | — |
-
-| bucket | public | policy |
+| role | held by | may |
 | --- | --- | --- |
-| `posts` | read | select only |
-| `post-thumbnails` | read | select only |
+| `booru_owner` | the environment file, the migration runner only | everything, DDL included |
+| `booru_app` | compiled into the desktop bundle | `select, insert, update, delete` on all six tables; **no** create, alter or drop |
+| `booru_web` | Vercel | `select` on all six; `update (view_count) on posts`; nothing else |
 
-Every write bypasses RLS on the service-role client. The anon key can therefore do
-nothing but read, which is all the website does — a missing policy states that more
-plainly than a policy testing a session nobody has.
+The grants are the last block of the baseline, applied to whichever roles exist so a
+scratch database still migrates. `db/README.md` creates them.
+
+The website's half is strictly stronger than what it replaced, where Vercel carried a
+service-role key that bypassed every policy in the project in order to count views. The
+desktop's is the same trust model it always had — possession of the installer is the
+authorization — with one addition that matters: `booru_app` owns nothing, so a string
+extracted from a bundle can vandalise the data and cannot drop a table.
+
+Images are not in the database. They are one public R2 bucket, `posts/` and `thumbs/`,
+read by URL and written only by the desktop app's bucket key.
 
 ---
 
@@ -298,7 +310,7 @@ The query logic that used to be plpgsql. It moved to TypeScript because a plpgsq
 needs a migration to edit and reports one opaque error from inside a statement that was
 about something else. What remains in SQL is the schema itself.
 
-Everything below takes its Supabase client as an argument rather than building one —
+Everything below takes its database handle as an argument rather than building one —
 that is what lets Electron's main process run the same code the website compiles.
 
 ### Post writes
@@ -329,23 +341,24 @@ that is what lets Electron's main process run the same code the website compiles
   automatically now that the trigger is gone.
 - **It logs and never throws.** By the time it runs the post write has already landed;
   failing the upload afterwards would trade a wrong number for a lost image.
-- Service role, because that is the only client that can write at all.
+- `booru_app`, because that is the only role that can write at all.
 
 ### View counting
 
-`src/lib/data/posts.ts` — `incrementPostView()`. Formerly the `increment_post_view` RPC.
-**The only write the website makes.**
+`src/lib/data/posts.ts` — `incrementPostView()`. Formerly the `increment_post_view` RPC,
+then a compare-and-swap. **The only write the website makes**, and one statement:
+`update posts set view_count = view_count + 1`.
 
-- PostgREST can't send `view_count = view_count + 1`, so it reads the count and writes
-  back with `.eq('view_count', <what it read>)` — a compare-and-swap. A concurrent view
-  that landed first makes the update match no row, so it reads again, up to three
-  attempts, then drops the view. Under real contention a lost view costs less than a
-  retry loop holding a request open.
+- The retry loop is gone with PostgREST. It read the count and wrote back with an
+  equality check on what it had read, up to three attempts, then dropped the view —
+  which is what standing in for atomicity costs when you cannot express an increment.
 - It cannot recount the way the tag counter does: `view_count` is not derived from
-  anything, because the rows that would define it are never stored.
-- Service role, since `posts` has no update policy and an anonymous visitor's view still
-  counts. Called only from the `recordPostView` action, never on a read path, so
-  prefetches, `generateMetadata` and crawlers don't inflate it.
+  anything, because the rows that would define it are never stored. That is why this one
+  increments and that one recomputes, and it is not an inconsistency.
+- `booru_web` holds `update (view_count) on posts` and no other write grant, so the
+  column-level grant is what makes this safe rather than the function being careful.
+  Called only from the `recordPostView` action, never on a read path, so prefetches,
+  `generateMetadata` and crawlers don't inflate it.
 
 ### Search
 
@@ -353,32 +366,39 @@ that is what lets Electron's main process run the same code the website compiles
 `search_posts` SQL function. One implementation, run by both the website's listing and the
 desktop app's browse screen.
 
-Multi-tag AND is the one thing PostgREST cannot express in a single filter, so tag
-membership is resolved to plain id lists in TypeScript first and the request that follows
-only filters and orders:
+**One statement**, whatever was typed:
 
-1. **All include tags** — read the `post_tags` links for those tag ids, in pages of 1000
-   so nothing is silently truncated, and keep the posts whose distinct match count equals
-   the number of tags asked for.
-2. **No exclude tags** — posts carrying any of them are subtracted from the candidate
-   list, or filtered out with `not.in` when there are no include tags.
-3. **One posts request** — `rating` in the whitelist `resolveRatings()` produced,
-   `order by id desc`, `limit(perPage + 1)`. Two cursors narrow it, both ids and neither
-   an offset: `id <= from` starts where the query's `start:` metatag says, `id < after`
-   continues chunk to chunk.
+- **All include tags** — a correlated `count(distinct pt.tag_id)` over `post_tags` joined
+  to `tags`, compared against how many names were asked for. Matched by name, so nothing
+  has to be resolved to ids in a round trip of its own, and a name nobody has used simply
+  fails to reach the count.
+- **No exclude tags** — the same join as a `not exists`, which the planner takes as an
+  anti-join.
+- **The rating whitelist** `resolveRatings()` produced, then `order by id desc` and
+  `limit(perPage + 1)`. Two cursors narrow it, both ids and neither an offset: `id <=
+  start` begins where the query's `start:` metatag says, `id < after` continues chunk to
+  chunk.
+
+**Empty arrays degrade correctly**, which is what makes it one fixed statement rather than
+a query assembled from the input: `= any('{}')` matches nothing, so a count of 0 is
+compared against 0 and passes, and a `not exists` over a condition nothing satisfies is
+true for every row. Browsing with no query takes the same path as a three-tag search.
+
+This replaced about a hundred lines that read every `post_tags` link the named tags
+carried — in pages of a thousand, because a PostgREST request answers with one page —
+intersected them in a `Map` of `Set`s and handed the surviving ids back as a literal
+`in (…)` list. Multi-tag AND is the one thing PostgREST genuinely cannot say.
 
 **Invariants**
 
 - **Nothing counts rows.** The spare row from `perPage + 1` is the whole answer to "is
-  there more". `count: 'exact'` scanned the filtered set on every read to feed a page
+  there more". An exact count scanned the filtered set on every read to feed a page
   number that no longer exists.
 - Cursors are ids, never offsets — an offset slides when an upload lands mid-scroll.
-- A provably empty query (an unknown tag name, or excludes that cancel the includes)
-  returns early without asking Postgres anything.
 
-**Scaling:** the id lists are bounded by the tags' `post_count`, and browsing with no
-tags skips them entirely — that path is a single indexed read. Fine to ~100k posts.
-Revisit (materialized tag arrays + GIN, or a function again) only if it gets slow.
+**Scaling:** fine to ~100k posts, served by `post_tags_tag_post_idx` and the primary key.
+If it stops being, the fix is materialized tag arrays plus GIN — not a return to resolving
+ids in TypeScript.
 
 ---
 
@@ -391,13 +411,14 @@ it is in the schema.
 | --- | --- | --- |
 | `profiles` table, `handle_new_user()` trigger | one row per `auth.users` account | The board dropped its accounts. Every account was one person's, nothing displayed who uploaded what, and the desktop bundle already carried the service-role key — the login guarded a door it was not the lock for |
 | `posts.uploader_id` | `uuid → profiles.id` | Never displayed anywhere on the site; went with `profiles` |
-| write RLS policies | `(select auth.uid()) is not null` on every table | No session left to test |
+| write RLS policies, then RLS itself | `(select auth.uid()) is not null` on every table | No session left to test — and once the public anon key was gone too, a `grant` says the whole of it |
 | `rating_counts` table + 3 triggers | a counter row per rating tier | Bought a number beside four fixed filters. The facet lists the scale without counts |
 | `search_posts`, `create_post_with_tags`, `update_post_with_tags`, `increment_post_view` | plpgsql functions | See [Operations](#operations) |
 | `posts.status`, `is_admin()`, `profiles.role` | a moderation tier | Dropped before the schema was squashed |
 
-The eighteen migrations written during the build were squashed into the current four
-before the first deployment. Schema changes from here are **always** a new timestamped
+The eighteen migrations written during the build were squashed into four; those four and
+the twelve after them were squashed again into one baseline when the board moved to Neon
+and was emptied. Schema changes from here are **always** a new numbered
 file — never a dashboard edit, and never an edit to the squashed four once they have been
 pushed anywhere real.
 

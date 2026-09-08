@@ -4,7 +4,7 @@ import {
   type FormSectionEdit,
   type FormSections,
 } from '@common/data/form-sections'
-import { boardClient } from './supabase'
+import { boardDb } from './db'
 
 /**
  * The form sections, read from and written to the board.
@@ -23,9 +23,9 @@ import { boardClient } from './supabase'
 /** An unreachable board is no sections, never a thrown channel — the window carries on with
  *  a form of headings and no rows, which says plainly that it cannot reach anything. */
 export async function loadFormSections(): Promise<FormSections> {
-  const client = boardClient()
-  if (!client) return {}
-  return listFormSections(client)
+  const db = boardDb()
+  if (!db) return {}
+  return listFormSections(db)
 }
 
 /**
@@ -40,10 +40,10 @@ export async function loadFormSections(): Promise<FormSections> {
 export async function saveFormSections(
   edit: FormSectionEdit
 ): Promise<{ sections: FormSections; error?: string }> {
-  const client = boardClient()
-  if (!client) throw new Error('Not set up yet')
+  const db = boardDb()
+  if (!db) throw new Error('Not set up yet')
 
-  const result = await editFormSections(client, edit)
-  const sections = await listFormSections(client)
+  const result = await editFormSections(db, edit)
+  const sections = await listFormSections(db)
   return result.ok ? { sections } : { sections, error: result.error }
 }

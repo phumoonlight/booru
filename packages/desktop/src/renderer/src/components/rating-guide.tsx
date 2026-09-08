@@ -2,34 +2,27 @@ import { useEffect } from 'react'
 import { RATING_COLOR, RATING_LABEL, RATING_NAME, RATINGS, isRestricted } from '@common/search'
 
 /**
- * What the four ratings mean, and what choosing one actually does.
+ * What the two ratings mean, and what choosing one actually does.
  *
- * The select on a queue card offers four words and no help, and the difference between
- * Sensitive and Questionable is a judgement nobody makes the same way twice from the
- * words alone. Worse, the choice has consequences off this screen — two of the tiers
- * decide whether the post is in the listing at all for someone who has not turned the
- * adult ones on — and none of that is visible from the card.
+ * It used to explain four, and most of what it had to explain was the scale rather than
+ * the picture: the line between Sensitive and Questionable is a judgement nobody makes
+ * the same way twice from the words alone, and the board did nothing with either answer
+ * except decide whether the post was behind the setting. Two tiers ask the only question
+ * that had a consequence, so this is short now — but it is still worth a panel, because
+ * the consequence is off this screen and invisible from the picker.
  *
- * Written from what the code actually does, not from what a booru usually does:
- * `RESTRICTED_RATINGS` is what gates the site, and the wording below follows it. The
- * examples are Danbooru's, since the scale is Danbooru's.
+ * Written from what the code actually does: `RESTRICTED_RATINGS` is what gates the site,
+ * and the wording below follows it. How sexual a post is, in any finer degree than this,
+ * is what its tags are for.
  */
 const MEANING: Record<string, { short: string; examples: string }> = {
   g: {
-    short: 'Nothing suggestive. Safe to have on screen anywhere.',
-    examples: 'Portraits, scenery, ordinary clothes, anything you would show a stranger.',
+    short: 'Safe to have on screen anywhere.',
+    examples: 'Portraits, scenery, ordinary clothes, swimwear — anything mild enough to pass.',
   },
-  s: {
-    short: 'Mildly suggestive, but nothing is exposed.',
-    examples: 'Swimwear, underwear worn as clothing, cleavage, a suggestive pose fully dressed.',
-  },
-  q: {
-    short: 'Strongly suggestive, or partly undressed.',
-    examples: 'Bare breasts, see-through or open clothing, a pose whose subject is the sex of it.',
-  },
-  e: {
-    short: 'Nudity or sex.',
-    examples: 'Genitals, sexual acts, fluids — anything with nothing left implied.',
+  r: {
+    short: 'Adult. Hidden until a visitor turns the setting on.',
+    examples: 'Nudity, sex, or anything strongly sexual enough that you would not want it found.',
   },
 }
 
@@ -68,9 +61,9 @@ export function RatingGuide({ onClose }: { onClose: () => void }) {
         </div>
 
         <p className="text-sm text-muted">
-          Every post carries exactly one of these. It is the one field on a card that is not about
-          what is in the picture but about who should see it — the board hides two of the four from
-          anyone who has not asked for them.
+          Every post carries one of these. It is the one field on a card that is not about what is
+          in the picture but about who should see it — the board hides R-18 from anyone who has not
+          asked for it.
         </p>
 
         <ul className="flex flex-col gap-2">
@@ -100,12 +93,11 @@ export function RatingGuide({ onClose }: { onClose: () => void }) {
           <h3 className="text-sm font-semibold">What the choice does</h3>
           <ul className="flex list-disc flex-col gap-1.5 pl-4 text-sm text-muted">
             <li>
-              <span className="text-foreground">Questionable and Explicit are off by default.</span>{' '}
-              The website leaves them out of every listing until a visitor turns Enable NSFW on in
-              its Settings, keeps them out of <span className="font-mono text-xs">sitemap.xml</span>
-              , and asks search engines not to index them. A post&rsquo;s own page shows a notice
-              instead of the picture, its title and preview included — so a link pasted somewhere
-              does not describe what it is.
+              <span className="text-foreground">R-18 is off by default.</span> The website leaves
+              it out of every listing until a visitor turns Enable NSFW on in its Settings, keeps it
+              out of <span className="font-mono text-xs">sitemap.xml</span>, and asks search engines
+              not to index it. A post&rsquo;s own page shows a notice instead of the picture, its
+              title and preview included — so a link pasted somewhere does not describe what it is.
             </li>
             <li>
               <span className="text-foreground">It is not a lock.</span> The setting is a checkbox

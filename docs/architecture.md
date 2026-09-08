@@ -4,8 +4,9 @@ A booru-style image board: tag-centric gallery, multi-tag search with negation, 
 detail pages. Danbooru is the reference.
 
 **The website is read-only.** It has no accounts and makes one write — the view counter.
-Everything that changes the board is the desktop app's, which holds a service-role key
-compiled into its own bundle. That single fact explains most of the shape below.
+Everything that changes the board is the desktop app's, which holds a writing database
+login and a bucket key compiled into its own bundle. That single fact explains most of
+the shape below.
 
 ## Three programs
 
@@ -29,22 +30,22 @@ React — Electron's main process compiles it. See
 | Framework | Next.js 16, App Router | RSC for reads; one Server Action for the view counter |
 | Language | TypeScript (strict) | React 19 |
 | Styling | Tailwind CSS v4 | Mobile-first, dark theme only, no component library — plain utilities against the CSS variables in `globals.css` |
-| Database | Supabase Postgres | Four migrations in `supabase/migrations/`; RLS on every table, select policies only |
-| File storage | Supabase Storage | `posts` and `post-thumbnails`, both public-read |
+| Database | Neon Postgres, via `postgres` (porsager) | One baseline in `db/migrations/`, applied by `scripts/migrate.mjs`. No RLS: three roles and their grants |
+| File storage | Cloudflare R2, via `@aws-sdk/client-s3` | One bucket, `posts/` and `thumbs/` prefixes, public-read through a custom domain |
 | Auth | none | Removed. Possession of a desktop build is the write authorization |
 | Image processing | `sharp` | Both AVIF encoders in `@common/imgcmp/`. Only the desktop app runs them now; the root `tsc` still compiles them |
 | Desktop | Electron 44 + electron-vite | Packaged for Windows with electron-builder |
-| Deployment | Vercel + Supabase cloud | |
+| Deployment | Vercel (`sin1`) + Neon + R2 | |
 
 ## Repository
 
 ```
 booru/
 ├── docs/                      # this file, database-schema.md, design/
-├── supabase/
-│   ├── migrations/            # four files: storage, posts, tags, post_tags
-│   ├── seed.sql               # data, not schema — runs on db:reset only
-│   └── config.toml
+├── db/
+│   ├── migrations/            # 0001_baseline.sql — the whole schema, plus the grants
+│   └── README.md              # the three roles, and how to add a migration
+├── scripts/migrate.mjs        # push / list / reset — what replaced the Supabase CLI
 ├── packages/
 │   ├── common/src/            # @common/* — one definition of everything shared
 │   │   ├── search.ts          # the ?query= grammar, ratings, searchHref
@@ -57,8 +58,8 @@ booru/
     ├── app/(public)/          # page.tsx (landing), posts/, tags/
     ├── components/            # post-feed, post-card, tag-list, rating-list, search-bar…
     └── lib/
-        ├── supabase/          # anon.ts (every read), admin.ts (the view counter)
-        ├── data/              # @common/data bound to the anon client
+        ├── db.ts images.ts   # the one pool (booru_web); image URLs off NEXT_PUBLIC_CDN_URL
+        ├── data/              # @common/data bound to that pool
         └── actions/           # search.ts (the feed's next chunk), posts.ts (views)
 ```
 
@@ -67,16 +68,16 @@ board dropped its accounts; git has them.
 
 ## Data access
 
-- **Reads:** RSC → `src/lib/data/*` → `@common/data/*` → the anon client. Never query
-  Supabase from a page or component. The one read that isn't an RSC is `loadMorePosts`
+- **Reads:** RSC → `src/lib/data/*` → `@common/data/*` → the pool. Never query the
+  database from a page or component. The one read that isn't an RSC is `loadMorePosts`
   in `lib/actions/search.ts` — the feed's next chunk, an action rather than a route
   handler so the data layer stays the only query surface.
-- **Writes:** there is one, `recordPostView`, and it runs on the service-role client
-  because no table has an update policy. A mutation being added to `src/` is almost
-  certainly being added to the wrong program.
-- **Two clients, each with one job.** `anon.ts` is cookie-less, so every page stays
-  cacheable and every read is the same read for everybody; `admin.ts` is `server-only`
-  and never reaches the browser.
+- **Writes:** there is one, `recordPostView`. A mutation being added to `src/` is almost
+  certainly being added to the wrong program — and `booru_web` holds `update (view_count)
+  on posts` and nothing else, so the database refuses it rather than a reviewer having to.
+- **One pool, not two clients.** It was `anon.ts` for reads and `admin.ts` carrying a
+  service-role key just to count views; a column grant says the same thing and says it
+  where it is enforced.
 - Reads that both `generateMetadata` and the page need (`getPost`, `getPostTags`) are
   wrapped in React `cache`, so each runs once per request.
 
@@ -102,13 +103,16 @@ free serverless tier bills by the second and kills at ten.
 
 - **The URL is the state, and `?query=` is all of it**:
   `/posts?query=blue_hair+solo+-photo+start:900`. Ratings and the cursor ride in the same
-  string as metatags — `rating:explicit`, `start:900` — so a saved query is one string
+  string as metatags — `rating:r18`, `start:900` — so a saved query is one string
   and the search bar renders every token as a chip you can clear.
 - `searchPosts()` in `@common/data/search.ts` runs it, for the website's listing *and*
-  the desktop's browse screen. Multi-tag AND is the one thing PostgREST cannot say in a
-  single filter, so tag membership is resolved to id lists in TypeScript first and the
-  request that follows only filters and orders. It was a `search_posts` SQL function
-  early on — faster to write, much harder to change.
+  the desktop's browse screen, and it is **one statement**: a correlated count for the
+  included tags and a `not exists` for the excluded ones, both matched by name so nothing
+  has to be resolved to ids first. Empty arrays degrade correctly — a count of 0 against 0
+  passes, a `not exists` over nothing is true — so it is one fixed query for every shape a
+  search bar can produce. It was a `search_posts` SQL function early on, then about a
+  hundred lines of TypeScript intersecting `post_tags` in thousand-row pages, which is
+  what a multi-tag AND cost under PostgREST.
 - **The listing is a feed, not pages.** The newest screenful is server-rendered; older
   chunks append by cursor (`id < lastId`), never by offset, which slides when an upload
   lands mid-scroll. Nothing counts rows: `hasMore` is one row read past the chunk.
@@ -118,10 +122,11 @@ free serverless tier bills by the second and kills at ten.
 
 ## Ratings and SEO
 
-- **Stored as one letter, written as a word.** `posts.rating` holds `g`, `s`, `q` or `e`;
-  a query spells `rating:explicit`. `RATING_NAME` in `@common/search` is the only
-  translation, and `asRating` reads either form while `ratingToken` only writes the word.
-- `RESTRICTED_RATINGS` (`q`, `e`) is kept out of `sitemap.xml` and `noindex`ed, left out
+- **Stored as one letter, written as a word.** `posts.rating` holds `g` or `r` — General
+  and R-18, two tiers where it was Danbooru's four; a query spells `rating:r18`.
+  `RATING_NAME` in `@common/search` is the only translation, and `asRating` reads either
+  form while `ratingToken` only writes the word.
+- `RESTRICTED_RATINGS` (`r`) is kept out of `sitemap.xml` and `noindex`ed, left out
   of every listing until the `nsfw` cookie is set at `/settings`, and blocked on its own
   page — `<RestrictedNotice />`, with the metadata cut back to match, since an unfurl
   carries no cookie. Not access control: the cookie is a checkbox anyone can tick.

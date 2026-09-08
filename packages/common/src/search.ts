@@ -80,36 +80,45 @@ export function searchHref(query: string): string {
 }
 
 // ── Rating metatags ────────────────────────────────────────────────────────────
-// `rating:explicit` narrows the search to that rating; `-rating:explicit` drops it.
+// `rating:r18` narrows the search to that rating; `-rating:r18` drops it.
 // They travel in the same `?query=` string as ordinary tags (Danbooru convention),
 // so the search bar, chips and tag links need no special cases — only the data
 // layer splits them back out.
 
 /**
- * **A rating is stored as one letter and written as a word.** `posts.rating` holds
- * `g`, `s`, `q` or `e`; the chips and every link the app builds spell `rating:general`,
- * and `asRating` / `ratingToken` are the only two places the two forms meet. A query
- * typed by hand may use either — `asRating` reads both, `ratingToken` writes the name.
+ * **A rating is stored as one letter and written as a word.** `posts.rating` holds `g`
+ * or `r`; the chips and every link the app builds spell `rating:general`, and `asRating`
+ * / `ratingToken` are the only two places the two forms meet. A query typed by hand may
+ * use either — `asRating` reads both, `ratingToken` writes the name.
  *
  * The column is the reason. It is free-form text with no check constraint, repeated on
  * every row and every index entry, and the word carries nothing the letter doesn't —
  * `RATING_LABEL` is what a person actually reads, and it has never been the stored
- * value. The URL is the opposite case: `?query=rating:e` is a query nobody can read
+ * value. The URL is the opposite case: `?query=rating:r` is a query nobody can read
  * back, and a saved query is a string somebody keeps.
  *
  * So `Rating` is the stored code everywhere in the code, and `RATING_NAME` is the one
  * translation, used only at the edge of a query string.
+ *
+ * **Two tiers, pixiv-style.** It was four — `g`, `s`, `q`, `e`, Danbooru's scale — and
+ * the middle two were a judgement nobody could make the same way twice: the line between
+ * sensitive and questionable moved with the mood of whoever was tagging, and the only
+ * thing the board did with any of it was decide whether a post is behind the setting.
+ * That is one bit, so it is one bit. How sexual a post actually *is* is what tags are
+ * for, which is where a description of the picture belongs anyway.
+ *
+ * A letter rather than a `boolean r18` column, which would read more honestly today and
+ * would foreclose a third tier — pixiv itself has R-18G. The enum costs one character
+ * and keeps the door open; the column is free-form text, so that door is a code change.
  */
-export const RATINGS = ['g', 's', 'q', 'e'] as const
+export const RATINGS = ['g', 'r'] as const
 
 export type Rating = (typeof RATINGS)[number]
 
 /** How a rating is written in a query. `rating:g` is read too, but never written. */
 export const RATING_NAME: Record<Rating, string> = {
   g: 'general',
-  s: 'sensitive',
-  q: 'questionable',
-  e: 'explicit',
+  r: 'r18',
 }
 
 /** The code a query name means, built from `RATING_NAME` so the two cannot drift. */
@@ -120,27 +129,30 @@ const RATING_BY_NAME: Record<string, Rating> = Object.fromEntries(
 /** Display form — what a person reads, on a facet or a post page. */
 export const RATING_LABEL: Record<Rating, string> = {
   g: 'General',
-  s: 'Sensitive',
-  q: 'Questionable',
-  e: 'Explicit',
+  r: 'R-18',
 }
 
-// Danbooru's traffic-light convention, tuned for the dark theme
+// A traffic light with two lamps. Both hexes are kept from the four-tier scale — green
+// was General and red was Explicit — so a board that has been re-rated looks like the
+// one you knew rather than a new palette to learn, the same courtesy the tag categories
+// got through their re-cuts.
 export const RATING_COLOR: Record<Rating, string> = {
   g: 'text-[#35c64a]',
-  s: 'text-[#4fa3e3]',
-  q: 'text-[#ead084]',
-  e: 'text-[#ff5d5f]',
+  r: 'text-[#ff5d5f]',
 }
 
 /**
- * The adult tiers. They stay out of the sitemap and out of search-engine results
- * (`robots: noindex`), and the website now also keeps them out of the listing until a
- * visitor turns them on in Settings — see `src/lib/nsfw.ts`. A post is still reachable
- * by its own URL either way: this is what the gallery volunteers, not access control,
- * and there are no accounts here to make it anything more.
+ * The adult tier. It stays out of the sitemap and out of search-engine results
+ * (`robots: noindex`), and the website keeps it out of the listing until a visitor turns
+ * it on in Settings — see `src/lib/nsfw.ts`. A post is still reachable by its own URL
+ * either way: this is what the gallery volunteers, not access control, and there are no
+ * accounts here to make it anything more.
+ *
+ * One tier rather than two now, which is the whole of what collapsing the scale changed
+ * downstream — every consumer of this list works unchanged and is easier to reason
+ * about, because "restricted" and "R-18" are finally the same word.
  */
-export const RESTRICTED_RATINGS: readonly Rating[] = ['q', 'e']
+export const RESTRICTED_RATINGS: readonly Rating[] = ['r']
 
 export function isRestricted(rating: Rating): boolean {
   return RESTRICTED_RATINGS.includes(rating)
@@ -204,10 +216,10 @@ export function ratingToken(rating: Rating): string {
 export function asRating(token: string): Rating | null {
   if (!token.startsWith(RATING_PREFIX)) return null
   const value = token.slice(RATING_PREFIX.length)
-  // Both spellings are accepted: `rating:explicit` is what every link and chip the app
-  // builds says, and `rating:e` is what someone typing into the box will reach for once
-  // they have seen the column. Only the reading is loose — `ratingToken` still writes
-  // the name, so the two forms never both end up in a URL the app produced.
+  // Both spellings are accepted: `rating:r18` is what every link and chip the app builds
+  // says, and `rating:r` is what someone typing into the box will reach for once they
+  // have seen the column. Only the reading is loose — `ratingToken` still writes the
+  // name, so the two forms never both end up in a URL the app produced.
   return RATING_BY_NAME[value] ?? ((RATINGS as readonly string[]).includes(value) ? (value as Rating) : null)
 }
 
@@ -265,8 +277,8 @@ export function splitQuery(parsed: ParsedQuery): SplitQuery {
  * Two things narrow it, and they compose in one direction only. `visible` is the ceiling
  * the *caller* sets — the website hands it the safe tiers unless the NSFW cookie is
  * there; the desktop app passes nothing and gets everything. The query narrows within
- * that ceiling and can never lift it, so `rating:explicit` typed by someone who hasn't
- * turned the adult tiers on returns nothing rather than quietly reaching past the
+ * that ceiling and can never lift it, so `rating:r18` typed by someone who hasn't
+ * turned the adult tier on returns nothing rather than quietly reaching past the
  * setting. That is also why the intersection can come back empty: an empty whitelist is
  * a real answer, and `readPosts` filtering `rating in ()` matches no row, which is the
  * honest result.

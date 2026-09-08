@@ -136,21 +136,25 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
 
         {status.configured ? (
           <>
-            <Readout label="Project" value={status.supabaseUrl} />
+            {/* The host, not the connection string: that one carries a password now,
+                where the project URL it replaced carried nothing. Main sends only the
+                hostname, so there is nothing here to redact. */}
+            <Readout label="Database" value={status.databaseHost} />
+            <Readout label="Images" value={status.cdnUrl} />
             <Readout label="Board" value={status.siteUrl} />
             <p className="text-xs text-muted">
-              The anon and service role keys are compiled in with these. They are not shown, and
-              nothing writes them to disk.
+              The database login and the bucket keys are compiled in with these. They are not
+              shown, and nothing writes them to disk.
             </p>
           </>
         ) : (
           // The build refuses to produce this, so it is a bundle put together some other
-          // way — worth a sentence that says what is wrong rather than a Supabase error
+          // way — worth a sentence that says what is wrong rather than a connection error
           // from the first thing that tries to use it.
           <p className="rounded-lg border border-red-500/30 bg-red-500/15 px-3 py-2 text-sm text-red-400">
-            This build has no project baked into it, so there is nothing to upload to. Rebuild it
-            with NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
-            and NEXT_PUBLIC_SITE_URL set.
+            This build has no board baked into it, so there is nothing to upload to. Rebuild it
+            with DATABASE_URL_APP, NEXT_PUBLIC_CDN_URL, NEXT_PUBLIC_SITE_URL and the four R2
+            values set.
           </p>
         )}
 

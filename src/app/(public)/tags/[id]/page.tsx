@@ -8,7 +8,7 @@ import { SearchHeader } from '@/components/search-header'
 import { SetupNotice } from '@/components/setup-notice'
 import { NavProgress } from '@/components/nav-progress'
 import { categoryColor, categoryLabel, TagMark } from '@/components/tag-list'
-import { isSupabaseConfigured } from '@/lib/env'
+import { isDatabaseConfigured } from '@/lib/db'
 import { searchHref, tagLabel } from '@common/search'
 import { SITE_NAME } from '@/lib/site'
 
@@ -30,7 +30,7 @@ const SAMPLE_LIMIT = 50
 export async function generateMetadata({ params }: PageProps<'/tags/[id]'>): Promise<Metadata> {
   const tagId = readId((await params).id)
   if (tagId === null) return { title: 'Tag not found' }
-  if (!isSupabaseConfigured()) return { title: 'Tag' }
+  if (!isDatabaseConfigured()) return { title: 'Tag' }
 
   const tag = await getTagById(tagId)
   if (!tag) return { title: 'Tag not found', robots: { index: false, follow: false } }
@@ -56,7 +56,7 @@ export async function generateMetadata({ params }: PageProps<'/tags/[id]'>): Pro
 }
 
 export default async function TagPage({ params }: PageProps<'/tags/[id]'>) {
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     return (
       <div className="mx-auto w-full max-w-7xl px-3 py-4">
         <SearchHeader showSearch={false} />

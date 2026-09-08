@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next'
 import { getSitemapPosts } from '@/lib/data/posts'
-import { isSupabaseConfigured } from '@/lib/env'
+import { isDatabaseConfigured } from '@/lib/db'
 import { siteUrl } from '@/lib/site'
 
 // Sitemaps cap at 50k URLs; posts are the only unbounded set here.
@@ -17,10 +17,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}/tags`, changeFrequency: 'daily', priority: 0.5 },
   ]
 
-  // Before the Supabase runbook has been run there is nothing to list
-  if (!isSupabaseConfigured()) return staticRoutes
+  // Before the database has been created there is nothing to list
+  if (!isDatabaseConfigured()) return staticRoutes
 
-  // Explicit posts stay out of the sitemap — same default as anonymous browsing
+  // R-18 posts stay out of the sitemap — same default as anonymous browsing
   const posts = await getSitemapPosts(MAX_POSTS)
 
   return [

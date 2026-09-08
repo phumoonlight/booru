@@ -6,7 +6,7 @@ import { pipeline } from 'node:stream/promises'
 import sharp, { type Metadata } from 'sharp'
 import { findPostIdsByFileNames } from '@common/data/shared'
 import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL, MAX_PIXELS } from './limits'
-import { boardClient } from './supabase'
+import { boardDb } from './db'
 import type { StageOutcome } from '../shared/api'
 
 /**
@@ -162,13 +162,13 @@ async function markDuplicates(outcomes: StageOutcome[]): Promise<StageOutcome[]>
   if (staged.length === 0) return outcomes
 
   // A build with no project can still stage and preview files; it just cannot ask.
-  const client = boardClient()
-  if (!client) return outcomes
+  const db = boardDb()
+  if (!db) return outcomes
 
   let existing: Map<string, number>
   try {
     existing = await findPostIdsByFileNames(
-      client,
+      db,
       staged.map((outcome) => outcome.md5)
     )
   } catch (error) {

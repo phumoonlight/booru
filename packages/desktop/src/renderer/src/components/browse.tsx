@@ -16,7 +16,7 @@ import { BUTTON, BUTTON_SUBMIT, buttonToggle } from './buttons'
  *
  * The query box is the site's search bar: `posts:search` runs `@common/data/search`,
  * which is the same function the listing renders through, so `1girl -solo
- * rating:explicit` narrows to the same rows in both places. There is one grammar and
+ * rating:r18` narrows to the same rows in both places. There is one grammar and
  * one implementation of it.
  *
  * Thumbnails come across the bridge as `data:` URLs (`main/manage.ts`). The window's CSP
@@ -572,7 +572,7 @@ export function Browse({
                 complete(showing[highlight].name)
               }
             }}
-            placeholder="1girl blue_hair -solo rating:explicit"
+            placeholder="1girl blue_hair -solo rating:r18"
             spellCheck={false}
             className="min-h-9 w-full rounded-lg border border-border bg-surface px-3 py-1.5 font-mono text-sm outline-none focus:border-accent"
           />

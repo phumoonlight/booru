@@ -106,7 +106,7 @@
   ${ifNot} ${isUpdated}
   ${AndIfNot} ${Silent}
     MessageBox MB_YESNO|MB_ICONQUESTION \
-      "Also delete Pubooru's settings?$\r$\n$\r$\nThis removes save.json, including the saved Supabase keys and login." \
+      "Also delete Pubooru's settings?$\r$\n$\r$\nThis removes save.json, including your compression settings and tag catalogs." \
       /SD IDNO IDNO skipAppData
     ; Electron always writes userData under the per-user AppData, whatever mode
     ; the installer itself ran in.

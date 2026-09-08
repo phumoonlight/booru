@@ -1,6 +1,6 @@
 {
   "name": "desktop",
-  "version": "4.2.1",
+  "version": "5.0.0",
   "private": true,
   "description": "Pubooru desktop uploader — the upload page, run locally so image compression uses a real CPU",
   "main": "./out/main/index.js",
@@ -14,7 +14,8 @@
     "package": "npm run clean && electron-vite build && electron-builder --win --config electron-builder.yml"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.112.4",
+    "@aws-sdk/client-s3": "^3.1127.0",
+    "postgres": "^3.4.9",
     "sharp": "^0.35.3",
     "zod": "^4.4.3"
   },

@@ -5,7 +5,7 @@ import { SearchBar } from '@/components/search-bar'
 import { NavProgress } from '@/components/nav-progress'
 import { SetupNotice } from '@/components/setup-notice'
 import { getPostCount } from '@/lib/data/posts'
-import { isSupabaseConfigured } from '@/lib/env'
+import { isDatabaseConfigured } from '@/lib/db'
 import { emojiNumber } from '@/lib/emoji-number'
 import { searchHref, SEARCH_PARAM } from '@common/search'
 import { SITE_DESCRIPTION, SITE_NAME } from '@/lib/site'
@@ -24,7 +24,7 @@ export default async function HomePage({ searchParams }: PageProps<'/'>) {
   const legacy = params[SEARCH_PARAM]
   if (typeof legacy === 'string' && legacy.trim()) redirect(searchHref(legacy))
 
-  const configured = isSupabaseConfigured()
+  const configured = isDatabaseConfigured()
   const postCount = configured ? await getPostCount() : 0
 
   return (

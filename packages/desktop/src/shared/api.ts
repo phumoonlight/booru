@@ -52,16 +52,22 @@ export type TransferResult =
 
 export type AppStatus = {
   /**
-   * False only if this build was made without the project's values, which the build
-   * itself refuses to do — the desktop equivalent of `isSupabaseConfigured()` gating the
-   * web's `<SetupNotice />`, kept so a broken bundle explains itself instead of failing
-   * inside a Supabase call.
+   * False only if this build was made without the board's values, which the build itself
+   * refuses to do — the desktop equivalent of `isDatabaseConfigured()` gating the web's
+   * `<SetupNotice />`, kept so a broken bundle explains itself instead of failing inside
+   * a connection attempt.
    */
   configured: boolean
   /** Where a finished post can be opened. Compiled in, and shown on the settings screen. */
   siteUrl: string
-  /** The project this build talks to. Shown on the settings screen; no key ever is. */
-  supabaseUrl: string
+  /**
+   * The database's **host**, not its URL. The settings screen answers "which board is
+   * this" and must never answer "with what password", and a Postgres connection string
+   * carries one — where the Supabase project URL this replaced carried nothing.
+   */
+  databaseHost: string
+  /** Where images are served from. Public by definition — it is in the site's markup. */
+  cdnUrl: string
   /**
    * What the About screen shows, and what a bug report needs: the app and the runtime
    * under it. `versions.app` is `app.getVersion()` — `packages/desktop/package.json`,
@@ -203,7 +209,7 @@ export type PostAppApi = {
    */
   saveRule: (kind: RuleKind, tag: string, names: string[]) => Promise<TagRules>
   /**
-   * The rows the tag form draws under a category, and their order — `tag_form_section` on
+   * The rows the tag form draws under a category, and their order — `tag_form_sections` on
    * the board. One write taking one edit: a section has an id, so creating, renaming,
    * deleting and moving are four things done to a row rather than four ways of restating a
    * list. `error` is a refusal the typist can fix — a name already taken, an empty one.
@@ -239,7 +245,7 @@ export type PostAppApi = {
    * `self` and `data:` and nothing else, which is a rule worth an IPC hop to keep.
    */
   postThumbnail: (fileName: string) => Promise<string>
-  /** `sectionId` is a row of `tag_form_section`, or null for none. */
+  /** `sectionId` is a row of `tag_form_sections`, or null for none. */
   createTag: (
     name: string,
     category: TagCategory,

@@ -25,7 +25,8 @@ import { app } from 'electron'
  * The cost of secure is that there is no plain-DNS fallback left, and the reason that is
  * affordable is how narrow this setting's reach turns out to be: it configures Chromium's
  * network service, which here means the image downloads in `main/download.ts` and
- * whatever the window itself loads. The Supabase clients go through the global `fetch`,
+ * whatever the window itself loads. The database goes over a socket and the bucket over
+ * the global `fetch`,
  * which in the main process is Node's own and keeps using the OS resolver. So a network
  * that blocked both providers below would cost browser drags, not the ability to upload
  * — and picked files, the ordinary path, never resolve anything at all.

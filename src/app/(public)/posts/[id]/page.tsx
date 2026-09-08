@@ -7,9 +7,9 @@ import { PostViewCounter } from '@/components/post-view-counter'
 import { PostNav } from '@/components/post-nav'
 import { StartHereLink } from '@/components/start-here'
 import { isRestricted, ratingToken, RATING_COLOR, RATING_LABEL, searchHref } from '@common/search'
-import { postImageUrl, thumbnailUrl } from '@common/storage'
+import { postImageUrl, thumbnailUrl } from '@/lib/images'
 import { GroupedTagList } from '@/components/tag-list'
-import { isSupabaseConfigured } from '@/lib/env'
+import { isDatabaseConfigured } from '@/lib/db'
 import { isNsfwEnabled } from '@/lib/nsfw-server'
 import { SetupNotice } from '@/components/setup-notice'
 import { RestrictedNotice } from '@/components/restricted-notice'
@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: PageProps<'/posts/[id]'>): Pr
   const postId = Number(id)
   if (!Number.isInteger(postId) || postId < 1) return { title: 'Post not found' }
   // Pre-runbook the page renders the setup notice, so don't try to read the DB
-  if (!isSupabaseConfigured()) return { title: `Post #${postId}` }
+  if (!isDatabaseConfigured()) return { title: `Post #${postId}` }
 
   const post = await getPost(postId)
   if (!post) return { title: 'Post not found', robots: { index: false, follow: false } }
@@ -80,7 +80,7 @@ export async function generateMetadata({ params }: PageProps<'/posts/[id]'>): Pr
 }
 
 export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     return (
       <div className="mx-auto w-full max-w-5xl px-3 py-4">
         <SetupNotice />

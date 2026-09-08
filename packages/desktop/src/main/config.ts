@@ -1,45 +1,58 @@
 import { existsSync } from 'node:fs'
 import { app, shell } from 'electron'
+import { imageUrl } from '@common/storage'
 import { clearSection, readSection, savePath } from './save-file'
 
 /**
- * Which board this build talks to. The same three values the web keeps in its
- * environment, plus `siteUrl` for opening a finished post in the browser — read from
- * the repo's environment file at build time and compiled into this bundle by
- * `electron.vite.config.ts`, which refuses to build without all four.
+ * Which board this build talks to — the database, the bucket, and the site a finished
+ * post is opened on. Read from the repo's environment file at build time and compiled
+ * into this bundle by `electron.vite.config.ts`, which refuses to build without every
+ * one of them.
  *
  * They used to be typed into a settings screen on first launch and kept in `save.json`.
- * Two things were wrong with that. The service-role key — which bypasses RLS for the
- * whole project — ended up in a plain file on every machine that ran the app, written
- * by the app itself. And an installer was board-agnostic, so the only way to know what
- * a copy pointed at was to open its settings. A build is now made *for* a board, and
- * the app asks for nothing but a login.
+ * Two things were wrong with that. The credential that can write the whole board ended
+ * up in a plain file on every machine that ran the app, written by the app itself. And
+ * an installer was board-agnostic, so the only way to know what a copy pointed at was to
+ * open its settings. A build is now made *for* a board, and the app asks for nothing.
  *
- * The service-role key is what this app writes with, and now the only thing that can:
- * no table in the schema has a write policy, and the buckets take no writes from a
- * session either. The board's accounts are gone — nothing displayed who uploaded what,
- * and this bundle already carried the key, so the login stood in front of a door it was
- * not the lock for. The anon key is still here because reads go through it where a read
- * is all that is wanted.
+ * There is no read-only credential here beside the writing one. There was — an anon key
+ * next to a service-role key — but the board has no anon role any more and the reads and
+ * the writes go down the same connection, so a second one would be a key held for the
+ * sake of symmetry.
  */
 export type AppConfig = {
-  supabaseUrl: string
-  supabaseAnonKey: string
-  supabaseServiceRoleKey: string
+  /** `booru_app` — reads and writes every row, owns nothing. See `main/db.ts`. */
+  databaseUrl: string
+  /** The bucket's public origin, for building an image URL. No credential in it. */
+  cdnUrl: string
+  /** Where a finished post can be opened. */
   siteUrl: string
+  /** Writing to the bucket — `main/r2.ts`, and the only secret here besides the database. */
+  r2: {
+    accountId: string
+    accessKeyId: string
+    secretAccessKey: string
+    bucket: string
+  }
 }
 
 /** Replaced at build time by `define`. Nothing else in the app may read it. */
 declare const __BUILD_ENV__: AppConfig
 
 /**
- * The same test `isSupabaseConfigured()` makes on the web. The build already refuses
+ * The same test `isDatabaseConfigured()` makes on the web. The build already refuses
  * placeholders and blanks, so this only catches a bundle built some other way — but a
- * window saying which value is missing beats one that fails inside a Supabase call.
+ * window saying it is not set up beats one that fails inside a connection attempt.
  */
 function isUsable(config: AppConfig): boolean {
   return Boolean(
-    config.supabaseUrl && config.supabaseAnonKey && config.supabaseServiceRoleKey && config.siteUrl
+    config.databaseUrl &&
+      config.cdnUrl &&
+      config.siteUrl &&
+      config.r2?.accountId &&
+      config.r2?.accessKeyId &&
+      config.r2?.secretAccessKey &&
+      config.r2?.bucket
   )
 }
 
@@ -55,8 +68,8 @@ export function loadConfig(): AppConfig | null {
 /**
  * The settings screen used to write a `config` section here, service-role key and all.
  * Nothing reads it any more, so it is dropped on the way past rather than left on disk:
- * an unused copy of a key that bypasses RLS is a liability the app itself created, and
- * whoever upgrades never thinks to go looking for it.
+ * an unused copy of a credential that can write the whole board is a liability the app
+ * itself created, and whoever upgrades never thinks to go looking for it.
  */
 export function dropStoredConfig(): void {
   if (readSection('config')) {
@@ -115,10 +128,15 @@ export function revealSaveFile(): void {
 }
 
 /**
- * `@common/storage` builds public image URLs from `NEXT_PUBLIC_SUPABASE_URL`, and it is
- * shared verbatim with the web rather than reimplemented. Setting the variable it reads
- * is cheaper than threading a base URL through a module that only ever has one.
+ * The public URL of a stored image, built from this bundle's own base.
+ *
+ * There was an `exportConfigToEnv` here that set `NEXT_PUBLIC_SUPABASE_URL` on the
+ * process at startup, because `@common/storage` read it to build the same URL. That was
+ * a shared module reaching for one host's environment (invariant 4) and a desktop app
+ * pretending to be Next to satisfy it. The base is an argument now, and this is where
+ * this host supplies it.
  */
-export function exportConfigToEnv(config: AppConfig): void {
-  process.env.NEXT_PUBLIC_SUPABASE_URL = config.supabaseUrl
+export function boardImageUrl(path: string): string {
+  const config = loadConfig()
+  return config ? imageUrl(config.cdnUrl, path) : ''
 }

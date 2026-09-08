@@ -8,7 +8,7 @@ import { SearchHeader } from '@/components/search-header'
 import { TagDrawer } from '@/components/tag-drawer'
 import { GroupedTagList } from '@/components/tag-list'
 import { SetupNotice } from '@/components/setup-notice'
-import { isSupabaseConfigured } from '@/lib/env'
+import { isDatabaseConfigured } from '@/lib/db'
 import { isNsfwEnabled } from '@/lib/nsfw-server'
 import { isRestricted, parseSearchQuery, searchHref, SEARCH_PARAM, splitQuery } from '@common/search'
 import { SITE_DESCRIPTION, SITE_NAME } from '@/lib/site'
@@ -45,7 +45,7 @@ export async function generateMetadata({ searchParams }: PageProps<'/posts'>): P
 export default async function PostsPage({ searchParams }: PageProps<'/posts'>) {
   const query = readQuery(await searchParams)
 
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     return (
       <div className="mx-auto w-full max-w-7xl px-3 py-4">
         <SearchHeader query={query} />

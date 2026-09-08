@@ -1,32 +1,22 @@
-import type { BooruClient } from '@common/supabase/types'
+import type { Db, DbPool } from '@common/db'
 import { syncTagPostCounts } from '@common/data/counters'
 import type { Rating } from '@common/search'
 import type { Tag } from '@common/tags'
 
-// The query logic two front ends run: the web's server actions and the desktop
-// uploader in packages/desktop. Everything here takes its clients rather than
-// building them, which is the whole point — `server.ts` reaches for `next/headers`
-// and `admin.ts` is `server-only`, so a file that calls either can only run inside
-// Next. The web's `src/lib/data/posts.ts` and `tags.ts` wrap these with its
-// request-scoped clients, so nothing in a page or an action sees the difference.
+// The query logic two front ends run: the website's reads and the desktop app's writes.
+// Everything here takes its handle rather than building one, which is the whole point —
+// `packages/desktop` creates posts through this exact code rather than a second copy of
+// it (invariant 3).
 //
-// The post write path. These replace the create_post_with_tags / update_post_with_tags
-// SQL functions. Each step is now a request you can see, log and re-run on its own; what
-// is lost is the single transaction the functions ran in, so the create path undoes its
-// own work (see below) and every failure carries the message of the step that produced it.
+// The post write path. These were `create_post_with_tags` / `update_post_with_tags` in
+// plpgsql, then a sequence of PostgREST requests with a hand-written unwind, and are
+// back inside one transaction now — which is what a database was always going to be
+// better at than a `catch` block. Every step is still a statement you can read; what is
+// no longer needed is the paragraph explaining what happens when step three fails.
 //
-// That includes the counter: `tags.post_count` was kept by a trigger on the rows these
-// functions write, and is recomputed here instead (./counters.ts). Every write below is
-// followed by a sync naming exactly the tags it moved.
-//
-// Every function takes its client rather than building one. That is what keeps this file
-// clear of `server-only` and of `next/headers`, so the desktop app (packages/desktop)
-// creates posts through this exact code rather than a second copy of it.
-//
-// There used to be two clients here — the uploader's session for the post row, so RLS
-// could record who wrote it, and the service role for storage and the counters. The
-// accounts and `uploader_id` are both gone and no table has a write policy left, so a
-// write is a write: one service-role client, held only by the desktop app.
+// The counter is the exception and stays outside the transaction on purpose. It is
+// derived data, it recomputes rather than increments (./counters.ts), and it must not be
+// able to fail an upload that has already landed.
 
 export type PostFields = {
   file_name: string
@@ -47,109 +37,102 @@ export type PostFields = {
  * `fileName` is the md5 of the bytes: it is the name both stored files take, and being
  * derived from the content is what lets it answer this question at all.
  */
-export async function findPostIdByFileName(
-  client: BooruClient,
-  fileName: string
-): Promise<number | null> {
-  const { data } = await client.from('posts').select('id').eq('file_name', fileName).maybeSingle()
-  return data?.id ?? null
+export async function findPostIdByFileName(db: Db, fileName: string): Promise<number | null> {
+  const [row] = await db<{ id: number }[]>`select id from posts where file_name = ${fileName}`
+  return row?.id ?? null
 }
 
 /**
  * Which of these file names are already posts, as a name → id map. The batch form of
  * `findPostIdByFileName`, for the desktop app's staging step: a folder dropped on the
- * queue is checked against the board before anything is uploaded, and asking forty times
- * one at a time is the same answer four hundred milliseconds later.
+ * window is checked against the board before anything is uploaded, and asking forty
+ * times one at a time is the same answer four hundred milliseconds later.
  *
  * A name that is not a post is simply absent from the map — the caller asked about files
  * it has, not about rows.
  */
 export async function findPostIdsByFileNames(
-  client: BooruClient,
+  db: Db,
   fileNames: string[]
 ): Promise<Map<string, number>> {
-  const found = new Map<string, number>()
-  if (fileNames.length === 0) return found
+  if (fileNames.length === 0) return new Map()
 
-  const { data } = await client.from('posts').select('id, file_name').in('file_name', fileNames)
-  for (const row of data ?? []) found.set(row.file_name, row.id)
-  return found
+  const rows = await db<{ id: number; file_name: string }[]>`
+    select id, file_name from posts where file_name = any(${fileNames})`
+  return new Map(rows.map((row) => [row.file_name, row.id]))
 }
 
 /**
  * Inserts a post and its tag links, returning the new id.
  *
- * If tagging fails the post is deleted again rather than left half-tagged, counters
- * included — the delete goes through `deletePostRow`, so whatever links did land are
- * counted back down. A name the board has no tag for is one of the ways it fails.
+ * **The unwind is gone.** There was no transaction when these were PostgREST requests,
+ * so this function deleted the post it had just inserted if tagging failed, and that
+ * delete had to go through `deletePostRow` so the counters came back down with it. A
+ * `begin` says the same thing in one word and says it correctly — an unwind is itself a
+ * write that can fail, which is the case the old code could not do anything about.
+ *
+ * A name the board has no tag for is still one of the ways this fails; the difference is
+ * that nothing is left behind when it does.
+ *
+ * It takes the pool rather than a `Db`, because only the pool can open a transaction —
+ * the one function in this directory that does.
  */
-export async function createPostWithTags(
-  client: BooruClient,
-  fields: PostFields
-): Promise<number> {
-  const { data, error } = await client
-    .from('posts')
-    .insert({
-      file_name: fields.file_name,
-      file_ext: fields.file_ext,
-      file_size: fields.file_size,
-      width: fields.width,
-      height: fields.height,
-      rating: fields.rating,
-      source_url: fields.source_url || null,
-    })
-    .select('id')
-    .single()
-  if (error) throw new Error(`Could not create the post: ${error.message}`)
+export async function createPostWithTags(db: DbPool, fields: PostFields): Promise<number> {
+  const { id, moved } = await db.begin(async (tx) => {
+    const [post] = await tx<{ id: number }[]>`
+      insert into posts ${tx({
+        file_name: fields.file_name,
+        file_ext: fields.file_ext,
+        file_size: fields.file_size,
+        width: fields.width,
+        height: fields.height,
+        rating: fields.rating,
+        source_url: fields.source_url || null,
+      })} returning id`
 
-  try {
-    const moved = await setPostTags(client, data.id, fields.tags)
-    await syncTagPostCounts(client, moved)
-  } catch (tagError) {
-    await deletePostRow(client, data.id)
-    throw tagError
-  }
+    return { id: post.id, moved: await setPostTags(tx, post.id, fields.tags) }
+  })
 
-  return data.id
+  await syncTagPostCounts(db, moved)
+  return id
 }
 
 /** Rewrites an existing post's rating, source and whole tag set. */
 export async function updatePostWithTags(
-  client: BooruClient,
+  db: DbPool,
   postId: number,
   fields: Pick<PostFields, 'rating' | 'source_url' | 'tags'>
 ): Promise<void> {
-  // `select` after the update is how "no such post" is detected — an update that
-  // matches nothing is not an error to PostgREST, it just returns no row.
-  const { data, error } = await client
-    .from('posts')
-    .update({ rating: fields.rating, source_url: fields.source_url || null })
-    .eq('id', postId)
-    .select('id')
-    .maybeSingle()
-  if (error) throw new Error(`Could not update the post: ${error.message}`)
-  if (!data) throw new Error(`Post ${postId} not found`)
+  const moved = await db.begin(async (tx) => {
+    // `returning` is how "no such post" is detected — an update that matches nothing is
+    // not an error, it just changes no row.
+    const updated = await tx<{ id: number }[]>`
+      update posts
+         set rating = ${fields.rating}, source_url = ${fields.source_url || null}
+       where id = ${postId}
+      returning id`
+    if (updated.length === 0) throw new Error(`Post ${postId} not found`)
 
-  const moved = await setPostTags(client, postId, fields.tags)
-  await syncTagPostCounts(client, moved)
+    return setPostTags(tx, postId, fields.tags)
+  })
+
+  await syncTagPostCounts(db, moved)
 }
 
 /**
  * Deletes a post and recounts what that emptied. The row cascades `post_tags`, so the
  * links have to be read before it goes — afterwards nothing is left to say which tags
- * lost a post.
+ * lost a post. Both in one statement, which is what a `with` is for.
  *
- * Shared by the delete action and the create path unwind, so neither can forget half
- * of it.
+ * Shared by the delete path and nothing else now that the create path unwinds itself.
  */
-export async function deletePostRow(client: BooruClient, postId: number): Promise<void> {
-  const { data: links } = await client.from('post_tags').select('tag_id').eq('post_id', postId)
-  const tagIds = (links ?? []).map((row) => row.tag_id as number)
+export async function deletePostRow(db: Db, postId: number): Promise<void> {
+  const rows = await db<{ tag_id: number }[]>`
+    with links as (select tag_id from post_tags where post_id = ${postId}),
+         gone as (delete from posts where id = ${postId})
+    select tag_id from links`
 
-  const { error } = await client.from('posts').delete().eq('id', postId)
-  if (error) throw new Error(`Delete failed: ${error.message}`)
-
-  await syncTagPostCounts(client, tagIds)
+  await syncTagPostCounts(db, rows.map((row) => row.tag_id))
 }
 
 /**
@@ -162,16 +145,18 @@ export async function deletePostRow(client: BooruClient, postId: number): Promis
  * on it, so a near-duplicate is seen before it is made. The quiet one: Postgres draws
  * the identity default *before* it tests the conflict, so every tag a post already had
  * burned a `tags.id` and threw the row away. A twenty-tag post spent twenty ids on each
- * save, and the post editor writes on every control use, so re-tagging a handful of
- * posts opened gaps of hundreds in the id column.
+ * save, and the post editor writes on every control use.
+ *
+ * The order of `names` is preserved, which one caller depends on: `setTagRule` asks for
+ * the trigger and its targets in one lookup and takes the trigger back off the front.
  */
-export async function resolveTagIds(client: BooruClient, names: string[]): Promise<number[]> {
+export async function resolveTagIds(db: Db, names: string[]): Promise<number[]> {
   if (names.length === 0) return []
 
-  const { data, error } = await client.from('tags').select('id, name').in('name', names)
-  if (error) throw new Error(`Could not read tags: ${error.message}`)
+  const rows = await db<{ id: number; name: string }[]>`
+    select id, name from tags where name = any(${names})`
 
-  const found = new Map((data ?? []).map((row) => [row.name as string, row.id as number]))
+  const found = new Map(rows.map((row) => [row.name, row.id]))
   const missing = names.filter((name) => !found.has(name))
   if (missing.length > 0) {
     throw new Error(
@@ -186,130 +171,93 @@ export async function resolveTagIds(client: BooruClient, names: string[]): Promi
  * adds the ones that are. Every name has to be a tag already — see `resolveTagIds`.
  *
  * Returns the tags whose link count actually moved — the ones dropped plus the ones
- * added — which is what the caller hands `syncTagPostCounts`. That is why the wanted
- * set is diffed against the links already stored rather than written blind: a retag
- * that only reorders the box moves no counter, and recounting every tag on the post
- * would be work with no answer to show for it.
+ * added — which is what the caller hands `syncTagPostCounts`. That is why the wanted set
+ * is diffed against the links already stored rather than written blind: a retag that
+ * only reorders the box moves no counter, and recounting every tag on the post would be
+ * work with no answer to show for it.
  */
-async function setPostTags(
-  client: BooruClient,
-  postId: number,
-  names: string[]
-): Promise<number[]> {
-  const wanted = await resolveTagIds(client, names)
+async function setPostTags(db: Db, postId: number, names: string[]): Promise<number[]> {
+  const wanted = await resolveTagIds(db, names)
 
-  // On a fresh post this comes back empty, which is why create and update share this
-  const { data: linked, error: linkedError } = await client
-    .from('post_tags')
-    .select('tag_id')
-    .eq('post_id', postId)
-  if (linkedError) throw new Error(`Could not read the current tags: ${linkedError.message}`)
+  // Each half `returning` what it actually touched, so the moved set comes back from the
+  // writes themselves rather than from a read taken beforehand and trusted to still be
+  // true. The diff that used to be computed in TypeScript — two sets, two array filters
+  // — is what `<> all` and `on conflict do nothing` say here.
+  //
+  // The casts are not decoration: `wanted` is empty whenever a post is being stripped of
+  // every tag, and postgres.js cannot tell the server what an empty array holds without
+  // being told. Untyped, `all('{}')` is an error rather than the "matches nothing" it
+  // reads as.
+  const removed = await db<{ tag_id: number }[]>`
+    delete from post_tags
+     where post_id = ${postId} and tag_id <> all(${wanted}::int[])
+    returning tag_id`
 
-  const have = new Set((linked ?? []).map((row) => row.tag_id as number))
-  const want = new Set(wanted)
-  const removed = [...have].filter((id) => !want.has(id))
-  const added = [...want].filter((id) => !have.has(id))
+  const added = await db<{ tag_id: number }[]>`
+    insert into post_tags (post_id, tag_id)
+    select ${postId}, unnest(${wanted}::int[])
+        on conflict do nothing
+    returning tag_id`
 
-  if (removed.length > 0) {
-    const { error } = await client
-      .from('post_tags')
-      .delete()
-      .eq('post_id', postId)
-      .in('tag_id', removed)
-    if (error) throw new Error(`Could not remove old tags: ${error.message}`)
-  }
-
-  if (added.length > 0) {
-    const { error } = await client
-      .from('post_tags')
-      .insert(added.map((tag_id) => ({ post_id: postId, tag_id })))
-    if (error) throw new Error(`Could not apply tags: ${error.message}`)
-  }
-
-  return [...removed, ...added]
+  return [...removed.map((row) => row.tag_id), ...added.map((row) => row.tag_id)]
 }
 
 /**
- * Tags whose name starts with `query`, most used first — backs the tag field's autocomplete.
- * A prefix match, the same shape the search bar's suggestions have: a substring match put
- * whatever was popular ahead of the tag being typed — `hair` offered `black_hair` before
- * `hair` itself — and a tag is reached by its own opening far more often than by a word
- * buried in it.
+ * Tags whose name starts with `query`, most used first — backs the tag field's
+ * autocomplete. A prefix match, the same shape the search bar's suggestions have: a
+ * substring match put whatever was popular ahead of the tag being typed — `hair` offered
+ * `black_hair` before `hair` itself — and a tag is reached by its own opening far more
+ * often than by a word buried in it.
+ *
  * `_` is a LIKE wildcard and nearly every multi-word tag carries one, so it's escaped:
  * otherwise `black_h` would also match `blackXh`.
  *
  * `like`, not `ilike`, and that is the whole point of `tags_name_prefix_idx`. No btree
  * index can serve `ILIKE` — not under `text_pattern_ops`, not under any opclass — so
- * with `ilike` here the index was maintained on every tag write and used by nothing,
- * and every keystroke that reached the board was a sequential scan of `tags`. The two
- * return the same rows regardless: `tags.name` is checked against `^[a-z0-9_().-]+$`,
- * so it can only be lowercase, and the needle is lowercased on the line above.
+ * with `ilike` here the index would be maintained on every tag write and used by
+ * nothing, and every keystroke that reached the board would be a sequential scan of
+ * `tags`. The two return the same rows regardless: `tags.name` is checked against
+ * `^[a-z0-9_().-]+$`, so it can only be lowercase, and the needle is lowercased below.
  */
-export async function searchTags(
-  client: BooruClient,
-  query: string,
-  limit = 8
-): Promise<Tag[]> {
+export async function searchTags(db: Db, query: string, limit = 8): Promise<Tag[]> {
   const needle = query.trim().toLowerCase().replace(/[\\%_]/g, '\\$&')
   if (!needle) return []
 
-  const { data } = await client
-    .from('tags')
-    .select('id, name, category, mark, post_count')
-    .like('name', `${needle}%`)
-    .order('post_count', { ascending: false })
-    .order('name')
-    .limit(limit)
-  return data ?? []
+  return await db<Tag[]>`
+    select id, name, category, mark, post_count
+      from tags
+     where name like ${`${needle}%`}
+     order by post_count desc, name
+     limit ${limit}`
 }
 
 /**
  * Every tag, most used first — the index behind the web's /tags page and the desktop
- * uploader's Tags screen. It lives here rather than in `tags.ts` for the same reason the
- * write path does: the Electron app has no request-scoped client to build.
+ * app's Tags screen. It lives here rather than in `tags.ts` for the same reason the
+ * write path does: the Electron app has no request-scoped handle to build.
  *
  * The cap is the read's, not the page's. Ordering by `post_count` is what decides which
  * tags a capped read lets through; the screens then sort the ones they got by name,
  * because you arrive at an index holding a name, not a size.
+ *
+ * The section's **name** comes back beside the id it is stored as — a left join, where
+ * this was PostgREST's one genuinely awkward embed: two paths lead from `tags` to
+ * `tag_form_sections` (this column, and the many-to-many through `tag_form_section_deps`),
+ * so the embed was ambiguous and had to name a foreign-key constraint to disambiguate.
+ * Get that wrong and the whole read failed — which is how the Tags screen once went
+ * blank saying "no tags yet", the error having been swallowed by a `?? []`.
  */
-export async function listTags(client: BooruClient, limit = 200): Promise<Tag[]> {
-  const { data, error } = await client
-    .from('tags')
-    // The one read that asks about the form section, because the desktop tag form is the
-    // one thing that draws it and this is the read behind it. Autocomplete and the post
-    // page's tag list leave it alone rather than carry a field they never use. `mark` is
-    // the other way round and every read carries it — it is drawn in front of the name
-    // wherever a name is drawn.
-    //
-    // The name is embedded rather than joined by hand above: a section is an id on the row
-    // and a word on the screen, and this is the one place the two meet — the same split the
-    // tag rules make. Both come back, the id to write with and the name to group by.
-    //
-    // **The constraint is named** because there are two ways from `tags` to
-    // `tag_form_section`: this column, and the many-to-many PostgREST infers through
-    // `tag_form_section_dep`. Without the hint the embed is ambiguous and the whole read
-    // fails — which is how the Tags screen once went blank saying "no tags yet", the error
-    // having been swallowed by the `data ?? []` below. It is checked now.
-    .select(
-      'id, name, category, mark, post_count, form_section_id, tag_form_section!tags_form_section_id_fkey(name)'
-    )
-    .order('post_count', { ascending: false })
-    .order('name')
-    .limit(limit)
-
-  // Thrown rather than answered with an empty list. A read that fails and a board with no
-  // tags are not the same thing, and the screens cannot tell them apart: "no tags yet" is
-  // what a broken query looked like for as long as it took to notice. Every other read in
-  // this file is a page that degrades; this one is the vocabulary.
-  if (error) throw new Error(`Could not read the tags: ${error.message}`)
-
-  // Flattened here so nothing above ever handles the embed's shape. A tag on no section has
-  // no embedded row, which is null either way.
-  return (data ?? []).map(({ tag_form_section, ...tag }) => ({
-    ...tag,
-    // PostgREST types a one-to-one embed as an array, which it is not: the foreign key is
-    // on this row, so there is at most one. Through `unknown` because the two shapes do not
-    // overlap enough for the compiler to take it on trust.
-    form_section: (tag_form_section as unknown as { name: string } | null)?.name ?? null,
-  })) as Tag[]
+export async function listTags(db: Db, limit = 200): Promise<Tag[]> {
+  // Thrown rather than answered with an empty list — the caller does not catch this, and
+  // that is deliberate. A read that fails and a board with no tags are not the same
+  // thing, and the screens cannot tell them apart: "no tags yet" is what a broken query
+  // looked like for as long as it took to notice. Every other read in this file is a page
+  // that degrades; this one is the vocabulary.
+  return await db<Tag[]>`
+    select t.id, t.name, t.category, t.mark, t.post_count, t.form_section_id,
+           s.name as form_section
+      from tags t
+      left join tag_form_sections s on s.id = t.form_section_id
+     order by t.post_count desc, t.name
+     limit ${limit}`
 }

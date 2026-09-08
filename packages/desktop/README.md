@@ -49,19 +49,24 @@ source it was built from — it is the one thing here somebody goes looking for 
 version, so without that the folder just accumulates one file per release you ever built
 and the newest is only obvious if you read the numbers.
 
-Both read the repo's own environment file and **require all four values** —
-`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-and `NEXT_PUBLIC_SITE_URL` (see `.env.example`). A missing one fails the build and names
-what is missing, rather than producing an installer that cannot reach anything. The
-website treats the site URL as optional because Vercel supplies a deployment URL to fall
-back on; nothing here does, and it is how a finished post gets opened on the board.
+Both read the repo's own environment file and **require seven values** —
+`DATABASE_URL_APP`, `NEXT_PUBLIC_CDN_URL`, `NEXT_PUBLIC_SITE_URL` and the four `R2_*`
+(see `.env.example`). A missing one fails the build and names what is missing, rather
+than producing an installer that cannot reach anything. The website treats the site URL
+as optional because Vercel supplies a deployment URL to fall back on; nothing here does,
+and it is how a finished post gets opened on the board.
+
+`DATABASE_URL_APP` is `booru_app`, not the website's `booru_web` and not the migration
+runner's `booru_owner`: it reads and writes every row and may not create, alter or drop
+anything. That is what keeps a bundle somebody extracts the string from at "can vandalise
+the data" rather than "can drop the schema" — see `db/README.md`.
 
 Which board a copy talks to is therefore decided when it is built, not by whoever runs
 it. There is no setup screen and no login: the app opens on the upload form, and
-Settings shows the project it was built for as a readout. Earlier versions asked for
-those four values on first launch and kept them in `save.json`, which put a service-role
-key on every machine that ran the app — a copy this version deletes on startup if it
-finds one.
+Settings shows the database host and the image origin as a readout, never a credential.
+Earlier versions asked for those values on first launch and kept them in `save.json`,
+which put the board's writing credential on every machine that ran the app — a copy this
+version deletes on startup if it finds one.
 
 `save.json` now holds the compression preferences and the tag catalogs, and nothing else,
 as plain readable text — the catalogs being a `{ name: [tag, …] }` object worth opening the

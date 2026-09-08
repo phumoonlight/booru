@@ -33,9 +33,9 @@ export default async function SettingsPage() {
       <section className="flex flex-col gap-3 rounded-lg border border-border p-4">
         <div>
           {/* The scale's own red, so the heading is the colour of what it turns on */}
-          <h2 className={`text-base font-semibold ${RATING_COLOR.e}`}>Enable NSFW</h2>
+          <h2 className={`text-base font-semibold ${RATING_COLOR.r}`}>Enable NSFW</h2>
           <p className="mt-1 text-sm text-muted">
-            Adult posts are hidden by default. Turn this on to see them everywhere on the
+            R-18 posts are hidden by default. Turn this on to see them everywhere on the
             site.
           </p>
         </div>

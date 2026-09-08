@@ -27,7 +27,8 @@ import {
   TAG_INDEX_LIMIT,
 } from './tag-cache'
 import { clearBrowseCache, readBrowseCache, writeBrowseCache } from './browse-cache'
-import { boardClient } from './supabase'
+import { boardDb } from './db'
+import { boardStore } from './r2'
 import { loadPost, removePost, savePost, thumbnailDataUrl, type LoadedPost } from './manage'
 import type { FormSections } from '@common/data/form-sections'
 import type { AppStatus, BrowseCacheFile, PreferencesInput, TagSuggestion } from '../shared/api'
@@ -156,7 +157,12 @@ export function registerIpc(): void {
     return {
       configured: config !== null,
       siteUrl: config?.siteUrl ?? '',
-      supabaseUrl: config?.supabaseUrl ?? '',
+      // The host, never the connection string — that carries a password, and the settings
+      // screen is a readout somebody might screenshot. `URL.parse` returns null on
+      // anything it cannot read, which for a value this build refused to be without means
+      // a string shaped like no URL at all; showing nothing beats showing half of it.
+      databaseHost: config ? (URL.parse(config.databaseUrl)?.hostname ?? '') : '',
+      cdnUrl: config?.cdnUrl ?? '',
       // Read here rather than baked into the bundle: the renderer has no `process`, and
       // `app.getVersion()` is the version electron-builder actually stamped on the copy.
       versions: {
@@ -244,9 +250,9 @@ export function registerIpc(): void {
     const cached = await cachedIndex()
     if (cached) return cached
 
-    const supabase = boardClient()
-    if (!supabase) return []
-    return listTags(supabase, TAG_INDEX_LIMIT)
+    const db = boardDb()
+    if (!db) return []
+    return listTags(db, TAG_INDEX_LIMIT)
   })
 
   /**
@@ -264,9 +270,9 @@ export function registerIpc(): void {
     const cached = await cachedSuggestions(parsed.data)
     if (cached) return suggest(cached)
 
-    const supabase = boardClient()
-    if (!supabase) return []
-    return suggest(await searchTags(supabase, parsed.data))
+    const db = boardDb()
+    if (!db) return []
+    return suggest(await searchTags(db, parsed.data))
   })
 
   /**
@@ -321,7 +327,7 @@ export function registerIpc(): void {
 
   /**
    * The rows the tag form draws under a category, their order, and what each waits for —
-   * `tag_form_section`. One edit per write, in five shapes: a row has an id, so creating,
+   * `tag_form_sections`. One edit per write, in five shapes: a row has an id, so creating,
    * renaming, deleting, reordering and setting a condition are things done to a row rather
    * than five ways of restating a list. `normalizeFormSection` and `resolveTagIds` inside
    * are the parse.
@@ -359,8 +365,8 @@ export function registerIpc(): void {
     const parsed = uploadSchema.safeParse(raw)
     if (!parsed.success) return { ok: false, error: 'Nothing to upload' }
 
-    const supabase = boardClient()
-    if (!supabase) return { ok: false, error: 'Not set up yet' }
+    const db = boardDb()
+    if (!db) return { ok: false, error: 'Not set up yet' }
 
     const metadata = parsePostMetadata({
       tags: parsed.data.tags,
@@ -376,8 +382,12 @@ export function registerIpc(): void {
       return { ok: false, error: 'Could not read the file — has it moved?' }
     }
 
+    const store = boardStore()
+    if (!store) return { ok: false, error: 'Not set up yet' }
+
     const result = await createPostFromImage(
-      supabase,
+      db,
+      store,
       bytes,
       metadata.metadata,
       DESKTOP_UPLOAD_LIMITS
@@ -401,9 +411,9 @@ export function registerIpc(): void {
     const empty: PostPage = { posts: [], hasMore: false }
     if (!parsed.success) return empty
 
-    const supabase = boardClient()
-    if (!supabase) return empty
-    return searchPosts(supabase, {
+    const db = boardDb()
+    if (!db) return empty
+    return searchPosts(db, {
       query: parsed.data.query,
       after: parsed.data.after,
       perPage: parsed.data.perPage,
@@ -451,15 +461,15 @@ export function registerIpc(): void {
   ipcMain.handle(
     'tags:create',
     async (_event, name: unknown, category: unknown, section: unknown) => {
-      const supabase = boardClient()
-      if (!supabase) return { ok: false as const, error: 'Not set up yet' }
+      const db = boardDb()
+      if (!db) return { ok: false as const, error: 'Not set up yet' }
       const parsedName = tagNameSchema.safeParse(name)
       const parsedCategory = categorySchema.safeParse(category)
       if (!parsedName.success) return { ok: false as const, error: 'Type a tag name.' }
       if (!parsedCategory.success) return { ok: false as const, error: 'Pick a category.' }
 
       const result = await manageTags.createTag(
-        supabase,
+        db,
         parsedName.data,
         parsedCategory.data,
         z.number().int().positive().nullable().safeParse(section).data ?? null
@@ -470,27 +480,27 @@ export function registerIpc(): void {
   )
 
   ipcMain.handle('tags:rename', async (_event, id: unknown, name: unknown) => {
-    const supabase = boardClient()
-    if (!supabase) return { ok: false as const, error: 'Not set up yet' }
+    const db = boardDb()
+    if (!db) return { ok: false as const, error: 'Not set up yet' }
     const parsedId = postIdSchema.safeParse(id)
     const parsedName = tagNameSchema.safeParse(name)
     if (!parsedId.success) return { ok: false as const, error: 'No such tag' }
     if (!parsedName.success) return { ok: false as const, error: 'Type a tag name.' }
 
-    const result = await manageTags.renameTag(supabase, parsedId.data, parsedName.data)
+    const result = await manageTags.renameTag(db, parsedId.data, parsedName.data)
     if (result.ok) clearTagCache()
     return result
   })
 
   ipcMain.handle('tags:set-category', async (_event, id: unknown, category: unknown) => {
-    const supabase = boardClient()
-    if (!supabase) return { ok: false as const, error: 'Not set up yet' }
+    const db = boardDb()
+    if (!db) return { ok: false as const, error: 'Not set up yet' }
     const parsedId = postIdSchema.safeParse(id)
     const parsedCategory = categorySchema.safeParse(category)
     if (!parsedId.success) return { ok: false as const, error: 'No such tag' }
     if (!parsedCategory.success) return { ok: false as const, error: 'Pick a category.' }
 
-    const result = await manageTags.setTagCategory(supabase, parsedId.data, parsedCategory.data)
+    const result = await manageTags.setTagCategory(db, parsedId.data, parsedCategory.data)
     if (result.ok) clearTagCache()
     return result
   })
@@ -502,40 +512,40 @@ export function registerIpc(): void {
    * draws it.
    */
   ipcMain.handle('tags:set-section', async (_event, id: unknown, sectionId: unknown) => {
-    const supabase = boardClient()
-    if (!supabase) return { ok: false as const, error: 'Not set up yet' }
+    const db = boardDb()
+    if (!db) return { ok: false as const, error: 'Not set up yet' }
     const parsedId = postIdSchema.safeParse(id)
     // Null is the answer for "on no row", which is what the menu's empty option sends.
     const parsed = z.number().int().positive().nullable().safeParse(sectionId)
     if (!parsedId.success) return { ok: false as const, error: 'No such tag' }
     if (!parsed.success) return { ok: false as const, error: 'No such section' }
 
-    const result = await manageTags.setTagFormSection(supabase, parsedId.data, parsed.data)
+    const result = await manageTags.setTagFormSection(db, parsedId.data, parsed.data)
     if (result.ok) clearTagCache()
     return result
   })
 
   /** What is drawn in front of the tag's name — `tags.mark`. '' clears it. */
   ipcMain.handle('tags:set-mark', async (_event, id: unknown, mark: unknown) => {
-    const supabase = boardClient()
-    if (!supabase) return { ok: false as const, error: 'Not set up yet' }
+    const db = boardDb()
+    if (!db) return { ok: false as const, error: 'Not set up yet' }
     const parsedId = postIdSchema.safeParse(id)
     const parsed = markSchema.safeParse(mark)
     if (!parsedId.success) return { ok: false as const, error: 'No such tag' }
     if (!parsed.success) return { ok: false as const, error: 'That is too long for a mark.' }
 
-    const result = await manageTags.setTagMark(supabase, parsedId.data, parsed.data)
+    const result = await manageTags.setTagMark(db, parsedId.data, parsed.data)
     if (result.ok) clearTagCache()
     return result
   })
 
   ipcMain.handle('tags:delete', async (_event, id: unknown) => {
-    const supabase = boardClient()
-    if (!supabase) return { ok: false as const, error: 'Not set up yet' }
+    const db = boardDb()
+    if (!db) return { ok: false as const, error: 'Not set up yet' }
     const parsedId = postIdSchema.safeParse(id)
     if (!parsedId.success) return { ok: false as const, error: 'No such tag' }
 
-    const result = await manageTags.deleteTag(supabase, parsedId.data)
+    const result = await manageTags.deleteTag(db, parsedId.data)
     if (result.ok) clearTagCache()
     return result
   })
@@ -547,8 +557,8 @@ export function registerIpc(): void {
    * the difference between a rule that did something and one already satisfied.
    */
   ipcMain.handle('tags:apply', async (_event, target: unknown, condition: unknown) => {
-    const supabase = boardClient()
-    if (!supabase) return { ok: false as const, error: 'Not set up yet' }
+    const db = boardDb()
+    if (!db) return { ok: false as const, error: 'Not set up yet' }
     const parsedTarget = tagNameSchema.safeParse(target)
     const parsedCondition = tagNameSchema.safeParse(condition)
     if (!parsedTarget.success || !parsedCondition.success) {
@@ -556,7 +566,7 @@ export function registerIpc(): void {
     }
 
     const result = await manageTags.applyTagToTagged(
-      supabase,
+      db,
       parsedTarget.data,
       parsedCondition.data
     )

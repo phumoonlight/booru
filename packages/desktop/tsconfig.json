@@ -4,8 +4,7 @@
   // config and a web config, joined by project references) needs `composite`, and
   // `composite` insists every file in the program sit under this directory — which
   // the whole design rules out: the pipeline, the write path and the compressors are
-  // compiled out of ../common. So: one config, DOM included, and `@supabase/auth-js`
-  // gets the `Storage` type its session adapter is declared against.
+  // compiled out of ../common. So: one config, with DOM included.
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],

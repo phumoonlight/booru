@@ -4,24 +4,22 @@ import { z } from 'zod'
 import { POST_MAX_DIMENSION, compressImgForPost } from '@common/imgcmp/for-post'
 import { compressImgForThumbnail } from '@common/imgcmp/for-thumbnail'
 import { createPostWithTags, findPostIdByFileName, resolveTagIds } from '@common/data/shared'
-import { POSTS_BUCKET, THUMBNAILS_BUCKET, postImagePath, thumbnailPath } from '@common/storage'
+import { postImagePath, thumbnailPath, type ObjectStore } from '@common/storage'
 import { RATINGS, type Rating } from '@common/search'
 import { parseTagInput } from '@common/tags'
-import type { BooruClient } from '@common/supabase/types'
+import type { DbPool } from '@common/db'
 
 /**
- * One image in, one post out: validate, compress, store, insert, and unwind the whole
- * thing if any of that fails.
+ * One image in, one post out: validate, compress, store, insert, and put back whatever
+ * landed if any of that fails.
  *
- * This is the half of the upload that has nothing to do with how the bytes arrived. The
- * web hands it a server action's `FormData` file (`src/lib/actions/upload.ts`); the desktop
- * uploader hands it a file read off disk (`packages/desktop`), because the compression
- * below is the CPU work that a free serverless tier is worst at. Neither owns it, so
- * neither can drift from the other on what a post is.
+ * This is the half of the upload that has nothing to do with how the bytes arrived or
+ * where they are going. The desktop app hands it a file read off disk, a database handle
+ * and a bucket; it builds none of the three, which is what lets it compile in Electron's
+ * main process (invariant 3).
  *
- * What stays with the caller: authentication, whatever framework-shaped parsing gets the
- * bytes out of a request, cache revalidation, and the limits — those are a property of
- * where the code runs, not of the pipeline (see `limits` below).
+ * What stays with the caller: whatever gets the bytes off disk, and the limits — those
+ * are a property of where the code runs, not of the pipeline (see `limits` below).
  */
 
 const FORMAT_TO_EXT: Record<string, string> = {
@@ -53,10 +51,9 @@ export type UploadResult =
   | { ok: false; error: string; existingPostId?: number }
 
 /**
- * Where the ceilings come from is the caller's business. The web's are Vercel's — a
- * 4.5MB request body and a 10s function timeout (`src/lib/upload-limits.ts`) — and the
- * desktop uploader's are Supabase Storage's and its own patience
- * (`packages/desktop/src/main/limits.ts`). Nothing in here has an opinion about either.
+ * Where the ceilings come from is the caller's business — the desktop app's are its own
+ * (`packages/desktop/src/main/limits.ts`) and now the only ones, the website having
+ * stopped taking uploads. Nothing in here has an opinion about them.
  */
 export type UploadLimits = {
   maxFileSize: number
@@ -109,12 +106,16 @@ export function parsePostMetadata(
 }
 
 /**
- * Creates one post from one image's bytes. One client, and it has to be the service
- * role: no table in the schema has a write policy, so nothing else can write a row or
- * store an object.
+ * Creates one post from one image's bytes.
+ *
+ * Two handles, and it builds neither: the database, and somewhere to put the files. They
+ * were one Supabase client that was both — a bucket and a schema behind one key — and
+ * splitting them is what a separate database and a separate bucket made honest. Only the
+ * desktop app holds either, since it is the only thing that writes.
  */
 export async function createPostFromImage(
-  client: BooruClient,
+  db: DbPool,
+  store: ObjectStore,
   bytes: Buffer,
   metadata: PostMetadata,
   limits: UploadLimits
@@ -159,7 +160,7 @@ export async function createPostFromImage(
   // we re-encode below. Storage paths derive from it either way.
   const md5 = createHash('md5').update(bytes).digest('hex')
 
-  const existingPostId = await findPostIdByFileName(client, md5)
+  const existingPostId = await findPostIdByFileName(db, md5)
   if (existingPostId !== null) {
     return { ok: false, error: 'This image already exists', existingPostId }
   }
@@ -170,7 +171,7 @@ export async function createPostFromImage(
   // select on the way past and turns a mistyped or stale tag into an error before any
   // pixels are decoded. The insert still checks — this is an early out, not the rule.
   try {
-    await resolveTagIds(client, metadata.tags)
+    await resolveTagIds(db, metadata.tags)
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Unknown tags' }
   }
@@ -273,31 +274,26 @@ export async function createPostFromImage(
       `thumb ${kb(thumbResult.buffer.length)}`
   )
 
-  // Storage writes need the service-role client (RLS floor is signed-in-only anyway)
-  const storage = client.storage
-  const postUpload = await storage
-    .from(POSTS_BUCKET)
-    .upload(postImagePath(md5, postExt), postBuffer, {
-      contentType: CONTENT_TYPES[postExt],
-      upsert: false,
-    })
-  if (postUpload.error) {
-    return { ok: false, error: `Storage upload failed: ${postUpload.error.message}` }
+  // The files go in before the row, because the row is what makes them findable: an
+  // object nothing points at is invisible litter, where a row pointing at a missing
+  // object is a broken image on the board.
+  const imagePath = postImagePath(md5, postExt)
+  try {
+    await store.put(imagePath, postBuffer, CONTENT_TYPES[postExt])
+  } catch (error) {
+    return { ok: false, error: `Storage upload failed: ${message(error)}` }
   }
-  const thumbUpload = await storage
-    .from(THUMBNAILS_BUCKET)
-    .upload(thumbnailPath(md5), thumbResult.buffer, {
-      contentType: 'image/avif',
-      upsert: true,
-    })
-  if (thumbUpload.error) {
-    await storage.from(POSTS_BUCKET).remove([postImagePath(md5, postExt)])
-    return { ok: false, error: `Thumbnail upload failed: ${thumbUpload.error.message}` }
+
+  try {
+    await store.put(thumbnailPath(md5), thumbResult.buffer, 'image/avif')
+  } catch (error) {
+    await store.remove(imagePath)
+    return { ok: false, error: `Thumbnail upload failed: ${message(error)}` }
   }
 
   let postId: number
   try {
-    postId = await createPostWithTags(client, {
+    postId = await createPostWithTags(db, {
       file_name: md5,
       file_ext: postExt,
       file_size: postBuffer.length,
@@ -308,14 +304,18 @@ export async function createPostFromImage(
       tags: metadata.tags,
     })
   } catch (error) {
-    // Roll back storage so a retry starts clean
-    await storage.from(POSTS_BUCKET).remove([postImagePath(md5, postExt)])
-    await storage.from(THUMBNAILS_BUCKET).remove([thumbnailPath(md5)])
-    return {
-      ok: false,
-      error: `Database insert failed: ${error instanceof Error ? error.message : String(error)}`,
-    }
+    // The write itself is a transaction now, so there is no half-made post to undo —
+    // only the two objects, which nothing would ever ask for again. Removing them is
+    // what keeps a retry of the same image starting clean rather than uploading over
+    // itself.
+    await store.remove(imagePath)
+    await store.remove(thumbnailPath(md5))
+    return { ok: false, error: `Database insert failed: ${message(error)}` }
   }
 
   return { ok: true, postId }
+}
+
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }

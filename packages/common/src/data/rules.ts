@@ -1,26 +1,21 @@
 import { asRating, RATINGS, ratingToken, type Rating } from '@common/search'
 import { resolveTagIds } from '@common/data/shared'
-import type { BooruClient } from '@common/supabase/types'
+import type { Db } from '@common/db'
 
 /**
  * The tag rules, on the board rather than in a file on one machine.
  *
- * Two kinds, one table (`20260906140000_tag_rules.sql` has why): an **implication** is
- * applied by itself — `white_bra` means the post is also a `bra` — and a
- * **recommendation** is only offered, as a chip to press. What the app does with a row is
- * the whole difference; the row is the same shape either way, so `kind` is a column and
- * this file is one set of functions.
- *
- * There was a third, the **form group**, which hid tags inside a picker until the tag they
- * hung off was on the post. It is gone: the condition belongs on the form *row*, which is
- * the thing that should appear and disappear, so it is `tag_form_section_dep` now — see
- * `20260908160000_section_deps.sql`.
+ * Two kinds, one table (the baseline migration has why): an **implication** is applied
+ * by itself — `white_bra` means the post is also a `bra` — and a **recommendation** is
+ * only offered, as a chip to press. What the app does with a row is the whole
+ * difference; the row is the same shape either way, so `kind` is a column and this file
+ * is one set of functions.
  *
  * They read and write **names**, not ids, because everything above this line is written
  * in names: the rule store the tag field consults on every keystroke, the map the rule
  * diagram draws, the picker on the Tags screen. The table stores ids so a rename carries
- * its rules and a delete takes them — that is the point of moving them here — and this
- * is the one place the two spellings meet.
+ * its rules and a delete takes them — that is the point of having moved them here — and
+ * this is the one place the two spellings meet.
  */
 
 export type RuleKind = 'implies' | 'recommends'
@@ -31,7 +26,7 @@ export type RuleKind = 'implies' | 'recommends'
  * reason: a screen, an IPC channel and a rule map read better in words, and the column is
  * a discriminator with exactly two values.
  *
- * These two numbers appear nowhere else. The check constraint in the migrations is the
+ * These two numbers appear nowhere else. The check constraint in the baseline is the
  * other half of the pair, so a third kind is a line here and a line there.
  */
 export const RULE_KIND: Record<RuleKind, number> = { implies: 0, recommends: 1 }
@@ -39,61 +34,51 @@ export const RULE_KIND: Record<RuleKind, number> = { implies: 0, recommends: 1 }
 /** `{ trigger: [implied, …] }`, the shape both rule sets have had all along. */
 export type TagRules = Record<string, string[]>
 
-/** What the embed above hands back: a joined row with a name on each side. */
-type RuleRow = {
-  tag: { name: string } | null
-  target: { name: string } | null
-}
-
 /**
  * Every rule of one kind, keyed by the tag that triggers it.
  *
  * Read whole, never per tag: the window keeps the whole set in memory because the tag
  * field consults it while you type, and a few hundred edges is smaller than one page of
- * the gallery. Sorted on both axes so the rule diagram and the panels draw the same
- * order twice running.
+ * the gallery. Ordered in SQL on both axes so the rule diagram and the panels draw the
+ * same order twice running.
+ *
+ * Two joins back to `tags`, which is what PostgREST's two embeds were — and they had to
+ * name the foreign-key constraints by hand, since both sides point at the same table and
+ * the embed was otherwise ambiguous. That is why those constraints used to be named in
+ * the migration; nothing needs them named any more.
  *
  * For implications the rating floors are folded back in as `rating:` tokens in the same
- * lists, which is the shape `save.json` had and the shape every helper above this
- * expects. The column they come from is `tags.implied_rating` — one per tag, since a
- * floor under a floor is the same rule written twice.
+ * lists, which is the shape every helper above this expects. They come from
+ * `tags.implied_rating` — one per tag, since a floor under a floor is the same rule
+ * written twice.
  */
-export async function listTagRules(client: BooruClient, kind: RuleKind): Promise<TagRules> {
-  const { data, error } = await client
-    .from('tag_rules')
-    // Both sides point at `tags`, so PostgREST is told which constraint each embed
-    // follows. The names are pinned in the migration for exactly this.
-    .select('tag:tags!tag_rules_tag_id_fkey(name), target:tags!tag_rules_target_tag_id_fkey(name)')
-    .eq('kind', RULE_KIND[kind])
-  if (error) throw new Error(`Could not read the tag rules: ${error.message}`)
+export async function listTagRules(db: Db, kind: RuleKind): Promise<TagRules> {
+  const rows = await db<{ tag: string; target: string }[]>`
+    select trg.name as tag, tgt.name as target
+      from tag_rules r
+      join tags trg on trg.id = r.tag_id
+      join tags tgt on tgt.id = r.target_tag_id
+     where r.kind = ${RULE_KIND[kind]}
+     order by trg.name, tgt.name`
 
   const out: TagRules = {}
-  for (const row of (data ?? []) as unknown as RuleRow[]) {
-    const tag = row.tag?.name
-    const target = row.target?.name
-    if (!tag || !target) continue
-    ;(out[tag] ??= []).push(target)
-  }
-
-  // Before the floors go on, so a rating stays at the end of its list the way
-  // `normalizeRules` kept it — the tags are the list, the rating is the consequence
-  // hanging off the end of it, and a `rating:` token sorted in among the names would read
-  // as one of them
-  for (const tag of Object.keys(out)) out[tag].sort()
+  for (const row of rows) (out[row.tag] ??= []).push(row.target)
 
   if (kind === 'implies') {
-    const { data: floors, error: floorError } = await client
-      .from('tags')
-      .select('name, implied_rating')
-      .not('implied_rating', 'is', null)
-    if (floorError) throw new Error(`Could not read the implied ratings: ${floorError.message}`)
+    // Appended after the tags, so a rating stays at the end of its list: the tags are the
+    // list, and the rating is the consequence hanging off the end of it. A `rating:` token
+    // sorted in among the names would read as one of them.
+    const floors = await db<{ name: string; implied_rating: string }[]>`
+      select name, implied_rating from tags
+       where implied_rating is not null
+       order by name`
 
-    for (const row of floors ?? []) {
+    for (const row of floors) {
       // The column holds the letter; the list above it holds the token. This is where the
       // one becomes the other.
       const rating = storedRating(row.implied_rating)
       if (!rating) continue
-      ;(out[row.name as string] ??= []).push(ratingToken(rating))
+      ;(out[row.name] ??= []).push(ratingToken(rating))
     }
   }
 
@@ -109,12 +94,13 @@ export async function listTagRules(client: BooruClient, kind: RuleKind): Promise
  * written to `tags.implied_rating` instead. Only implications have one; a token handed to
  * a recommendation is dropped, the way `TAG_PATTERN` used to drop it on its colon.
  *
- * Diffed rather than deleted-and-reinserted because there is no transaction here: a
- * delete that lands followed by an insert that doesn't would take the rule with it, and
- * a rule that only reorders should write nothing at all.
+ * Diffed rather than deleted-and-reinserted, which is now the database's doing rather
+ * than two `Set`s and two array filters: `<> all` drops what is no longer wanted and `on
+ * conflict do nothing` adds only what is new, so a rule that only reorders writes nothing
+ * at all.
  */
 export async function setTagRule(
-  client: BooruClient,
+  db: Db,
   kind: RuleKind,
   tag: string,
   names: string[]
@@ -133,48 +119,29 @@ export async function setTagRule(
   // One lookup for the trigger and its targets together, and it throws naming anything
   // the board has no tag for — the same refusal a post write makes, since a rule may only
   // ever name tags that exist. The trigger comes back first because it went in first.
-  const [tagId, ...targetIds] = await resolveTagIds(client, [tag, ...wantedNames])
-  const wanted = new Set(targetIds)
+  const [tagId, ...targetIds] = await resolveTagIds(db, [tag, ...wantedNames])
 
-  const { data: stored, error: readError } = await client
-    .from('tag_rules')
-    .select('target_tag_id')
-    .eq('tag_id', tagId)
-    .eq('kind', RULE_KIND[kind])
-  if (readError) throw new Error(`Could not read the tag rule: ${readError.message}`)
+  await db`
+    delete from tag_rules
+     where tag_id = ${tagId} and kind = ${RULE_KIND[kind]}
+       and target_tag_id <> all(${targetIds}::int[])`
 
-  const have = new Set((stored ?? []).map((row) => row.target_tag_id as number))
-  const added = [...wanted].filter((id) => !have.has(id))
-  const dropped = [...have].filter((id) => !wanted.has(id))
-
-  if (added.length > 0) {
-    const { error } = await client
-      .from('tag_rules')
-      .insert(
-        added.map((target_tag_id) => ({ tag_id: tagId, kind: RULE_KIND[kind], target_tag_id }))
-      )
-    if (error) throw new Error(`Could not save the tag rule: ${error.message}`)
-  }
-  if (dropped.length > 0) {
-    const { error } = await client
-      .from('tag_rules')
-      .delete()
-      .eq('tag_id', tagId)
-      .eq('kind', RULE_KIND[kind])
-      .in('target_tag_id', dropped)
-    if (error) throw new Error(`Could not save the tag rule: ${error.message}`)
+  if (targetIds.length > 0) {
+    await db`
+      insert into tag_rules (tag_id, kind, target_tag_id)
+      select ${tagId}, ${RULE_KIND[kind]}, unnest(${targetIds}::int[])
+          on conflict do nothing`
   }
 
   if (kind === 'implies') {
-    const { error } = await client.from('tags').update({ implied_rating: floor }).eq('id', tagId)
-    if (error) throw new Error(`Could not save the implied rating: ${error.message}`)
+    await db`update tags set implied_rating = ${floor} where id = ${tagId}`
   }
 }
 
 /**
  * `tags.implied_rating` as it is stored: the letter, the way `posts.rating` holds one, not
- * the `rating:explicit` token a query spells. `asRating` reads tokens and returns null for
- * a bare `e`, which is right for a query and wrong for this column — reading the column
+ * the `rating:r18` token a query spells. `asRating` reads tokens and returns null for a
+ * bare `r`, which is right for a query and wrong for this column — reading the column
  * through it silently dropped every floor on the way out, so a rating could be set and
  * never came back.
  *

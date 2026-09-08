@@ -11,7 +11,7 @@ tier is bad at. Everything they must agree on — what a post is, how a query is
 the write path, the encoders — is in this directory, and neither of them owns it.
 
 The search is the clearest case. `data/search.ts` backs the website's listing *and* the
-desktop's browse screen, so `1girl -solo rating:explicit` narrows to the same rows in
+desktop's browse screen, so `1girl -solo rating:r18` narrows to the same rows in
 both windows. Two implementations of that grammar is how `-tag` quietly comes to mean two
 things.
 
@@ -26,10 +26,10 @@ where the file is.
 | | |
 |---|---|
 | `search.ts` | the `?query=` grammar — `splitQuery`, `searchHref`, the rating metatags, `RESTRICTED_RATINGS` |
-| `tags.ts` | tag parsing and the charset, `CATEGORY_COLOR` |
-| `storage.ts` | bucket names and the md5-derived image paths |
-| `supabase/types.ts` | `BooruClient`, the client type every function here takes |
-| `data/posts.ts` | the `Post` row shape, `POST_COLUMNS`, and the single-post reads |
+| `tags.ts` | tag parsing and the charset, `categoryColor`, `markColor` |
+| `storage.ts` | the md5-derived image paths, and the `ObjectStore` the upload writes through |
+| `db.ts` | `Db`, the handle every function here takes, and `DbPool` for the two that open a transaction |
+| `data/posts.ts` | the `Post` row shape, `postColumns`, and the single-post reads |
 | `data/search.ts` | `searchPosts` — the whole query, tag resolution and cursor |
 | `data/shared.ts` | the post write path, `resolveTagIds`, tag-name search, `listTags` |
 | `data/tags.ts` | managing the vocabulary: create, rename, recategorize, delete, apply-by-tag |
@@ -37,18 +37,18 @@ where the file is.
 | `data/form-sections.ts` | the rows the desktop tag form draws under a category, their order, and their dependencies |
 | `data/counters.ts` | `syncTagPostCounts` — recompute, never increment |
 | `imgcmp/for-post.ts` | lossy AVIF (q50) for the stored image, bounded to `POST_MAX_DIMENSION` |
-| `imgcmp/for-thumbnail.ts` | lossy AVIF thumbnail, 400px tall |
-| `upload/pipeline.ts` | `createPostFromImage` — one image in, one post out, unwound on failure |
+| `imgcmp/for-thumbnail.ts` | lossy AVIF thumbnail, 384px tall |
+| `upload/pipeline.ts` | `createPostFromImage` — one image in, one post out |
 
 ## The rules that keep it shareable
 
-- **Nothing here builds a Supabase client.** The caller passes one. The web's `admin.ts`
-  is `server-only`, so a module that built its own client could only ever run inside
-  Next. This is the one constraint the whole package rests on — don't "simplify" the
-  client parameter away.
-  It was `(supabase, admin)` until the board lost its accounts: the uploader's session
-  wrote the post row so RLS could record `uploader_id`, and the service role did storage
-  and the counters. No table has a write policy now, so a write is a write.
+- **Nothing here builds a client.** The caller passes a `Db` — and, for the upload, an
+  `ObjectStore`. The web's own module is `server-only` and reads the environment, so a
+  module that built its own could only ever run inside Next. This is the one constraint
+  the whole package rests on: don't "simplify" either parameter away.
+  It was `(supabase, admin)` until the board lost its accounts, then one Supabase client
+  that was both a schema and a bucket. Two handles now, because a Postgres role and an S3
+  key are two different credentials with two different powers.
 - **No `next/*`, no `server-only`, no React.** Electron's main process compiles these
   files and has none of it.
 - **No environment reads and no limits.** Ceilings are a property of where the code runs.
@@ -69,7 +69,12 @@ Files in here import each other by `@common/…` too, so a module reads the same
 it is compiled.
 
 One catch, and it is not a TypeScript one: Tailwind finds class names by **reading
-files**. `CATEGORY_COLOR` in `tags.ts` holds classes, and the desktop renderer scans only
-its own tree, so that file is named in an `@source` line in
-`packages/desktop/src/renderer/src/styles.css`. Put classes in another module here and it
-needs the same line, or the colours silently compile to nothing.
+files**. `categoryColor` in `tags.ts` and `RATING_COLOR` in `search.ts` hold classes, and
+the desktop renderer scans only its own tree, so both files are named in `@source` lines
+in `packages/desktop/src/renderer/src/styles.css`. Put classes in another module here and
+it needs the same line, or the colours silently compile to nothing.
+
+The other, which is a JavaScript one: an SQL comment inside a tagged template is still
+inside a JavaScript string, so a backtick in one ends the query and the parse errors
+somewhere else entirely. The queries in `data/` keep their commentary above the template
+rather than inside it.

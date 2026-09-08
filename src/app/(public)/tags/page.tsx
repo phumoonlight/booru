@@ -6,7 +6,7 @@ import { categoryColor, categoryLabel, TagMark } from '@/components/tag-list'
 import { SearchHeader } from '@/components/search-header'
 import { NavProgress } from '@/components/nav-progress'
 import { SetupNotice } from '@/components/setup-notice'
-import { isSupabaseConfigured } from '@/lib/env'
+import { isDatabaseConfigured } from '@/lib/db'
 import { tagLabel } from '@common/search'
 
 export const metadata: Metadata = {
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 }
 
 export default async function TagsPage() {
-  if (!isSupabaseConfigured()) {
+  if (!isDatabaseConfigured()) {
     return (
       <div className="mx-auto w-full max-w-7xl px-3 py-4">
         <SearchHeader />

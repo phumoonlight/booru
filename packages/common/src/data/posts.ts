@@ -1,4 +1,4 @@
-import type { BooruClient } from '@common/supabase/types'
+import { first, type Db } from '@common/db'
 import { RESTRICTED_RATINGS, type Rating } from '@common/search'
 import type { Tag } from '@common/tags'
 
@@ -8,7 +8,7 @@ import type { Tag } from '@common/tags'
  * load the post it is about to edit, and a second copy of the row shape is how the two
  * quietly disagree about what a post is.
  *
- * Like everything else in this directory they take their client rather than building
+ * Like everything else in this directory they take their handle rather than building
  * one. The web wraps them with `cache()` where a request reads the same row twice; that
  * is a React concern and stays on the web's side.
  */
@@ -23,12 +23,24 @@ export type Post = {
   rating: Rating
   source_url: string | null
   view_count: number
+  /** ISO-8601, formatted by the query — see `postColumns`. */
   created_at: string
 }
 
-/** The columns behind `Post`, spelled out so a select can't quietly drift from the type. */
-export const POST_COLUMNS =
-  'id, file_name, file_ext, file_size, width, height, rating, source_url, view_count, created_at'
+/**
+ * The columns behind `Post`, as a fragment, so a select can't quietly drift from the
+ * type. It was a string of column names when the reads went through PostgREST and is a
+ * piece of SQL now, interpolated into each query below.
+ *
+ * `created_at` is formatted rather than selected. postgres.js parses `timestamptz` into
+ * a `Date`, which is the honest shape and the wrong one here: the row crosses an IPC
+ * bridge into Electron's renderer, gets written to the desktop's browse cache as JSON —
+ * where a `Date` comes back a string and the type becomes a lie — and is rendered into a
+ * `<time dateTime>` attribute, which wants exactly this spelling anyway.
+ */
+export const postColumns = (db: Db) => db`
+  id, file_name, file_ext, file_size, width, height, rating, source_url, view_count,
+  to_char(created_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as created_at`
 
 export type PostPage = {
   posts: Post[]
@@ -38,66 +50,53 @@ export type PostPage = {
   hasMore: boolean
 }
 
-/** How many posts the board holds. Head-only, so no rows cross the wire. */
-export async function getPostCount(client: BooruClient): Promise<number> {
-  const { count, error } = await client.from('posts').select('*', { count: 'exact', head: true })
-  if (error) throw new Error(`Post count failed: ${error.message}`)
-  return count ?? 0
+/** How many posts the board holds. `::int` because `count(*)` is a `bigint`, which
+ *  postgres.js hands back as a string. */
+export async function getPostCount(db: Db): Promise<number> {
+  const [row] = await db<{ count: number }[]>`select count(*)::int as count from posts`
+  return row?.count ?? 0
 }
 
-export async function getPost(client: BooruClient, id: number): Promise<Post | null> {
-  const { data } = await client.from('posts').select(POST_COLUMNS).eq('id', id).maybeSingle()
-  return (data as Post | null) ?? null
+export async function getPost(db: Db, id: number): Promise<Post | null> {
+  return first(await db<Post[]>`select ${postColumns(db)} from posts where id = ${id}`)
 }
 
-export async function getPostTags(client: BooruClient, postId: number): Promise<Tag[]> {
-  const { data } = await client
-    .from('post_tags')
-    .select('tags(id, name, category, mark, post_count)')
-    .eq('post_id', postId)
-
-  return (data ?? [])
-    .flatMap((row) => (row.tags ? [row.tags as unknown as Tag] : []))
-    .sort((a, b) => a.name.localeCompare(b.name))
+export async function getPostTags(db: Db, postId: number): Promise<Tag[]> {
+  // A join, where this was an embed. Ordered in SQL rather than sorted afterwards, since
+  // the database is already reading the rows in an order and picking one costs nothing.
+  return await db<Tag[]>`
+    select t.id, t.name, t.category, t.mark, t.post_count
+      from post_tags pt
+      join tags t on t.id = pt.tag_id
+     where pt.post_id = ${postId}
+     order by t.name`
 }
 
 /** Adjacent post ids for prev/next navigation on the detail page. */
 export async function getPostNeighbours(
-  client: BooruClient,
+  db: Db,
   id: number
 ): Promise<{ prevId: number | null; nextId: number | null }> {
-  const [older, newer] = await Promise.all([
-    client
-      .from('posts')
-      .select('id')
-      .lt('id', id)
-      .order('id', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    client
-      .from('posts')
-      .select('id')
-      .gt('id', id)
-      .order('id', { ascending: true })
-      .limit(1)
-      .maybeSingle(),
-  ])
-  return { prevId: newer.data?.id ?? null, nextId: older.data?.id ?? null }
+  // Both in one round trip. They were two requests because PostgREST answers one query
+  // per request; here they are two subqueries of a statement that reads no table twice.
+  const [row] = await db<{ prev_id: number | null; next_id: number | null }[]>`
+    select (select id from posts where id > ${id} order by id asc  limit 1) as prev_id,
+           (select id from posts where id < ${id} order by id desc limit 1) as next_id`
+  return { prevId: row?.prev_id ?? null, nextId: row?.next_id ?? null }
 }
 
 /**
  * Ids + dates of indexable posts, newest first — the sitemap's source. Drops the
- * restricted tiers to match what a search engine is shown.
+ * restricted tier to match what a search engine is shown.
  */
 export async function getSitemapPosts(
-  client: BooruClient,
+  db: Db,
   limit: number
 ): Promise<Pick<Post, 'id' | 'created_at'>[]> {
-  const { data } = await client
-    .from('posts')
-    .select('id, created_at')
-    .not('rating', 'in', `(${RESTRICTED_RATINGS.join(',')})`)
-    .order('id', { ascending: false })
-    .limit(limit)
-  return (data as Pick<Post, 'id' | 'created_at'>[] | null) ?? []
+  return await db<Pick<Post, 'id' | 'created_at'>[]>`
+    select id, to_char(created_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as created_at
+      from posts
+     where rating <> all(${[...RESTRICTED_RATINGS]})
+     order by id desc
+     limit ${limit}`
 }

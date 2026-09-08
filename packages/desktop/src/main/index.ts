@@ -15,7 +15,7 @@ import { applyPreferences, loadPreferences } from './preferences'
  * a lossy AVIF thumbnail, and that is CPU work a free serverless tier is billed for by
  * the second and killed at ten of them. Running it here, the 4MB/20MP ceilings the web
  * carries for Vercel's sake go away (`main/limits.ts`), and the images and rows still
- * land in exactly the same Supabase project — the pipeline is the web's own file,
+ * land on exactly the board the website reads — the pipeline is the shared file,
  * imported, not copied.
  */
 

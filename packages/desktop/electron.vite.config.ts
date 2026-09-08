@@ -23,30 +23,40 @@ const envDir = resolve(__dirname, '../..')
 
 /**
  * Which board a copy of this app talks to is decided here, at build time, and compiled
- * into the main bundle — the same four values the website reads from its environment,
- * out of the same file at the repo root.
+ * into the main bundle — read from the same environment file at the repo root the
+ * website uses.
  *
- * It used to be four boxes on a settings screen, typed in on first launch. That put a
- * service-role key on every machine that ran the app, in a file the app itself wrote,
- * and made "which project is this pointing at" a question only the person holding it
+ * It used to be boxes on a settings screen, typed in on first launch. That put the
+ * board's writing credential on every machine that ran the app, in a file the app itself
+ * wrote, and made "which board is this pointing at" a question only the person holding it
  * could answer. An installer built from this checkout is now built *for* one board, and
- * the app asks for nothing but a login.
+ * the app asks for nothing.
  *
- * All four are required, `NEXT_PUBLIC_SITE_URL` included — the website treats that one
- * as optional because Vercel supplies a deployment URL to fall back on, and nothing
- * here does, so "open this post on the board" would have nowhere to go. A missing value
- * fails the build rather than shipping an installer that cannot reach anything.
+ * **`DATABASE_URL_APP`, not `DATABASE_URL`.** The website's variable holds `booru_web`,
+ * which may read and may touch one column; this one holds `booru_app`, which may write
+ * every row. Two names because they are two accounts with different powers, and a build
+ * that quietly compiled in the read-only one would fail on the first upload rather than
+ * here. Neither is `DATABASE_URL_OWNER`, which may create tables and never leaves the
+ * machine the migrations run on.
+ *
+ * All of them are required, `NEXT_PUBLIC_SITE_URL` included — the website treats that one
+ * as optional because Vercel supplies a deployment URL to fall back on, and nothing here
+ * does, so "open this post on the board" would have nowhere to go. A missing value fails
+ * the build rather than shipping an installer that cannot reach anything.
  */
 const REQUIRED_ENV = [
-  'NEXT_PUBLIC_SUPABASE_URL',
-  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-  'SUPABASE_SERVICE_ROLE_KEY',
+  'DATABASE_URL_APP',
+  'NEXT_PUBLIC_CDN_URL',
   'NEXT_PUBLIC_SITE_URL',
+  'R2_ACCOUNT_ID',
+  'R2_ACCESS_KEY_ID',
+  'R2_SECRET_ACCESS_KEY',
+  'R2_BUCKET',
 ] as const
 
 /** What the example file ships, which is not a value — a placeholder left in is a miss. */
 function isPlaceholder(value: string): boolean {
-  return value.startsWith('YOUR_') || value.includes('YOUR_PROJECT_REF')
+  return value.includes('YOUR_')
 }
 
 function buildEnv(mode: string) {
@@ -67,20 +77,25 @@ function buildEnv(mode: string) {
   }
 
   return {
-    supabaseUrl: env.NEXT_PUBLIC_SUPABASE_URL.trim().replace(/\/+$/, ''),
-    supabaseAnonKey: env.NEXT_PUBLIC_SUPABASE_ANON_KEY.trim(),
-    supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY.trim(),
+    databaseUrl: env.DATABASE_URL_APP.trim(),
+    cdnUrl: env.NEXT_PUBLIC_CDN_URL.trim().replace(/\/+$/, ''),
     siteUrl: env.NEXT_PUBLIC_SITE_URL.trim().replace(/\/+$/, ''),
+    r2: {
+      accountId: env.R2_ACCOUNT_ID.trim(),
+      accessKeyId: env.R2_ACCESS_KEY_ID.trim(),
+      secretAccessKey: env.R2_SECRET_ACCESS_KEY.trim(),
+      bucket: env.R2_BUCKET.trim(),
+    },
   }
 }
 
 export default defineConfig(({ mode }) => ({
   main: {
-    // sharp and @supabase/supabase-js stay `require`d from node_modules rather than
-    // bundled: sharp is a native module, and bundling a client that does its own
-    // dynamic imports only makes the output harder to debug. That is electron-vite's
-    // `build.externalizeDeps`, on by default — it was `externalizeDepsPlugin()` until
-    // that plugin was deprecated in v5.
+    // Dependencies stay `require`d from node_modules rather than bundled: sharp is a
+    // native module, postgres opens sockets, and the AWS SDK is large and does its own
+    // dynamic loading — bundling any of them only makes the output harder to debug. That
+    // is electron-vite's `build.externalizeDeps`, on by default — it was
+    // `externalizeDepsPlugin()` until that plugin was deprecated in v5.
     resolve: { alias },
     // Main only. The renderer has no keys and is not about to get any: it is handed the
     // project URL to display and nothing else, and a `define` over there would compile

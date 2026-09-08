@@ -5,7 +5,7 @@ import { SEARCH_PARAM } from '@common/search'
 
 /**
  * Vercel Web Analytics stores the URL of every page view, and on this site the URL
- * *is* the search: `/posts?query=1girl rating:explicit start:900`. Sending that would
+ * *is* the search: `/posts?query=1girl rating:r18 start:900`. Sending that would
  * hand a third party what each visitor searched for, ratings included, beside the
  * city-level geolocation the same data point carries — so the param is dropped before
  * the event leaves the browser. What survives is the path, which is all the pageview

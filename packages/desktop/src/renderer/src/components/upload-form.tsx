@@ -382,14 +382,14 @@ export function UploadForm({
         className="flex min-h-full flex-col gap-4"
       >
         {/* The only thing above the drop zone: the rating is the field whose consequences
-            are not on this screen — two of the four tiers decide whether the post is in the
+            are not on this screen — one of the two tiers decides whether the post is in the
             board's listing at all — so the explanation is one press away from where the
             choice is made. */}
         <div className="flex justify-end">
           <button
             type="button"
             onClick={() => setRatingGuide(true)}
-            title="What the four ratings mean, and what choosing one does"
+            title="What the two ratings mean, and what choosing one does"
             className={BUTTON_SM}
           >
             <span aria-hidden>ℹ️</span> About rating

@@ -1,7 +1,7 @@
 import { listTagRules, setTagRule, type RuleKind, type TagRules } from '@common/data/rules'
 import { normalizeRules } from '../shared/implications'
 import { normalizeRecommendations } from '../shared/recommendations'
-import { boardClient } from './supabase'
+import { boardDb } from './db'
 
 /**
  * The tag rules, read from and written to the board.
@@ -24,9 +24,9 @@ import { boardClient } from './supabase'
 
 /** An unreachable board is no rules, never a thrown channel — the window carries on. */
 export async function loadRules(kind: RuleKind): Promise<TagRules> {
-  const client = boardClient()
-  if (!client) return {}
-  return listTagRules(client, kind)
+  const db = boardDb()
+  if (!db) return {}
+  return listTagRules(db, kind)
 }
 
 /**
@@ -40,8 +40,8 @@ export async function loadRules(kind: RuleKind): Promise<TagRules> {
  * the tag whose panel is open — and it is now also what the write touches.
  */
 export async function saveRule(kind: RuleKind, tag: string, raw: unknown): Promise<TagRules> {
-  const client = boardClient()
-  if (!client) throw new Error('Not set up yet')
+  const db = boardDb()
+  if (!db) throw new Error('Not set up yet')
 
   // Normalised the way the trigger itself is, or the lookup below misses: `normalizeRules`
   // lowercases the keys it is given, and asking it for the name as typed would come back
@@ -50,6 +50,6 @@ export async function saveRule(kind: RuleKind, tag: string, raw: unknown): Promi
   const normalize = kind === 'implies' ? normalizeRules : normalizeRecommendations
   const names = normalize({ [trigger]: raw })[trigger] ?? []
 
-  await setTagRule(client, kind, trigger, names)
-  return listTagRules(client, kind)
+  await setTagRule(db, kind, trigger, names)
+  return listTagRules(db, kind)
 }

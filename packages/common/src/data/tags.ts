@@ -1,4 +1,4 @@
-import type { BooruClient } from '@common/supabase/types'
+import { first, isUniqueViolation, type Db } from '@common/db'
 import { syncTagPostCounts } from '@common/data/counters'
 import { markColor, parseTagInput, type Tag, type TagCategory } from '@common/tags'
 
@@ -6,22 +6,19 @@ import { markColor, parseTagInput, type Tag, type TagCategory } from '@common/ta
  * Tag management: create, apply-by-tag, rename, recategorize, delete.
  *
  * These were server actions on the website's /tags/manage. They moved here whole when
- * the board lost its login: the website has an anon key and no write policy to use it
- * against, so managing the vocabulary is the desktop app's job now, and the desktop has
- * no server actions to put them in.
+ * the board lost its login: the website reads and never writes, so managing the
+ * vocabulary is the desktop app's job now, and the desktop has no server actions to put
+ * them in.
  *
  * Every one answers `{ ok }` or `{ error }` rather than throwing. That was already the
  * shape the forms wanted — each failure here is something the typist can fix in the
  * field still on screen — and it is exactly what an IPC channel can carry, where a
- * thrown Error arrives as a string with a stack glued to the front of it.
+ * thrown Error arrives as a string with a stack glued to the front of it. The driver
+ * throws, so each write catches; `isUniqueViolation` is the one code anybody has to
+ * distinguish.
  */
 
 export type TagOutcome<T = unknown> = ({ ok: true } & T) | { ok: false; error: string }
-
-// Postgres' unique_violation. `tags.name` is the only unique column on the table, so
-// this always means "that name is already a tag" — the one failure both create and
-// rename have to explain rather than hand back as a database message.
-const UNIQUE_VIOLATION = '23505'
 
 /**
  * The typed-in name, normalized the way an upload's tag box normalizes it — same
@@ -86,33 +83,27 @@ export function readTagMark(raw: string): { mark: string | null } | { error: str
   return { mark: value }
 }
 
-export async function getTagByName(client: BooruClient, name: string): Promise<Tag | null> {
-  const { data } = await client
-    .from('tags')
-    .select('id, name, category, mark, post_count')
-    .eq('name', name)
-    .maybeSingle()
-  return data
+export async function getTagByName(db: Db, name: string): Promise<Tag | null> {
+  return first(
+    await db<Tag[]>`select id, name, category, mark, post_count from tags where name = ${name}`
+  )
 }
 
 /** One tag by id — the tag page's own address, so a rename never breaks a link. */
-export async function getTagById(client: BooruClient, id: number): Promise<Tag | null> {
-  const { data } = await client
-    .from('tags')
-    .select('id, name, category, mark, post_count')
-    .eq('id', id)
-    .maybeSingle()
-  return data
+export async function getTagById(db: Db, id: number): Promise<Tag | null> {
+  return first(
+    await db<Tag[]>`select id, name, category, mark, post_count from tags where id = ${id}`
+  )
 }
 
 /**
- * Add a tag nobody has used yet. Uploads create tags as a side effect of applying them,
- * so this exists for the other order: naming an artist or a series first and tagging
- * posts with it afterwards, with the category already right. It starts on no posts, so
- * `post_count` keeps its default of 0 and no counter needs syncing.
+ * Add a tag nobody has used yet, which is the only way a tag comes into being: no write
+ * path coins one, so this and the Tags screen behind it are where the vocabulary is
+ * decided. It starts on no posts, so `post_count` keeps its default of 0 and no counter
+ * needs syncing.
  */
 export async function createTag(
-  client: BooruClient,
+  db: Db,
   rawName: string,
   category: TagCategory,
   sectionId: number | null = null
@@ -120,41 +111,45 @@ export async function createTag(
   const parsed = readTagName(rawName)
   if ('error' in parsed) return { ok: false, error: parsed.error }
 
-  const { error } = await client
-    .from('tags')
-    .insert({ name: parsed.name, category, form_section_id: sectionId })
-  if (error) {
-    if (error.code === UNIQUE_VIOLATION) return { ok: false, error: `${parsed.name} already exists.` }
-    return { ok: false, error: `Could not create the tag: ${error.message}` }
+  try {
+    await db`
+      insert into tags (name, category, form_section_id)
+      values (${parsed.name}, ${category}, ${sectionId})`
+    return { ok: true, name: parsed.name }
+  } catch (error) {
+    // `tags.name` is the only unique column on the table, so this always means one thing.
+    if (isUniqueViolation(error)) return { ok: false, error: `${parsed.name} already exists.` }
+    return { ok: false, error: `Could not create the tag: ${message(error)}` }
   }
-  return { ok: true, name: parsed.name }
 }
 
 /**
- * Rename a tag in place. The row keeps its id, so every `post_tags` link and every
- * `/tags/[id]` link survives untouched — only the text moves, and with it the searches
- * that spell the old name. Nothing is recounted: the same posts carry the same tag.
+ * Rename a tag in place. The row keeps its id, so every `post_tags` link, every rule that
+ * names it and every `/tags/[id]` link survives untouched — only the text moves, and with
+ * it the searches that spell the old name. Nothing is recounted: the same posts carry the
+ * same tag.
  *
  * A name already taken is refused rather than merged. Folding two tags into one means
  * moving links and recounting both, and doing that silently behind a rename would be a
  * destructive edit wearing a cosmetic one's clothes.
  */
 export async function renameTag(
-  client: BooruClient,
+  db: Db,
   id: number,
   rawName: string
 ): Promise<TagOutcome<{ name: string }>> {
   const parsed = readTagName(rawName)
   if ('error' in parsed) return { ok: false, error: parsed.error }
 
-  const { error } = await client.from('tags').update({ name: parsed.name }).eq('id', id)
-  if (error) {
-    if (error.code === UNIQUE_VIOLATION) {
+  try {
+    await db`update tags set name = ${parsed.name} where id = ${id}`
+    return { ok: true, name: parsed.name }
+  } catch (error) {
+    if (isUniqueViolation(error)) {
       return { ok: false, error: `${parsed.name} is already a tag — rename it to something else.` }
     }
-    return { ok: false, error: `Rename failed: ${error.message}` }
+    return { ok: false, error: `Rename failed: ${message(error)}` }
   }
-  return { ok: true, name: parsed.name }
 }
 
 /**
@@ -163,22 +158,22 @@ export async function renameTag(
  * recounted.
  *
  * **The form section goes with it.** A section belongs to a category — `(category, name)`
- * is unique on `tag_form_section` — so the row a tag was drawn on does not exist in the
+ * is unique on `tag_form_sections` — so the row a tag was drawn on does not exist in the
  * category it is moving to. The desktop's edit panel sets both in one save, and this
  * clearing is what makes the order of those two writes not matter: a category change never
  * leaves a tag pointing at a row drawn under some other heading.
  */
 export async function setTagCategory(
-  client: BooruClient,
+  db: Db,
   id: number,
   category: TagCategory
 ): Promise<TagOutcome> {
-  const { error } = await client
-    .from('tags')
-    .update({ category, form_section_id: null })
-    .eq('id', id)
-  if (error) return { ok: false, error: `Update failed: ${error.message}` }
-  return { ok: true }
+  try {
+    await db`update tags set category = ${category}, form_section_id = null where id = ${id}`
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, error: `Update failed: ${message(error)}` }
+  }
 }
 
 /**
@@ -193,13 +188,16 @@ export async function setTagCategory(
  * refused by the database rather than checked twice.
  */
 export async function setTagFormSection(
-  client: BooruClient,
+  db: Db,
   id: number,
   sectionId: number | null
 ): Promise<TagOutcome> {
-  const { error } = await client.from('tags').update({ form_section_id: sectionId }).eq('id', id)
-  if (error) return { ok: false, error: `Update failed: ${error.message}` }
-  return { ok: true }
+  try {
+    await db`update tags set form_section_id = ${sectionId} where id = ${id}`
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, error: `Update failed: ${message(error)}` }
+  }
 }
 
 /**
@@ -212,64 +210,43 @@ export async function setTagFormSection(
  * decisions about the row.
  */
 export async function setTagMark(
-  client: BooruClient,
+  db: Db,
   id: number,
   rawMark: string
 ): Promise<TagOutcome<{ mark: string | null }>> {
   const parsed = readTagMark(rawMark)
   if ('error' in parsed) return { ok: false, error: parsed.error }
 
-  const { error } = await client.from('tags').update({ mark: parsed.mark }).eq('id', id)
-  if (error) return { ok: false, error: `Update failed: ${error.message}` }
-  return { ok: true, mark: parsed.mark }
+  try {
+    await db`update tags set mark = ${parsed.mark} where id = ${id}`
+    return { ok: true, mark: parsed.mark }
+  } catch (error) {
+    return { ok: false, error: `Update failed: ${message(error)}` }
+  }
 }
 
 /**
  * Remove a tag from the board entirely — it comes off every post that carries it.
- * post_tags has no cascade from tags, so its rows go first or the foreign key
- * refuses the delete.
+ *
+ * `post_tags` has no cascade from `tags`, so its rows go first or the foreign key
+ * refuses the delete; both are one statement, so a half-done delete is not a state this
+ * can leave behind. `tag_rules` and `tag_form_section_deps` need no such step — both of
+ * their keys cascade, so a deleted tag takes every rule and every dependency naming it,
+ * which is the whole reason those are rows and not names in a file.
  *
  * No counter to recount: the only `post_count` these links fed belongs to the tag being
  * deleted. Other tags on those posts keep every link they had.
  */
-export async function deleteTag(client: BooruClient, id: number): Promise<TagOutcome> {
-  // `post_tags` first because that foreign key does not cascade, and the delete below
-  // would be refused with it still pointing here. `tag_rules` needs no such step: both of
-  // its keys cascade, so a deleted tag takes every rule naming it — which is the whole
-  // reason those rules are rows and not names in a file.
-  const { error: linkError } = await client.from('post_tags').delete().eq('tag_id', id)
-  if (linkError) return { ok: false, error: `Delete failed: ${linkError.message}` }
-
-  const { error } = await client.from('tags').delete().eq('id', id)
-  if (error) return { ok: false, error: `Delete failed: ${error.message}` }
-  return { ok: true }
-}
-
-/**
- * PostgREST answers at most a thousand rows per request whatever the query says, so a
- * tag on more posts than that has to be read a page at a time — an unpaged read would
- * silently tag the first thousand posts and report itself finished.
- */
-const PAGE = 1000
-
-async function postIdsWithTag(client: BooruClient, tagId: number): Promise<number[]> {
-  const ids: number[] = []
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await client
-      .from('post_tags')
-      .select('post_id')
-      .eq('tag_id', tagId)
-      .order('post_id')
-      .range(from, from + PAGE - 1)
-    if (error) throw new Error(`Could not read that tag's posts: ${error.message}`)
-    ids.push(...(data ?? []).map((row) => row.post_id as number))
-    if ((data ?? []).length < PAGE) return ids
+export async function deleteTag(db: Db, id: number): Promise<TagOutcome> {
+  try {
+    await db`
+      with links as (delete from post_tags where tag_id = ${id})
+      delete from tags where id = ${id}`
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, error: `Delete failed: ${message(error)}` }
   }
 }
-
-/** Enough rows per insert to keep a large apply to a handful of round trips, and few
- *  enough that one rejected statement doesn't take the whole run with it. */
-const INSERT_CHUNK = 500
 
 export type ApplyTagResult = {
   target: string
@@ -293,13 +270,17 @@ export type ApplyTagResult = {
  * matching post at once. Naming a tag is the Tags screen's job, and the grid is right
  * underneath this panel.
  *
- * Posts that already carry the target are filtered out rather than inserted and left to
- * the unique constraint: the point is the count that comes back. "Added to 3 posts, 41
- * already had it" is the difference between a rule that did something and one that was
- * already satisfied, and an upsert that ignored duplicates could not tell them apart.
+ * **The apply is one statement.** It read every matching post id and every post that
+ * already carried the target, in thousand-row pages, subtracted the two lists in
+ * TypeScript and inserted the remainder five hundred rows at a time — all of it working
+ * around a request that answers with one page. `insert … select … on conflict do nothing`
+ * is the same thing said once, and `returning` is what makes the counts exact: the point
+ * of this panel is the difference between "added to 3 posts, 41 already had it" and a
+ * rule that was already satisfied, which an upsert that ignored duplicates could not tell
+ * you.
  */
 export async function applyTagToTagged(
-  client: BooruClient,
+  db: Db,
   rawTarget: string,
   rawCondition: string
 ): Promise<TagOutcome<ApplyTagResult>> {
@@ -312,54 +293,46 @@ export async function applyTagToTagged(
   }
 
   try {
-    const { data: rows, error } = await client
-      .from('tags')
-      .select('id, name, category, mark, post_count')
-      .in('name', [target.name, condition.name])
-    if (error) throw new Error(`Could not read the tags: ${error.message}`)
+    const rows = await db<{ id: number; name: string }[]>`
+      select id, name from tags where name = any(${[target.name, condition.name]})`
+    const found = new Map(rows.map((row) => [row.name, row.id]))
 
-    const conditionTag = (rows ?? []).find((tag) => tag.name === condition.name)
-    if (!conditionTag) {
+    const conditionId = found.get(condition.name)
+    if (conditionId === undefined) {
       return { ok: false, error: `${condition.name} is not a tag on this board.` }
     }
-
-    const targetTag = (rows ?? []).find((tag) => tag.name === target.name)
-    if (!targetTag) {
-      return {
-        ok: false,
-        error: `${target.name} is not a tag on this board — create it first.`,
-      }
+    const targetId = found.get(target.name)
+    if (targetId === undefined) {
+      return { ok: false, error: `${target.name} is not a tag on this board — create it first.` }
     }
-    const targetId = targetTag.id
 
-    const [matched, carried] = await Promise.all([
-      postIdsWithTag(client, conditionTag.id),
-      postIdsWithTag(client, targetId),
-    ])
-    const have = new Set(carried)
-    const missing = matched.filter((id) => !have.has(id))
-
-    for (let at = 0; at < missing.length; at += INSERT_CHUNK) {
-      const { error: insertError } = await client
-        .from('post_tags')
-        .insert(missing.slice(at, at + INSERT_CHUNK).map((post_id) => ({ post_id, tag_id: targetId })))
-      // Whatever landed before this stays applied — the counter below is recomputed from
-      // the links that exist, so a half-finished run leaves the board consistent and the
-      // same apply run again picks up exactly what is left.
-      if (insertError) throw new Error(`Could not apply the tag: ${insertError.message}`)
-    }
+    // `matched` counts in the same snapshot as the insert, and is unaffected by it: the
+    // rows going in carry the *target's* id, and this counts the condition's.
+    const [counts] = await db<{ added: number; matched: number }[]>`
+      with added as (
+        insert into post_tags (post_id, tag_id)
+        select pt.post_id, ${targetId} from post_tags pt where pt.tag_id = ${conditionId}
+            on conflict do nothing
+        returning post_id
+      )
+      select (select count(*)::int from added) as added,
+             (select count(*)::int from post_tags where tag_id = ${conditionId}) as matched`
 
     // Only the target moved: the condition tag is on exactly the posts it was on before.
-    await syncTagPostCounts(client, [targetId])
+    await syncTagPostCounts(db, [targetId])
 
     return {
       ok: true,
       target: target.name,
       condition: condition.name,
-      added: missing.length,
-      already: matched.length - missing.length,
+      added: counts.added,
+      already: counts.matched - counts.added,
     }
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Could not apply the tag.' }
+    return { ok: false, error: `Could not apply the tag: ${message(error)}` }
   }
+}
+
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }

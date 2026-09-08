@@ -46,7 +46,7 @@ export function NsfwToggle({ enabled }: { enabled: boolean }) {
         </span>
       </label>
       <p className="text-xs text-muted">
-        {on ? 'Showing every rating.' : 'Showing General and Sensitive posts only.'}
+        {on ? 'Showing every rating.' : 'Showing General posts only.'}
       </p>
     </div>
   )

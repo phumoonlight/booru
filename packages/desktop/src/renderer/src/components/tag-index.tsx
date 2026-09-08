@@ -834,7 +834,7 @@ function CreateTag({
             what this form is for, and re-picking the category and the row each time is what
             it saves. */}
         {/* Changing the category drops the row with it. A section belongs to one category —
-            `(category, name)` is unique on `tag_form_section` — so an id picked under
+            `(category, name)` is unique on `tag_form_sections` — so an id picked under
             Appearance means nothing under General, and the menu only *hid* the stale value
             while the state still held it, ready to be written by Create. */}
         <CategoryField

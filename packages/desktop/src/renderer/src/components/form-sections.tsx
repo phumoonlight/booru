@@ -12,7 +12,7 @@ import { editFormSections, useFormSections, useFormSectionsSaving } from '../for
 import type { DepsMode, FormSection } from '@common/data/form-sections'
 
 /**
- * The rows the tag form draws under one category, and their order — `tag_form_section`.
+ * The rows the tag form draws under one category, and their order — `tag_form_sections`.
  *
  * It is here rather than on each tag's own panel because a section is not about a tag: it
  * is a division of a *category*, made once and then filed into, the way a category itself
