@@ -21,7 +21,7 @@ export const POST_MAX_DIMENSION = 2048
 export const POST_QUALITY = 50
 
 /** The ceiling: what an image at or below `POST_QUALITY_MAX_AT` is encoded at. */
-export const POST_QUALITY_MAX = 100
+export const POST_QUALITY_MAX = 75
 
 /** At or above this on the longer side, quality is `POST_QUALITY`. */
 export const POST_QUALITY_FLOOR_AT = 1920
@@ -31,7 +31,7 @@ export const POST_QUALITY_MAX_AT = 1280
 
 /**
  * How hard to squeeze this image, from its own dimensions: 50 at 1920px and up, rising in
- * a straight line to 100 at 1280px and down.
+ * a straight line to 75 at 1280px and down.
  *
  * Quality 50 is the right trade for something being downscaled towards 2048 — it is
  * losing detail to the resize anyway, and the bytes saved are real. It is the wrong trade
@@ -57,7 +57,7 @@ export const POST_QUALITY_MAX_AT = 1280
  * it beats the uploaded bytes, and the one case that skips that comparison — an image
  * over `POST_MAX_DIMENSION`, where the re-encode is the only version within bounds — is
  * by definition over 1920 on its longer side and so encoded at `POST_QUALITY`. A
- * quality-100 candidate that comes out fatter than its original is therefore always
+ * top-of-ramp candidate that comes out fatter than its original is therefore always
  * discarded rather than stored.
  */
 export function postQualityFor(width = 0, height = 0): number {

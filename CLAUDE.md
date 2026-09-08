@@ -624,8 +624,8 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   is kept only when it beats the uploaded bytes, otherwise the original is stored
   byte-for-byte. Lossless was measured and rejected on size (3.6MB from a 1.9MB JPEG).
 - **The post image's quality is a ramp on its longer side** (`postQualityFor`): 50 at
-  1920px and above, rising in a straight line to 100 at 1280px and below — 1600px is 75,
-  1440px is 88. Quality 50 is the right trade for something the resize is already taking
+  1920px and above, rising in a straight line to 75 at 1280px and below — 1600px is 63,
+  1440px is 69. Quality 50 is the right trade for something the resize is already taking
   detail from and the wrong one for an image that arrives at the size it will be looked at
   — nothing is thrown away, so every artefact is seen at 1:1, and there are far fewer
   pixels to pay for. A ramp rather than steps because the argument strengthens gradually
