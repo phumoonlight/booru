@@ -920,6 +920,15 @@ function send(message, then) {
  */
 function scan() {
   const fresh = []
+  // The post's own page is the one page whose post is not a thumbnail on it, and its
+  // number is in the address rather than in a link. Without asking about it the store is
+  // never consulted, so a post marked read last week opens with the menu offering to mark
+  // it read again.
+  const current = postIdOf(location.href)
+  if (current !== null && !seen.has(current)) {
+    seen.add(current)
+    fresh.push(current)
+  }
   let found = 0
   for (const anchor of document.links) {
     if (examined.has(anchor)) continue
@@ -937,8 +946,7 @@ function scan() {
   // Painting is on anything new appearing, not on anything new being *asked* about — a
   // post that turns up a second time on the same page already has its answer, and
   // waiting for a query that will never be sent would leave that copy of it unfaded.
-  if (found === 0) return
-  paintRead()
+  if (found > 0) paintRead()
   if (fresh.length === 0) return
   send({ type: 'query', site: board.key, ids: fresh }, (answer) => {
     if (!answer || !Array.isArray(answer.read)) return
@@ -1088,6 +1096,19 @@ function buildDock() {
       .item.holding .fill { width: 100%; transition: width 600ms linear }
       .label { position: relative }
       .state { position: relative; margin-left: auto; font-size: 11px; opacity: .55; letter-spacing: .04em }
+      /* Above the button rather than on it: the button is what would happen, and on a
+         board where a post can be reached from anywhere those are two different facts. */
+      #status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 10px 8px;
+        font-size: 11px;
+        letter-spacing: .04em;
+        opacity: .6;
+      }
+      #status.read { color: #12b76a; opacity: 1 }
+      #status[hidden], #note[hidden] { display: none }
       #note { padding: 5px 10px 6px; font-size: 11px; opacity: .45 }
       /* The dock's button, drawn the same way, because it is the same kind of thing:
          one glyph you press, floating over a page it does not belong to. */
@@ -1116,6 +1137,10 @@ function buildDock() {
     </style>
     <div id="dock">
       <div id="menu" hidden>
+        <div id="status" hidden>
+          <span id="status-mark" aria-hidden="true"></span>
+          <span id="status-text"></span>
+        </div>
         <button class="item" id="all">
           <span class="fill"></span>
           <span class="label" aria-hidden="true">📚</span>
@@ -1183,19 +1208,34 @@ function repaintDock() {
   // The one item that isn't about the listing: on a post's own page there is exactly one
   // thing to mark, and the menu says which way it would go.
   const current = postIdOf(location.href)
+  const currentRead = current !== null && readIds.has(current)
   dockPart('one').disabled = !prefs.marking || current === null
-  dockPart('one-label').textContent =
-    current !== null && readIds.has(current) ? 'Mark this post unread' : 'Mark this post read'
+  dockPart('one-label').textContent = currentRead ? 'Mark this post unread' : 'Mark this post read'
+
+  // What the post *is*, above what the button would do to it. The two read the same way
+  // round on a listing you just faded and opposite ways round on a post you marked last
+  // week, which is the case that made a button alone look like it had lost the mark.
+  const status = dockPart('status')
+  status.hidden = current === null
+  status.classList.toggle('read', currentRead)
+  if (current !== null) {
+    dockPart('status-mark').textContent = currentRead ? '✅' : '👁️'
+    dockPart('status-text').textContent = currentRead
+      ? `Post ${current} — read`
+      : `Post ${current} — not read`
+  }
 
   const ids = pageIds()
   const read = ids.filter((id) => readIds.has(id)).length
-  dockPart('note').textContent = !prefs.marking
+  const note = dockPart('note')
+  note.textContent = !prefs.marking
     ? 'Marking is off — nothing is faded or recorded.'
     : ids.length === 0
       ? current === null
         ? 'No posts on this page.'
-        : `Post ${current}.`
+        : ''
       : `${read} of ${ids.length} read on this page.`
+  note.hidden = note.textContent === ''
 }
 
 // ------------------------------------------------------------------ saving it
