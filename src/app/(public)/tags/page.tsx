@@ -1,22 +1,22 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import { getTags } from '@/lib/data/tags'
-import { categoryOrder, type TagCategory } from '@common/tags'
-import { categoryColor, categoryLabel, TagMark } from '@/components/tag-list'
+import { browseTags } from '@/lib/data/tags'
+import { categoryLabel } from '@/components/tag-list'
+import { TagTable } from '@/components/tag-table'
 import { SearchHeader } from '@/components/search-header'
 import { NavProgress } from '@/components/nav-progress'
 import { SetupNotice } from '@/components/setup-notice'
 import { isDatabaseConfigured } from '@/lib/db'
-import { tagLabel } from '@common/search'
+import { readParam, readShown, tagsHref } from '@/lib/tags-url'
 
 export const metadata: Metadata = {
   title: 'Tags',
-  description: 'Every tag on the board, grouped by category and sorted by post count.',
+  description: 'Every tag on the board, with its post count and category.',
   alternates: { canonical: '/tags' },
   openGraph: { url: '/tags', title: 'Tags' },
 }
 
-export default async function TagsPage() {
+export default async function TagsPage({ searchParams }: PageProps<'/tags'>) {
   if (!isDatabaseConfigured()) {
     return (
       <div className="mx-auto w-full max-w-7xl px-3 py-4">
@@ -28,71 +28,75 @@ export default async function TagsPage() {
     )
   }
 
-  const tags = await getTags(500)
+  const params = await searchParams
+  const find = readParam(params.find)
+  const category = readParam(params.category)
+  const shown = readShown(params.show)
 
-  // A–Z within each category, like the facets and the manage screen. The read above
-  // orders by post_count and that is what decides which tags the cap lets through, but
-  // this page is an index: you arrive holding a name, and a tag's size says nothing about
-  // where to look for it. Sorted by the label, since the underscores are not on screen.
-  const groups = categoryOrder(tags.map((t) => t.category)).map(
-    (category) =>
-      [
-        category,
-        tags
-          .filter((t) => t.category === category)
-          .sort((a, b) => tagLabel(a.name).localeCompare(tagLabel(b.name))),
-      ] as [TagCategory, typeof tags]
-  ).filter(([, group]) => group.length > 0)
+  const page = await browseTags({ find, category, limit: shown })
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-3 py-4">
       <SearchHeader />
 
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-lg font-bold tracking-tight">Tags</h1>
-        {/* No manage link: renaming, recategorizing and deleting tags are the desktop
-            app's, along with every other write. */}
-      </div>
+      {/* No manage link: renaming, recategorizing and deleting tags are the desktop
+          app's, along with every other write. The count is under the table, beside Show
+          more, where it says how far down the list you are rather than repeating a total
+          the table is about to give you again. */}
+      <h1 className="text-lg font-bold tracking-tight">Tags</h1>
 
-      {groups.length === 0 ? (
-        <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
-          No tags yet — they are created by uploads.
+      {/* A plain GET form, so the filter works with no JavaScript and the result is an
+          address you can keep. The category rides along in a hidden field: the two are
+          independent filters and narrowing within a heading is the ordinary thing to
+          want. `show` deliberately does not, so a new filter opens at ten rows again.
+
+          The placeholder is an example rather than a description — the heading above
+          already says these are tags, and `blue_hair` shows the underscores in one go. */}
+      <form action="/tags" method="get" className="flex gap-2">
+        {category && <input type="hidden" name="category" value={category} />}
+        <input
+          type="search"
+          name="find"
+          defaultValue={find}
+          placeholder="blue_hair"
+          aria-label="Filter tags by name"
+          className="min-h-11 flex-1 rounded-lg border border-border bg-surface px-3 text-sm outline-none placeholder:text-muted focus:border-accent"
+        />
+        <button
+          type="submit"
+          className="min-h-11 rounded-lg border border-border bg-surface px-4 text-sm transition-colors hover:border-accent"
+        >
+          Filter
+        </button>
+      </form>
+
+      {/* What the table is currently narrowed to, and the way back out. Only drawn when
+          something is on, so an unfiltered index carries no chrome it doesn't need. */}
+      {(find || category) && (
+        <p className="flex flex-wrap items-center gap-2 text-sm text-muted">
+          <span>
+            Showing
+            {category ? ` ${categoryLabel(category)}` : ' every category'}
+            {find ? ` matching “${find}”` : ''}
+          </span>
+          <Link href={category && find ? tagsHref({ find }) : '/tags'} className="text-accent hover:underline">
+            {category && find ? 'Every category' : 'Clear'}
+            <NavProgress />
+          </Link>
         </p>
-      ) : (
-        groups.map(([category, group]) => (
-          <section key={category}>
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-              {categoryLabel(category)} ({group.length})
-            </h2>
-            {/* Ruled like a table rather than spaced apart: a count sitting in open space
-                was as close to the next column's name as to its own, and no gap says
-                "these two belong together" as plainly as a line saying where the cell
-                ends. Each cell carries its own right/bottom rule and is pulled a pixel
-                over its neighbour so shared edges stay hairlines; the frame closes the
-                last row when it comes up short. The count keeps its fixed right-aligned
-                slot, so the numbers still line up down each column. */}
-            <ul className="grid grid-cols-2 overflow-hidden rounded-lg border border-border sm:grid-cols-3 lg:grid-cols-4">
-              {group.map((tag) => (
-                <li key={tag.id} className="-mb-px -mr-px border-b border-r border-border">
-                  <Link
-                    href={`/tags/${tag.id}`}
-                    className={`flex min-h-9 items-center gap-2 px-3 py-1.5 text-sm hover:bg-surface ${categoryColor(category)}`}
-                  >
-                    <span className="min-w-0 flex-1 truncate">
-                      <TagMark mark={tag.mark} />
-                      {tagLabel(tag.name)}
-                    </span>
-                    <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted">
-                      {tag.post_count}
-                    </span>
-                    <NavProgress />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))
       )}
+
+      {/* Keyed on the filters so a navigation resets the accumulated rows — without it,
+          Show more's chunks from the previous filter would still be on screen under a
+          server render of the new one. */}
+      <TagTable
+        key={`${find}|${category}|${shown}`}
+        initialTags={page.tags}
+        find={find}
+        category={category}
+        total={page.total}
+        hasMore={page.hasMore}
+      />
     </div>
   )
 }
