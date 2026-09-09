@@ -17,11 +17,38 @@ export type { Post, PostPage } from '@common/data/posts'
 // returns the whole gallery.
 
 /**
+ * The landing page's count, held for five minutes.
+ *
+ * `count(*)` has no shortcut in Postgres — it scans every row, and gets linearly slower
+ * as the board fills. Neon amplifies that: the compute reads its pages over the network
+ * from the pageserver, so a scan over anything not in the local cache pays a round trip
+ * per batch, and the first read after a scale-to-zero wake pays all of them. None of
+ * which the visitor should be waiting on for a number under a search box.
+ *
+ * The window is what makes the board's size stop mattering: however much traffic `/`
+ * takes, the query runs at most 288 times a day.
+ *
+ * A module-level `let` rather than `unstable_cache` — which is deprecated in Next 16,
+ * replaced by `use cache`, which in turn needs `cacheComponents: true`, which is a
+ * site-wide opt-in: the NSFW cookie is read down in `lib/data/search.ts`, so every
+ * listing is cookie-dependent and would need Suspense boundaries before the build
+ * passed. That is the right migration to make for its own reasons and the wrong one to
+ * make for this. What a plain `let` costs is that the copy is one serverless instance's,
+ * so a cold one still queries — the same trade `main/tag-cache.ts` takes in the desktop.
+ */
+const COUNT_TTL_MS = 5 * 60 * 1000
+
+let countCache: { at: number; count: number } | null = null
+
+/**
  * How many posts the board holds. Counted head-only, so no rows cross the wire —
  * the landing page shows the number and nothing else about them.
  */
 export async function getPostCount(): Promise<number> {
-  return read.getPostCount(db())
+  if (countCache && Date.now() - countCache.at < COUNT_TTL_MS) return countCache.count
+  const count = await read.getPostCount(db())
+  countCache = { at: Date.now(), count }
+  return count
 }
 
 // Cached because the post page and its generateMetadata both need the same rows
