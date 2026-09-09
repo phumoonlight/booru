@@ -20,7 +20,7 @@ export default async function TagsPage({ searchParams }: PageProps<'/tags'>) {
   if (!isDatabaseConfigured()) {
     return (
       <div className="mx-auto w-full max-w-7xl px-3 py-4">
-        <SearchHeader />
+        <SearchHeader showSearch={false} />
         <div className="pt-4">
           <SetupNotice />
         </div>
@@ -37,7 +37,9 @@ export default async function TagsPage({ searchParams }: PageProps<'/tags'>) {
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-3 py-4">
-      <SearchHeader />
+      {/* No post search bar: the filter box below is this page's own, and two boxes on
+          one screen is a coin toss over which one a typed tag name goes into. */}
+      <SearchHeader showSearch={false} />
 
       {/* No manage link: renaming, recategorizing and deleting tags are the desktop
           app's, along with every other write. The count is under the table, beside Show

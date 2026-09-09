@@ -13,8 +13,10 @@ import { SITE_NAME } from '@/lib/site'
  * nothing a visitor could do with one. Uploading, editing, deleting and the tag
  * vocabulary all live in the desktop app (`packages/desktop`), which writes with a key
  * compiled into its own bundle. What is left here is a gallery anyone can read.
- * `showSearch` drops the input for pages that are already one fixed listing (a tag's
- * own page) — the nav above it is the part every page still needs.
+ * `showSearch` drops the input for pages the post search does not belong on — a tag's
+ * own page, which is already one fixed listing, and /tags, which has a filter box of its
+ * own and would otherwise offer two boxes with no way to tell which one a tag name goes
+ * into. The nav above it is the part every page still needs.
  */
 export function SearchHeader({
   query = '',
