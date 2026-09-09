@@ -1,7 +1,8 @@
 # Database Schema
 
-**Source of truth:** `db/migrations/`, applied with `npm run db:push` (or `db:reset`,
-which drops `public` first) by `scripts/migrate.mjs`. This document describes them; when
+**Source of truth:** `db/migrations/`, applied with `npm run db:push` by
+`scripts/migrate.mjs`. There is no `db:reset` any more — dropping the schema is the whole
+board, and it is typed out in a console now rather than kept behind one word. This document describes them; when
 the two disagree, the migrations win and this file is the bug.
 
 **Shape:**
@@ -15,12 +16,18 @@ tags >─── tag_form_sections ───< tag_form_section_deps >─── ta
 `tags.form_section_id` points at a section (`on delete set null`); a section's dependencies
 point back at tags.
 
-Six tables, no functions, no triggers. There is no `profiles` table: the board has no
+Seven tables, no functions, no triggers. Six describe what is on the board; the seventh,
+`site_settings`, is a name and a string per setting and describes what the *website* is
+doing — today the maintenance switch and its notice, written by the desktop app and read on
+every visit that isn't answered from the site's ten-minute hold. Adding a setting to it is
+an insert, not a migration. There is no `profiles` table: the board has no
 accounts. Every write is made by the desktop app (`packages/desktop`) as `booru_app`,
 from a connection string compiled into its own bundle; the website connects as
 `booru_web` and only reads — and it reads three of the six: `tag_rules`,
 `tag_form_sections` and `tag_form_section_deps` are the desktop tag form's, consulted only
 where a post is tagged.
+
+`db/migrations/0002_site_settings.sql` adds `site_settings`.
 
 `db/migrations/0001_baseline.sql` is the whole schema in foreign-key order — `posts` →
 `tag_form_sections` → `tags` → `tag_form_section_deps` → `post_tags` → `tag_rules` — ending
@@ -278,6 +285,45 @@ tag→posts and makes the recount an index-only scan.
 
 ---
 
+## `site_settings`
+
+`db/migrations/0002_site_settings.sql`
+
+| column | type | notes |
+| --- | --- | --- |
+| `key` | `text primary key` | the setting's name |
+| `value` | `text not null default ''` | what it is set to; the meaning belongs to the reader |
+| `updated_at` | `timestamptz not null default now()` | set by the write, not by a trigger |
+
+| key | value | |
+| --- | --- | --- |
+| `maintenance` | `'on'` closes the site; anything else serves | read loosely (`on`, `true`, `yes`, `1`), written only as `on`/`off` |
+| `maintenance_message` | the notice, optional | trimmed to 500 on write |
+
+**A name and a string on purpose.** A column per setting means a migration for every
+switch anyone ever wants, and a site-wide switch is exactly what gets wanted when there is
+no time to write one. JSON would buy structure nothing here needs and cost the property the
+table exists for: a row a person can read and change by hand in a console. A setting with
+two parts is therefore two rows.
+
+The meaning moves to `@common/data/site.ts`, where each setting is a reader plus a default:
+a row that is missing, misspelled or hand-edited into nonsense costs the default and never
+a throw — the only way a settings table may fail on a page that has to render. Only an
+affirmative closes the site; the failure worth avoiding is a board that shuts itself over a
+row it misread.
+
+`readSiteState` and `setSiteState` are the accessors. The write is one upsert covering both
+rows, so the switch and its notice can never land apart, and `updated_at` means "when
+someone last decided this" — which is why re-wording a notice moves it, and why a read
+takes the later of the two rows.
+
+**Grants are the exception to the loop in `db/grants.sql`:** `booru_web` gets `select`,
+`booru_app` gets `select, insert, update`. Insert because the next setting is a new key;
+no delete, because a key the code has stopped reading is harmless where a key it still
+reads is a site that has forgotten what it was doing.
+
+---
+
 ## Roles
 
 There is no RLS. There was, on every table, with a select policy and nothing else — the
@@ -287,11 +333,11 @@ key any more, so the boundary is drawn where Postgres draws boundaries:
 | role | held by | may |
 | --- | --- | --- |
 | `booru_owner` | the environment file, the migration runner only | everything, DDL included |
-| `booru_app` | compiled into the desktop bundle | `select, insert, update, delete` on all six tables; **no** create, alter or drop |
-| `booru_web` | Vercel | `select` on all six; `update (view_count) on posts`; nothing else |
+| `booru_app` | compiled into the desktop bundle | `select, insert, update, delete` on the six content tables, `select, insert, update` on `site_settings`; **no** create, alter or drop |
+| `booru_web` | Vercel | `select` on all seven; `update (view_count) on posts`; nothing else |
 
-The grants are the last block of the baseline, applied to whichever roles exist so a
-scratch database still migrates. `db/README.md` creates them.
+The grants are `db/grants.sql`, re-applied on every `db:push` and applied to whichever
+roles exist so a scratch database still migrates. `db/README.md` creates them.
 
 The website's half is strictly stronger than what it replaced, where Vercel carried a
 service-role key that bypassed every policy in the project in order to count views. The

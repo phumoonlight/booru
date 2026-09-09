@@ -10,7 +10,15 @@ import postgres from 'postgres'
  *
  *   push    apply every migration this database has not seen, then re-apply the grants
  *   list    what is applied, what is pending
- *   reset   drop `public` and apply everything again
+ *   grant   re-apply `db/grants.sql` on its own
+ *
+ * **There is no `reset`.** It was `drop schema public cascade` behind one word on the
+ * command line, which is the whole board — every post row, every tag, the vocabulary — and
+ * the images in R2 would survive it as orphans nothing could name. It was worth having
+ * while the schema was moving under an empty board; against a board with posts on it, it
+ * is a keystroke away from a mistake with no undo. Rebuilding from nothing is rare enough
+ * to be worth typing out by hand in a console, where the statement is visible and the
+ * database asks which one you are connected to.
  *
  * Every file runs inside a transaction and is recorded in `_migrations`, so a
  * failure rolls back whole and nothing after it runs. That is the one thing `supabase db
@@ -95,20 +103,7 @@ async function list(sql) {
   }
 }
 
-async function reset(sql) {
-  // The whole schema, not table by table: a drop list goes stale the moment a migration
-  // adds a table and then resets stop being resets.
-  //
-  // It leaves an empty board, and there is no seed step. There was one — `db/seed.sql`,
-  // three tags — but a starter vocabulary is a guess about a board somebody else is
-  // making, and this one names its tags on the Tags screen where the whole list is
-  // visible. A reset that plants three tags nobody asked for is three tags to delete.
-  await sql.unsafe('drop schema public cascade; create schema public;').simple()
-  console.log('dropped  public')
-  await push(sql)
-}
-
-const commands = { push, list, reset, grant }
+const commands = { push, list, grant }
 const command = commands[process.argv[2]]
 if (!command) {
   console.error(`Usage: migrate.mjs <${Object.keys(commands).join('|')}>`)

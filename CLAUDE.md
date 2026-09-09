@@ -41,7 +41,6 @@ essay either — answer it, then offer the detail rather than supplying it.
 | `npm run dev` / `build` / `lint` | the only verification the repo has — there is no test runner |
 | `npm run typecheck -w desktop` | the only check the Electron app has; the root `tsc` covers `src/` and `packages/common`, not the desktop |
 | `npm run db:push` / `db:list` | apply pending migrations / say what is applied. `scripts/migrate.mjs`, as `booru_owner` |
-| `npm run db:reset` | drop `public`, re-apply everything. No seed — a reset leaves an empty board |
 | `npm run desktop:dev` / `desktop:package` | window, or installer. Both need the seven env values |
 | `npm run bench:avif` | sweeps AVIF `effort` through both encoders over `tests/bench/example.jpg` |
 
@@ -150,6 +149,17 @@ The post write path, the search, the counters, both encoders, and the pure helpe
   `/tags/[id]`, `/settings`, `robots.txt`, `sitemap.xml`. There is no `/upload`,
   `/login`, `/account`, `/tags/manage` or `src/proxy.ts` (Next 16's `middleware.ts`) —
   see [History](#history).
+- **The whole site closes behind one row.** `site_settings.maintenance`, flipped from the
+  desktop app's settings screen, and read in `src/app/(public)/layout.tsx` — a layout
+  rather than a proxy, since the site has none and the pool is already here. Closed, every
+  route in the group is `<MaintenanceNotice />` instead; `robots.txt` and `sitemap.xml` sit
+  outside it on purpose, being what a crawler reads to decide whether to come back. The
+  read is **asymmetric** (`lib/data/site.ts`): a serving board is asked on every visit,
+  because a switch nobody feels is worthless, and a closed one is held for ten minutes,
+  because a visitor refreshing the notice is the traffic a closed site actually gets. Only
+  the "on" answer is cached, and Check status — a server action that drops the hold and
+  reports what the board said — is the way out of the window. An unreadable table is
+  treated as serving: a blip must not close the site.
 - **The gallery is `/posts`, not `/`.** `/` is a landing page: wordmark, search box,
   emoji post count. `/?query=` redirects to the listing for old links.
 - **`?query=` is the only param the listing has** (`SEARCH_PARAM` in `@common/search`),
@@ -248,6 +258,12 @@ is bad at — see [packages/desktop/README.md](packages/desktop/README.md). It i
   file that won't parse is treated as absent, costing the settings and never a crash. The
   two rule sections an older version wrote are deleted on the way past
   (`dropStoredRules`), the way the login and the stored keys were.
+- **The website's maintenance switch is on the settings screen**, because this app is the
+  only program that can reach the board to write and a switch on Vercel would be a redeploy
+  to close the site and another to open it. One write moves the switch and words the notice
+  together — the notice is only read while the switch is on. Three states, not two: a board
+  that could not be asked is drawn as that, never as off, since off is the state that means
+  visitors are being served.
 - **The settings screen is a readout, two settings and a cache.** Connection shows the
   project and board URLs, never the keys. Compression is the only editable part;
   `main/preferences.ts` applies as it writes, so a change takes the next image rather than
@@ -558,24 +574,40 @@ placed in the commit and beside the code, where it already was.
 
 Full reference: [docs/database-schema.md](docs/database-schema.md).
 
+- **Never run `db:push` or any other migration command.** Write the migration
+  file and say it is pending; applying it is the author's, on the author's board. An agent
+  that pushes has changed a live database on a hunch about what the author wanted, and the
+  file is the part that can be reviewed before that happens.
 - **One baseline**, `db/migrations/0001_baseline.sql`: every table in foreign-key order
-  and its indexes. Schema changes from here are **always** a new numbered file, never a
+  and its indexes, plus `0002_site_settings.sql`. Schema changes from here are **always** a new numbered file, never a
   dashboard edit and never an edit to the baseline once pushed anywhere real.
   `scripts/migrate.mjs` applies each inside a transaction and records it in `_migrations`.
 - **`db/grants.sql` is not a migration** and re-runs on every `db:push`. Who may do what
   is desired state, not history: roles are made after the schema exists and remade when a
   password changes, and a grant block inside the baseline ran once, before either.
-- **There is no seed.** There was — three tags, run by `db:reset` — and a starter
-  vocabulary is a guess about a board somebody else is making. Tags are named on the Tags
-  screen, where the whole list is on one page and a near-duplicate is visible before it
-  is made; a reset that plants three of them is three to delete. A post could never have
-  been seeded anyway: its row is half of a pair, the other half being two objects named
-  after the md5 of bytes no SQL file has.
+- **There is no `db:reset` and no seed.** Reset was `drop schema public cascade` behind
+  one word — the whole board, with the images left in R2 as orphans nothing could name —
+  and it was worth having only while the schema moved under a board with nothing on it.
+  Rebuilding from nothing is rare enough to type out in a console, where the statement is
+  visible. The seed went earlier and separately: three tags, and a starter vocabulary is a
+  guess about a board somebody else is making. Tags are named on the Tags screen, where the
+  whole list is on one page and a near-duplicate is visible before it is made. A post could
+  never have been seeded anyway — its row is half of a pair, the other half being two
+  objects named after the md5 of bytes no SQL file has.
 - **No SQL functions and no triggers.** Search, the post writes, the view counter and the
   counters all moved to TypeScript — a plpgsql body needs a migration to edit and reports
   one opaque error from inside a statement that was about something else. Don't add RPCs
   back without a reason plain SQL genuinely can't meet — which is a much shorter list now
   that the queries are plain SQL.
+- **`site_settings` is a name and a string, and the only table that is not about the
+  board's contents.** `key text`, `value text`, `updated_at` — so the next site-wide switch
+  is an insert rather than a migration, and a row is something the board's owner can read
+  and change by hand in a console, which is why it is neither a column per setting nor
+  JSON. A setting with two parts is two rows: `maintenance` (`'on'` closes the site) and
+  `maintenance_message`. The meaning lives in `@common/data/site.ts`, one reader and one
+  default per key — an absent, older or hand-typed value costs the default and never a
+  throw — and reading is loose where writing is strict, the bargain `asRating` makes.
+  `booru_web` may select; `booru_app` may select, insert and update — not delete.
 - **`tags.mark` is one slot holding two kinds of thing.** A `#hex` or a CSS colour name
   is drawn as a dot, anything else as text, and `markColor` (`@common/tags`) is the only
   place that decides which — shared, so a tag looks the same on the site and in the app.

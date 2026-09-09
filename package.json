@@ -13,7 +13,6 @@
     "bench:avif": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tests/bench/sharp-avif-bench.mts",
     "db:list": "node --env-file-if-exists=.env.local scripts/migrate.mjs list",
     "db:push": "node --env-file-if-exists=.env.local scripts/migrate.mjs push",
-    "db:reset": "node --env-file-if-exists=.env.local scripts/migrate.mjs reset",
     "desktop:dev": "npm run dev -w desktop",
     "desktop:package": "npm run package -w desktop"
   },

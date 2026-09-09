@@ -7,14 +7,20 @@ Postgres on Neon. `migrations/` is the source of truth, applied by `scripts/migr
 |---|---|
 | `npm run db:push` | apply every migration the database has not seen, then re-apply `grants.sql` |
 | `npm run db:list` | what is applied and what is pending |
-| `npm run db:reset` | drop `public`, re-apply everything. Leaves an empty board |
 
 `grants.sql` is not a migration and runs on every push, because who may do what is
 desired state rather than history — roles get made after the schema, or remade with new
 passwords, and a grant block buried in the baseline would have run once, before any of
 that.
 
-All three read `DATABASE_URL_OWNER` from `.env.local`.
+Both read `DATABASE_URL_OWNER` from `.env.local`.
+
+There is no `db:reset`. It dropped `public` and re-applied everything, which is every post
+row and the whole tag vocabulary behind one word on the command line — and the images in
+the bucket would outlive it as orphans nothing could name. It earned its place while the
+schema was still moving under an empty board; it does not against a board with posts on it.
+Rebuilding from nothing means typing the drop out in a console, where the statement is on
+screen and the connection says which database you are about to do it to.
 
 ## The three roles
 

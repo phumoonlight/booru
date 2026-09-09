@@ -48,6 +48,8 @@ const api: PostAppApi = {
   // and the renderer pushes on every change, so a reply would be noise.
   reportStaged: (state: StagedState) => ipcRenderer.send('upload:state', state),
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
+  getSiteState: () => ipcRenderer.invoke('site:state'),
+  saveSiteState: (input) => ipcRenderer.invoke('site:save', input),
   exportSettings: () => ipcRenderer.invoke('settings:export'),
   importSettings: () => ipcRenderer.invoke('settings:import'),
   openDataFolder: () => ipcRenderer.invoke('shell:open-data-folder'),

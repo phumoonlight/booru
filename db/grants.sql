@@ -45,6 +45,11 @@ begin
     -- The website's only write. A column grant rather than a policy, so the database
     -- refuses a stray update to `rating` instead of the code remembering not to make one.
     execute 'grant update (view_count) on public.posts to booru_web';
+    -- What the site is doing — the maintenance switch, and whatever setting comes after
+    -- it. Read on every visit that isn't answered from the ten-minute hold, and read only:
+    -- a setting is changed from the desktop app, which is the half of this project that
+    -- writes.
+    execute 'grant select on public.site_settings to booru_web';
   else
     raise notice 'booru_web does not exist — skipping its grants (see db/README.md)';
   end if;
@@ -54,6 +59,12 @@ begin
     foreach entry in array app_tables loop
       execute format('grant select, insert, update, delete on public.%I to booru_app', entry);
     end loop;
+    -- `site_settings` is not in that list because a setting is not a row of the board's
+    -- content. Insert as well as update, since the table's whole point is that the next
+    -- setting is a new key rather than a migration — but no delete: a key the code has
+    -- stopped reading is harmless where a key the code still reads is a site that has
+    -- forgotten what it was doing.
+    execute 'grant select, insert, update on public.site_settings to booru_app';
   else
     raise notice 'booru_app does not exist — skipping its grants (see db/README.md)';
   end if;

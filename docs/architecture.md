@@ -45,7 +45,7 @@ booru/
 ├── db/
 │   ├── migrations/            # 0001_baseline.sql — the whole schema, plus the grants
 │   └── README.md              # the three roles, and how to add a migration
-├── scripts/migrate.mjs        # push / list / reset — what replaced the Supabase CLI
+├── scripts/migrate.mjs        # push / list / grant — what replaced the Supabase CLI
 ├── packages/
 │   ├── common/src/            # @common/* — one definition of everything shared
 │   │   ├── search.ts          # the ?query= grammar, ratings, searchHref

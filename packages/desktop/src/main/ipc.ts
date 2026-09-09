@@ -18,6 +18,7 @@ import { previewFile, stageFiles } from './staging'
 import { downloadImages } from './download'
 import { setStagedState } from './close-guard'
 import { exportSave, importSave } from './transfer'
+import { loadSiteState, saveSiteState } from './site'
 import {
   bumpTagCounts,
   cachedIndex,
@@ -36,6 +37,7 @@ import type { TagRules } from '@common/data/rules'
 import type { TagCatalogs } from '../shared/catalogs'
 import type { Tag } from '@common/tags'
 import type { PostPage } from '@common/data/posts'
+import type { SiteState } from '@common/data/site'
 import type { UploadResult } from '@common/upload/pipeline'
 
 /**
@@ -58,6 +60,14 @@ const preferencesSchema = z.object({
 })
 
 const postIdSchema = z.number().int().positive()
+
+// The website's maintenance switch. The message is bounded here as a ceiling and trimmed
+// to 500 by `setSiteState`, which is the one that decides what a stored notice looks like
+// — this only stops a pasted essay crossing the bridge.
+const siteStateSchema = z.object({
+  maintenance: z.boolean(),
+  message: z.string().max(2000).optional().default(''),
+})
 
 const browseSchema = z.object({
   query: z.string().max(500).optional().default(''),
@@ -593,6 +603,20 @@ export function registerIpc(): void {
    * whatever of it this build recognises, so there is nothing for the window to decide.
    * `main/transfer.ts` has why the import is section-by-section rather than a copy.
    */
+  /**
+   * The website's maintenance switch — the one thing this app writes that is about the
+   * site rather than about the board's contents. `null` from the read is "couldn't ask",
+   * which the settings screen draws differently from "off": off means visitors are being
+   * served, and a disconnected copy must not claim that.
+   */
+  ipcMain.handle('site:state', async (): Promise<SiteState | null> => loadSiteState())
+
+  ipcMain.handle('site:save', async (_event, raw: unknown) => {
+    const parsed = siteStateSchema.safeParse(raw)
+    if (!parsed.success) return { ok: false as const, error: 'Nothing to save' }
+    return saveSiteState(parsed.data)
+  })
+
   ipcMain.handle('settings:export', async () => exportSave())
   ipcMain.handle('settings:import', async () => importSave())
 

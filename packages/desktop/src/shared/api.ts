@@ -5,6 +5,7 @@ import type { UploadResult } from '@common/upload/pipeline'
 import type { FormSectionEdit, FormSections } from '@common/data/form-sections'
 import type { RuleKind, TagRules } from '@common/data/rules'
 import type { TagCatalogs } from './catalogs'
+import type { SiteState } from '@common/data/site'
 
 /**
  * The whole surface between the window and the process that does the work. The renderer
@@ -269,6 +270,18 @@ export type PostAppApi = {
    * main side, so neither takes a path — the renderer has no filesystem to name one with.
    * `cancelled` is the dismissed picker, which is not a failure and is not reported as one.
    */
+  /**
+   * The website's maintenance switch — `site_settings` on the board. `null` is a board
+   * that could not be asked, which the settings screen must draw as its own state: `false`
+   * means visitors are being served the gallery, and a copy of the app that cannot reach
+   * the database has no business claiming either.
+   */
+  getSiteState: () => Promise<SiteState | null>
+  /** Moves the switch and re-words the notice in one write, answering with what stored. */
+  saveSiteState: (input: {
+    maintenance: boolean
+    message: string
+  }) => Promise<{ ok: true; state: SiteState } | { ok: false; error: string }>
   exportSettings: () => Promise<TransferResult>
   importSettings: () => Promise<TransferResult>
   /** Reveals `save.json` — preferences and tag rules — in the OS file manager. */
