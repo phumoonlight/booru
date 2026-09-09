@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next'
 import { SEARCH_PARAM } from '@common/search'
-import { siteUrl } from '@/lib/site'
+import { siteUrl } from '@/config'
 
 /**
  * Search results are an unbounded tag-combination space, so crawlers get the

@@ -1,6 +1,6 @@
 'use client'
 
-import { SITE_NAME } from '@/lib/site'
+import { SITE_NAME } from '@/config'
 
 /**
  * Last-resort boundary: errors thrown by the root layout itself never reach

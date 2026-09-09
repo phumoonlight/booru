@@ -10,7 +10,7 @@ import { NavProgress } from '@/components/nav-progress'
 import { categoryColor, categoryLabel, TagMark } from '@/components/tag-list'
 import { isDatabaseConfigured } from '@/lib/db'
 import { searchHref, tagLabel } from '@common/search'
-import { SITE_NAME } from '@/lib/site'
+import { SITE_NAME } from '@/config'
 
 /** The tag's own page is addressed by id, so a rename can't break an existing link. */
 function readId(id: string): number | null {

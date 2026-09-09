@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import './globals.css'
 import { Analytics } from '@/components/analytics'
-import { SITE_DESCRIPTION, SITE_NAME, siteUrl } from '@/lib/site'
+import { SITE_DESCRIPTION, SITE_NAME, siteUrl } from '@/config'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',

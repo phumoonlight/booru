@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next'
 import { getSitemapPosts } from '@/lib/data/posts'
 import { isDatabaseConfigured } from '@/lib/db'
-import { siteUrl } from '@/lib/site'
+import { siteUrl } from '@/config'
 
 // Sitemaps cap at 50k URLs; posts are the only unbounded set here.
 const MAX_POSTS = 10_000

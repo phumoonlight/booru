@@ -1,6 +1,7 @@
 import 'server-only'
 import postgres from 'postgres'
 import type { DbPool } from '@common/db'
+import { databaseUrl } from '@/config'
 
 /**
  * The website's one connection to the board, and the whole of what it may do.
@@ -18,7 +19,8 @@ import type { DbPool } from '@common/db'
  *
  * `server-only` stays. It is no longer guarding a key that could do anything, but a
  * connection string in a client bundle is still a connection string in a client bundle,
- * and this module is the one place the URL is read.
+ * and this module is the one place the URL is used — `src/config.ts` is where it, and
+ * every other environment value, is read.
  */
 
 /**
@@ -34,7 +36,7 @@ let pool: DbPool | null = null
 
 export function db(): DbPool {
   if (!pool) {
-    pool = postgres(process.env.DATABASE_URL!, {
+    pool = postgres(databaseUrl()!, {
       // A serverless instance holds few connections and holds them briefly; the pooled
       // endpoint is on the other side of this, doing the real multiplexing.
       max: 5,
@@ -54,6 +56,6 @@ export function db(): DbPool {
  * before the environment file has been filled in.
  */
 export function isDatabaseConfigured(): boolean {
-  const url = process.env.DATABASE_URL
+  const url = databaseUrl()
   return Boolean(url && !url.includes('YOUR_'))
 }

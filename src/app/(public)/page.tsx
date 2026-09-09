@@ -8,7 +8,7 @@ import { getPostCount } from '@/lib/data/posts'
 import { isDatabaseConfigured } from '@/lib/db'
 import { emojiNumber } from '@/lib/emoji-number'
 import { searchHref, SEARCH_PARAM } from '@common/search'
-import { SITE_DESCRIPTION, SITE_NAME } from '@/lib/site'
+import { SITE_DESCRIPTION, SITE_NAME } from '@/config'
 
 export const metadata: Metadata = {
   title: SITE_NAME,

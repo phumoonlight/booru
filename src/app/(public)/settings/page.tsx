@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { SearchHeader } from '@/components/search-header'
 import { NsfwPot } from '@/components/nsfw-pot'
 import { isNsfwEnabled } from '@/lib/nsfw-server'
-import { SITE_NAME } from '@/lib/site'
+import { SITE_NAME } from '@/config'
 
 export const metadata: Metadata = {
   title: 'Settings',

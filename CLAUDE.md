@@ -119,8 +119,13 @@ structure further down.
 - **Query logic lives in `lib/data/` and `@common/data/`**, never in actions or pages, so
   a second caller can reuse it — which is how the desktop app browses the board.
 - **Pure helpers** (`@common/search`, `@common/tags`, `@common/storage`, the web's
-  `lib/site.ts` and `lib/images.ts`) import nothing server-side, so client components can
+  `config.ts` and `lib/images.ts`) import nothing server-side, so client components can
   share them.
+- **`src/config.ts` is the website's only `process.env`.** The name (`SITE_NAME`, from
+  `NEXT_PUBLIC_SITE_NAME`, defaulting to `Booru`), the origin, the image host and the
+  connection string are read there and nowhere else, so a misconfigured deployment is
+  one file to read. It is not `server-only` — the name is drawn by client components —
+  which is safe because Next inlines `NEXT_PUBLIC_*` and nothing else.
 
 ## `packages/common`
 

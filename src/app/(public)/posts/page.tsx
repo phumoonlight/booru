@@ -11,7 +11,7 @@ import { SetupNotice } from '@/components/setup-notice'
 import { isDatabaseConfigured } from '@/lib/db'
 import { isNsfwEnabled } from '@/lib/nsfw-server'
 import { isRestricted, parseSearchQuery, searchHref, SEARCH_PARAM, splitQuery } from '@common/search'
-import { SITE_DESCRIPTION, SITE_NAME } from '@/lib/site'
+import { SITE_DESCRIPTION, SITE_NAME } from '@/config'
 
 /** The whole address of a listing is one string — tags, ratings and the `start:`
     cursor together — so there is only ever this one param to read. */

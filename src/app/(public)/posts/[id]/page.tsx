@@ -14,7 +14,7 @@ import { isNsfwEnabled } from '@/lib/nsfw-server'
 import { SetupNotice } from '@/components/setup-notice'
 import { RestrictedNotice } from '@/components/restricted-notice'
 import { BLUR_DATA_URL } from '@/lib/blur'
-import { SITE_NAME } from '@/lib/site'
+import { SITE_NAME } from '@/config'
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`

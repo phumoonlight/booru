@@ -2,7 +2,7 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { SearchBar } from '@/components/search-bar'
 import { NavProgress } from '@/components/nav-progress'
-import { SITE_NAME } from '@/lib/site'
+import { SITE_NAME } from '@/config'
 
 /**
  * Sticky top bar — the mobile stand-in for Danbooru's left sidebar search box, and

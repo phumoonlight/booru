@@ -134,7 +134,8 @@ free serverless tier bills by the second and kills at ten.
   `lib/data/search.ts` so every listing and every feed chunk agrees. There used to be a
   rating *blur* here instead — every post sent, some obscured by CSS.
 - Absolute URLs (canonicals, OpenGraph, `robots.txt`, `sitemap.xml`) all come from
-  `lib/site.ts` → `NEXT_PUBLIC_SITE_URL`, so the origin is configured in one place.
+  `config.ts` → `NEXT_PUBLIC_SITE_URL`, so the origin is configured in one place — as is
+  the board's name, `NEXT_PUBLIC_SITE_NAME`, which defaults to `Booru`.
 - Search-result URLs are `noindex, follow` and disallowed in `robots.txt` — the
   tag-combination space is unbounded. Post pages and `/tags` carry the indexable content.
 
