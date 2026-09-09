@@ -19,6 +19,9 @@ import type { SiteState } from '@common/data/site'
  * says what it answered — a refresh alone could land on a different serverless instance
  * with a hold of its own.
  */
+/** How long Check status stays pressed, however fast the board answers. */
+const CHECK_FLOOR_MS = 5000
+
 export function MaintenanceNotice({ state }: { state: SiteState }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -28,7 +31,15 @@ export function MaintenanceNotice({ state }: { state: SiteState }) {
 
   function check() {
     startTransition(async () => {
-      const next = await checkSiteState()
+      // The answer and a five-second floor, whichever is slower. A read that comes back
+      // in 80ms leaves the button looking untouched — the page says the same thing it
+      // said before, because nothing has changed yet — and the visitor presses it again.
+      // Holding the label at "Checking…" is what makes the press legible, and it paces
+      // repeat presses against the board for free.
+      const [next] = await Promise.all([
+        checkSiteState(),
+        new Promise((resolve) => setTimeout(resolve, CHECK_FLOOR_MS)),
+      ])
       // Still closed: keep the fresh copy, so a re-worded notice and a moved timestamp
       // both land without a navigation. Open again: re-render the route, which now
       // reads through a hold this call has already dropped.
@@ -56,21 +67,31 @@ export function MaintenanceNotice({ state }: { state: SiteState }) {
         )}
       </div>
 
-      <div className="flex flex-col items-center gap-2">
-        <button
-          type="button"
-          onClick={check}
-          disabled={pending}
-          className="min-h-11 rounded-lg border border-border px-4 text-sm font-medium hover:border-accent disabled:opacity-50"
-        >
-          {pending ? 'Checking…' : 'Check status'}
-        </button>
-        <p className="text-xs text-muted">
-          {checked
-            ? 'Still closed — the board answered just now.'
-            : 'Reloading reuses this answer for up to ten minutes; this asks the board.'}
-        </p>
-      </div>
+      {/* Nothing under the button. A press that finds the site still closed has nothing
+          to report that the page is not already showing — the notice, and the time it was
+          last decided, are the answer — and a line appearing to say so is a second thing
+          to read on a page whose whole content is one sentence. */}
+      <button
+        type="button"
+        onClick={check}
+        disabled={pending}
+        className="min-h-11 rounded-lg border border-border px-4 text-sm font-medium hover:border-accent disabled:cursor-default disabled:opacity-50 disabled:hover:border-border"
+      >
+        {pending ? (
+          <span className="inline-flex items-center gap-1.5">
+            Checking
+            {/* Decoration: the word beside it is what gets announced. */}
+            <span aria-hidden className="inline-flex items-center gap-1">
+              <span className="size-1 animate-check-dot rounded-full bg-current" />
+              <span className="size-1 animate-check-dot rounded-full bg-current [animation-delay:200ms]" />
+              <span className="size-1 animate-check-dot rounded-full bg-current [animation-delay:400ms]" />
+            </span>
+          </span>
+        ) : (
+          'Check status'
+        )}
+      </button>
+
     </div>
   )
 }

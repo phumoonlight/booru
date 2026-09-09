@@ -24,6 +24,23 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --animate-nav-progress: nav-progress 1.1s ease-in-out infinite;
+  --animate-check-dot: check-dot 1.2s ease-in-out infinite;
+}
+
+/* The three dots after "Checking". Indeterminate for the same reason the nav bar is —
+   the board has been asked and there is nothing to report until it answers — and given a
+   floor of five seconds by the button, so the animation is what fills a wait the visitor
+   would otherwise read as a press that did nothing. The three spans stagger it with
+   animation-delay. */
+@keyframes check-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+  }
+  30% {
+    opacity: 1;
+  }
 }
 
 /* The navigation bar's slide. Indeterminate on purpose — a query rewrite has no
