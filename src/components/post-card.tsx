@@ -3,7 +3,7 @@ import Link from 'next/link'
 import type { Post } from '@/lib/data/posts'
 import { StartHereBadge } from '@/components/start-here'
 import { thumbnailUrl } from '@/lib/images'
-import { postHref } from '@common/search'
+import { isRestricted, postHref, RATING_LABEL } from '@common/search'
 import { BLUR_DATA_URL } from '@/lib/blur'
 
 /** `query` is the search the card is being shown under — what the 🔖 badge adds its
@@ -25,6 +25,15 @@ export function PostCard({
     // moved up here.
     <div className="group relative h-full">
       <StartHereBadge postId={post.id} query={query} active={active} />
+      {/* The adult tier says so on the thumbnail. A listing showing it is one where the
+          setting is on, so this is a label rather than a gate — which corner of the grid
+          a post is in is the one thing the card can't say otherwise. Only the restricted
+          tier is drawn: a badge on every card is a badge nobody reads. */}
+      {isRestricted(post.rating) && (
+        <span className="pointer-events-none absolute left-1 top-1 z-10 rounded-lg bg-[#ff5d5f] px-1.5 py-0.5 text-xs font-bold text-white">
+          {RATING_LABEL[post.rating]}
+        </span>
+      )}
       <Link
         href={postHref(post.id, query)}
         // A new tab, because the grid is a feed now: following a post in place throws
