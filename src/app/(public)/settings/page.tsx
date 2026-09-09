@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 import { SearchHeader } from '@/components/search-header'
-import { NsfwToggle } from '@/components/nsfw-toggle'
+import { NsfwPot } from '@/components/nsfw-pot'
 import { isNsfwEnabled } from '@/lib/nsfw-server'
-import { RATING_COLOR } from '@common/search'
 import { SITE_NAME } from '@/lib/site'
 
 export const metadata: Metadata = {
@@ -31,16 +30,10 @@ export default async function SettingsPage() {
       <h1 className="text-lg font-bold tracking-tight">Settings</h1>
 
       <section className="flex flex-col gap-3 rounded-lg border border-border p-4">
-        <div>
-          {/* The scale's own red, so the heading is the colour of what it turns on */}
-          <h2 className={`text-base font-semibold ${RATING_COLOR.r}`}>Enable NSFW</h2>
-          <p className="mt-1 text-sm text-muted">
-            R-18 posts are hidden by default. Turn this on to see them everywhere on the
-            site.
-          </p>
-        </div>
-
-        <NsfwToggle enabled={nsfw} />
+        {/* No heading and no explanation: the pot is the explanation, and a sentence
+            above it saying the same thing in words is a caption on a picture that does
+            not need one. */}
+        <NsfwPot enabled={nsfw} />
       </section>
 
       <p className="text-xs text-muted">

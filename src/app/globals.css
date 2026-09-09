@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* Dark theme by default (booru convention) */
 :root {
@@ -128,10 +128,172 @@ select {
   animation: scrim-in 180ms ease-out;
 }
 
+/* ── The settings pot ────────────────────────────────────────────
+   Settings draws the NSFW preference as a pot on the boil, and a pot that is not
+   boiling is a still life. Both loops are decoration on a control that says the same
+   thing in words underneath, so they are the first thing reduced motion turns off. */
+/* Tiles, as two repeating gradients rather than an SVG pattern, so the wall is the
+   panel's own background and reaches its edges at any width. The grout is what says
+   "kitchen" at this size — a tile with no seam is just a wall. */
+.pot-wall {
+  background-color: #141922;
+  background-image:
+    repeating-linear-gradient(to right, #1e2532 0 1px, transparent 1px 20px),
+    repeating-linear-gradient(to bottom, #1e2532 0 1px, transparent 1px 16px);
+}
+
+@keyframes pot-bubble {
+  from {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.85;
+  }
+  to {
+    transform: translateY(-46px);
+    opacity: 0;
+  }
+}
+
+@keyframes pot-steam {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.7;
+  }
+  to {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+}
+
+.pot-bubble {
+  animation: pot-bubble 2.6s ease-in infinite;
+}
+
+.pot-steam > path {
+  animation: pot-steam 3.2s ease-out infinite;
+}
+
+/* The flame flickers from its own base rather than its middle, which is where a flame
+   is actually anchored — a tongue that scales about its centre reads as a pulse. */
+@keyframes pot-flame {
+  from,
+  to {
+    transform: scaleY(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scaleY(0.72);
+    opacity: 0.65;
+  }
+}
+
+/* The chilli sitting on the counter, breathing. Its own element rather than the
+   button's, which is carrying the spring's transform and cannot also carry this. */
+@keyframes pot-spice {
+  from,
+  to {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(6deg) translateY(-2px);
+  }
+}
+
+.pot-spice {
+  display: inline-block;
+  animation: pot-spice 3.4s ease-in-out infinite;
+}
+
+.pot-flame > path {
+  transform-box: fill-box;
+  transform-origin: bottom center;
+  animation: pot-flame 0.9s ease-in-out infinite;
+}
+
+/* Holding down Yes. The shake is the effort of holding something over a pot; the bar
+   words come up to the rating's own red over the two seconds, which is `HOLD_MS` in
+   `nsfw-pot.tsx` — arriving red is the moment it fires. */
+@keyframes pot-hold {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-2px) rotate(-0.6deg);
+  }
+  50% {
+    transform: translateX(2px) rotate(0.6deg);
+  }
+  75% {
+    transform: translateX(-1.5px);
+  }
+}
+
+@keyframes pot-heat {
+  from {
+    color: var(--foreground);
+  }
+  to {
+    color: #ff5d5f;
+  }
+}
+
+.pot-hold {
+  animation: pot-hold 160ms linear infinite;
+}
+
+.pot-heat {
+  animation: pot-heat 2000ms linear forwards;
+}
+
+/* Swapping the pot. Out to the side and tipped, because a pot is carried off a stove
+   rather than faded out, and in from above with one settle, because it is set down. */
+@keyframes pot-out {
+  to {
+    transform: translateX(-135%) rotate(-14deg);
+    opacity: 0;
+  }
+}
+
+@keyframes pot-in {
+  from {
+    transform: translateY(-155%);
+  }
+  65% {
+    transform: translateY(0);
+  }
+  80% {
+    transform: translateY(-7%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.pot-out {
+  animation: pot-out 340ms cubic-bezier(0.5, 0, 0.9, 0.4) forwards;
+}
+
+.pot-in {
+  animation: pot-in 520ms cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+
 /* Someone who has asked for less motion is asking about exactly this */
 @media (prefers-reduced-motion: reduce) {
   .drawer-panel,
-  .drawer-scrim {
+  .drawer-scrim,
+  .pot-bubble,
+  .pot-steam > path,
+  .pot-flame > path,
+  .pot-spice,
+  .pot-out,
+  .pot-in,
+  .pot-hold {
     animation: none;
   }
 }
