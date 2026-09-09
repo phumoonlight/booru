@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
+import { postHref } from '@common/search'
 
 /**
  * True while the visitor is typing — the tag field and search bar own the arrow
@@ -24,8 +25,21 @@ const BUTTON = 'flex items-center justify-center text-lg hover:opacity-80'
  * Prev/next arrows, plus ←/→ as keyboard shortcuts. They ride the sidebar's header row
  * beside the wordmark, so the image column is left entirely to the image.
  * `<Link>` keeps them prefetched and crawlable; the shortcut only mirrors them.
+ *
+ * `query` is the search these two ids were found in. The ids already come from it — the
+ * page asks `searchNeighbours` — and carrying it in the href is what keeps the *next*
+ * step inside the same search: without it, one arrow press leaves the listing behind
+ * and the walk quietly becomes the whole board's.
  */
-export function PostNav({ prevId, nextId }: { prevId: number | null; nextId: number | null }) {
+export function PostNav({
+  prevId,
+  nextId,
+  query = '',
+}: {
+  prevId: number | null
+  nextId: number | null
+  query?: string
+}) {
   const router = useRouter()
 
   useEffect(() => {
@@ -37,12 +51,12 @@ export function PostNav({ prevId, nextId }: { prevId: number | null; nextId: num
       if (id === null) return
 
       event.preventDefault()
-      router.push(`/posts/${id}`)
+      router.push(postHref(id, query))
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [prevId, nextId, router])
+  }, [prevId, nextId, query, router])
 
   if (!prevId && !nextId) return null
 
@@ -50,7 +64,7 @@ export function PostNav({ prevId, nextId }: { prevId: number | null; nextId: num
     <nav className="flex items-center gap-2">
       {prevId && (
         <Link
-          href={`/posts/${prevId}`}
+          href={postHref(prevId, query)}
           title="Newer post (←)"
           aria-label="Newer post"
           className={BUTTON}
@@ -60,7 +74,7 @@ export function PostNav({ prevId, nextId }: { prevId: number | null; nextId: num
       )}
       {nextId && (
         <Link
-          href={`/posts/${nextId}`}
+          href={postHref(nextId, query)}
           title="Older post (→)"
           aria-label="Older post"
           className={BUTTON}

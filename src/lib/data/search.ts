@@ -24,6 +24,18 @@ export async function searchPosts(options: Parameters<typeof read.searchPosts>[1
   })
 }
 
+/**
+ * Prev/next for the detail page, filtered by the same search the visitor is inside and
+ * the same tiers this browser lists — so the walk cannot step onto a post the listing
+ * would not have shown, and cannot step out of the search that led here.
+ */
+export async function getSearchNeighbours(options: { id: number; query?: string }) {
+  return read.searchNeighbours(db(), {
+    ...options,
+    visibleRatings: await visibleRatings(),
+  })
+}
+
 export async function getTagsForPosts(postIds: number[]) {
   return read.getTagsForPosts(db(), postIds)
 }

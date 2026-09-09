@@ -122,6 +122,65 @@ export async function searchPosts(
 }
 
 /**
+ * The posts either side of one, *within a search* — what prev/next walks.
+ *
+ * It was `getPostNeighbours`, two subqueries over the whole board, and it disagreed with
+ * the listing twice over. A post opened from `1girl` stepped to whatever was uploaded
+ * next, tagged or not; and with the adult tiers switched off, the walk led straight into
+ * a post the gallery had just declined to show, which then rendered its own refusal —
+ * the setting was honoured everywhere except the one control whose whole job is moving
+ * between posts. The filters are the search's, so both follow from asking the same
+ * question the listing asks.
+ *
+ * `start:` is deliberately ignored: it says where the listing *began*, which is a
+ * scrolling position, not a wall. Walking back past it from a post you opened is the
+ * ordinary thing to want.
+ *
+ * The filters are written once, in a CTE, and `not materialized` so the planner may
+ * inline it into each side and stop at the first row either way — the alternative reads
+ * every matching id to find the two next to one.
+ */
+export async function searchNeighbours(
+  db: Db,
+  {
+    id,
+    query = '',
+    visibleRatings,
+  }: { id: number; query?: string; visibleRatings?: readonly Rating[] }
+): Promise<{ prevId: number | null; nextId: number | null }> {
+  const { include, exclude, ratings, excludeRatings } = splitQuery(parseSearchQuery(query))
+  const allowed = resolveRatings({ ratings, excludeRatings }, visibleRatings)
+
+  try {
+    const [row] = await db<{ prev_id: number | null; next_id: number | null }[]>`
+      with matching as not materialized (
+        select p.id
+          from posts p
+         where (${allowed}::text[] is null or p.rating = any(${allowed}::text[]))
+           and (select count(distinct pt.tag_id)
+                  from post_tags pt
+                  join tags t on t.id = pt.tag_id
+                 where pt.post_id = p.id
+                   and t.name = any(${include}::text[])) = ${include.length}
+           and not exists (select 1
+                             from post_tags pt
+                             join tags t on t.id = pt.tag_id
+                            where pt.post_id = p.id
+                              and t.name = any(${exclude}::text[]))
+      )
+      select (select id from matching where id > ${id} order by id asc  limit 1) as prev_id,
+             (select id from matching where id < ${id} order by id desc limit 1) as next_id`
+
+    return { prevId: row?.prev_id ?? null, nextId: row?.next_id ?? null }
+  } catch (error) {
+    // The arrows disappear rather than the page failing — they are a way around, not the
+    // post, and the post is what the reader came for.
+    console.error('searchNeighbours failed:', error)
+    return { prevId: null, nextId: null }
+  }
+}
+
+/**
  * Tags carried by the posts currently on screen — this is what fills the tag sidebar /
  * drawer. Which tags appear is decided by the page, but the number beside each one is
  * the tag's site-wide `post_count`, the same figure the detail page and the search

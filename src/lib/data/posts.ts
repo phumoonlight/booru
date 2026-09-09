@@ -61,11 +61,6 @@ export async function getPostTagNames(postId: number): Promise<string[]> {
   return tags.map((t) => t.name)
 }
 
-/** Adjacent post ids for prev/next navigation on the detail page. */
-export async function getPostNeighbours(id: number) {
-  return read.getPostNeighbours(db(), id)
-}
-
 /** Ids + dates of indexable posts, newest first — the sitemap's source. */
 export async function getSitemapPosts(limit: number) {
   return read.getSitemapPosts(db(), limit)

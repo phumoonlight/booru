@@ -117,7 +117,10 @@ export function SearchBar({
           // Delay so a tap on a suggestion registers before the list unmounts
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onKeyDown={onKeyDown}
-          className="min-h-11 flex-1 rounded-lg border border-border bg-surface px-3 text-base outline-none focus:border-accent"
+          // `min-w-0`: a search input's intrinsic width is about twenty characters, and
+          // a flex item will not shrink below that on its own — in the post page's 18rem
+          // sidebar that pushed the button out through the aside's border.
+          className="min-h-11 w-full min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 text-base outline-none focus:border-accent"
         />
         <button
           type="submit"

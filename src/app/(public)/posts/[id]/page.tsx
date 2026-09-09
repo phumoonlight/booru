@@ -2,11 +2,20 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
-import { getPost, getPostNeighbours, getPostTags } from '@/lib/data/posts'
+import { getPost, getPostTags } from '@/lib/data/posts'
+import { getSearchNeighbours } from '@/lib/data/search'
 import { PostViewCounter } from '@/components/post-view-counter'
 import { PostNav } from '@/components/post-nav'
+import { SearchBar } from '@/components/search-bar'
 import { StartHereLink } from '@/components/start-here'
-import { isRestricted, ratingToken, RATING_COLOR, RATING_LABEL, searchHref } from '@common/search'
+import {
+  isRestricted,
+  ratingToken,
+  readQuery,
+  RATING_COLOR,
+  RATING_LABEL,
+  searchHref,
+} from '@common/search'
 import { postImageUrl, thumbnailUrl } from '@/lib/images'
 import { GroupedTagList } from '@/components/tag-list'
 import { isDatabaseConfigured } from '@/lib/db'
@@ -79,7 +88,15 @@ export async function generateMetadata({ params }: PageProps<'/posts/[id]'>): Pr
   }
 }
 
-export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
+/**
+ * A post is read *inside* a search. `?query=` is the same string the listing carries —
+ * the grid's cards hand it over when they open — and it decides three things here: which
+ * posts prev/next walks, where the wordmark goes back to, and what the box below it
+ * already holds. Without it every post was an island: the arrows stepped through the
+ * whole board however narrow the search that found it was, and the way back was the
+ * unfiltered gallery.
+ */
+export default async function PostPage({ params, searchParams }: PageProps<'/posts/[id]'>) {
   if (!isDatabaseConfigured()) {
     return (
       <div className="mx-auto w-full max-w-5xl px-3 py-4">
@@ -104,9 +121,13 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
     return <RestrictedNotice />
   }
 
+  const query = readQuery(await searchParams)
+
   const [tags, { prevId, nextId }] = await Promise.all([
     getPostTags(postId),
-    getPostNeighbours(postId),
+    // The walk is the search's, and the tiers are this browser's: with the adult ones
+    // off, an arrow can no longer land on the notice saying they are off.
+    getSearchNeighbours({ id: post.id, query }),
   ])
 
   const fullSize = postImageUrl(post.file_name, post.file_ext)
@@ -153,7 +174,11 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
         {/* The top bar is gone from this page, so the sidebar's header carries both the
             way back and the walk through the post's neighbours */}
         <div className="flex shrink-0 items-center justify-between gap-2 pb-5">
-          <Link href="/posts" className="text-lg font-bold tracking-tight hover:underline">
+          {/* Back to the listing this post came from, not to the whole gallery */}
+          <Link
+            href={searchHref(query)}
+            className="text-lg font-bold tracking-tight hover:underline"
+          >
             {SITE_NAME}
           </Link>
           <div className="flex items-center gap-1">
@@ -161,9 +186,20 @@ export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
                 question from the other side: this is where you stop walking and go back
                 to the gallery, starting here. It is also the only way to set a cursor on
                 a phone — the grid's badge needs a hover the device doesn't have. */}
-            <StartHereLink postId={post.id} />
-            <PostNav prevId={prevId} nextId={nextId} />
+            <StartHereLink postId={post.id} query={query} />
+            <PostNav prevId={prevId} nextId={nextId} query={query} />
           </div>
+        </div>
+
+        {/* The search, on the page a search leads to. It was only ever on the listing,
+            so narrowing what you were looking at meant going back to it first and
+            finding your place again — and a post reached from a tag link had no box at
+            all. Submitting leaves for the listing, which is where results are looked at;
+            what it does here is let the next search be typed where the last one landed.
+            Keyed by the query so a walk to the next post refills it rather than keeping
+            what was half-typed against the post before. */}
+        <div className="shrink-0 pb-4">
+          <SearchBar key={query} initialQuery={query} />
         </div>
 
         {/* Negative margin plus matching padding puts the scrollbar on the aside's own

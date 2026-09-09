@@ -3,10 +3,13 @@ import Link from 'next/link'
 import type { Post } from '@/lib/data/posts'
 import { StartHereBadge } from '@/components/start-here'
 import { thumbnailUrl } from '@/lib/images'
+import { postHref } from '@common/search'
 import { BLUR_DATA_URL } from '@/lib/blur'
 
 /** `query` is the search the card is being shown under — what the 🔖 badge adds its
-    cursor to. `active` marks the post the listing already starts at. */
+    cursor to, and what the post itself carries when it opens, so prev/next there walks
+    this listing rather than the whole board. `active` marks the post the listing already
+    starts at. */
 export function PostCard({
   post,
   query = '',
@@ -23,7 +26,7 @@ export function PostCard({
     <div className="group relative h-full">
       <StartHereBadge postId={post.id} query={query} active={active} />
       <Link
-        href={`/posts/${post.id}`}
+        href={postHref(post.id, query)}
         // A new tab, because the grid is a feed now: following a post in place throws
         // away every chunk loaded below the fold, and coming back lands you at the top
         // of whichever page the URL had reached rather than on the thumbnail you left.
@@ -33,7 +36,7 @@ export function PostCard({
       >
         {/* Full aspect ratio, never cropped — the justified row sizes the <li>, and the box
             it hands down already carries the thumbnail's ratio */}
-      {/*
+        {/*
         `unoptimized`, like the detail image and for the same reason: the thumbnail is
         already the optimizer's output. Upload built it as a 384px-tall AVIF sized for
         this grid, so the only thing Next could add is a second lossy pass — a costly

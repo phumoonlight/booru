@@ -93,8 +93,10 @@ structure further down.
    still inside a JavaScript string**, so a backtick in one ends the query and TypeScript
    reports the parse error somewhere else entirely. The queries in `@common/data/*` keep
    their commentary above the template.
-9. **`searchHref()` is the only thing that spells the listing's path.** Tag links,
-   facets and the feed all derive from it.
+9. **`searchHref()` is the only thing that spells the listing's path**, and
+   `postHref()` the only thing that spells a post's. Tag links, facets and the feed
+   derive from the first; the grid's cards and the detail page's arrows from the second,
+   which is what carries `?query=` from the listing onto the post and back out again.
 10. **Re-measure with `npm run bench:avif` before changing a constant in
    `@common/imgcmp/`.** Those numbers were measured, not chosen.
 11. **`select count(*)` needs `::int`.** postgres.js hands a `bigint` back as a *string*,
@@ -163,6 +165,14 @@ The post write path, the search, the counters, both encoders, and the pure helpe
   landing chunk can't reflow rows already scrolled past; and `replaceState` keeps the
   cursor in the URL so a refresh doesn't drop you at the top. Cards open in a **new tab**
   for the same reason. `hasMore` is one row read past the chunk — nothing counts.
+- **A post is read inside a search.** A card opens `/posts/<id>?query=…`, and the detail
+  page spends that string three ways: prev/next walks the posts *that search* matches
+  (`searchNeighbours`, which replaced the board-wide `getPostNeighbours`), the wordmark
+  goes back to that listing rather than the whole gallery, and the sidebar's search box —
+  the listing's own `SearchBar`, on the page a search leads to — opens holding it. The
+  walk takes the visible tiers too, so with the adult ones off an arrow can no longer
+  land on the notice saying they are off. `start:` is ignored there: it says where the
+  listing began, which is a scrolling position rather than a wall.
 - **`/tags/[id]` is a sample, not a listing** — ten posts, up to fifty, then a link into
   the gallery. No search box, no facets, no cursor: browsing a tag to its end is what
   `/posts?query=<tag>` is for.

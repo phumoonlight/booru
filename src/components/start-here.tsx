@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { NavProgress } from '@/components/nav-progress'
-import { searchHref, startToken, withStart } from '@common/search'
+import { searchHref, withStart } from '@common/search'
 
 /**
  * "Start here" — the badge over a thumbnail. It doesn't save anything: it rewrites the
@@ -47,10 +47,10 @@ export function StartHereBadge({
  * card underneath to fight with — so it says what it is. It is also the only way in on a
  * phone, which is why it sits in the header beside the walk to the neighbouring posts.
  */
-export function StartHereLink({ postId }: { postId: number }) {
+export function StartHereLink({ postId, query = '' }: { postId: number; query?: string }) {
   return (
     <Link
-      href={searchHref(startToken(postId))}
+      href={searchHref(withStart(query, postId))}
       title="Browse the gallery from this post"
       className="flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 text-xl opacity-60 transition-opacity hover:opacity-100"
     >

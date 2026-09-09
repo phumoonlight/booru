@@ -10,15 +10,8 @@ import { GroupedTagList } from '@/components/tag-list'
 import { SetupNotice } from '@/components/setup-notice'
 import { isDatabaseConfigured } from '@/lib/db'
 import { isNsfwEnabled } from '@/lib/nsfw-server'
-import { isRestricted, parseSearchQuery, searchHref, SEARCH_PARAM, splitQuery } from '@common/search'
+import { isRestricted, parseSearchQuery, readQuery, searchHref, splitQuery } from '@common/search'
 import { SITE_DESCRIPTION, SITE_NAME } from '@/config'
-
-/** The whole address of a listing is one string — tags, ratings and the `start:`
-    cursor together — so there is only ever this one param to read. */
-function readQuery(params: Record<string, string | string[] | undefined>) {
-  const raw = params[SEARCH_PARAM]
-  return typeof raw === 'string' ? raw.trim() : ''
-}
 
 export async function generateMetadata({ searchParams }: PageProps<'/posts'>): Promise<Metadata> {
   const query = readQuery(await searchParams)
@@ -105,7 +98,9 @@ export default async function PostsPage({ searchParams }: PageProps<'/posts'>) {
 
       {posts.length === 0 ? (
         <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
-          {query ? 'No posts match that search.' : 'No posts yet — the desktop app adds the first one.'}
+          {query
+            ? 'No posts match that search.'
+            : 'No posts yet — the desktop app adds the first one.'}
         </p>
       ) : (
         <PostFeed

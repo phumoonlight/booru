@@ -79,6 +79,34 @@ export function searchHref(query: string): string {
   return `${POSTS_PATH}?${params.toString()}`
 }
 
+/**
+ * A post's own URL, carrying the search it was opened from.
+ *
+ * The same `?query=` string the listing uses, on a different path: a post reached from
+ * `1girl blue_hair` is being read *inside* that search, so its neighbours are that
+ * search's neighbours and the way back is that listing rather than the whole gallery.
+ * Spelled here for the reason `searchHref` is — a link that forgets to carry the query
+ * silently drops you out of the search you were in, which is a bug nobody reports.
+ */
+export function postHref(id: number, query = ''): string {
+  const path = `${POSTS_PATH}/${id}`
+  const trimmed = query.trim()
+  if (!trimmed) return path
+  const params = new URLSearchParams()
+  params.set(SEARCH_PARAM, trimmed)
+  return `${path}?${params.toString()}`
+}
+
+/**
+ * The query as it arrives in a page's `searchParams`. The whole address of a listing is
+ * one string — tags, ratings and the `start:` cursor together — so there is only ever
+ * this one param to read, on the listing and on a post alike.
+ */
+export function readQuery(params: Record<string, string | string[] | undefined>): string {
+  const raw = params[SEARCH_PARAM]
+  return typeof raw === 'string' ? raw.trim() : ''
+}
+
 // ── Rating metatags ────────────────────────────────────────────────────────────
 // `rating:r18` narrows the search to that rating; `-rating:r18` drops it.
 // They travel in the same `?query=` string as ordinary tags (Danbooru convention),
@@ -220,7 +248,10 @@ export function asRating(token: string): Rating | null {
   // says, and `rating:r` is what someone typing into the box will reach for once they
   // have seen the column. Only the reading is loose — `ratingToken` still writes the
   // name, so the two forms never both end up in a URL the app produced.
-  return RATING_BY_NAME[value] ?? ((RATINGS as readonly string[]).includes(value) ? (value as Rating) : null)
+  return (
+    RATING_BY_NAME[value] ??
+    ((RATINGS as readonly string[]).includes(value) ? (value as Rating) : null)
+  )
 }
 
 export type SplitQuery = ParsedQuery & {

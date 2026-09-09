@@ -72,19 +72,6 @@ export async function getPostTags(db: Db, postId: number): Promise<Tag[]> {
      order by t.name`
 }
 
-/** Adjacent post ids for prev/next navigation on the detail page. */
-export async function getPostNeighbours(
-  db: Db,
-  id: number
-): Promise<{ prevId: number | null; nextId: number | null }> {
-  // Both in one round trip. They were two requests because PostgREST answers one query
-  // per request; here they are two subqueries of a statement that reads no table twice.
-  const [row] = await db<{ prev_id: number | null; next_id: number | null }[]>`
-    select (select id from posts where id > ${id} order by id asc  limit 1) as prev_id,
-           (select id from posts where id < ${id} order by id desc limit 1) as next_id`
-  return { prevId: row?.prev_id ?? null, nextId: row?.next_id ?? null }
-}
-
 /**
  * Ids + dates of indexable posts, newest first — the sitemap's source. Drops the
  * restricted tier to match what a search engine is shown.
