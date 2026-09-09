@@ -40,7 +40,7 @@ essay either — answer it, then offer the detail rather than supplying it.
 |---|---|
 | `npm run dev` / `build` / `lint` | the only verification the repo has — there is no test runner |
 | `npm run typecheck -w desktop` | the only check the Electron app has; the root `tsc` covers `src/` and `packages/common`, not the desktop |
-| `npm run db:push` / `db:list` | apply pending migrations / say what is applied. `scripts/migrate.mjs`, as `booru_owner` |
+| `npm run db:push` / `db:list` | apply pending migrations, after naming them and the board and asking / say what is applied. `scripts/migrate.mjs`, as `booru_owner` |
 | `npm run desktop:dev` / `desktop:package` | window, or installer. Both need the seven env values |
 | `npm run bench:avif` | sweeps AVIF `effort` through both encoders over `tests/bench/example.jpg` |
 
@@ -319,25 +319,42 @@ behind a session, because there is none.
 - **`CategoryTagField` is the one tag editor**, on the upload form and the post editor:
   staging a post and editing one differ in when the write happens,
   not in what a tag is. It replaced a free-text box that had to guess a category and so
-  coined every new tag as general. **A row is a category and a section** — Appearance, then
-  `hair color`, `hair styles`, `clothes`, `accessory` indented under it (`tags.form_section`,
-  free text, and the rows are whatever the board's tags name — A–Z, so a section exists
-  exactly as long as a tag says so). The website has no such division
-  and never will: it shows the category, which is what a tag *is*, where a row is where
-  your hand goes, and one Appearance row holding four kinds of thing is a row you read
-  before you can aim at it. It is also where the four categories cut in the fourth re-cut
-  went — `body`, `clothes`, `accessories`, `exposure` were the wrong division for a board
-  and the right one for a form. **Two columns, assigned rather than flowed**: `RIGHT_COLUMN`
-  holds copyright, character, activity, sexual, general and meta — the answers that come from
-  looking once, a tag or two each — and the left holds `appearance`, the long sectioned half
-  you work down, with artist above it. The split is about how much work each holds, so
-  the columns stay roughly level while a post is tagged. A grid of two explicit columns, not
-  CSS columns or `grid-flow-row`, since those pick a side by height and would move a category
-  across the moment a picker opened.
+  coined every new tag as general. **A row is a form section, and there is no category on
+  the form at all** — `hair color`, then `clothes`, then `hair styles`, in the order the
+  board's own `tag_form_sections` are in (`tags.form_section_id` points at one). The
+  website has no such division and never will: it shows the category, which is what a tag
+  *is*, where a row is where your hand goes, and one Appearance row holding four kinds of
+  thing is a row you read before you can aim at it. It is also where the four categories
+  cut in the fourth re-cut went — `body`, `clothes`, `accessories`, `exposure` were the
+  wrong division for a board and the right one for a form. The two were **nested** for one
+  revision, a category heading with its sections indented under it, which asked the
+  question twice and forbade the one thing a form row is for: `bikini` is General, `bare
+  shoulders` is Appearance, and both go on the row you fill in looking at a swimsuit. What
+  a category is still good for here is the **chip's colour**, read off the tag. That also
+  took the two assigned columns with it — a split by category means nothing once the rows
+  are not categories. **A row is a card, two across**: as a full-width row a section
+  was a line of text with a ＋ a screen away at the other end, where the chips that make it
+  worth reading take a fraction of that width. Two rather than three, because a column
+  count is chosen against the width of the chips — at a third of the window four hair
+  colours wrapped onto three lines, costing more height than the column saved. **Two real columns, and which one a row is in is
+  stored on the row** (`tag_form_sections.side`), not a flowing grid and not derived. A row
+  appears and disappears as the post changes, which is what a section's dependencies *are*,
+  and in a flowing grid one row arriving shunts every row after it along, so half the form
+  swaps sides while you are reaching for it. It was the parity of a flat `position` for one
+  revision, which fixed that and bought its own bug: a single ordered list cannot say that
+  one column holds one more than the other, so the surplus row came out on the wrong side
+  and the foot of the shorter column was a place nothing could be dragged to. The sides go
+  uneven when several conditional rows on one of them are hidden at once, which is what a
+  form whose rows come and go looks like. Two columns at every width, since stacking them
+  would read down the left half and then down the right. **Nothing folds**: a card is only as tall as what is on it, most
+  rows on most posts are empty, and a shut row is a row you cannot see is empty — which is
+  the opposite of what this form is for, being reminded of the questions you have not
+  answered about the picture. ＋ sits on the heading rather than after the chips, so the
+  target does not move as the row fills.
   **A section can have dependencies**, which is the one thing on the field that depends on
   the rest of the post: none and the row is always drawn, `any` and it waits for one of its
   tags, `all` for every one (`dependenciesMet`, on `tag_form_section_deps`). `blue archive`
-  under Character waits for `blue_archive`; `hair color` waits for nothing. Implied tags
+  waits for `blue_archive`; `hair color` waits for nothing. Implied tags
   count, since the person tagging cannot tell a typed tag from an implied one without
   reading the line below the box. A row the post already has a tag on is drawn whatever its
   condition says — a row that vanishes takes a tag you can no longer see or remove, and the
@@ -347,20 +364,21 @@ behind a session, because there is none.
   so the row was still drawn with a ＋ that opened onto nothing and could not say why. And
   Character used to match its sections against the post's copyright tags by name in code,
   which was exactly one dependency in `any` mode, hardcoded for one pair of categories.
-  **A category is a heading, not a row**: it wears its own
-  colour — the one it has in the grid, the picker and on a post — and has no ＋, because a
-  tag is offered through its section or not at all. So a tag with no section is not offered
-  anywhere, which is the point: an unfiled tag is one the vocabulary has not decided about,
-  and that is decided on the Tags screen rather than here with a picture in front of you.
-  It is still *drawn* on the category's own row if the post already carries it — a chip
-  that existed and was visible nowhere would be a tag you cannot take off, which the post
-  editor would then save straight back. A category with no sections and nothing unfiled is
-  not drawn at all, and a board with no sections anywhere says so in one line rather than
-  as eight empty headings. The picker a row opens offers that
-  row's tags alone — **and only tags that exist**: naming one is the Tags screen's job,
+  **A tag on no row is not offered**, which is the point: an unfiled tag is one the
+  vocabulary has not decided about, and that is decided on the Tags screen rather than here
+  with a picture in front of you. It is still *drawn*, in a last row called On no row, if
+  the post already carries it — a chip that existed and was visible nowhere would be a tag
+  you cannot take off, which the post editor would then save straight back. A board with no
+  sections anywhere says so in one line rather than as a blank form. The picker a row opens
+  offers that
+  row's tags alone, whatever categories they are in — **and only tags that exist**: naming
+  one is the Tags screen's job,
   which is also the only place a new *section* is named,
   where the whole vocabulary is on screen and a near-duplicate is visible before it is
-  made. It holds the board's names in a module-level cache shared by every field on
+  made. **A tag is named without a row** — New tag asks for a name and a category and
+  nothing else, so a new tag is on no row and offered nowhere until it is filed. Naming and
+  filing are two decisions at two moments, and the menu that used to sit on that form got
+  answered on the way past. It holds the board's names in a module-level cache shared by every field on
   screen, separate from the Tags screen's: that one carries `post_count` and is dropped on
   every post save, this one holds names and categories, so only `invalidateTagNames()`
   from the Tags screen's own refresh drops it. Nothing in the app types a tag
@@ -382,31 +400,60 @@ behind a session, because there is none.
   rather than on the save, so correcting a rating twice is two clicks and not two
   searches. Delete is the exception: nothing is left to look at.
 - **Tags** lists and manages: click a row for rename / recategorize / delete, **which row
-  of the form it sits on** (a menu of that category's rows), **and that tag's rules**.
-  🧱 **Sections** is the panel beside Catalogs: one category at a time, its rows and their
-  order, with the name editable in place, a **drag** by the grip to reorder, and ➕ to name
-  one before anything is on it. The upload queue reached the opposite conclusion about drags
-  and it is not a contradiction: a queue card was most of the window, so the target was
-  off-screen as often as not; these are ten one-line rows all visible at once, which is the
-  case a drag is for. What it costs is the keyboard. Order is why `tag_form_sections` is a table — A–Z is an index's order, not a form's —
-  and **ids are why a row can be renamed**: the name was the key for one revision, and
-  correcting a spelling made a different section while every tag on the old one fell off the
-  form. `tags.form_section_id` points at a row, so a rename carries them. **Categories are folded**, a heading and its
+  of the form it sits on** (a menu of every row, since a section is not a division of a
+  category — the two are independent, and recategorizing leaves the row alone), **and that
+  tag's rules**.
+  🧱 **Sections is a view, not a panel** (`form-sections.tsx`), opened like the rule map and
+  closed the same way: **a card per row with its tags inside it**, two across, and the
+  **unfiled tags in a strip at the top**. It was a list of section names, with which row a
+  tag sat on set one tag at a time from a menu on that tag's panel — two halves of the same
+  mistake, since filing a vocabulary is a job about sets and a menu per tag is thirty trips
+  through a panel showing one name, with no way to see what a row already holds. **Filing is
+  a drag** onto a card, written on the drop and drawn optimistically until the way out,
+  where the screen behind re-reads once rather than after every drop. **The top strip is not
+  a drop target**: unfiling stops a tag being offered anywhere, which is a decision to go
+  and make on that tag's own panel rather than one to reach by letting go short of a card.
+  The **whole card** takes the drop, since an empty row is the one you are aiming at, and
+  the **grip** reorders — which of the two is being dragged is held in state, because a
+  dragover may not read what it is carrying. The cards are two stacked columns, the side read off
+  each row as on the form; a flowing grid made every row as tall as its tallest card, which
+  with one card holding twelve chips and its neighbour none was mostly holes. Reordering is
+  an **insert**: drop a card on another to move the row there — either column — or into the
+  space under a column to send it to the end of that one, which is the only way to reach the
+  foot of the shorter side and was unreachable for as long as the side was a position's
+  parity. One write carries both columns in their new order, so a row's side and its place
+  in it are the one edit they are. **␣ Space** makes a row that holds nothing and is drawn
+  as a gap on the form, which is how a row on one side is brought level with a row on the
+  other; it is told from a real row by its name (`isSpacer` / `newSpacerName` in
+  `@common/tags`, `__space__<random>`), a magic value in a free-text column defended the way
+  `tags.mark` is — one pair of functions knows the spelling — rather than a `kind` column and
+  a migration for a row that is a blank space. It is a card with a grip and a ✕ here, since
+  this is where it is moved and removed, and nothing at all there. A row's **condition** is answered from the same chips (👆 Choose,
+  then click), which is what that gesture used the Tags grid for before it had a screen with
+  every tag on it. Order is why `tag_form_sections` is a table — A–Z is an index's order,
+  not a form's — and **ids are why a row can be renamed**: the name was the key for one
+  revision, and correcting a spelling made a different section while every tag on the old
+  one fell off the form. `tags.form_section_id` points at a row, so a rename carries them. **Categories are folded**, a heading and its
   count until clicked: a few hundred tags is a screen you scroll past rather than read, and
   the category you came for is the one thing you already know. Filtering or picking forces
   every one open — both are moments when the answer is a tag you cannot see yet, and a
   filter matching four tags in three folded categories looks like a filter matching nothing
   — with the fold remembered underneath, so clearing the box puts back what you had open.
-  Unfolding is `display` and never a read: the whole index is already in memory. The grid is split by section the way
-  the form is, because this is where a section is set — a section down to one tag, or a tag
-  nobody filed, is only visible with the category laid out that way. It is *not* split by
+  Unfolding is `display` and never a read: the whole index is already in memory. **The grid
+  is not split by section**: it was, while a section was a division of a category and the
+  two screens were the same shape, and repeating that division here now draws the same list
+  twice in two arrangements — and makes a category read as an outline of headings rather
+  than as the list of what the board calls this kind of thing. Which row a tag is on is the
+  Sections screen's question, one click away, and `listTags` stopped carrying the row's
+  *name* with it when the last reader of that spelling went: both screens hold the rows in a
+  store and match on the id. It is *not* split by
   section's condition, which belongs to the section and is read on the Sections panel. Two rows carry the controls: New tag, Apply by tag, Catalogs and Rule map on
   the title line, then a toolbar of Refresh and a full-width filter box, which is Browse's
   search bar drawn the same way — the first three being what is not about a row you are pointing at,
   and the filter being what makes a few hundred tags browsable now that the grid is also a
   picker. Every button is unbordered (`HEADER_LINK` / `headerToggle`, shared with Browse); the box
   keeps its border, being the one thing you type into. **The grid has two
-  meanings**: ordinarily a click opens that tag, and while one of the open tag's three
+  meanings**: ordinarily a click opens that tag, and while one of the open tag's two
   rules or a catalog is being filled in (`picking` in `TagIndex`, a union of the two) a
   click toggles that tag in *that* instead, with
   the count column showing ✓/＋ rather than a number for as long as that lasts. The
@@ -579,7 +626,8 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   that pushes has changed a live database on a hunch about what the author wanted, and the
   file is the part that can be reviewed before that happens.
 - **One baseline**, `db/migrations/0001_baseline.sql`: every table in foreign-key order
-  and its indexes, plus `0002_site_settings.sql`. Schema changes from here are **always** a new numbered file, never a
+  and its indexes, plus `0002_site_settings.sql`, `0003_sections_off_categories.sql` and
+  `0004_section_sides.sql`. Schema changes from here are **always** a new numbered file, never a
   dashboard edit and never an edit to the baseline once pushed anywhere real.
   `scripts/migrate.mjs` applies each inside a transaction and records it in `_migrations`.
 - **`db/grants.sql` is not a migration** and re-runs on every `db:push`. Who may do what
@@ -756,6 +804,7 @@ current.
 | The upload **queue** — `upload-queue.tsx`, the reorder arrows, the per-card fold, the done tick, the Apply-to-all bar | Machinery for keeping twenty half-tagged images straight. Tagging is per image however they are stacked, so the queue postponed the slow part rather than removing it, and charged twenty cards of unsaved state for one press of Upload |
 | `tags.category2` and everything spelling it — `Subcategory`, `normalizeSubcategory`, `subcategoryLabel`, `subcategoryOrder`, `setTagSubcategory`, `tags:set-category2` | A heading *inside* one picker: it could divide a category and never shorten one, since every subgroup was drawn whatever the post was about. What divides one now is `tag_form_sections`, a row of the form with its own ＋; what makes a row come and go is that row's own dependencies |
 | **Form groups** — `tag_rules` kind 2, `shared/groups.ts`, `renderer/src/groups.ts`, the Form group panel and the rule map's third section | The right question in the wrong place. A group hid tags *inside* a row, so the row was still drawn, still had its ＋, and opened onto a picker that was empty for reasons the picker could not state — and the rule was written on the tag it hung off, which is the one screen where you are not thinking about the form. `tag_form_section_deps` says it about the whole row instead |
+| **The form's category headings** — `tag_form_sections.category`, `RIGHT_COLUMN` and the field's two assigned columns, the section menu clearing on a recategorization | A section inside a category asked the question twice: a category says what a tag *is*, which is the website's question, and a row says where your hand goes. It also forbade the one thing a form row is for — `bikini` is General and `bare shoulders` is Appearance, and both belong on the row you fill in looking at a swimsuit. The form is one flat ordered list of foldable rows; the category survives as the chip's colour |
 | The hardcoded Character↔copyright match (`LINKED_CATEGORY` / `LINKING_CATEGORY` / `OTHER_SECTION`) | One dependency, in `any` mode, spelled in code for one pair of categories. It is a row you can see and change now |
 | **Supabase entirely** — PostgREST, RLS, both Storage buckets, the CLI, `@supabase/supabase-js`, `src/lib/supabase/`, `supabase/config.toml` | Postgres on Neon and a bucket on R2. What PostgREST cost was visible in one file: multi-tag AND is the one thing it cannot express, so the search resolved tag membership in TypeScript over thousand-row pages of `post_tags`. RLS went with the anon key — with no public credential, a `grant` says what a select-only policy was standing in for, and says it about writes too |
 | `@supabase/supabase-js`'s query builder — 62 call sites, every embed, `maybeSingle()`, `count: 'exact'`, `.range()` paging | Plain SQL through `postgres` (porsager). The counters became one `update … from`, the view counter went back to `+ 1`, the post write became a real transaction, and the search became one statement |

@@ -15,16 +15,16 @@ import { boardDb } from './db'
  * keystroke of an autocomplete; a few dozen section names are read once.
  *
  * On the board rather than in `save.json` because a section is a fact about the board's
- * vocabulary, like the tag rules and unlike the catalogs: the same categories divide the
- * same way on every install, and an order worked out once should not be worked out again
- * after a reinstall.
+ * vocabulary, like the tag rules and unlike the catalogs: the same board wants the same
+ * rows on every install, and an order worked out once should not be worked out again after
+ * a reinstall.
  */
 
 /** An unreachable board is no sections, never a thrown channel — the window carries on with
- *  a form of headings and no rows, which says plainly that it cannot reach anything. */
+ *  a form of no rows at all, which says plainly that it cannot reach anything. */
 export async function loadFormSections(): Promise<FormSections> {
   const db = boardDb()
-  if (!db) return {}
+  if (!db) return []
   return listFormSections(db)
 }
 

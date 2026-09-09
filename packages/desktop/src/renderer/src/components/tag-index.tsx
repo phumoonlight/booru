@@ -5,7 +5,7 @@ import {
   categoryLabel,
   categoryOrder,
   formSectionLabel,
-  orderFormSections,
+  isSpacer,
   type Tag,
   type TagCategory,
 } from '@common/tags'
@@ -13,13 +13,13 @@ import { tagLabel } from '@common/search'
 import { BUTTON, BUTTON_ON_SURFACE, BUTTON_SUBMIT_ON_SURFACE, buttonToggle } from './buttons'
 import { TagMark, invalidateTagNames } from './category-tag-field'
 import { FIELD, Panel } from './panel'
-import { FormSectionsPanel } from './form-sections'
+import { FormSectionsView } from './form-sections'
 import { RuleDiagram } from './rule-diagram'
 import { TagCatalogs } from './tag-catalogs'
 import { TagRuleEditor, toggleRuleName, type RuleKind } from './tag-rule-editor'
 import { toggleCatalogTag } from '../../../shared/catalogs'
 import { saveCatalogs, useCatalogs } from '../catalogs'
-import { editFormSections, reloadFormSections, useFormSections } from '../form-sections'
+import { reloadFormSections, useFormSections } from '../form-sections'
 import type { FormSection } from '@common/data/form-sections'
 import { reloadImplications, saveImplication, useImplications } from '../implications'
 import { reloadRecommendations, saveRecommendation, useRecommendations } from '../recommendations'
@@ -27,15 +27,16 @@ import { reloadRecommendations, saveRecommendation, useRecommendations } from '.
 /**
  * What a click on the tag grid is currently answering, when it is not simply opening a tag.
  *
- * Three things fill themselves in from the grid now — a tag's rules, a catalog, and a form
- * section's dependencies — and they are told apart by what the pick is *about*: a rule is
- * about the tag whose panel is open, a catalog is about a name that has nothing to do with
- * any row. One at a time, because there is one grid and a click has to mean one thing.
+ * Two things fill themselves in from the grid — a tag's rules and a catalog — and they are
+ * told apart by what the pick is *about*: a rule is about the tag whose panel is open, a
+ * catalog is about a name that has nothing to do with any row. One at a time, because there
+ * is one grid and a click has to mean one thing.
+ *
+ * A section's dependencies were a third. They are answered on the 🧱 Form sections screen
+ * now, off the chips it already draws — which is the whole board's tags, laid out by row,
+ * so the picker that gesture needed is there rather than here.
  */
-type Picking =
-  | { into: RuleKind; tag: string }
-  | { into: 'catalog'; name: string }
-  | { into: 'section'; id: number }
+type Picking = { into: RuleKind; tag: string } | { into: 'catalog'; name: string }
 
 /**
  * The last index read, kept outside React on purpose. This screen is unmounted whenever
@@ -83,11 +84,11 @@ export function invalidateTags(): void {
  */
 export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
   const [editing, setEditing] = useState<Tag | null>(null)
-  const [panel, setPanel] = useState<'none' | 'create' | 'apply' | 'catalogs' | 'sections'>('none')
-  // Which category the sections panel has open. Held here rather than inside it so
-  // reopening the panel comes back to the category you were dividing, not to Artist.
-  const [sectionCategory, setSectionCategory] = useState<TagCategory>('appearance')
+  const [panel, setPanel] = useState<'none' | 'create' | 'apply' | 'catalogs'>('none')
   const [diagram, setDiagram] = useState(false)
+  // The form sections, which are a screen rather than a panel — like the rule map, and for
+  // the same reason: laying out every row with its tags inside it wants the whole window.
+  const [sectionsView, setSectionsView] = useState(false)
   // What the grid is currently filling in, or null for its ordinary job. It lives here
   // rather than in the panel because the two halves of the gesture are in different
   // components — the button that starts it is in a panel, and the tags it is answered with
@@ -178,16 +179,6 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
   }
 
   /**
-   * The sections already in use in a category — what the two forms offer while you type
-   * one. A section only does its job when every tag on it spells it the same way, and the
-   * list of them exists nowhere but in the tags themselves, so the field that sets one has
-   * to show what is already there or it is a free-text box inviting a near-duplicate.
-   */
-  /** The rows this category has, for the menu on the two forms. The board's list and only
-   *  it: a tag is put on a section that exists, and making one is the Sections panel. */
-  const sectionsIn = (category: TagCategory): FormSection[] => formSections[category] ?? []
-
-  /**
    * What a click on a tag in the grid means, which depends on what a panel is asking.
    *
    * Ordinarily it opens that tag. While a rule or a catalog is being filled in it toggles
@@ -206,22 +197,6 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
     }
     if (picking.into === 'catalog') {
       void saveCatalogs(toggleCatalogTag(catalogs, picking.name, tag.name))
-      return
-    }
-    if (picking.into === 'section') {
-      // The section being filled in, found by id across every category: the panel has one
-      // category open, but the tags a row waits for need not be in it — Character's
-      // `blue archive` waits for a Copyright tag, which is the whole point.
-      const section = Object.values(formSections)
-        .flat()
-        .find((row) => row.id === picking.id)
-      if (!section) return
-      void editFormSections({
-        do: 'deps',
-        id: section.id,
-        mode: section.depsMode,
-        names: toggleRuleName(section.deps, tag.name),
-      })
       return
     }
     if (tag.name === picking.tag) return
@@ -273,33 +248,21 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
       ? []
       : picking.into === 'catalog'
         ? catalogs[picking.name] ?? []
-        : picking.into === 'section'
-          ? Object.values(formSections)
-              .flat()
-              .find((row) => row.id === picking.id)?.deps ?? []
-          : ruleSet[picking.into][picking.tag] ?? []
+        : ruleSet[picking.into][picking.tag] ?? []
   )
 
   /**
    * Why a tag cannot go into whatever is being filled in, or null if it can.
    *
-   * Two cases, both circular in the same way. A **rule** cannot name the tag it is about: a
-   * tag implying itself is the one rule that can never fire. And a **section** cannot wait
-   * for a tag filed on itself — the row is hidden until its condition is met, so the tag
-   * that would meet it is a tag you can never reach. A catalog refuses nothing: it is about
-   * a set of images, not about a tag.
+   * One case: a **rule** cannot name the tag it is about, a tag implying itself being the
+   * one rule that can never fire. A catalog refuses nothing — it is about a set of images,
+   * not about a tag.
    *
    * Answered as the sentence the grid shows, so the reason is written once and lands in the
    * title of the cell it is about.
    */
   const inertReason = (tag: Tag): string | null => {
-    if (!picking) return null
-    if (picking.into === 'catalog') return null
-    if (picking.into === 'section') {
-      return tag.form_section_id === picking.id
-        ? `${tagLabel(tag.name)} is on this row — a row cannot wait for a tag it holds`
-        : null
-    }
+    if (!picking || picking.into === 'catalog') return null
     return tag.name === picking.tag ? `${tagLabel(tag.name)} is the tag this rule is about` : null
   }
 
@@ -395,14 +358,13 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
           <span aria-hidden>📚</span>
           Catalogs
         </button>
-        {/* Beside the other two that are about a set of things rather than the row under
-            the pointer. A section is a division of a category, made once and filed into,
-            so it belongs with the controls that are not about any one tag. */}
+        {/* Beside the rule map below it, being the other thing here that is a view rather
+            than a panel: both are about all of the tags at once and none in particular. */}
         <button
           type="button"
-          onClick={() => showPanel('sections')}
-          title="The rows the upload form draws under a category, and their order"
-          className={buttonToggle(panel === 'sections')}
+          onClick={() => setSectionsView(true)}
+          title="The rows the upload form draws, their order, and what is on each"
+          className={BUTTON}
         >
           <span aria-hidden>🧱</span>
           Sections
@@ -424,6 +386,16 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
       </div>
 
       {diagram && <RuleDiagram onClose={() => setDiagram(false)} tags={tags} />}
+
+      {/* Filing a tag onto a row moves nothing this screen draws except the row a tag names,
+          so the re-read is asked for on the way out rather than after every drop. */}
+      {sectionsView && (
+        <FormSectionsView
+          tags={tags}
+          onClose={() => setSectionsView(false)}
+          onChanged={() => void refresh()}
+        />
+      )}
 
       {/* A browser's toolbar, and Browse has the same one: reload at the head of the row,
           then the box, filling everything left. Refresh sat in the far corner of the title
@@ -459,20 +431,8 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
       </div>
 
 
-      {panel === 'create' && <CreateTag sectionsIn={sectionsIn} onDone={() => void refresh()} />}
+      {panel === 'create' && <CreateTag onDone={() => void refresh()} />}
       {panel === 'apply' && <ApplyTag onDone={() => void refresh()} />}
-      {panel === 'sections' && (
-        <FormSectionsPanel
-          category={sectionCategory}
-          onCategory={(next) => {
-            setSectionCategory(next)
-            setPicking(null)
-          }}
-          picking={picking?.into === 'section' ? picking.id : null}
-          onPick={(id) => setPicking(id === null ? null : { into: 'section', id })}
-          onClose={() => showPanel('none')}
-        />
-      )}
       {panel === 'catalogs' && (
         <TagCatalogs
           tags={tags}
@@ -489,14 +449,10 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
           key={editing.id}
           tag={editing}
           onBrowse={onBrowse}
-          sectionsIn={sectionsIn}
+          sections={formSections}
           // The rule editor knows about its own two kinds and nothing else; a catalog
           // pick is somebody else's business and reads to it as no pick at all.
-          picking={
-            picking && picking.into !== 'catalog' && picking.into !== 'section'
-              ? picking.into
-              : null
-          }
+          picking={picking && picking.into !== 'catalog' ? picking.into : null}
           onPick={(kind) => setPicking(kind ? { into: kind, tag: editing.name } : null)}
           onClose={() => openTag(null)}
           onDone={() => void refresh()}
@@ -518,29 +474,15 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
           {typed ? `No tag matches “${typed}”.` : 'No tags yet — they are created by uploads.'}
         </p>
       ) : (
-        // Split the same way the tag form splits it, and from the same values: a section
-        // exists exactly as long as a tag says so, on both screens. This is where the split
-        // is decided, and a section down to one tag, a near-duplicate spelling, or a tag
-        // nobody filed is only visible with the whole category laid out this way.
-        //
-        // Not split by *form group*, though the field is: a group belongs to the tag it
-        // hangs off and is read on that tag's panel, and drawing one tag's rule across
-        // everybody else's rows would be a different claim entirely.
+        // One grid per category, and no division inside it. It was split by form section
+        // for as long as a section was a division of a category and the two screens were
+        // therefore the same shape. They are not: the form is rows holding tags of any
+        // category, laid out on the 🧱 Sections screen with each row's tags inside it, and
+        // repeating that division here drew the same list twice in two arrangements — while
+        // making a category read as an outline of headings rather than as what it is, the
+        // list of what the board calls this kind of thing. Which row a tag is on is the
+        // other screen's question, and it is one drag from here.
         rows.map(([category, group]) => {
-          const loose = group.filter((tag) => !tag.form_section)
-          // The form's order, so the two screens read the same way down the page. Empty
-          // sections are left out here and drawn there: the form needs the row to file a
-          // first tag onto, and this screen is a picture of what the board holds.
-          const sections = orderFormSections(
-            (formSections[category] ?? []).map((section) => section.name),
-            group.map((tag) => tag.form_section)
-          )
-            .map(
-              (section) =>
-                [section, group.filter((tag) => tag.form_section === section)] as [string, Tag[]]
-            )
-            .filter(([, list]) => list.length > 0)
-
           const open = isOpen(category)
 
           return (
@@ -562,9 +504,9 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
                 <span className={categoryColor(category)}>{categoryLabel(category)}</span>
                 <span className="tabular-nums">({group.length})</span>
               </button>
-              {open && loose.length > 0 && (
+              {open && (
                 <TagGrid
-                  tags={loose}
+                  tags={group}
                   category={category}
                   editingId={editing?.id ?? null}
                   onSelect={pickTag}
@@ -573,31 +515,6 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
                   inert={inertReason}
                 />
               )}
-              {open &&
-                sections.map(([section, list]) => (
-                  <div
-                    key={section}
-                    // Inset on the left, and quieter than the category above it — a section
-                    // is a division inside that heading, not a sibling of it, and the grid
-                    // stepping in is what says so at a glance. Only the left: the right edge
-                    // lines up with every other grid on the screen, so the step reads as an
-                    // indent rather than as a narrower table.
-                    className="flex flex-col gap-1 pl-3"
-                  >
-                    <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                      {formSectionLabel(section)} ({list.length})
-                    </h3>
-                    <TagGrid
-                      tags={list}
-                      category={category}
-                      editingId={editing?.id ?? null}
-                      onSelect={pickTag}
-                      picking={picking !== null}
-                      picked={picked}
-                      inert={inertReason}
-                    />
-                  </div>
-                ))}
             </section>
           )
         })
@@ -607,7 +524,7 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
 }
 
 /**
- * One block of tags: the whole of a category, or one subgroup of it.
+ * One block of tags: the whole of one category.
  *
  * Ruled like a table, the same way the web page is: a count sitting in open space reads as
  * close to the next column's name as to its own. Each cell carries its own right/bottom
@@ -736,24 +653,28 @@ function CategoryField({
 }
 
 /**
- * Which row of the desktop tag form a tag is offered on, inside its category —
- * `tags.form_section_id`, whose migration has why it is an id.
+ * Which row of the desktop tag form a tag is offered on — `tags.form_section_id`, whose
+ * migration has why it is an id.
  *
  * A menu, and it has been three things now. A fixed list in code was wrong because how a
- * category wants dividing is a judgement about one board's own vocabulary. Free text with a
+ * form wants dividing is a judgement about one board's own vocabulary. Free text with a
  * datalist was right about that and wrong about everything else: no order, no row until a
  * tag was already on it, and a near-duplicate the first time somebody typed `hair colour`.
  * The sections are rows on the board now, made and ordered on the 🧱 Sections panel, so this
  * is a menu again — and this time the list it offers is one you wrote.
+ *
+ * **Every row, whatever the tag's category is.** They were the rows of that category alone
+ * while a section belonged to one, which is exactly the constraint that went: `bikini` is
+ * General and belongs on the swimsuit row beside Appearance tags.
  *
  * Empty means no row at all, which is not the same as harmless: a tag on no section is not
  * offered anywhere in the form. That is the point of it — an unfiled tag is one the
  * vocabulary has not decided about — and it is why this menu says so rather than saying
  * "none".
  *
- * Absent entirely for a category with no sections, rather than drawn empty: a menu whose
- * only option is "nowhere" is a control that cannot do anything, and its absence says the
- * same more quietly.
+ * Absent entirely on a board with no sections, rather than drawn empty: a menu whose only
+ * option is "nowhere" is a control that cannot do anything, and its absence says the same
+ * more quietly.
  */
 function SectionField({
   value,
@@ -770,9 +691,6 @@ function SectionField({
 
   return (
     <select
-      // A section belonging to the category as *currently selected*, not as stored: moving
-      // a tag to another category takes its section off, so the menu is about where the tag
-      // is going.
       value={options.some((section) => section.id === value) ? String(value) : ''}
       onChange={(event) => onChange(event.target.value === '' ? null : Number(event.target.value))}
       disabled={disabled}
@@ -793,23 +711,23 @@ function SectionField({
  * already right. This is now the only way a tag comes into being: a post write resolves
  * the names it was given and fails on one the board doesn't have, rather than coining it
  * on the way past. So the order is always this one, and the tag starts on no posts.
+ *
+ * **It does not ask which row of the form the tag goes on**, and a new tag is therefore on
+ * none — not offered anywhere until it is filed. That is two decisions and they are made at
+ * different moments: naming one is about the vocabulary, filing it is about the shape of the
+ * form, and the second is a question you answer for a set of tags at once on the 🧱 Form
+ * sections screen, looking at what each row already holds. Asking here got a menu answered
+ * on the way past, which is how a tag ends up on the row that happened to be first.
  */
-function CreateTag({
-  sectionsIn,
-  onDone,
-}: {
-  sectionsIn: (category: TagCategory) => FormSection[]
-  onDone: () => void
-}) {
+function CreateTag({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState('')
   const [category, setCategory] = useState<TagCategory>('general')
-  const [section, setSection] = useState<number | null>(null)
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
 
   async function submit() {
     setBusy(true)
-    const result = await window.api.createTag(name, category, section)
+    const result = await window.api.createTag(name, category, null)
     setBusy(false)
     if (result.ok) {
       setMessage({ ok: true, text: `Created ${tagLabel(result.name)}.` })
@@ -830,21 +748,9 @@ function CreateTag({
           spellCheck={false}
           className={`${FIELD} min-w-40 flex-1 font-mono`}
         />
-        {/* Both kept when the name is cleared below: naming five underwear tags in a row is
-            what this form is for, and re-picking the category and the row each time is what
-            it saves. */}
-        {/* Changing the category drops the row with it. A section belongs to one category —
-            `(category, name)` is unique on `tag_form_sections` — so an id picked under
-            Appearance means nothing under General, and the menu only *hid* the stale value
-            while the state still held it, ready to be written by Create. */}
-        <CategoryField
-          value={category}
-          onChange={(next) => {
-            setCategory(next)
-            setSection(null)
-          }}
-        />
-        <SectionField value={section} onChange={setSection} options={sectionsIn(category)} />
+        {/* Kept when the name is cleared below: naming five underwear tags in a row is what
+            this form is for, and re-picking the category each time is what it saves. */}
+        <CategoryField value={category} onChange={setCategory} />
         <button
           type="button"
           onClick={() => void submit()}
@@ -937,7 +843,7 @@ function ApplyTag({ onDone }: { onDone: () => void }) {
 function EditTag({
   tag,
   onBrowse,
-  sectionsIn,
+  sections,
   picking,
   onPick,
   onClose,
@@ -945,7 +851,7 @@ function EditTag({
 }: {
   tag: Tag
   onBrowse: (query: string) => void
-  sectionsIn: (category: TagCategory) => FormSection[]
+  sections: FormSection[]
   picking: RuleKind | null
   onPick: (kind: RuleKind | null) => void
   onClose: () => void
@@ -991,10 +897,9 @@ function EditTag({
         return
       }
     }
-    // After the category, never before: `setTagCategory` clears the section, a section
-    // belonging to the category it is under. Written whenever either has moved, since a
-    // category change has just cleared whatever was stored.
-    if (section !== (tag.form_section_id ?? null) || category !== tag.category) {
+    // Independent of the category, and in either order: recategorizing leaves the column
+    // alone now that a section is a row of the form rather than a division of a category.
+    if (section !== (tag.form_section_id ?? null)) {
       const moved = await window.api.setTagFormSection(tag.id, section)
       if (!moved.ok) {
         setBusy(false)
@@ -1106,24 +1011,14 @@ function EditTag({
           spellCheck={false}
           className={`${FIELD} min-w-40 flex-1 font-mono`}
         />
-        {/* Changing the category drops the row with it, for the reason `setTagCategory`
-            clears the column: a section belongs to one category, so an id picked under the
-            old one would be written back under the new one and file the tag onto a row
-            nothing draws. The menu hid it; the state kept it. */}
-        <CategoryField
-          value={category}
-          onChange={(next) => {
-            setCategory(next)
-            setSection(null)
-          }}
-          disabled={busy}
-        />
-        {/* Offered from the category as currently selected, not as stored: moving a tag to
-            another category and onto one of *that* category's rows is one edit. */}
+        {/* Two independent answers about one tag: what it is, and where it is offered.
+            Changing the category used to clear the row, because the row belonged to the
+            category it was under — it does not any more. */}
+        <CategoryField value={category} onChange={setCategory} disabled={busy} />
         <SectionField
           value={section}
           onChange={setSection}
-          options={sectionsIn(category)}
+          options={sections.filter((row) => !isSpacer(row.name))}
           disabled={busy}
         />
         <button

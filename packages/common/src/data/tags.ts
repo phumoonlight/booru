@@ -157,11 +157,11 @@ export async function renameTag(
  * grouping — so the tag's name, id and post links are untouched and nothing has to be
  * recounted.
  *
- * **The form section goes with it.** A section belongs to a category — `(category, name)`
- * is unique on `tag_form_sections` — so the row a tag was drawn on does not exist in the
- * category it is moving to. The desktop's edit panel sets both in one save, and this
- * clearing is what makes the order of those two writes not matter: a category change never
- * leaves a tag pointing at a row drawn under some other heading.
+ * **The form section stays.** A section is not a division of a category any more — it is a
+ * row of the form, and `clothes` is the right row for a dress whichever category the dress
+ * is filed under. This used to clear the column, because the row a tag sat on genuinely did
+ * not exist in the category it was moving to; there is nothing for it to be outside of now,
+ * so the two writes the edit panel makes are independent and their order does not matter.
  */
 export async function setTagCategory(
   db: Db,
@@ -169,7 +169,7 @@ export async function setTagCategory(
   category: TagCategory
 ): Promise<TagOutcome> {
   try {
-    await db`update tags set category = ${category}, form_section_id = null where id = ${id}`
+    await db`update tags set category = ${category} where id = ${id}`
     return { ok: true }
   } catch (error) {
     return { ok: false, error: `Update failed: ${message(error)}` }

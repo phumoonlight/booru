@@ -210,8 +210,8 @@ export type PostAppApi = {
    */
   saveRule: (kind: RuleKind, tag: string, names: string[]) => Promise<TagRules>
   /**
-   * The rows the tag form draws under a category, and their order — `tag_form_sections` on
-   * the board. One write taking one edit: a section has an id, so creating, renaming,
+   * The rows the tag form draws, and their order — `tag_form_sections` on the board. One
+   * write taking one edit: a section has an id, so creating, renaming,
    * deleting and moving are four things done to a row rather than four ways of restating a
    * list. `error` is a refusal the typist can fix — a name already taken, an empty one.
    */

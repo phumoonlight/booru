@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
 import postgres from 'postgres'
 
@@ -11,6 +12,14 @@ import postgres from 'postgres'
  *   push    apply every migration this database has not seen, then re-apply the grants
  *   list    what is applied, what is pending
  *   grant   re-apply `db/grants.sql` on its own
+ *
+ * **`push` asks before it applies anything.** It names the files it is about to run and
+ * waits for a typed yes — a schema change against a live board is the one thing here with
+ * no undo, and `npm run db:push` is a short enough command to be typed while thinking about
+ * something else. A database already holding every file is not asked anything: nothing is
+ * being changed, the grants re-apply as they always do, and a prompt that appears when the
+ * answer cannot matter is a prompt people learn to press through. `--yes` skips it for a
+ * script; without a terminal to ask in, that flag is required rather than assumed.
  *
  * **There is no `reset`.** It was `drop schema public cascade` behind one word on the
  * command line, which is the whole board — every post row, every tag, the vocabulary — and
@@ -60,10 +69,56 @@ async function applied(sql) {
   return new Set(rows.map((row) => row.name))
 }
 
+/**
+ * Asks, and answers false if the answer is anything but yes.
+ *
+ * `y` alone is enough — the confirmation is there to make the moment deliberate, not to
+ * make it laborious, and the list of files above it is the part that carries the
+ * information. Anything else, an empty line included, is no.
+ *
+ * Without a TTY there is nobody to ask: a pipe or a CI job answering its own question by
+ * reading EOF as agreement is exactly the accident this guards, so it refuses and names the
+ * flag instead.
+ */
+async function confirm(question) {
+  if (process.argv.includes('--yes') || process.argv.includes('-y')) return true
+  if (!process.stdin.isTTY) {
+    console.error('Not a terminal — re-run with --yes to apply without confirming.')
+    return false
+  }
+
+  const rl = createInterface({ input: process.stdin, output: process.stdout })
+  try {
+    const answer = await rl.question(`${question} [y/N] `)
+    return answer.trim().toLowerCase() === 'y' || answer.trim().toLowerCase() === 'yes'
+  } finally {
+    rl.close()
+  }
+}
+
 async function push(sql) {
   const done = await applied(sql)
   const pending = migrations().filter((name) => !done.has(name))
+  // Nothing to apply is not a decision, so it is not a question: the grants below re-apply
+  // either way, which is the whole of what this run then does.
   if (pending.length === 0) console.log('No new migrations.')
+
+  if (pending.length > 0) {
+    // Named before the question, because "which files" is what the answer depends on and
+    // the count alone says nothing about whether one of them is the one you meant.
+    console.log(`${pending.length} pending migration${pending.length === 1 ? '' : 's'}:`)
+    for (const name of pending) console.log(`  ${name}`)
+    // Which board, so the answer is about the database actually in front of you rather
+    // than about whichever one the environment file happens to be pointing at today. The
+    // host and the database name off the parsed connection options, never the URL itself
+    // — that carries a password, and this is a line people paste into a chat.
+    console.log(`  → ${sql.options.database} on ${sql.options.host.join(', ')}`)
+
+    if (!(await confirm('Apply?'))) {
+      console.log('Nothing applied.')
+      return
+    }
+  }
 
   for (const name of pending) {
     const body = readFileSync(join(MIGRATIONS, name), 'utf8')

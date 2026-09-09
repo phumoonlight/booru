@@ -73,31 +73,34 @@ export const TAG_CATEGORIES = [
 export type KnownCategory = (typeof TAG_CATEGORIES)[number]
 
 /**
- * How the desktop tag form cuts a category into rows — `tags.form_section`, whose
- * migration has the whole argument.
+ * How the desktop tag form is cut into rows — `tag_form_sections`, and
+ * `tags.form_section_id` pointing at one.
  *
  * **The website never sees these.** It draws the category, one heading, as it always has.
  * The form has a different job: a category answers "what is this tag", which is the right
  * question for a page listing a board's vocabulary and the wrong one for a row you are
  * trying to put your hand on. One Appearance row holding hair colours, hair styles,
- * garments and jewellery is a row you have to read; four rows under an Appearance heading
+ * garments and jewellery is a row you have to read; four rows named for those four things
  * are four places to aim.
+ *
+ * **A section is not inside a category.** It was for one revision — a category heading
+ * with its rows indented under it — and the nesting was the same question asked twice, the
+ * upper one being about the vocabulary rather than about tagging. It also kept a row from
+ * holding what a category does not: `bikini` is General and `bare shoulders` is
+ * Appearance, and both belong on the row you fill in looking at a swimsuit. The form is a
+ * flat list of sections now; a tag's category is what its chip is coloured with and what
+ * the site shows.
  *
  * It is also where the categories cut in the fourth re-cut went. `body`, `clothes`,
  * `accessories` and `exposure` were four boxes for one subject and they are one category
  * now — but the finer division was never wrong *for the form*, which is the only place it
  * was ever doing work. So the form still has it, and the board does not.
  *
- * **The list is whatever the tags carry**, not a constant in this file. It started as one
- * and it was the wrong shape for the thing: how a category wants dividing is a judgement
- * about one board's own vocabulary, made while looking at it, and a fixed list makes that
- * a code change and a new build — the same objection that keeps `tags.category` free-form
- * text. What a constant bought was an order and a row that could be drawn while empty; the
- * order is A–Z instead, and an empty section is not a thing that can exist, since a section
- * comes into being by being typed onto a tag on the Tags screen. Near-duplicate spellings
- * are what the datalist on that field is for.
- *
- * A category whose tags name no section is one row in the form, exactly as it always was.
+ * **The list is on the board**, not a constant in this file: how a form wants dividing is a
+ * judgement about one board's own vocabulary, made while looking at it, and a fixed list
+ * makes that a code change and a new build — the same objection that keeps `tags.category`
+ * free-form text. A row is named on the Tags screen's 🧱 Sections panel, which is also
+ * where the order is set, an order being the other thing a constant would have decided.
  */
 
 /**
@@ -116,32 +119,36 @@ export function normalizeFormSection(raw: string): string | null {
 }
 
 /**
- * The rows to draw under a category: the ones the board lists, in the order it lists them,
- * then anything the tags name that the board does not, A–Z.
+ * A form row that holds nothing and is drawn as a gap — how the two columns are lined up
+ * against each other when one runs shorter than the other reads badly.
  *
- * `listed` is `form_sections` for this category — authored, ordered, and drawn whether or
- * not anything is on it, since a row's ＋ is how the first tag gets onto it. `used` is the
- * sections the tags actually carry; null is not one of them, being the category's own row
- * above them, which is why it is dropped rather than sorted first.
+ * It is a row of `tag_form_sections` like any other, told apart by its **name**, which is
+ * why the name is one nothing could be typed: `normalizeFormSection` keeps what a person
+ * writes and would have to refuse this shape, and the Sections screen never shows it. The
+ * random tail is because the table's names are unique and a form wants more than one gap.
  *
- * The second half is the same courtesy `categoryOrder` does a category outside
- * `TAG_CATEGORIES`, and for the same reason: a tag naming a section the table has never
- * heard of — because it was deleted, or typed before the table existed — is drawn at the end
- * rather than dropping out of the form. Reads never assume the list.
+ * A name rather than a `kind` column, which is the honest trade and worth stating: this is
+ * a magic value in a free-text column, and the defence is that exactly one pair of
+ * functions knows the spelling — the same bargain `tags.mark` makes, holding a colour or a
+ * glyph and letting `markColor` be the only thing that decides which. A column would be a
+ * migration and a shape change through the data layer, the IPC schema and both screens for
+ * a row that is a blank space.
  */
-export function orderFormSections(
-  listed: readonly string[],
-  used: Iterable<string | null | undefined>
-): string[] {
-  const known = new Set(listed)
-  const extra = [...new Set([...used].filter((value): value is string => !!value))]
-    .filter((value) => !known.has(value))
-    .sort()
-  return [...listed, ...extra]
+const SPACER_PREFIX = '__space__'
+
+/** A fresh spacer's name. Lowercase and unspaced, so `normalizeFormSection` leaves it be. */
+export function newSpacerName(): string {
+  return `${SPACER_PREFIX}${Math.random().toString(36).slice(2, 10)}`
+}
+
+/** Whether a row is a gap rather than a row of tags. */
+export function isSpacer(section: string): boolean {
+  return section.startsWith(SPACER_PREFIX)
 }
 
 /** What a person reads on a section row. Capitalized, as an unknown category is. */
 export function formSectionLabel(section: string): string {
+  if (isSpacer(section)) return 'Space'
   return section.charAt(0).toUpperCase() + section.slice(1)
 }
 
@@ -189,17 +196,16 @@ export type Tag = {
    * Which row of the desktop tag form this tag is offered on, or null for none —
    * `tags.form_section_id`, whose migration has why it is an id.
    *
-   * The id is what is written; the name beside it is what everything above the data layer
-   * groups and draws by, embedded by `listTags` rather than looked up per tag. The same
-   * split as the tag rules: rows are ids so a rename carries them, and the screens are
-   * written in names.
+   * The id and nothing else. The row's name used to come back beside it, from a join, for
+   * as long as the screens grouped tags by that name; both of them hold the whole list of
+   * rows in a store now and match on the id, which is the point of having one — a rename
+   * carries every tag on the row without a single copy of the old spelling to go stale.
    *
-   * Both optional, because most reads do not ask: only `listTags` selects them, the desktop
-   * form and the desktop Tags screen being the only things that draw them, and a type
-   * promising them everywhere would be a lie about the post page's own tag list.
+   * Optional, because most reads do not ask: only `listTags` selects it, the desktop form
+   * and the desktop Tags screen being the only things that use it, and a type promising it
+   * everywhere would be a lie about the post page's own tag list.
    */
   form_section_id?: number | null
-  form_section?: string | null
   post_count: number
 }
 

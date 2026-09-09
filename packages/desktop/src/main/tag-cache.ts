@@ -52,13 +52,13 @@ function readFile(): CacheFile | null {
 
   const { at, tags } = parsed as Partial<CacheFile>
   if (typeof at !== 'number' || !Array.isArray(tags)) return null
-  // A copy written before `mark` or `form_section` existed has no such key, and serving it
+  // A copy written before `mark` or `form_section_id` existed has no such key, and serving it
   // would draw every tag glyphless, or every one of them on its category's own row, for up
   // to a day with nothing to explain it. Both columns are on the row they belong to, so an
   // entry that never carried one is not a tag "with no mark" or "on no section" — it is a
   // cache from a different version of this file. A copy carrying a key this version no
   // longer reads, like the old `category2`, is harmless the other way round.
-  if (tags.length > 0 && !('mark' in tags[0] && 'form_section' in tags[0])) return null
+  if (tags.length > 0 && !('mark' in tags[0] && 'form_section_id' in tags[0])) return null
   return { at, tags }
 }
 

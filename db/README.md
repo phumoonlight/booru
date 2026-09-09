@@ -5,7 +5,7 @@ Postgres on Neon. `migrations/` is the source of truth, applied by `scripts/migr
 
 | | |
 |---|---|
-| `npm run db:push` | apply every migration the database has not seen, then re-apply `grants.sql` |
+| `npm run db:push` | list what the database has not seen, ask, apply it, then re-apply `grants.sql`. `--yes` skips the question; nothing pending is never asked about |
 | `npm run db:list` | what is applied and what is pending |
 
 `grants.sql` is not a migration and runs on every push, because who may do what is

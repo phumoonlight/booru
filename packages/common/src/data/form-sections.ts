@@ -1,16 +1,21 @@
-import { normalizeFormSection, type TagCategory } from '@common/tags'
+import { normalizeFormSection } from '@common/tags'
 import { resolveTagIds } from '@common/data/shared'
 import { isUniqueViolation, type Db } from '@common/db'
 
 /**
- * The rows the desktop tag form draws under a category, and their order —
- * `tag_form_sections`, whose place in the baseline has why it is a table and why a row
- * has an id.
+ * The rows the desktop tag form draws, and their order — `tag_form_sections`, whose place
+ * in the baseline has why it is a table and why a row has an id.
  *
  * Read whole and held in the window's store, the way the tag rules are: the tag field
- * consults them on every render of every category, and a few dozen rows is smaller than
- * one thumbnail. Keyed by category on the way out, which is the shape every caller wants
- * — nothing ever asks "which categories is `clothes` a section of".
+ * consults them on every render, and a few dozen rows is smaller than one thumbnail.
+ *
+ * **One flat list, not a list per category.** A section used to be a division of a
+ * category and the form drew a heading with its rows under it — two answers to "where does
+ * this tag go" stacked on top of each other, where only the lower one was about tagging. A
+ * row is free to hold what a category cannot now: `bikini` is General, `bare shoulders` is
+ * Appearance, and both belong on the row you fill in while looking at a swimsuit. The
+ * category is still what the tag *is*, which is the colour its chip is drawn in and what
+ * the website shows.
  *
  * **A section has an id, and everything above this file uses it.** That is the difference
  * from the version this replaces, where the name was the identity: renaming meant deleting
@@ -29,13 +34,26 @@ export type DepsMode = 'any' | 'all'
  * `@common/data/rules.ts` is for the rules. Empty is the common case and means no condition:
  * the row is always drawn.
  */
-export type FormSection = { id: number; name: string; depsMode: DepsMode; deps: string[] }
+export type FormSection = {
+  id: number
+  name: string
+  /**
+   * Which column of the form it is drawn in — 0 left, 1 right — with `position` ordering it
+   * inside that column. Two authored facts rather than one derived from the other: the side
+   * used to be the parity of a single flat position, which can say everything except that
+   * one column is longer than the other, and that is the only state a two-column layout
+   * spends its time in. See `0004_section_sides.sql`.
+   */
+  side: number
+  depsMode: DepsMode
+  deps: string[]
+}
 
-/** `{ category: [section, …] }`, each list in the order the form draws it. */
-export type FormSections = Record<string, FormSection[]>
+/** Every section: the left column in its order, then the right in its own. */
+export type FormSections = FormSection[]
 
 /**
- * Every section, by category, in position order with ties broken by name.
+ * The whole list, by side and then position, with ties broken by name.
  *
  * The tie-break is what makes a table written by hand — every `position` left at its
  * default of 0 — come out alphabetical rather than in whatever order the rows were
@@ -49,29 +67,28 @@ export type FormSections = Record<string, FormSection[]>
  */
 export async function listFormSections(db: Db): Promise<FormSections> {
   const rows = await db<
-    { id: number; category: string; name: string; deps_mode: string; deps: string[] }[]
+    { id: number; name: string; side: number; deps_mode: string; deps: string[] }[]
   >`
-    select s.id, s.category, s.name, s.deps_mode,
+    select s.id, s.name, s.side, s.deps_mode,
            coalesce(array_agg(t.name order by t.name) filter (where t.name is not null),
                     '{}'::text[]) as deps
       from tag_form_sections s
       left join tag_form_section_deps d on d.section_id = s.id
       left join tags t on t.id = d.tag_id
      group by s.id
-     order by s.category, s.position, s.name`
+     order by s.side, s.position, s.name`
 
-  const out: FormSections = {}
-  for (const row of rows) {
-    ;(out[row.category] ??= []).push({
-      id: row.id,
-      name: row.name,
-      // Anything but 'all' is 'any', which is the safer of the two to fall back to: a
-      // condition read wrong should show a row rather than hide one.
-      depsMode: row.deps_mode === 'all' ? 'all' : 'any',
-      deps: row.deps,
-    })
-  }
-  return out
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    // Anything but 1 is the left column, which is the side a hand-edited row should land on
+    // rather than vanishing: the check constraint allows only the two.
+    side: row.side === 1 ? 1 : 0,
+    // Anything but 'all' is 'any', which is the safer of the two to fall back to: a
+    // condition read wrong should show a row rather than hide one.
+    depsMode: row.deps_mode === 'all' ? 'all' : 'any',
+    deps: row.deps,
+  }))
 }
 
 /**
@@ -84,10 +101,15 @@ export async function listFormSections(db: Db): Promise<FormSections> {
  * is exactly what ids are for.
  */
 export type FormSectionEdit =
-  | { do: 'create'; category: TagCategory; name: string }
+  | { do: 'create'; name: string }
   | { do: 'rename'; id: number; name: string }
   | { do: 'delete'; id: number }
-  | { do: 'reorder'; category: TagCategory; ids: number[] }
+  /**
+   * The whole layout: both columns, each in its new order, `[left, right]`. A row's side and
+   * its place in it are one arrangement and are written as one — a list of ids per column
+   * says which side every row is on and where, which is what an ordered flat list could not.
+   */
+  | { do: 'reorder'; columns: [number[], number[]] }
   | { do: 'deps'; id: number; mode: DepsMode; names: string[] }
 
 export type FormSectionOutcome = { ok: true } | { ok: false; error: string }
@@ -114,11 +136,21 @@ export async function editFormSections(
       const name = normalizeFormSection(edit.name)
       if (!name) return { ok: false, error: 'Type a section name.' }
 
+      // Onto the end of the **shorter** column, ties to the left. A new row is a row you are
+      // about to fill, so it wants to be where it can be seen, and always appending to one
+      // side would make every new row extend the longer column — which is the one place on
+      // the form with nothing beside it.
       await db`
-        insert into tag_form_sections (category, name, position)
-        select ${edit.category}, ${name},
-               coalesce(max(position), -1) + 1 from tag_form_sections
-         where category = ${edit.category}`
+        with sides as (
+          select s.side,
+                 count(t.id) as held,
+                 coalesce(max(t.position), -1) + 1 as next
+            from (values (0::smallint), (1::smallint)) as s(side)
+            left join tag_form_sections t on t.side = s.side
+           group by s.side
+        )
+        insert into tag_form_sections (name, side, position)
+        select ${name}, side, next from sides order by held, side limit 1`
       return { ok: true }
     }
 
@@ -160,20 +192,26 @@ export async function editFormSections(
       return { ok: true }
     }
 
-    // Reorder. One statement over the whole list rather than an update per row: the
-    // position each id wants is its place in the array, which `with ordinality` reads
-    // straight off. `category` is still checked, so a stale window cannot renumber rows
-    // under a heading it wasn't looking at.
-    await db`
-      update tag_form_sections s
-         set position = wanted.position - 1
-        from unnest(${edit.ids}::smallint[]) with ordinality as wanted(id, position)
-       where s.id = wanted.id and s.category = ${edit.category}`
+    // Reorder: one statement per column rather than an update per row, the position each id
+    // wants being its place in that column's array, which `with ordinality` reads straight
+    // off. The side is written from the same statement, so a row that changed columns is
+    // carried by the list it now appears in and needs no separate edit.
+    //
+    // An empty column writes nothing, which is correct rather than a gap: its rows are in
+    // the other array and the statement for that one has already claimed them.
+    for (const [side, ids] of edit.columns.entries()) {
+      if (ids.length === 0) continue
+      await db`
+        update tag_form_sections s
+           set side = ${side}, position = wanted.position - 1
+          from unnest(${ids}::smallint[]) with ordinality as wanted(id, position)
+         where s.id = wanted.id`
+    }
     return { ok: true }
   } catch (error) {
     if (isUniqueViolation(error)) {
-      // The unique constraint is `(category, name)`, so this only ever means one thing.
-      return { ok: false, error: `That is already a row on this category.` }
+      // The unique constraint is the name, and it is the only one on the table.
+      return { ok: false, error: `That is already a row on the form.` }
     }
     return { ok: false, error: error instanceof Error ? error.message : 'Could not save.' }
   }

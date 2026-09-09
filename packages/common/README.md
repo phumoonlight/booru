@@ -34,7 +34,7 @@ where the file is.
 | `data/shared.ts` | the post write path, `resolveTagIds`, tag-name search, `listTags` |
 | `data/tags.ts` | managing the vocabulary: create, rename, recategorize, delete, apply-by-tag |
 | `data/rules.ts` | the tag rules — implications and recommendations, ids on the table and names above it |
-| `data/form-sections.ts` | the rows the desktop tag form draws under a category, their order, and their dependencies |
+| `data/form-sections.ts` | the rows the desktop tag form draws, their order, and their dependencies |
 | `data/counters.ts` | `syncTagPostCounts` — recompute, never increment |
 | `imgcmp/for-post.ts` | lossy AVIF (q50) for the stored image, bounded to `POST_MAX_DIMENSION` |
 | `imgcmp/for-thumbnail.ts` | lossy AVIF thumbnail, 384px tall |

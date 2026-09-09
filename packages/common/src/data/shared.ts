@@ -240,12 +240,12 @@ export async function searchTags(db: Db, query: string, limit = 8): Promise<Tag[
  * tags a capped read lets through; the screens then sort the ones they got by name,
  * because you arrive at an index holding a name, not a size.
  *
- * The section's **name** comes back beside the id it is stored as — a left join, where
- * this was PostgREST's one genuinely awkward embed: two paths lead from `tags` to
- * `tag_form_sections` (this column, and the many-to-many through `tag_form_section_deps`),
- * so the embed was ambiguous and had to name a foreign-key constraint to disambiguate.
- * Get that wrong and the whole read failed — which is how the Tags screen once went
- * blank saying "no tags yet", the error having been swallowed by a `?? []`.
+ * The section comes back as the **id** alone. Its name travelled beside it for as long as
+ * anything above this file worked in section names — a left join, and PostgREST's one
+ * genuinely awkward embed before that, two paths leading from `tags` to
+ * `tag_form_sections` making it ambiguous enough to need a constraint named. Nothing reads
+ * the name off a tag any more: the form and the sections screen both hold the whole list of
+ * rows in a store and match on the id, which is what the id was for.
  */
 export async function listTags(db: Db, limit = 200): Promise<Tag[]> {
   // Thrown rather than answered with an empty list — the caller does not catch this, and
@@ -254,10 +254,8 @@ export async function listTags(db: Db, limit = 200): Promise<Tag[]> {
   // looked like for as long as it took to notice. Every other read in this file is a page
   // that degrades; this one is the vocabulary.
   return await db<Tag[]>`
-    select t.id, t.name, t.category, t.mark, t.post_count, t.form_section_id,
-           s.name as form_section
-      from tags t
-      left join tag_form_sections s on s.id = t.form_section_id
-     order by t.post_count desc, t.name
+    select id, name, category, mark, post_count, form_section_id
+      from tags
+     order by post_count desc, name
      limit ${limit}`
 }

@@ -117,13 +117,18 @@ const categorySchema = z.enum(TAG_CATEGORIES)
 // missing here is refused at the bridge, which is a channel error rather than the typed
 // failure the panel knows how to show.
 const sectionEditSchema = z.discriminatedUnion('do', [
-  z.object({ do: z.literal('create'), category: categorySchema, name: sectionSchema }),
+  z.object({ do: z.literal('create'), name: sectionSchema }),
   z.object({ do: z.literal('rename'), id: z.number().int().positive(), name: sectionSchema }),
   z.object({ do: z.literal('delete'), id: z.number().int().positive() }),
   z.object({
     do: z.literal('reorder'),
-    category: categorySchema,
-    ids: z.array(z.number().int().positive()).max(200),
+    // Both columns, each in its new order — a row's side and its place in it are one
+    // arrangement, so they are one edit.
+    columns: z
+      .tuple([
+        z.array(z.number().int().positive()).max(200),
+        z.array(z.number().int().positive()).max(200),
+      ]),
   }),
   z.object({
     do: z.literal('deps'),
@@ -336,7 +341,7 @@ export function registerIpc(): void {
   )
 
   /**
-   * The rows the tag form draws under a category, their order, and what each waits for —
+   * The rows the tag form draws, their order, and what each waits for —
    * `tag_form_sections`. One edit per write, in five shapes: a row has an id, so creating,
    * renaming, deleting, reordering and setting a condition are things done to a row rather
    * than five ways of restating a list. `normalizeFormSection` and `resolveTagIds` inside

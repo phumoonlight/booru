@@ -2,11 +2,11 @@ import { createRuleStore } from './rule-store'
 import type { FormSectionEdit, FormSections } from '@common/data/form-sections'
 
 /**
- * Which rows each category has in the tag form, and in what order.
+ * Which rows the tag form has, and in what order.
  *
  * The same store the tag rules use — read once for the whole window, held outside React —
  * because the reason is the same: the tag field consults them on every render of every
- * category row, and state threaded down from `App` would be a prop forwarded through three
+ * row, and state threaded down from `App` would be a prop forwarded through three
  * components whose only job is to forward it.
  *
  * One write, taking an edit rather than a list: a section has an id now, so creating,
@@ -27,7 +27,7 @@ const store = createRuleStore(
     lastError = null
     return sections
   },
-  {} as FormSections
+  [] as FormSections
 )
 
 /**

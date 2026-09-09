@@ -28,6 +28,10 @@ from a connection string compiled into its own bundle; the website connects as
 where a post is tagged.
 
 `db/migrations/0002_site_settings.sql` adds `site_settings`.
+`db/migrations/0003_sections_off_categories.sql` takes `category` off `tag_form_sections`,
+so a form row is not a division of a category, and
+`db/migrations/0004_section_sides.sql` gives it a `side`, so which column of the form a row
+is in is a fact about the row rather than the parity of its position.
 
 `db/migrations/0001_baseline.sql` is the whole schema in foreign-key order — `posts` →
 `tag_form_sections` → `tags` → `tag_form_section_deps` → `post_tags` → `tag_rules` — ending
@@ -107,21 +111,28 @@ lookup); `tags_name_prefix_idx (name text_pattern_ops)` for autocomplete;
   grouped list (`categoryOrder`) — reads never assume the list. Writes do:
   `z.enum(TAG_CATEGORIES)` guards the two IPC channels that set this column, so one can
   only arrive by hand-editing the table.
-- **`category` is what the website shows; `form_section` is how the desktop form cuts it
-  up.** The site draws one Appearance heading, as it always has; the form draws Appearance
-  and then `hair color`, `hair styles`, `clothes`, `accessory` as rows under it, each with
-  its own picker and its own ＋. Two views of one column and neither is a lie — a category
-  says what a tag *is*, a row is a place to put your hand.
+- **`category` is what the website shows; `form_section_id` is where the desktop form
+  offers the tag.** Two columns answering two questions: a category says what a tag *is*,
+  a row is a place to put your hand. They were nested for one revision — the form drew a
+  category heading with its sections indented under it — and the nesting is gone: a row is
+  free to hold `bikini` (General) beside `bare shoulders` (Appearance), which is what the
+  person tagging a swimsuit is actually reaching for. The chip keeps its category's colour
+  wherever it is drawn.
 - **`form_section_id`, not a name.** The sections are
   [`tag_form_sections`](#tag_form_sections) and this points at one by id, so renaming a row
   carries every tag on it. `listTags` embeds the name beside the id, which is the one place
-  the two meet — everything above it groups and draws by name, the way it does for the tag
-  rules. Null is no row, which means the tag is **not offered in the form at all**: a
-  category has no ＋ of its own.
+  the two meet. Null is no row, which means the tag is **not offered in the form at all**.
+  `listTags` selects the id alone — the row's name came back beside it while the screens
+  grouped tags by that spelling, and they hold the whole list of rows in a store now.
 - **A section travels with its tag through a recategorization.** `setTagCategory` leaves
-  the column alone: there is no list for the value to be outside of, and a `dress` moved to
-  another category belongs on the `clothes` row wherever it lands. The edit panel writes
-  both, so a move that should also re-file it says so in the field.
+  the column alone: a section is not a division of a category, so there is nothing for the
+  value to be outside of, and a `dress` moved to another category belongs on the `clothes`
+  row wherever it lands. It did clear the column for as long as the two were nested, which
+  is why the desktop's edit panel used to drop its section menu on every category change.
+- **A new tag is on no row.** `createTag` still takes a section id, and the desktop's New
+  tag form passes null: naming a tag and deciding where the form offers it are two
+  decisions, and the second is made for a set of tags at once on the 🧱 Form sections
+  screen, where each row is a card holding what is already on it.
 - There was a `category2`, and this is not it restored — it is the same idea aimed at a
   different thing. That one was a heading *inside* one picker, dropped because a heading
   cannot shorten a category. What narrows a picker now is the form groups on
@@ -211,24 +222,22 @@ to keep true for no reader.
 
 ## `tag_form_sections`
 
-`db/migrations/0001_baseline.sql`
-, replaced by
-`db/migrations/0001_baseline.sql`
+`db/migrations/0001_baseline.sql`, then
+`db/migrations/0003_sections_off_categories.sql` and `db/migrations/0004_section_sides.sql`
 
 
-The rows the **desktop tag form** draws under a category, and their order. `hair color`,
-`hair styles`, `clothes` under Appearance. The website has never heard of them: it draws
-the category, one heading.
+The rows the **desktop tag form** draws, and their order — `hair color`, `hair styles`,
+`clothes`. The website has never heard of them: it draws the category, one heading.
 
 | column | type | notes |
 | --- | --- | --- |
 | `id` | `smallint` PK identity | what `tags.form_section_id` points at, so a rename carries every tag on the row |
-| `category` | `text not null` | which category it divides — free-form, like `tags.category` |
 | `name` | `text not null` | the row's label, lowercased and space-collapsed by `normalizeFormSection` |
-| `position` | `smallint not null default 0` | where it sits under its category, low first, ties by name |
+| `side` | `smallint not null default 0` | `check in (0, 1)` — which column of the two-column form it is drawn in |
+| `position` | `smallint not null default 0` | where it sits **within that column**, low first, ties by name |
 | `deps_mode` | `text not null default 'any'` | `check in ('any', 'all')` — whether the row needs one of its dependencies on the post, or all |
 | `created_at` | `timestamptz not null default now()` | |
-| | `unique (category, name)` | `clothes` under two categories is two rows, and neither is the other |
+| | `unique (name)` | two rows reading the same on the form is what a free-text label has to be defended against |
 
 `tag_form_section_deps` holds what a row waits for: `(section_id, tag_id)`, both cascading.
 A section with no rows there has no condition and is always drawn, which is most of them.
@@ -248,10 +257,16 @@ into the window's store, the way the tag rules are.
   form and puts its tags back on no row at all — a re-file rather than a loss, and the same
   answer the free-text column gave, said structurally instead of by the read being
   forgiving.
-- **A category's rows are written one edit at a time**, not as a list: create, rename,
-  delete and reorder (`FormSectionEdit`). A list of names cannot express a rename, which is
-  the whole reason the list-shaped write went.
-- **A condition belongs to the row, not to a tag.** `blue archive` under Character waits for
+- **A section is not inside a category** (`0003_sections_off_categories.sql`). It had a
+  `category` column for one revision, and the nesting was the same question asked twice —
+  the upper half being about the vocabulary rather than about tagging — while forbidding
+  the one thing a form row is for: holding tags of several categories that go on the post
+  together. Dropping the column merged nothing; a name that collided across two categories
+  took its old category in brackets, to be corrected by hand on the Sections panel.
+- **The rows are written one edit at a time**, not as a list: create, rename, delete and
+  reorder (`FormSectionEdit`). A list of names cannot express a rename, which is the whole
+  reason the list-shaped write went.
+- **A condition belongs to the row, not to a tag.** `blue archive` waits for
   `blue_archive`; `hair color` waits for nothing. This is where form groups went: they said
   the same thing on the tag that triggered them and hid tags *inside* a row, leaving the row
   drawn with a ＋ that opened onto an empty picker. Implied tags satisfy a dependency, and a
@@ -259,8 +274,16 @@ into the window's store, the way the tag rules are.
 - **An empty section is the point.** It is drawn in the form with its ＋ and nothing on it,
   which is how the first tag gets filed into a new row — the one thing free text on each tag
   could not do. The other half is the order.
-- **Order is `position`, then `name`.** The tie-break makes a table written by hand, every
-  position left at its default, come out alphabetical rather than in insertion order.
+- **Order is `side`, then `position`, then `name`.** The tie-break makes a table written by
+  hand, every position left at its default, come out alphabetical rather than in insertion
+  order.
+- **The side is stored, not derived.** It was the parity of a flat `position` for one
+  revision — even left, odd right — which holds only while the two columns are the same
+  length, and a single ordered list has no way to say that one is longer. The surplus row
+  came out on the wrong side of the divider, and the empty space at the foot of the shorter
+  column was a place the model could not name, so a row could not be dragged there. Two
+  authored facts instead: which column, and where in it. A reorder therefore writes **both
+  columns**, each in its own order, which says every row's side and place in one edit.
 
 ## `post_tags`
 

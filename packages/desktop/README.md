@@ -95,7 +95,7 @@ for your own board. Treat the installer accordingly: anyone who has it can write
 | `src/shared/recommendations.ts` | rules the app only offers, same shape |
 
 | `src/main/rules.ts` | reads and writes both sets on the board — `@common/data/rules.ts` underneath |
-| `src/main/form-sections.ts` | the rows the tag form draws under a category, their order, and what each waits for |
+| `src/main/form-sections.ts` | the rows the tag form draws, their order, and what each waits for |
 | `src/shared/catalogs.ts` | named sets of tags, applied when asked for by name |
 
 The renderer holds no keys, no file access and no network. Every capability it has is one
