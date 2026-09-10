@@ -65,6 +65,14 @@ sidebar you are looking at.
 The whole page is a **hold** rather than a click because it is the one action here that
 repeating does not undo. 600ms, with the fill running under the label.
 
+**On pixiv it leaves your bookmarks alone.** A filled heart is a post you kept to come
+back to, and a blanket over the page is exactly what that should not be under — so 📚
+skips them and the menu says how many it held back. Nothing else changes: they are not
+faded, and clicking one in marking mode still marks it, because that is a decision about
+one picture rather than a sweep. The heart is read off the page each time it is asked
+about — pixiv is already holding that fact, and a copy of it here would be free to
+disagree with the original.
+
 **Marking mode** turns the grid into a set of checkboxes: a click marks instead of opening
 the post, and clicking a marked one unmarks it. Hovering is off for as long as it lasts —
 a preview covering the thumbnail you are about to click is in the way of it. Esc leaves,
@@ -242,7 +250,15 @@ fade together.
 pixiv is not a booru, and everything here is indifferent to that: what marking needs is a
 number in the address and a thumbnail wrapped in a link to it, which is what an illust id
 and an artwork card are. What it costs is the crop the listing draws (the mode default
-above) and the save button (the referer, above).
+above) and the save button (the referer, above). What it gains is the bookmark, which is
+the one thing any of these boards says about a post that the extension did not have to
+record itself.
+
+The heart is recognised by its **colour** rather than by its label — the label is whatever
+language the account is set to, and `#FF4060` is the same in all of them — inside the card
+found by walking up from the thumbnail until a second post appears, since pixiv's class
+names are generated and change between deploys. If pixiv ever redraws it, the count in the
+menu stays at none, which is how you would notice.
 
 Konachan is also the one that cannot be resolved by pattern — moebooru puts the post title
 inside the file name — so its hover rule reads the `Post.register({…})` calls the page

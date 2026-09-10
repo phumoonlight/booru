@@ -876,6 +876,32 @@ const BOARDS = [
       }
       return null
     },
+    /**
+     * The filled heart, which is pixiv already saying something about this post.
+     *
+     * A bookmark is made to come back to something, so a page sweep that took it with
+     * the rest would fade exactly the posts that were kept. 📚 leaves them bright, and
+     * that is the only thing it changes: clicking one in marking mode still marks it,
+     * because that is a decision about this picture rather than a blanket over a page.
+     *
+     * It is read off the **drawing** rather than off a label, since the label is the
+     * interface language and the heart is that pink in every one of them. Where pixiv
+     * writes a pressed state it is believed first. If pixiv ever redraws the heart this
+     * quietly finds nothing and the sweep goes back to taking everything, which is why
+     * the menu says how many it is holding back — a count that stays at none is how you
+     * notice.
+     */
+    bookmarked(anchor, id) {
+      const card = cardOf(anchor, id)
+      for (const button of card.querySelectorAll('button[aria-pressed="true"]')) {
+        if (button.querySelector('svg')) return true
+      }
+      for (const path of card.querySelectorAll('svg path')) {
+        if (BOOKMARK_FILL.test(path.getAttribute('fill') ?? '')) return true
+        if (BOOKMARK_FILL.test(getComputedStyle(path).fill)) return true
+      }
+      return false
+    },
     // No `original`, and so no ⬇️ — the one thing pixiv does not get. `i.pximg.net`
     // answers 403 to a request carrying no `Referer` from pixiv, and `chrome.downloads`
     // sends none: setting one is the `headers` option, which needs host access, which is
@@ -887,6 +913,38 @@ const BOARDS = [
 
 function digits(value) {
   return value && /^\d+$/.test(value) ? Number(value) : null
+}
+
+// pixiv's bookmarked heart, which is this exact pink whether it arrives as an attribute
+// on the path or as a rule. Exact rather than "reddish": the R-18 badge on a card and
+// half a dozen other things on that page are red too.
+const BOOKMARK_FILL = /^(#ff4060|rgb\(255,\s*64,\s*96\))$/i
+
+/**
+ * The card a thumbnail belongs to — the highest ancestor still talking about this one
+ * post, which is where anything the board draws *about* the post lives.
+ *
+ * The heart is not inside the anchor: it is a button laid over the corner of the card,
+ * beside it. Walking up until a second post appears finds the card without knowing one
+ * of pixiv's class names, which are generated and change between deploys. The walk is
+ * cheap however big the grid is, since `querySelectorAll` answers in document order and
+ * the first foreign post link is the one that ends it.
+ */
+function cardOf(anchor, id) {
+  let card = anchor
+  for (let up = 0; up < 6 && card.parentElement; up += 1) {
+    if (!onlyPost(card.parentElement, id)) break
+    card = card.parentElement
+  }
+  return card
+}
+
+function onlyPost(element, id) {
+  for (const link of element.querySelectorAll('a[href]')) {
+    const other = postIdOf(link.href)
+    if (other !== null && other !== id) return false
+  }
+  return true
 }
 
 const board = BOARDS.find((entry) => entry.host.test(location.hostname)) ?? null
@@ -1056,6 +1114,27 @@ function pageIds() {
     ids.add(Number(anchor.getAttribute(POST_ATTR)))
   }
   return [...ids]
+}
+
+/**
+ * The posts on this page the board itself says you have already dealt with — pixiv's
+ * bookmarks, and nothing at all on the two boards that have no such thing.
+ *
+ * Nothing is stored. The heart is a fact pixiv is already holding and already drawing,
+ * and a copy of it here would be a second answer free to disagree with the first. It is
+ * read at the moment it is wanted for that same reason: a bookmark made a second ago
+ * counts, and one taken off again stops counting.
+ *
+ * A post drawn twice on one page is one post — bookmarked on either card is bookmarked.
+ */
+function bookmarkedIds() {
+  const held = new Set()
+  if (!board.bookmarked) return held
+  for (const anchor of document.querySelectorAll(`[${POST_ATTR}]`)) {
+    const id = Number(anchor.getAttribute(POST_ATTR))
+    if (!held.has(id) && board.bookmarked(anchor, id)) held.add(id)
+  }
+  return held
 }
 
 /**
@@ -1303,6 +1382,9 @@ function repaintDock() {
 
   const ids = pageIds()
   const read = ids.filter((id) => readIds.has(id)).length
+  // Counting the bookmarks is a walk of the board's own markup, so it is asked for only
+  // while the menu that says it is open — which is the only moment it is read.
+  const kept = menuOpen() ? bookmarkedIds().size : 0
   const note = dockPart('note')
   note.textContent = !prefs.marking
     ? 'Marking is off — nothing is faded or recorded.'
@@ -1310,7 +1392,9 @@ function repaintDock() {
       ? current === null
         ? 'No posts on this page.'
         : ''
-      : `${read} of ${ids.length} read on this page.`
+      : kept === 0
+        ? `${read} of ${ids.length} read on this page.`
+        : `${read} of ${ids.length} read here — ${kept} bookmarked, which 📚 leaves alone.`
   note.hidden = note.textContent === ''
 }
 
@@ -1504,7 +1588,13 @@ function wireDock() {
     all.classList.add('holding')
     holding = setTimeout(() => {
       all.classList.remove('holding')
-      mark(pageIds(), true)
+      // The one place a bookmark is consulted: a blanket over a page is exactly what a
+      // post kept on purpose should not be under.
+      const held = bookmarkedIds()
+      mark(
+        pageIds().filter((id) => !held.has(id)),
+        true
+      )
       closeMenu()
     }, 600)
   }
