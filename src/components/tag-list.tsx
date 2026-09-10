@@ -3,7 +3,6 @@ import { NavProgress } from '@/components/nav-progress'
 import { categoryColor, categoryLabel, categoryOrder, markColor, type Tag } from '@common/tags'
 import { parseSearchQuery, searchHref, tagLabel, withTag, withoutTag } from '@common/search'
 
-
 /**
  * ➕/➖ share the count's slot on the right: the count fades out and the buttons take its
  * place while the row is hovered or keyboard-focused, so a resting list is just names and
@@ -146,9 +145,7 @@ function TagRow({ entry, currentQuery }: { entry: TagEntry; currentQuery: string
                 href: searchHref(
                   included ? withoutTag(currentQuery, tag.name) : withTag(currentQuery, tag.name)
                 ),
-                label: included
-                  ? `Remove ${label} from the search`
-                  : `Add ${label} to the search`,
+                label: included ? `Remove ${label} from the search` : `Add ${label} to the search`,
                 on: included,
               }
             : undefined
@@ -168,50 +165,126 @@ function TagRow({ entry, currentQuery }: { entry: TagEntry; currentQuery: string
 }
 
 /**
+ * The same tag as a chip, for the arrangements where the tags run across the page rather
+ * than down a column beside it. A column has height to spend and a page has none: one tag
+ * per line is the right shape when the list is 288px wide and the wrong one when it is the
+ * whole window, where twenty tags became twenty lines and pushed the picture off the
+ * screen. Wrapped chips put the same twenty on two.
+ *
+ * **The chip is one link and nothing else.** The row's ➕/➖ are for building a query out
+ * of what is on screen, which is the listing's job — here the reader is looking at one
+ * post, and the question a tag answers is "show me these", which the name already does.
+ * Two more targets inside a 90px chip bought a second meaning for a press that has an
+ * obvious first one. With them gone the whole chip is the link, plainly, rather than a
+ * stretched pseudo-element reaching around two things that had to sit above it.
+ *
+ * No underline either: a border, a ground and a category colour are already saying this
+ * is pressable, and underlining the word inside the button on hover says it twice.
+ */
+function TagPill({ entry, currentQuery }: { entry: TagEntry; currentQuery: string }) {
+  const { tag, count } = entry
+  const { include, exclude } = parseSearchQuery(currentQuery)
+  const included = include.includes(tag.name)
+  const excluded = exclude.includes(tag.name)
+  const label = tagLabel(tag.name)
+
+  return (
+    <li>
+      <Link
+        href={searchHref(tag.name)}
+        aria-label={`Search only ${label}`}
+        className="flex items-center gap-2 rounded-full border border-border bg-surface py-0.5 pl-2.5 pr-3 hover:border-muted"
+      >
+        <span
+          className={`whitespace-nowrap text-sm ${categoryColor(tag.category)} ${
+            included ? 'font-semibold' : ''
+          } ${excluded ? 'line-through opacity-60' : ''}`}
+        >
+          <TagMark mark={tag.mark} />
+          {label}
+        </span>
+        <span className="text-xs tabular-nums text-muted">{count}</span>
+        <NavProgress />
+      </Link>
+    </li>
+  )
+}
+
+/** Who made it, what it is from, who is in it — see `headings` below. */
+const NAMED_CATEGORIES: readonly string[] = ['artist', 'copyright', 'character']
+
+/**
  * Sectioned by category in Danbooru order, A–Z within each one. The caller's order still
  * matters — it decides which tags survive a facet list's cap — but once a set is on
  * screen a name is looked up by reading down the column, so alphabetical is the order to
  * read it in. Used by the sidebar/drawer facets and the post detail page.
+ *
+ * `headings` is what those two callers disagree about. A facet list is a set of filters
+ * and every heading in it says which kind of filter the rows under it are. One post's
+ * tags are a description, and there the headings outnumbered what they organised — a
+ * post with two Appearance tags and one Activity tag was three rows under two headings,
+ * most of the column being labels for lists of one. So `'named'` keeps the three that
+ * answer a question the tag itself cannot (who drew it, what it is from, who is in it)
+ * and runs the rest together as one list, where the colour already says what each is.
  */
 export function GroupedTagList({
   entries,
   currentQuery = '',
   empty = 'No tags here.',
+  headings = 'every',
+  flow = 'list',
 }: {
   entries: TagEntry[]
   currentQuery?: string
   empty?: string
+  headings?: 'every' | 'named'
+  /** `pills` wraps the tags across the width instead of down it — see `TagPill`. */
+  flow?: 'list' | 'pills'
 }) {
-  const groups = categoryOrder(entries.map((e) => e.tag.category)).map(
-    (category) =>
-      [
-        category,
-        entries
-          // Sorted by the label rather than the raw name, so the underscores the reader
-          // never sees can't push a row out of the order the column appears to be in
-          .filter((e) => e.tag.category === category)
-          .sort((a, b) => tagLabel(a.tag.name).localeCompare(tagLabel(b.tag.name))),
-      ] as const
-  ).filter(([, group]) => group.length > 0)
+  const groups = categoryOrder(entries.map((e) => e.tag.category))
+    .map(
+      (category) =>
+        [
+          category,
+          entries
+            // Sorted by the label rather than the raw name, so the underscores the reader
+            // never sees can't push a row out of the order the column appears to be in
+            .filter((e) => e.tag.category === category)
+            .sort((a, b) => tagLabel(a.tag.name).localeCompare(tagLabel(b.tag.name))),
+        ] as const
+    )
+    .filter(([, group]) => group.length > 0)
 
   if (groups.length === 0) {
     return <p className="text-sm text-muted">{empty}</p>
   }
 
+  const labelled =
+    headings === 'named' ? groups.filter(([c]) => NAMED_CATEGORIES.includes(c)) : groups
+  // The categories that lost their heading stay in category order and become one list,
+  // since a run of headingless sections would be gaps with nothing to separate
+  const rest = headings === 'named' ? groups.filter(([c]) => !NAMED_CATEGORIES.includes(c)) : []
+
+  const pills = flow === 'pills'
+  const list = pills ? 'flex flex-wrap gap-1.5' : 'flex flex-col gap-0.5'
+  const draw = (entry: TagEntry) =>
+    pills ? (
+      <TagPill key={entry.tag.id} entry={entry} currentQuery={currentQuery} />
+    ) : (
+      <TagRow key={entry.tag.id} entry={entry} currentQuery={currentQuery} />
+    )
+
   return (
-    <div className="pointer-fine:gap-3 flex flex-col gap-4">
-      {groups.map(([category, group]) => (
+    <div className={pills ? 'flex flex-col gap-2.5' : 'pointer-fine:gap-3 flex flex-col gap-4'}>
+      {labelled.map(([category, group]) => (
         <section key={category}>
           <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
             {categoryLabel(category)}
           </h3>
-          <ul className="flex flex-col gap-0.5">
-            {group.map((entry) => (
-              <TagRow key={entry.tag.id} entry={entry} currentQuery={currentQuery} />
-            ))}
-          </ul>
+          <ul className={list}>{group.map(draw)}</ul>
         </section>
       ))}
+      {rest.length > 0 && <ul className={list}>{rest.flatMap(([, group]) => group.map(draw))}</ul>}
     </div>
   )
 }
