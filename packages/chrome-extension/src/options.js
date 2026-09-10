@@ -20,6 +20,7 @@ const PREF_KEY = 'booru-explorer-prefs'
 const BOARDS = [
   { key: 'gelbooru', label: 'Gelbooru' },
   { key: 'konachan', label: 'Konachan' },
+  { key: 'pixiv', label: 'Pixiv' },
 ]
 
 const say = (message) => {

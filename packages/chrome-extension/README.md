@@ -15,6 +15,10 @@ half that happens in a browser.
 
 Press **S** while a preview is up to switch. The choice is remembered per board.
 
+The default is bigger, except on pixiv, where the listing thumbnail is a **square crop**
+— the picture in the page is a piece of the post rather than a small copy of it, so the
+mode that enlarges it is the one mode that cannot be right about what you are looking at.
+
 **Bigger** (default) fetches nothing. The thumbnail is already decoded and sitting in the
 page, so it is scaled into the viewport and drawn on the frame the pointer arrived. There
 is no request to be slow and no cache to miss — it cannot lag. It is soft, and for "which
@@ -40,7 +44,7 @@ out of the page rather than asked for.
 
 ## Marking posts read
 
-**Gelbooru and Konachan only** — see [Boards](#boards).
+**Gelbooru, Konachan and pixiv only** — see [Boards](#boards).
 
 A read post is **faded, and cannot be hovered**. That second half is the point. The reason
 to point at a thumbnail is to ask which picture it is, and a post you have marked is one
@@ -119,7 +123,7 @@ saving that never happened, and a prune without the floor is read posts forgotte
 
 ### Import and export
 
-Settings exports both boards as one JSON file: a sorted list of post numbers per board,
+Settings exports every board as one JSON file: a sorted list of post numbers per board,
 each board's floor, and the date it was written. The floor goes in as itself — writing out
 the millions of numbers it covers would be the file saying the thing the floor exists not
 to say. Import **merges** by default — read history only grows, and
@@ -129,7 +133,9 @@ takes the higher of the two, for the reason merged ids take the union: both mach
 saying what has been read, and neither of them saying it makes it unread.
 
 The settings page also says what is held per board, holds the floor, and can clear a
-board — floor included, since clearing has to leave nothing fading.
+board — floor included, since clearing has to leave nothing fading. A board the file
+brought in that this build has never heard of keeps its row, so an import is never storage
+you cannot see or clear.
 
 ## Install
 
@@ -140,6 +146,8 @@ Brave and Chrome, unpacked:
 3. **Load unpacked** → pick `packages/chrome-extension`
 
 ## Saving the picture
+
+**Gelbooru and Konachan**, and deliberately not pixiv — see the end of this section.
 
 On a post's own page a ⬇️ button sits on the top-left corner of the picture — the dock's
 button drawn smaller, because it is the same kind of thing. Clicking it opens the save
@@ -167,6 +175,12 @@ being sourced get filed somewhere on purpose, and choosing the folder is the rea
 were right-clicking. Chrome opens it on the last folder used, so a run of saves is one
 choice and then Enter.
 
+**pixiv has no button.** `i.pximg.net` answers 403 to a request carrying no `Referer` from
+pixiv, and `chrome.downloads` sends none — setting one is the `headers` option, which needs
+host access, which is the permission this extension exists without. A button that fails
+every time is worse than no button, and a right click in the page sends the referer for
+free. A board with no `original` in its `BOARDS` entry simply doesn't draw one.
+
 ## Permissions
 
 Three, and no host access at all:
@@ -174,7 +188,7 @@ Three, and no host access at all:
 - **`storage`** — the marking on/off switch and which side the button sits on. These
   answer for the extension rather than for a board, so unlike the hover mode and size
   (which stay in each board's `localStorage`, deliberately per board) they have to be
-  somewhere both boards and the settings page can see.
+  somewhere every board and the settings page can see.
 - **`unlimitedStorage`** — read history has no ceiling but the one you give it, and
   hitting a quota mid-mark would lose marks silently.
 - **`downloads`** — the Save button. This is the one Chrome warns about, as "Manage your
@@ -216,12 +230,19 @@ look alike and only one of them has more detail to give.
 ## Boards
 
 **Hovering** works on Gelbooru, Safebooru, Rule34, Xbooru, TBIB (all the Gelbooru 0.2
-engine), Danbooru, and Konachan.
+engine), Danbooru, Konachan, and pixiv.
 
-**Marking** works on Gelbooru and Konachan. Fewer, on purpose: a post number means nothing
-without knowing whose it is, and the Gelbooru engine is five sites with five unrelated id
-spaces behind one set of markup. Konachan's two hosts are one board — `.net` is the same
-posts with the same numbers, filtered.
+**Marking** works on Gelbooru, Konachan and pixiv. Fewer, on purpose: a post number means
+nothing without knowing whose it is, and the Gelbooru engine is five sites with five
+unrelated id spaces behind one set of markup. Konachan's two hosts are one board — `.net`
+is the same posts with the same numbers, filtered — and pixiv's language prefix is a prefix
+on the path rather than another site, so `/en/artworks/1` and `/artworks/1` are one post and
+fade together.
+
+pixiv is not a booru, and everything here is indifferent to that: what marking needs is a
+number in the address and a thumbnail wrapped in a link to it, which is what an illust id
+and an artwork card are. What it costs is the crop the listing draws (the mode default
+above) and the save button (the referer, above).
 
 Konachan is also the one that cannot be resolved by pattern — moebooru puts the post title
 inside the file name — so its hover rule reads the `Post.register({…})` calls the page
@@ -230,11 +251,15 @@ hosts in its `host` regex and nothing else.
 
 Adding a board to the hover is an entry in `SITES` in [src/content.js](src/content.js): a
 host pattern, a regex over the thumbnail URL, and the candidate full-size URLs to try in
-order. Bigger mode needs none of it and works on any board in `matches`.
+order — plus `defaultMode`, if the thumbnail in the page is not a small copy of the post.
+Bigger mode needs none of it and works on any board in `matches`.
 
-Adding one to the marking is an entry in `BOARDS` in the same file: a host pattern and a
-function that pulls the digits out of a post URL. Both boards' numbers are already in their
-addresses, so nothing is fetched to find one.
+Adding one to the marking is an entry in `BOARDS` in the same file: a host pattern, a
+function that pulls the digits out of a post URL, and `original` if the board links to the
+stored file from the post. Every board's numbers are already in their addresses, so nothing
+is fetched to find one. A row in `BOARDS` in
+[src/options.js](src/options.js) is what makes the settings page say so before anything has
+been marked.
 
 Candidates are tried in order and the first that loads wins, so guessing the extension is
 safe: a miss is a 404 answered in milliseconds, and if every one of them misses the

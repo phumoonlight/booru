@@ -33,6 +33,7 @@
 const CONFIG = {
   // 'bigger' — scale the thumbnail already in the page, no request.
   // 'sample' — load the board's larger rendition when you hover.
+  // A board whose thumbnail is a crop rather than a small copy overrides this in `SITES`.
   defaultMode: 'bigger',
   // How far a thumbnail may be blown up past its own pixels. A 180px thumbnail shown at
   // 180px is not a preview, so this mode has to upscale to exist; past about four times
@@ -107,6 +108,27 @@ const SITES = [
       ...IMAGE_EXT.map((ext) => `${base}/image/${md5}.${ext}`),
     ],
   },
+  {
+    // Pixiv, which is not a booru and does not draw thumbnails like one: a listing shows
+    // a **square crop**, so the picture already in the page is a piece of the post rather
+    // than a small copy of it. Enlarging that is enlarging the crop, which is the one
+    // thing bigger mode cannot be right about — so this is the board that defaults to the
+    // sample. `S` still switches, and the crop is still the instant answer to "which of
+    // these forty".
+    host: /(^|\.)pixiv\.net$/i,
+    defaultMode: 'sample',
+    // `/c/250x250_80_a2/custom-thumb/img/<date>/<id>_p<n>_custom1200.jpg`, and the
+    // `img-master` / `_square1200` spelling of the same thing. The `/c/<size>/` segment
+    // *is* the crop and the rendition suffix is its size, so dropping both and keeping
+    // the date path is the whole derivation — the date is not a date to pixiv, it is
+    // where the file lives.
+    thumb:
+      /^(https?:\/\/[^/]+)\/(?:c\/[^/]+\/)?(?:custom-thumb|img-master)\/img\/(\d{4}(?:\/\d{2}){5})\/(\d+)_p(\d+)_(?:custom|square|master)1200\./i,
+    candidates: ([, base, at, id, page]) => [
+      `${base}/img-master/img/${at}/${id}_p${page}_master1200.jpg`,
+      ...IMAGE_EXT.map((ext) => `${base}/img-original/img/${at}/${id}_p${page}.${ext}`),
+    ],
+  },
 ]
 
 /**
@@ -137,11 +159,15 @@ function harvestMoebooru() {
   return found
 }
 
+// Which of them this page is, decided once — the host does not change under a tab, and
+// the mode's default is read out of it before the first hover.
+const site = SITES.find((entry) => entry.host.test(location.hostname)) ?? null
+
 // Rebuilt on demand and dropped whenever the page changes, since the boards that harvest
 // are also the ones that can append a second page of posts into the same document.
 let indexed = null
 
-function pageIndex(site) {
+function pageIndex() {
   if (!indexed) indexed = site.index()
   return indexed
 }
@@ -187,11 +213,10 @@ function candidatesFor(img) {
 
   const found = [...preferred, ...rest]
   const src = img.currentSrc || img.src
-  const site = SITES.find((entry) => entry.host.test(location.hostname))
   const match = site && src ? src.match(site.thumb) : null
   if (match) {
     // Every rule captures the md5 last, which is what the harvest is keyed by.
-    const known = site.index ? pageIndex(site).get(match[4]) : null
+    const known = site.index ? pageIndex().get(match[4]) : null
     found.push(...(known ?? []), ...site.candidates(match))
   }
 
@@ -353,7 +378,9 @@ function readMode() {
   } catch {
     // A page can deny storage outright. The default is a fine answer.
   }
-  return CONFIG.defaultMode
+  // A board may name its own, for the one reason a board can have: pixiv's thumbnail is
+  // a crop, so the mode that enlarges it is the wrong thing to open on.
+  return site?.defaultMode ?? CONFIG.defaultMode
 }
 
 let mode = readMode()
@@ -832,6 +859,30 @@ const BOARDS = [
     // `/jpeg/<md5>/…` is moebooru's re-encode of a large png and is deliberately not this.
     original: /\/image\/[\da-f]{32}/i,
   },
+  {
+    // Pixiv. An illust id, which is its own number space and nothing to do with the two
+    // above — the same reason five gelbooru sites are one board here and not five. The
+    // language prefix is a prefix on the path rather than another board: `/en/artworks/1`
+    // and `/artworks/1` are one post, and marking it on one has to fade it on the other.
+    key: 'pixiv',
+    label: 'Pixiv',
+    host: /(^|\.)pixiv\.net$/i,
+    postId(url) {
+      const match = url.pathname.match(/^(?:\/[a-z]{2})?\/artworks\/(\d+)/i)
+      if (match) return Number(match[1])
+      // The old page, which is still what an external link and an old bookmark are.
+      if (/\/member_illust\.php$/i.test(url.pathname)) {
+        return digits(url.searchParams.get('illust_id'))
+      }
+      return null
+    },
+    // No `original`, and so no ⬇️ — the one thing pixiv does not get. `i.pximg.net`
+    // answers 403 to a request carrying no `Referer` from pixiv, and `chrome.downloads`
+    // sends none: setting one is the `headers` option, which needs host access, which is
+    // the permission this extension exists without. A button that reliably fails is
+    // worse than no button, and the picture is one right click away in the page, where
+    // the referer is sent for free.
+  },
 ]
 
 function digits(value) {
@@ -937,10 +988,19 @@ function scan() {
   let found = 0
   for (const anchor of document.links) {
     if (examined.has(anchor)) continue
-    examined.add(anchor)
-    if (!anchor.querySelector('img')) continue
     const id = postIdOf(anchor.href)
-    if (id === null) continue
+    if (id === null) {
+      examined.add(anchor)
+      continue
+    }
+    // A post link with no picture inside it is a title or a caption, and fading those
+    // would be fading words. It is deliberately *not* remembered as examined: pixiv
+    // builds a card over more than one render, so an anchor whose thumbnail has not
+    // mounted yet is one to ask about again rather than one to skip for the life of the
+    // page. The links that are not posts at all are the ones worth never looking at
+    // twice, and those are settled above.
+    if (!anchor.querySelector('img')) continue
+    examined.add(anchor)
     anchor.setAttribute(POST_ATTR, String(id))
     found += 1
     if (!seen.has(id)) {
@@ -1291,6 +1351,7 @@ function postMedia() {
  * small enough to have no sample it is also the right answer.
  */
 function originalHref(media) {
+  if (!board.original) return null
   const shown = media ? media.currentSrc || media.src : ''
   if (shown && board.original.test(shown)) return shown
   for (const anchor of document.links) {
@@ -1328,7 +1389,8 @@ const SAVE_OUT = Math.round(SAVE_SIZE * 0.6)
 function placeSave() {
   const save = dockPart('save')
   if (!save) return
-  const media = postMedia()
+  // A board with no original to recognise has no button at all — see pixiv in `BOARDS`.
+  const media = board.original ? postMedia() : null
   if (!media) {
     save.hidden = true
     return
