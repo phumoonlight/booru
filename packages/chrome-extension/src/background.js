@@ -66,11 +66,13 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (typeof message.site !== 'string' || !message.site) return
 
   if (message.type === 'query') {
+    // The floor comes back with the answer rather than on a message of its own: the page
+    // needs it for the same reason it needs the subset, and it is already in hand.
     queryReads(message.site, ids(message.ids)).then(
-      (read) => respond({ read }),
+      (answer) => respond(answer),
       // A store that will not open is a store with nothing read in it. The board is drawn
       // as it is rather than the page failing to finish.
-      () => respond({ read: [] })
+      () => respond({ read: [], floor: 0 })
     )
     return true
   }

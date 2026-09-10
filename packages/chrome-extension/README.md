@@ -56,7 +56,7 @@ sidebar you are looking at.
 | ✅ Mark this post read | on a post's own page, where there is only one to mark |
 | 👆 Start marking       | click thumbnails to mark them; click again to unmark  |
 | 👁️ Read marking        | off, nothing fades and nothing is recorded            |
-| ⚙️ Settings            | what is stored, and the import/export file            |
+| ⚙️ Settings            | what is stored, the floor, and the import/export file |
 
 The whole page is a **hold** rather than a click because it is the one action here that
 repeating does not undo. 600ms, with the fill running under the label.
@@ -88,21 +88,48 @@ of key and index overhead to hold six bytes of ids. The same ten thousand fill 1
 at 65536 wide — 130KB down to 27KB. The width is capped there rather than measured: an
 offset has to fit the `Uint16Array` the sparse shape is made of, and 65536 is its range.
 Widening it is a schema change, since the bucket is half the key, so version 2 of the
-database reads every record and writes it back regrouped.
+database reads every record and writes it back regrouped. Version 3 adds a second store
+holding one floor per board and touches the records not at all.
 
 The database is the **extension's**, not the board's. A content script's `indexedDB`
 belongs to the site it was injected into, which would have meant one store per board, none
 of them reachable from a settings page, and all of them taken by a "clear site data" aimed
 at something else.
 
+### Read up to
+
+A post number per board, set on the settings page: everything **at or below** it counts as
+read without being stored, and the numbers already held inside it are deleted on the spot.
+
+It is the one thing here that makes the database smaller rather than larger. A board
+sourced from for a year is mostly a long tail of old posts that will never be opened
+again, and storing each of their numbers to say so costs two bytes apiece for a fact one
+number states. Fifty thousand read posts under the floor are 100KB before and nothing
+after.
+
+What it costs is that the range is a **blanket**. A post under the floor cannot be
+unmarked — there is no record to remove — so the menu says so and its button is disabled
+rather than shrugging. Clearing the number does not bring back what setting it deleted,
+and neither does lowering it. Raising one asks first, with the count of stored posts it is
+about to swallow, since "this cannot be undone" is only a warning if it says what "this"
+was.
+
+The floor is written and the prune runs in one transaction: a floor without the prune is a
+saving that never happened, and a prune without the floor is read posts forgotten.
+
 ### Import and export
 
 Settings exports both boards as one JSON file: a sorted list of post numbers per board,
-and the date it was written. Import **merges** by default — read history only grows, and
+each board's floor, and the date it was written. The floor goes in as itself — writing out
+the millions of numbers it covers would be the file saying the thing the floor exists not
+to say. Import **merges** by default — read history only grows, and
 two machines that have each seen something the other hasn't is the ordinary case rather
-than a conflict. Replace is there for undoing an import of the wrong file.
+than a conflict. Replace is there for undoing an import of the wrong file. A merged floor
+takes the higher of the two, for the reason merged ids take the union: both machines are
+saying what has been read, and neither of them saying it makes it unread.
 
-The settings page also says what is held per board, and can clear a board.
+The settings page also says what is held per board, holds the floor, and can clear a
+board — floor included, since clearing has to leave nothing fading.
 
 ## Install
 

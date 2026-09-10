@@ -23,6 +23,14 @@
  * Bucketing is also what makes a write incremental: marking a post rewrites one record,
  * never the whole set.
  *
+ * **A floor is the one thing cheaper than a record.** A board sourced from for a year is
+ * mostly a long tail of old posts that will never be looked at again, and storing each of
+ * their numbers to say so costs two bytes apiece for a fact one number states: everything
+ * at or below `floor` is read. Setting one answers for that whole range without a record,
+ * and deletes the records already covering it — which is the only operation here that
+ * makes the database smaller. The cost is that the range is a blanket: a post under the
+ * floor cannot be unmarked, because there is nothing to remove.
+ *
  * **A bucket is wide because a record costs the same however little is in it.** Version 1
  * grouped 4096 to a record, which sounds tidy and is not: reading is scattered over a
  * board's whole history, so ten thousand read posts landed about three to a bucket and
@@ -33,8 +41,13 @@
  */
 
 const DB_NAME = 'booru-explorer'
-const DB_VERSION = 2
+const DB_VERSION = 3
 const STORE = 'reads'
+// One row per board — `{ site, floor }` — and absent means none. Its own store rather
+// than `chrome.storage`, because setting a floor and deleting what it covers is one
+// transaction: a floor written without the prune is a saving that never happened, and a
+// prune without the floor is read posts forgotten.
+const FLOORS = 'floors'
 
 const BUCKET_BITS = 16
 const BUCKET_SIZE = 1 << BUCKET_BITS
@@ -59,12 +72,17 @@ function open() {
         // `[site]` … `[site, []]` is every one of them — arrays sort after numbers in
         // IndexedDB, which is what makes that upper bound work.
         database.createObjectStore(STORE, { keyPath: ['site', 'bucket'] })
-        return
+      } else if (event.oldVersion < 2) {
+        // The bucket is part of the key, so widening it changes what every existing
+        // record is about. Rewriting them is a few hundred kilobytes read once, and the
+        // alternative is a store that quietly fades the wrong posts.
+        repack(request.transaction.objectStore(STORE))
       }
-      // The bucket is part of the key, so widening it changes what every existing record
-      // is about. Rewriting them is a few hundred kilobytes read once, and the
-      // alternative is a store that quietly fades the wrong posts.
-      if (event.oldVersion < 2) repack(request.transaction.objectStore(STORE))
+      // Version 3 adds the floors, and nothing else: a board with no row has none, which
+      // is what every existing board wants to be.
+      if (!database.objectStoreNames.contains(FLOORS)) {
+        database.createObjectStore(FLOORS, { keyPath: 'site' })
+      }
     }
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error)
@@ -82,18 +100,28 @@ function open() {
  * the difference matters for writes, where a resolved promise has to mean "on disk".
  * `run` fills `box.value` from its own request callbacks, which all fire before commit.
  */
-function withStore(mode, run) {
+function withTx(names, mode, run) {
   return open().then(
     (database) =>
       new Promise((resolve, reject) => {
-        const transaction = database.transaction(STORE, mode)
+        const transaction = database.transaction(names, mode)
         const box = {}
         transaction.oncomplete = () => resolve(box.value)
         transaction.onabort = () => reject(transaction.error)
         transaction.onerror = () => reject(transaction.error)
-        run(transaction.objectStore(STORE), box)
+        run(transaction, box)
       })
   )
+}
+
+function withStore(mode, run) {
+  return withTx(STORE, mode, (transaction, box) => run(transaction.objectStore(STORE), box))
+}
+
+/** The floor a board is under, or 0. Absent, zero and negative all mean the same thing. */
+function floorOf(record) {
+  const level = record?.floor
+  return Number.isInteger(level) && level > 0 ? level : 0
 }
 
 const bucketOf = (id) => Math.floor(id / BUCKET_SIZE)
@@ -208,21 +236,38 @@ function repack(store) {
 }
 
 /**
- * Which of these ids are read. The answer is the subset, so a page of unread posts costs
- * an empty array rather than a hundred booleans.
+ * Which of these ids are read, and the board's floor. The answer is the subset, so a page
+ * of unread posts costs an empty array rather than a hundred booleans; the floor rides
+ * along because the caller is the one page that has to know it — a post under it is read
+ * and cannot be unmarked, and a menu offering to would be offering nothing.
+ *
+ * The floor is read first and the ids under it are answered from it, so a board whose
+ * whole first year is floored asks the store about none of them.
  */
 export function queryReads(site, ids) {
   const wanted = group(ids)
-  return withStore('readonly', (store, box) => {
+  return withTx([STORE, FLOORS], 'readonly', (transaction, box) => {
     const read = []
-    box.value = read
-    for (const [bucket, held] of wanted) {
-      const request = store.get([site, bucket])
-      request.onsuccess = () => {
-        const record = request.result
-        if (!record) return
+    box.value = { read, floor: 0 }
+    const level = transaction.objectStore(FLOORS).get(site)
+    level.onsuccess = () => {
+      const floor = floorOf(level.result)
+      box.value.floor = floor
+      const store = transaction.objectStore(STORE)
+      for (const [bucket, held] of wanted) {
+        const above = []
         for (const id of held) {
-          if (holds(record, offsetOf(id))) read.push(id)
+          if (id <= floor) read.push(id)
+          else above.push(id)
+        }
+        if (above.length === 0) continue
+        const request = store.get([site, bucket])
+        request.onsuccess = () => {
+          const record = request.result
+          if (!record) return
+          for (const id of above) {
+            if (holds(record, offsetOf(id))) read.push(id)
+          }
         }
       }
     }
@@ -232,26 +277,112 @@ export function queryReads(site, ids) {
 /**
  * Mark or unmark, in one transaction however many ids are handed over — a whole page
  * marked at once is two or three records rewritten, not a hundred.
+ *
+ * **The floor takes precedence over both directions.** Marking under it writes nothing,
+ * since the floor already says so and a record repeating it is the storage the floor was
+ * set to avoid; unmarking under it does nothing, because a blanket has no threads to pull
+ * out. That is the whole cost of a floor, and it is why the settings page says what one
+ * covers before it is applied.
  */
 export function markReads(site, ids, read) {
-  const wanted = group(ids)
-  return withStore('readwrite', (store, box) => {
+  return withTx([STORE, FLOORS], 'readwrite', (transaction, box) => {
     box.value = 0
-    for (const [bucket, held] of wanted) {
-      const request = store.get([site, bucket])
-      request.onsuccess = () => {
-        const found = offsets(request.result)
-        const before = found.size
-        for (const id of held) {
-          if (read) found.add(offsetOf(id))
-          else found.delete(offsetOf(id))
+    const level = transaction.objectStore(FLOORS).get(site)
+    level.onsuccess = () => {
+      const floor = floorOf(level.result)
+      const store = transaction.objectStore(STORE)
+      for (const [bucket, held] of group(ids)) {
+        const above = held.filter((id) => id > floor)
+        if (above.length === 0) continue
+        const request = store.get([site, bucket])
+        request.onsuccess = () => {
+          const found = offsets(request.result)
+          const before = found.size
+          for (const id of above) {
+            if (read) found.add(offsetOf(id))
+            else found.delete(offsetOf(id))
+          }
+          if (found.size === before) return
+          box.value += Math.abs(found.size - before)
+          const next = pack(site, bucket, found)
+          if (next) store.put(next)
+          else store.delete([site, bucket])
         }
-        if (found.size === before) return
-        box.value += Math.abs(found.size - before)
-        const next = pack(site, bucket, found)
-        if (next) store.put(next)
-        else store.delete([site, bucket])
       }
+    }
+  })
+}
+
+/**
+ * Everything at or below `floor` is read, and the records saying so are deleted.
+ *
+ * Both halves are one transaction on purpose — see `FLOORS`. What comes back is the level
+ * that stuck and how many stored posts it swallowed, which is the only number that says
+ * whether setting it was worth anything.
+ *
+ * Zero clears the floor, and clearing does **not** bring back what was pruned: those
+ * numbers are gone, and the posts they named read again. Lowering one is the same trade.
+ */
+export function setFloor(site, floor) {
+  const level = Number.isInteger(floor) && floor > 0 ? floor : 0
+  return withTx([STORE, FLOORS], 'readwrite', (transaction, box) => {
+    box.value = { floor: level, removed: 0 }
+    const floors = transaction.objectStore(FLOORS)
+    if (level === 0) floors.delete(site)
+    else floors.put({ site, floor: level })
+    if (level > 0) prune(transaction.objectStore(STORE), site, level, box.value)
+  })
+}
+
+/**
+ * Delete every id at or below the floor: whole records under the boundary bucket, then
+ * the boundary itself rewritten without its lower half. Counted as it goes, since a
+ * record is cheaper to count on the way past than to look up again.
+ */
+function prune(store, site, floor, tally) {
+  const bucket = bucketOf(floor)
+  // `bound` throws when the two ends are equal and one is open, so the whole-record sweep
+  // only exists once there is a record below the boundary to sweep.
+  if (bucket > 0) {
+    const request = store.openCursor(IDBKeyRange.bound([site, 0], [site, bucket], false, true))
+    request.onsuccess = () => {
+      const cursor = request.result
+      if (!cursor) return
+      tally.removed += count(cursor.value)
+      cursor.delete()
+      cursor.continue()
+    }
+  }
+  const edge = store.get([site, bucket])
+  edge.onsuccess = () => {
+    const record = edge.result
+    if (!record) return
+    const found = offsets(record)
+    const before = found.size
+    const top = offsetOf(floor)
+    for (const offset of found) {
+      if (offset <= top) found.delete(offset)
+    }
+    if (found.size === before) return
+    tally.removed += before - found.size
+    const next = pack(site, bucket, found)
+    if (next) store.put(next)
+    else store.delete([site, bucket])
+  }
+}
+
+/** Every board's floor, as `{ site: floor }` — the settings page and the export file. */
+export function listFloors() {
+  return withTx(FLOORS, 'readonly', (transaction, box) => {
+    const per = {}
+    box.value = per
+    const request = transaction.objectStore(FLOORS).openCursor()
+    request.onsuccess = () => {
+      const cursor = request.result
+      if (!cursor) return
+      const floor = floorOf(cursor.value)
+      if (floor > 0) per[cursor.value.site] = floor
+      cursor.continue()
     }
   })
 }
@@ -279,10 +410,12 @@ export function listIds(site) {
   })
 }
 
+/** A board forgotten, floor included — clearing has to leave nothing fading. */
 export function clearSite(site) {
-  return withStore('readwrite', (store, box) => {
+  return withTx([STORE, FLOORS], 'readwrite', (transaction, box) => {
     box.value = true
-    store.delete(siteRange(site))
+    transaction.objectStore(STORE).delete(siteRange(site))
+    transaction.objectStore(FLOORS).delete(site)
   })
 }
 
@@ -291,19 +424,31 @@ export function clearSite(site) {
  * everything else is right should be able to state what it thinks it has.
  */
 export function stats() {
-  return withStore('readonly', (store, box) => {
+  return withTx([STORE, FLOORS], 'readonly', (transaction, box) => {
     const per = {}
     box.value = per
-    const request = store.openCursor()
+    const entryFor = (site) => (per[site] ??= { posts: 0, bytes: 0, records: 0, floor: 0 })
+
+    const request = transaction.objectStore(STORE).openCursor()
     request.onsuccess = () => {
       const cursor = request.result
       if (!cursor) return
       const record = cursor.value
-      const entry = per[record.site] ?? { posts: 0, bytes: 0, records: 0 }
+      const entry = entryFor(record.site)
       entry.posts += count(record)
       entry.bytes += record.data.byteLength
       entry.records += 1
-      per[record.site] = entry
+      cursor.continue()
+    }
+
+    // A board can be nothing but a floor — everything it had was pruned — and a row that
+    // vanished from the table would be a floor nobody could see or lift.
+    const levels = transaction.objectStore(FLOORS).openCursor()
+    levels.onsuccess = () => {
+      const cursor = levels.result
+      if (!cursor) return
+      const floor = floorOf(cursor.value)
+      if (floor > 0) entryFor(cursor.value.site).floor = floor
       cursor.continue()
     }
   })

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Booru explorer",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Hover a booru thumbnail to see it full size, and mark the posts you have already been through so they fade out of the next search.",
   "permissions": ["storage", "unlimitedStorage", "downloads"],
   "background": {

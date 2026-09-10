@@ -122,6 +122,21 @@
       input[type='file'] {
         display: none;
       }
+      input[type='number'] {
+        width: 7.5em;
+        padding: 5px 8px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: var(--background);
+        color: var(--foreground);
+        font: inherit;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      input[type='number']:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
       code {
         color: var(--foreground);
       }
@@ -143,11 +158,20 @@
               <th>Board</th>
               <th class="n">Posts</th>
               <th class="n">Stored</th>
+              <th class="n">Read up to</th>
               <th></th>
             </tr>
           </thead>
           <tbody id="stats"></tbody>
         </table>
+        <p style="margin: 12px 0 0">
+          <strong style="color: var(--foreground); font-weight: 600">Read up to</strong> is a post
+          number: everything at or below it counts as read without being stored, and the numbers
+          already held inside it are deleted. It is what makes the database smaller — a board
+          sourced from for a year is mostly old posts you will never look at again, and one number
+          says so where thousands of them did. The range is a blanket, so a post under it cannot be
+          unmarked, and clearing the number does not bring back what it deleted. Empty for none.
+        </p>
       </section>
 
       <h2>Marking</h2>

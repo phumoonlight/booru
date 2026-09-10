@@ -899,6 +899,11 @@ const seen = new Set()
 const readIds = new Set()
 const examined = new WeakSet()
 let marking = false
+// Everything at or below this is read without a record saying so, set on the settings
+// page. The page holds it because it is the one thing a mark has to check before writing:
+// under the floor there is nothing to add and nothing to take away. Zero until the first
+// answer comes back, which is the same thing a board with no floor has.
+let floor = 0
 
 function send(message, then) {
   try {
@@ -950,6 +955,7 @@ function scan() {
   if (fresh.length === 0) return
   send({ type: 'query', site: board.key, ids: fresh }, (answer) => {
     if (!answer || !Array.isArray(answer.read)) return
+    if (Number.isInteger(answer.floor)) floor = answer.floor
     for (const id of answer.read) readIds.add(id)
     paintRead()
   })
@@ -970,6 +976,10 @@ function paintRead() {
  * nothing a failed write could have done differently anyway.
  */
 function mark(ids, read) {
+  // Unmarking under the floor is refused here rather than in the store, so the thumbnail
+  // does not brighten for the half second before a reload puts it back. Marking under it
+  // is left alone: the paint is already right and the store simply writes nothing.
+  if (!read) ids = ids.filter((id) => id > floor)
   if (ids.length === 0) return
   for (const id of ids) {
     seen.add(id)
@@ -1209,7 +1219,11 @@ function repaintDock() {
   // thing to mark, and the menu says which way it would go.
   const current = postIdOf(location.href)
   const currentRead = current !== null && readIds.has(current)
-  dockPart('one').disabled = !prefs.marking || current === null
+  // A post under the floor is read by a rule rather than by a record, so there is nothing
+  // the button could remove. Disabled and said out loud, since a button that shrugs is
+  // worse than one that is plainly not for this post.
+  const floored = current !== null && current <= floor
+  dockPart('one').disabled = !prefs.marking || current === null || floored
   dockPart('one-label').textContent = currentRead ? 'Mark this post unread' : 'Mark this post read'
 
   // What the post *is*, above what the button would do to it. The two read the same way
@@ -1220,9 +1234,11 @@ function repaintDock() {
   status.classList.toggle('read', currentRead)
   if (current !== null) {
     dockPart('status-mark').textContent = currentRead ? '✅' : '👁️'
-    dockPart('status-text').textContent = currentRead
-      ? `Post ${current} — read`
-      : `Post ${current} — not read`
+    dockPart('status-text').textContent = floored
+      ? `Post ${current} — read, under ${floor.toLocaleString()}`
+      : currentRead
+        ? `Post ${current} — read`
+        : `Post ${current} — not read`
   }
 
   const ids = pageIds()
