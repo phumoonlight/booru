@@ -255,10 +255,17 @@ the one thing any of these boards says about a post that the extension did not h
 record itself.
 
 The heart is recognised by its **colour** rather than by its label — the label is whatever
-language the account is set to, and `#FF4060` is the same in all of them — inside the card
+language the account is set to, and the pink is the same in all of them — inside the card
 found by walking up from the thumbnail until a second post appears, since pixiv's class
-names are generated and change between deploys. If pixiv ever redraws it, the count in the
-menu stays at none, which is how you would notice.
+names are generated and change between deploys. A range of pinks rather than the one hex
+it is today: the heart is drawn through `fill` in one place and `color` in another, it is
+an svg here and a glyph there, and a private bookmark puts a lock over it. What the range
+must not swallow is white and grey, which is what the _unbookmarked_ heart is, and it is
+scoped to the card's buttons so nothing else red on the page can answer. A hidden one does
+not count — pixiv keeps both states in the markup.
+
+The menu says the count either way, **including none**, because a selector that has gone
+stale and a page with no bookmarks on it look identical from the outside otherwise.
 
 Konachan is also the one that cannot be resolved by pattern — moebooru puts the post title
 inside the file name — so its hover rule reads the `Post.register({…})` calls the page

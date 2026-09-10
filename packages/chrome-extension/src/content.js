@@ -893,12 +893,15 @@ const BOARDS = [
      */
     bookmarked(anchor, id) {
       const card = cardOf(anchor, id)
-      for (const button of card.querySelectorAll('button[aria-pressed="true"]')) {
-        if (button.querySelector('svg')) return true
+      for (const button of card.querySelectorAll('button, [role="button"]')) {
+        if (button.getAttribute('aria-pressed') === 'true') return true
+        if (drawnPink(button)) return true
       }
-      for (const path of card.querySelectorAll('svg path')) {
-        if (BOOKMARK_FILL.test(path.getAttribute('fill') ?? '')) return true
-        if (BOOKMARK_FILL.test(getComputedStyle(path).fill)) return true
+      // The same question of any svg in the card, for a build where the heart is not a
+      // button at all. An svg is safe to ask where the whole card is not: everything
+      // else red on one of these — the R-18 badge, the ai notice — is text.
+      for (const svg of card.querySelectorAll('svg')) {
+        if (drawnPink(svg)) return true
       }
       return false
     },
@@ -915,10 +918,57 @@ function digits(value) {
   return value && /^\d+$/.test(value) ? Number(value) : null
 }
 
-// pixiv's bookmarked heart, which is this exact pink whether it arrives as an attribute
-// on the path or as a rule. Exact rather than "reddish": the R-18 badge on a card and
-// half a dozen other things on that page are red too.
-const BOOKMARK_FILL = /^(#ff4060|rgb\(255,\s*64,\s*96\))$/i
+/**
+ * Whether a colour is the pink pixiv fills a bookmarked heart with.
+ *
+ * A range rather than the one hex it is today (`#ff4060`): the heart is an svg on some
+ * pages and a glyph on others, it is drawn through `fill` in one and `color` in another,
+ * and a private bookmark puts a lock over it — none of which is worth a separate rule,
+ * because the *other* state is a white heart with a grey edge and the gap between the
+ * two is enormous. What the range must not swallow is grey, white and black, which is
+ * everything else a card's buttons are drawn in.
+ */
+function pinkish(value) {
+  const rgb = readRgb(value)
+  if (!rgb) return false
+  const [r, g, b] = rgb
+  return r > 190 && g < 150 && b < 190 && r - g > 80 && r - b > 40
+}
+
+/**
+ * Whether anything drawn inside `root` is that pink. Hidden parts are skipped: pixiv
+ * keeps both states of a toggle in the markup, and a heart nobody can see is not an
+ * answer about anything.
+ */
+function drawnPink(root) {
+  for (const part of [root, ...root.querySelectorAll('*')]) {
+    if (part.checkVisibility && !part.checkVisibility({ checkOpacity: true })) continue
+    const style = getComputedStyle(part)
+    if (pinkish(style.fill) || pinkish(style.color)) return true
+    if (pinkish(part.getAttribute('fill'))) return true
+  }
+  return false
+}
+
+function readRgb(value) {
+  if (typeof value !== 'string') return null
+  const hex = value.trim().match(/^#([\da-f]{3}|[\da-f]{6})$/i)
+  if (hex) {
+    const pairs =
+      hex[1].length === 3 ? [...hex[1]].map((digit) => digit + digit) : hex[1].match(/../g)
+    return pairs.map((pair) => parseInt(pair, 16))
+  }
+  const call = value.match(/^rgba?\(([^)]+)\)/i)
+  if (!call) return null
+  const parts = call[1]
+    .split(/[\s,/]+/)
+    .filter(Boolean)
+    .map(Number)
+  if (parts.length < 3 || parts.slice(0, 3).some((part) => Number.isNaN(part))) return null
+  // A fully transparent colour is not a colour anybody can see.
+  if (parts.length > 3 && parts[3] === 0) return null
+  return parts.slice(0, 3)
+}
 
 /**
  * The card a thumbnail belongs to — the highest ancestor still talking about this one
@@ -1392,9 +1442,11 @@ function repaintDock() {
       ? current === null
         ? 'No posts on this page.'
         : ''
-      : kept === 0
+      : !board.bookmarked
         ? `${read} of ${ids.length} read on this page.`
-        : `${read} of ${ids.length} read here — ${kept} bookmarked, which 📚 leaves alone.`
+        : kept === 0
+          ? `${read} of ${ids.length} read here — none bookmarked.`
+          : `${read} of ${ids.length} read here — ${kept} bookmarked, which 📚 leaves alone.`
   note.hidden = note.textContent === ''
 }
 
