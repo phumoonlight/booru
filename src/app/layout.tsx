@@ -1,12 +1,14 @@
 import type { Metadata, Viewport } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Geist_Mono, Lexend } from 'next/font/google'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import './globals.css'
 import { Analytics } from '@/components/analytics'
 import { SITE_DESCRIPTION, SITE_NAME, siteUrl } from '@/config'
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+// Lexend is a variable font, so the whole 100-900 range costs one file — which is
+// what the weights scattered through the pages are drawn from.
+const lexendSans = Lexend({
+  variable: '--font-lexend-sans',
   subsets: ['latin'],
 })
 
@@ -51,7 +53,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
     // a row that was never rendered needs nothing hidden.
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
+      className={`${lexendSans.variable} ${geistMono.variable} dark h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {/* Navigation lives in the sticky SearchHeader each page renders */}

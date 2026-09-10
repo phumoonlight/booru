@@ -5,6 +5,11 @@
 @source './**/*.{ts,tsx}';
 @source '../index.html';
 
+/* Lexend, the web's face, from a package rather than Google's CDN: the renderer has no
+   network and its CSP says so, so the woff2 has to be a file Vite emitted beside the
+   bundle. Variable, so the whole 100-900 range is one request to 'self'. */
+@import '@fontsource-variable/lexend';
+
 /* The exceptions, and each has to be named: the category colours in the shared package's
    tags.ts (`categoryColor`, including its plain-foreground fallback) and `RATING_COLOR`
    in its search.ts are Tailwind classes, worn by the tag index, the tag picker, the rule
@@ -43,18 +48,14 @@
   --color-surface: var(--surface);
   --color-border: var(--border);
   --color-accent: var(--accent);
+  --font-sans:
+    'Lexend Variable', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    Arial,
-    sans-serif;
+  font-family: var(--font-sans);
   /* A window is not a document: the app scrolls its own queue, never the frame */
   overflow: hidden;
 }
