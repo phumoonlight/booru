@@ -4,7 +4,17 @@ import { z } from 'zod'
 import { POST_MAX_DIMENSION, compressImgForPost } from '@common/imgcmp/for-post'
 import { compressImgForThumbnail } from '@common/imgcmp/for-thumbnail'
 import { createPostWithTags, findPostIdByFileName, resolveTagIds } from '@common/data/shared'
-import { postImagePath, thumbnailPath, type ObjectStore } from '@common/storage'
+import {
+  createCollectionPost,
+  findCollectionPostByFileName,
+} from '@common/data/collections'
+import {
+  collectionImagePath,
+  collectionThumbnailPath,
+  postImagePath,
+  thumbnailPath,
+  type ObjectStore,
+} from '@common/storage'
 import type { Board } from '@common/board'
 import { RATINGS, type Rating } from '@common/search'
 import { parseTagInput } from '@common/tags'
@@ -107,30 +117,30 @@ export function parsePostMetadata(
 }
 
 /**
- * Creates one post from one image's bytes.
+ * What the bytes are, before anything has been decoded — the cheap half of the pipeline,
+ * and the half both callers run before they ask the board anything.
  *
- * Two handles, and it builds neither: the database, and somewhere to put the files. They
- * were one Supabase client that was both — a bucket and a schema behind one key — and
- * splitting them is what a separate database and a separate bucket made honest. Only the
- * desktop app holds either, since it is the only thing that writes.
- *
- * `board` picks the table the row lands in and the prefix the two objects land under
- * (`@common/board`). Nothing else about the pipeline moves: the compression, the dedup
- * hash, the limits and the tag resolution are the same questions on either board. It
- * defaults to the gallery, so a caller that has never heard of the second board is
- * unchanged.
+ * Header reads only. This is the last point at which an oversized or unreadable file can
+ * be turned away for free, and it is also where the md5 comes from, which is what makes
+ * the dedup question answerable before a single pixel is encoded.
  */
-export async function createPostFromImage(
-  db: DbPool,
-  store: ObjectStore,
+type InspectedImage = {
+  meta: Metadata
+  width: number
+  height: number
+  ext: string
+  animated: boolean
+  /** The md5 of the *uploaded* bytes — `file_name` on whichever table, and the name both
+   *  stored objects take. Hashing what came in rather than what gets stored is what keeps
+   *  dedup stable however the re-encode below turns out. */
+  md5: string
+}
+
+async function inspectImage(
   bytes: Buffer,
-  metadata: PostMetadata,
-  limits: UploadLimits,
-  board: Board = 'post'
-): Promise<UploadResult> {
-  if (bytes.length === 0) {
-    return { ok: false, error: 'Pick an image file' }
-  }
+  limits: UploadLimits
+): Promise<{ ok: true; image: InspectedImage } | { ok: false; error: string }> {
+  if (bytes.length === 0) return { ok: false, error: 'Pick an image file' }
   if (bytes.length > limits.maxFileSize) {
     return { ok: false, error: `File is too large (max ${limits.maxFileSizeLabel})` }
   }
@@ -141,6 +151,7 @@ export async function createPostFromImage(
   } catch {
     return { ok: false, error: 'File is not a readable image' }
   }
+
   // EXIF orientations 5-8 turn the image a quarter turn, and metadata() reports
   // the size *before* that turn. Both ends of the pipeline show it turned —
   // browsers apply the tag to a stored original, and sharp bakes the rotation
@@ -149,7 +160,6 @@ export async function createPostFromImage(
   const width = quarterTurned ? meta.height : meta.width
   const height = quarterTurned ? meta.width : meta.height
   const ext = meta.format ? FORMAT_TO_EXT[meta.format] : undefined
-  const animated = (meta.pages ?? 1) > 1
   if (!ext || !width || !height) {
     return { ok: false, error: 'Unsupported format (jpg/png/gif/webp/avif only)' }
   }
@@ -162,29 +172,41 @@ export async function createPostFromImage(
     }
   }
 
-  // The md5 of the *uploaded* bytes, which becomes `posts.file_name` and both stored
-  // files' names. Hashing what came in rather than what gets stored is what keeps dedupe
-  // stable no matter what
-  // we re-encode below. Storage paths derive from it either way.
-  const md5 = createHash('md5').update(bytes).digest('hex')
-
-  // Per board: the same image can be a post on both, which is correct — they are two
-  // boards, and the two rows point at two stored objects under two prefixes.
-  const existingPostId = await findPostIdByFileName(db, md5, board)
-  if (existingPostId !== null) {
-    return { ok: false, error: 'This image already exists', existingPostId }
+  return {
+    ok: true,
+    image: {
+      meta,
+      width,
+      height,
+      ext,
+      animated: (meta.pages ?? 1) > 1,
+      md5: createHash('md5').update(bytes).digest('hex'),
+    },
   }
+}
 
-  // A tag the board doesn't have fails the insert at the bottom of this function, which
-  // by then has cost a full encode and two storage uploads to undo. The same question
-  // asked here, next to the other one this function asks the board, costs one small
-  // select on the way past and turns a mistyped or stale tag into an error before any
-  // pixels are decoded. The insert still checks — this is an early out, not the rule.
-  try {
-    await resolveTagIds(db, metadata.tags)
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Unknown tags' }
-  }
+/** What actually gets stored, once the encoders have argued it out. */
+type EncodedImage = {
+  postBuffer: Buffer
+  postExt: string
+  postWidth: number
+  postHeight: number
+  thumb: Buffer
+}
+
+/**
+ * The expensive half: the thumbnail, the AVIF candidate for the post image, and the PNG
+ * re-deflate that only runs when AVIF lost.
+ *
+ * Neither caller has an opinion about any of it — a collection's image is compressed
+ * exactly as a post's is, because the argument for each of these branches is about the
+ * bytes rather than about what table the row lands in.
+ */
+async function encodeImage(
+  bytes: Buffer,
+  image: InspectedImage
+): Promise<{ ok: true; encoded: EncodedImage } | { ok: false; error: string }> {
+  const { meta, md5, ext, width, height, animated } = image
 
   // Unlike the post image below there is no fallback here — a post with no
   // thumbnail has nothing to show in the grid — so a failure ends the upload with
@@ -284,22 +306,93 @@ export async function createPostFromImage(
       `thumb ${kb(thumbResult.buffer.length)}`
   )
 
-  // The files go in before the row, because the row is what makes them findable: an
-  // object nothing points at is invisible litter, where a row pointing at a missing
-  // object is a broken image on the board.
-  const imagePath = postImagePath(md5, postExt, board)
+  return {
+    ok: true,
+    encoded: { postBuffer, postExt, postWidth, postHeight, thumb: thumbResult.buffer },
+  }
+}
+
+/**
+ * Both objects into the bucket, and back out again if the second one fails.
+ *
+ * The files go in before the row, because the row is what makes them findable: an object
+ * nothing points at is invisible litter, where a row pointing at a missing object is a
+ * broken image on the board.
+ */
+async function storeImage(
+  store: ObjectStore,
+  encoded: EncodedImage,
+  imagePath: string,
+  thumbPath: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await store.put(imagePath, postBuffer, CONTENT_TYPES[postExt])
+    await store.put(imagePath, encoded.postBuffer, CONTENT_TYPES[encoded.postExt])
   } catch (error) {
     return { ok: false, error: `Storage upload failed: ${message(error)}` }
   }
 
   try {
-    await store.put(thumbnailPath(md5, board), thumbResult.buffer, 'image/avif')
+    await store.put(thumbPath, encoded.thumb, 'image/avif')
   } catch (error) {
     await store.remove(imagePath)
     return { ok: false, error: `Thumbnail upload failed: ${message(error)}` }
   }
+
+  return { ok: true }
+}
+
+/**
+ * Creates one post from one image's bytes.
+ *
+ * Two handles, and it builds neither: the database, and somewhere to put the files. They
+ * were one Supabase client that was both — a bucket and a schema behind one key — and
+ * splitting them is what a separate database and a separate bucket made honest. Only the
+ * desktop app holds either, since it is the only thing that writes.
+ *
+ * `board` picks the table the row lands in and the prefix the two objects land under
+ * (`@common/board`). Nothing else about the pipeline moves: the compression, the dedup
+ * hash, the limits and the tag resolution are the same questions on either board. It
+ * defaults to the gallery, so a caller that has never heard of the second board is
+ * unchanged.
+ */
+export async function createPostFromImage(
+  db: DbPool,
+  store: ObjectStore,
+  bytes: Buffer,
+  metadata: PostMetadata,
+  limits: UploadLimits,
+  board: Board = 'post'
+): Promise<UploadResult> {
+  const inspected = await inspectImage(bytes, limits)
+  if (!inspected.ok) return inspected
+  const { md5 } = inspected.image
+
+  // Per board: the same image can be a post on both, which is correct — they are two
+  // boards, and the two rows point at two stored objects under two prefixes.
+  const existingPostId = await findPostIdByFileName(db, md5, board)
+  if (existingPostId !== null) {
+    return { ok: false, error: 'This image already exists', existingPostId }
+  }
+
+  // A tag the board doesn't have fails the insert at the bottom of this function, which
+  // by then has cost a full encode and two storage uploads to undo. The same question
+  // asked here, next to the other one this function asks the board, costs one small
+  // select on the way past and turns a mistyped or stale tag into an error before any
+  // pixels are decoded. The insert still checks — this is an early out, not the rule.
+  try {
+    await resolveTagIds(db, metadata.tags)
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Unknown tags' }
+  }
+
+  const result = await encodeImage(bytes, inspected.image)
+  if (!result.ok) return result
+  const { encoded } = result
+
+  const imagePath = postImagePath(md5, encoded.postExt, board)
+  const thumbPath = thumbnailPath(md5, board)
+  const stored = await storeImage(store, encoded, imagePath, thumbPath)
+  if (!stored.ok) return stored
 
   let postId: number
   try {
@@ -307,10 +400,10 @@ export async function createPostFromImage(
       db,
       {
         file_name: md5,
-        file_ext: postExt,
-        file_size: postBuffer.length,
-        width: postWidth,
-        height: postHeight,
+        file_ext: encoded.postExt,
+        file_size: encoded.postBuffer.length,
+        width: encoded.postWidth,
+        height: encoded.postHeight,
         rating: metadata.rating,
         source_url: metadata.sourceUrl,
         tags: metadata.tags,
@@ -323,7 +416,79 @@ export async function createPostFromImage(
     // what keeps a retry of the same image starting clean rather than uploading over
     // itself.
     await store.remove(imagePath)
-    await store.remove(thumbnailPath(md5, board))
+    await store.remove(thumbPath)
+    return { ok: false, error: `Database insert failed: ${message(error)}` }
+  }
+
+  return { ok: true, postId }
+}
+
+/** The three fields a collection post is made with. No tags, which is the whole
+ *  difference between this and `PostMetadata` and the whole point of the feature. */
+export type CollectionPostMetadata = {
+  collectionId: number
+  rating: Rating
+  sourceUrl: string
+}
+
+/**
+ * The same pipeline, into a collection.
+ *
+ * It shares every expensive part with the function above — `inspectImage`, `encodeImage`,
+ * `storeImage` — because the compression is an argument about bytes and has nothing to do
+ * with where the row lands. What is genuinely different is only what is around it: no tags
+ * to resolve, a different prefix pair, and a dedup check against the whole of
+ * `collection_posts` rather than against one board, since an image lives on exactly one
+ * shelf and the refusal can say which.
+ *
+ * A separate entry point rather than a `board: 'collection'` argument, for the reason
+ * `@common/collections` gives: a collection is not a board, and a parameter that made it
+ * one would have carried a tag list nothing reads through the middle of this file.
+ */
+export async function createCollectionPostFromImage(
+  db: DbPool,
+  store: ObjectStore,
+  bytes: Buffer,
+  metadata: CollectionPostMetadata,
+  limits: UploadLimits
+): Promise<UploadResult> {
+  const inspected = await inspectImage(bytes, limits)
+  if (!inspected.ok) return inspected
+  const { md5 } = inspected.image
+
+  const existing = await findCollectionPostByFileName(db, md5)
+  if (existing !== null) {
+    return {
+      ok: false,
+      error: `This image is already in ${existing.collection_name}`,
+      existingPostId: existing.id,
+    }
+  }
+
+  const result = await encodeImage(bytes, inspected.image)
+  if (!result.ok) return result
+  const { encoded } = result
+
+  const imagePath = collectionImagePath(md5, encoded.postExt)
+  const thumbPath = collectionThumbnailPath(md5)
+  const stored = await storeImage(store, encoded, imagePath, thumbPath)
+  if (!stored.ok) return stored
+
+  let postId: number
+  try {
+    postId = await createCollectionPost(db, {
+      collection_id: metadata.collectionId,
+      file_name: md5,
+      file_ext: encoded.postExt,
+      file_size: encoded.postBuffer.length,
+      width: encoded.postWidth,
+      height: encoded.postHeight,
+      rating: metadata.rating,
+      source_url: metadata.sourceUrl,
+    })
+  } catch (error) {
+    await store.remove(imagePath)
+    await store.remove(thumbPath)
     return { ok: false, error: `Database insert failed: ${message(error)}` }
   }
 

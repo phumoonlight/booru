@@ -4,13 +4,14 @@ import { searchHref } from '@common/search'
 import { BOARD_EMOJI, boardLabel, setBoard, useBoard } from './board-store'
 import { About } from './components/about'
 import { Browse, browseFor, hydrateBrowseCache } from './components/browse'
+import { Collections } from './components/collections'
 import { Settings } from './components/settings'
 import { TagIndex } from './components/tag-index'
 import { UploadForm } from './components/upload-form'
 import type { AppStatus } from '../../shared/api'
 
 /**
- * Five screens, one of them always mounted. There is no login and no setup step: which
+ * Six screens, one of them always mounted. There is no login and no setup step: which
  * board this build talks to was decided when it was built and compiled in
  * (`main/config.ts`), and the board itself has no accounts any more — this app writes
  * with the service-role key in its own bundle, which is why it is the only thing that
@@ -29,11 +30,20 @@ import type { AppStatus } from '../../shared/api'
  * are working on. It lives in `board-store.ts` rather than in this component's state for
  * the reason Browse keeps its query there — the screens unmount whenever something is in
  * front of them.
+ *
+ * **Collections is the one screen the switch does nothing to.** A collection is not a board
+ * (`@common/collections`): its images carry no tags, are never searched and are in neither
+ * gallery, so there is no mode to be in there and none of its channels takes one. The
+ * switch stays drawn rather than being hidden on that screen — it is a mode the rest of the
+ * window is still in, and a control that vanishes and comes back as you move between
+ * screens is worse than one that is briefly beside the point.
  */
 export function App() {
   const [status, setStatus] = useState<AppStatus | null>(null)
   const board = useBoard()
-  const [view, setView] = useState<'upload' | 'browse' | 'tags' | 'settings' | 'about'>('upload')
+  const [view, setView] = useState<
+    'upload' | 'browse' | 'collections' | 'tags' | 'settings' | 'about'
+  >('upload')
   // A post the queue asked to review after uploading it. Held here because it is the one
   // thing one screen sends another, and cleared by any ordinary navigation — otherwise
   // Browse would reopen that editor the next time it is opened for its own reasons.
@@ -93,6 +103,10 @@ export function App() {
       // remembered query and grid, rather than an update that would leave the other
       // board's rows on screen until the read landed.
       <Browse key={board} board={board} siteUrl={status.siteUrl} initialEdit={reviewing} />
+    ) : view === 'collections' ? (
+      // No `key={board}`: this screen is the same screen whichever board the header is
+      // showing, which is the whole of what a collection is not.
+      <Collections siteUrl={status.siteUrl} />
     ) : view === 'tags' ? (
       // Its posts, on a tag's panel, hands the query to Browse and switches to it —
       // `browseFor` seeds the module-level box that view mounts from, so this is one
@@ -201,6 +215,19 @@ export function App() {
           >
             <span aria-hidden>🔍</span>
             Browse
+          </button>
+          {/* The third gallery, and the one that is not a board. It sits after Browse
+              because it is the same job — putting images somewhere and fixing the ones
+              already there — over a different shelf, and before Tags because nothing in
+              here has a tag on it. */}
+          <button
+            type="button"
+            onClick={go('collections')}
+            title="Sets of images kept off the board"
+            className={navClass(view === 'collections')}
+          >
+            <span aria-hidden>🗂️</span>
+            Collections
           </button>
           {/* Tag rules used to be the item beside this one. They are inside it now: a
               rule is written about a tag, and this is the screen with every tag on it —

@@ -21,7 +21,7 @@ import { startOf } from '@common/search'
  * it a single leftover thumb would stretch across the whole width. Every item caps at the
  * same row height, so a capped row stays uniform, it just stops short of the right edge.
  */
-const ROW = 'flex flex-wrap gap-1 [--row-h:15rem] sm:[--row-h:17.5rem] lg:[--row-h:20rem]'
+export const ROW = 'flex flex-wrap gap-1 [--row-h:15rem] sm:[--row-h:17.5rem] lg:[--row-h:20rem]'
 const MIN_ROW = 0.75
 // 1.2 × 20rem is 384px on desktop — exactly THUMB_MAX_HEIGHT, so a row never upscales
 // past the pixels the thumbnail actually has. The two are one decision: raising either
@@ -33,7 +33,10 @@ const MAX_ROW = 1.2
     would reserve width the image can't fill. */
 const MAX_RATIO = 2
 
-function itemStyle(width: number, height: number): CSSProperties {
+/** Exported because the collections grid lays out the same thumbnails the same way. The
+ *  band, the cap and `MAX_RATIO` are one decision tied to `THUMB_MAX_HEIGHT`, and a second
+ *  copy of it is how the two galleries would drift apart by a re-encode nobody noticed. */
+export function itemStyle(width: number, height: number): CSSProperties {
   const ratio = Math.min(width / Math.max(height, 1), MAX_RATIO)
   return {
     flexGrow: ratio * 100,

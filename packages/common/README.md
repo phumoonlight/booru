@@ -26,9 +26,10 @@ where the file is.
 | | |
 |---|---|
 | `board.ts` | the two boards — post table, link table, count column, object prefixes and website path, spelled nowhere else |
+| `collections.ts` | the shelves, which are deliberately **not** a third board: two table names, two object prefixes, three hrefs, and what counts as a name |
 | `search.ts` | the `?query=` grammar — `splitQuery`, `searchHref`, the rating metatags, `RESTRICTED_RATINGS` |
 | `tags.ts` | tag parsing and the charset, `categoryColor`, `markColor` |
-| `storage.ts` | the md5-derived image paths, per board, and the `ObjectStore` the upload writes through |
+| `storage.ts` | the md5-derived image paths — per board, plus the collections' pair — and the `ObjectStore` the upload writes through |
 | `db.ts` | `Db`, the handle every function here takes, and `DbPool` for the two that open a transaction |
 | `data/posts.ts` | the `Post` row shape, `postColumns`, and the single-post reads |
 | `data/search.ts` | `searchPosts` — the whole query, tag resolution and cursor |
@@ -37,9 +38,10 @@ where the file is.
 | `data/rules.ts` | the tag rules — implications and recommendations, ids on the table and names above it |
 | `data/form-sections.ts` | the rows the desktop tag form draws, their order, and their dependencies |
 | `data/counters.ts` | `syncTagPostCounts` — recompute, never increment |
+| `data/collections.ts` | the shelves and what is on them: no tags, no search, a collection id and a cursor |
 | `imgcmp/for-post.ts` | lossy AVIF (q50) for the stored image, bounded to `POST_MAX_DIMENSION` |
 | `imgcmp/for-thumbnail.ts` | lossy AVIF thumbnail, 384px tall |
-| `upload/pipeline.ts` | `createPostFromImage` — one image in, one post out |
+| `upload/pipeline.ts` | `createPostFromImage` and `createCollectionPostFromImage` — one image in, one row out, over one shared encode |
 
 ## The rules that keep it shareable
 

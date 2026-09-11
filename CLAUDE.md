@@ -104,7 +104,17 @@ structure further down.
    and interpolates them with `db(...)`, as identifiers. That is what makes the two boards
    impossible to mix by accident, which is the whole reason `generative_posts` is a table
    rather than a `generated boolean`. A board that arrives from the browser — an action's
-   argument — is checked with `isBoard` before it names anything.
+   argument — is checked with `isBoard` before it names anything. The collections' two
+   tables are the same rule one section over: `COLLECTION_TABLES` in `@common/collections`,
+   and nowhere else.
+14. **A collection is not a board, and never becomes one.** No tags, no search, no entry in
+   `BOARD` — see [Collections](#collections). The moment something in
+   `@common/data/collections.ts` takes a `Board`, or `BOARDS` grows a third member, the
+   thing that stops a shelved image turning up in a tag search has gone.
+15. **A collection cannot be deleted while it holds anything.** `collection_posts.collection_id`
+   has no `on delete cascade`, which is the enforcement; `deleteCollection` counts first only
+   so the refusal can say how many are in the way. It is the only container this project has,
+   and deleting one by accident would take a set of images that exist nowhere else.
 11. **Re-measure with `npm run bench:avif` before changing a constant in
    `@common/imgcmp/`.** Those numbers were measured, not chosen.
 12. **`select count(*)` needs `::int`.** postgres.js hands a `bigint` back as a *string*,
@@ -120,7 +130,8 @@ structure further down.
 - **Reads:** RSC → `src/lib/data/*` → `@common/data/*` → the pool. The one read that
   isn't an RSC is `loadMorePosts` in `lib/actions/search.ts` — the feed's next chunk, an
   action rather than a route handler so the data layer stays the only query surface.
-- **The website's only write is `recordPostView`**, because a visitor's view still counts.
+- **The website's only write is the view counter** — `recordPostView` for a post,
+  `recordCollectionPostView` for a shelved image — because a visitor's view still counts.
   It is `update <the board's table> set view_count = view_count + 1` — atomic again, where PostgREST
   forced a three-attempt compare-and-swap that dropped the view under contention.
 - **One pool, `src/lib/db.ts`**, `server-only`, connecting as `booru_web`. It was two
@@ -128,6 +139,10 @@ structure further down.
   in the project, held solely to count views. A column grant says that better.
 - **Query logic lives in `lib/data/` and `@common/data/`**, never in actions or pages, so
   a second caller can reuse it — which is how the desktop app browses the board.
+- **Collections are the exception to the board pattern**, on both sides: `lib/data/collections.ts`
+  over `@common/data/collections.ts`, taking a collection id and a cursor where a listing
+  takes a `Board` and a query. `loadMoreCollectionPosts` is the second read that isn't an
+  RSC, and it is an action for the same reason the first one is.
 - **Pure helpers** (`@common/search`, `@common/tags`, `@common/storage`, the web's
   `config.ts` and `lib/images.ts`) import nothing server-side, so client components can
   share them.
@@ -154,10 +169,11 @@ The post write path, the search, the counters, both encoders, and the pure helpe
 
 ## The website (`src/`)
 
-- **Ten routes**, and none of them writes: `/`, `/posts`, `/posts/[id]`, `/ai-posts`,
-  `/ai-posts/[id]`, `/tags`, `/tags/[id]`, `/settings`, `robots.txt`, `sitemap.xml`. There
-  is no `/upload`, `/login`, `/account`, `/tags/manage` or `src/proxy.ts` (Next 16's
-  `middleware.ts`) — see [History](#history).
+- **Thirteen routes**, and the only thing any of them writes is a view counter: `/`,
+  `/posts`, `/posts/[id]`, `/ai-posts`, `/ai-posts/[id]`, `/collections`,
+  `/collections/[id]`, `/collections/[id]/[postId]`, `/tags`, `/tags/[id]`, `/settings`,
+  `robots.txt`, `sitemap.xml`. There is no `/upload`, `/login`, `/account`, `/tags/manage`
+  or `src/proxy.ts` (Next 16's `middleware.ts`) — see [History](#history).
 - **The whole site closes behind one row.** `site_settings.maintenance`, flipped from the
   desktop app's settings screen, and read in `src/app/(public)/layout.tsx` — a layout
   rather than a proxy, since the site has none and the pool is already here. Closed, every
@@ -240,6 +256,62 @@ The post write path, the search, the counters, both encoders, and the pure helpe
   which broke invariant 4 quietly and made the desktop app set a `NEXT_PUBLIC_*` variable
   on itself at startup to satisfy it.
 
+## Collections
+
+A third gallery that is **not a board**. `/collections` is a shelf of named sets — a card
+per set with its name and a cover, like a photo app's albums — and each one opens onto its
+own images, newest first, with no search box anywhere in the section.
+
+- **What a collection post is: a post minus its tags.** Same md5 name, same two stored
+  objects, same two rating tiers, same view counter, same encoders. What it has instead is
+  a `collection_id`, and what it has not is any row in any link table. It is for the
+  one-off and the niche piece — the thing that would only dilute a tag if it were given
+  one. **It never appears in either gallery**, which is the point and is free: the listings
+  read `posts` and `generative_posts`, and these rows are in neither.
+- **It is not a `Board`, and the reason is invariant 14.** `@common/board` is three table
+  names per board and two of them are about tags; a third entry would have carried a
+  `postTags` and a `tagCount` that every read, counter and facet then had to test for, and
+  a `path` the search grammar could address. So the vocabulary of this section is
+  `@common/collections` — the two table names, the two object prefixes, the three hrefs and
+  `readCollectionName` — and its queries are `@common/data/collections`, which take a
+  collection id and a cursor.
+- **An image lives on exactly one shelf**, which `collection_posts.file_name unique` says
+  as well as the feature does: one name is one pair of stored objects, so two rows would be
+  two rows that break each other on delete. Staging says so before anything is uploaded,
+  and names the shelf — "already in Ukiyo-e studies" is a refusal somebody can act on.
+- **The cover is derived, not stored**: the newest image on the shelf. A `cover_post_id`
+  would be a circular foreign key, a null to handle on every delete and a picker nobody
+  asked for, to answer a question the newest image already answers.
+- **The list is ordered by `updated_at`**, touched by a rename and by every image added or
+  removed — in TypeScript (`touchCollection`), inside the same transaction as the change,
+  because this schema has no triggers. Correcting one image's rating does *not* touch it:
+  that ordering answers "what has happened to this shelf", and a rating is a fact about one
+  image.
+- **A shelf cannot be deleted while it holds anything** — invariant 15.
+- **The website hides an empty shelf and the desktop app does not** (`hideEmpty`). A card
+  with a name, no picture and a count of zero is an invitation to click on nothing; a shelf
+  you have just named is exactly the row you are looking for in the app. The NSFW ceiling
+  reaches the count and the cover too, so a shelf of adult work is absent rather than blank
+  with the setting off.
+- **Indexed as shelves.** `/collections` and each `/collections/[id]` are in
+  `sitemap.xml`; an individual image is `noindex, follow`. A shelf is a fixed listing with
+  a name; the images inside it have no words on them and could be a great many.
+- **The desktop screen is 🗂️ Collections, and the board switch does nothing to it** —
+  there is no mode to be in. Adding images there is a **batch with one rating and one
+  source**, which is not the upload queue coming back: the queue died because tagging is per
+  image however the images are stacked, and here there is nothing per image to type. Both
+  fields are what images arriving together usually share — they are the four in one post —
+  and the source box survives the upload rather than being cleared with the staged files,
+  since the next drop is very often the next post by the same artist. Correcting either on
+  one image afterwards is a click on its own panel.
+- **An image can be moved to another shelf, and no bytes move.** The flat
+  `collections/posts/<md5>` prefix is what buys that: where an image is shelved was never
+  part of where its bytes live, so a move is one column of one row. It touches **both**
+  shelves' `updated_at` — one lost an image and one gained one — and it is its own channel
+  rather than a field on the save, because it is a change to two collections rather than to
+  one image. The control is a menu of every shelf on the image's own panel, not a drag: the
+  destination is usually a collection that is not on screen.
+
 ## The desktop app (`packages/desktop`)
 
 The upload page as a desktop app, because compression is CPU work a free serverless tier
@@ -311,7 +383,7 @@ only wall time. Both are process-wide, applied before the first encode and re-ap
 save. A POSIX host won't let a niced-down process raise itself back, so low → normal
 takes a restart; Windows, which this is packaged for, will.
 
-**Views** — `App.tsx` holds `'upload' | 'browse' | 'tags' | 'settings' | 'about'`, with
+**Views** — `App.tsx` holds `'upload' | 'browse' | 'collections' | 'tags' | 'settings' | 'about'`, with
 settings forced open only for a bundle built with no project. Nothing sits
 behind a session, because there is none.
 
@@ -690,7 +762,7 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   file is the part that can be reviewed before that happens.
 - **One baseline**, `db/migrations/0001_baseline.sql`: every table in foreign-key order
   and its indexes, plus `0002_site_settings.sql`, `0003_sections_off_categories.sql`,
-  `0004_section_sides.sql` and `0005_generative_posts.sql`. Schema changes from here are **always** a new numbered file, never a
+  `0004_section_sides.sql`, `0005_generative_posts.sql` and `0006_collections.sql`. Schema changes from here are **always** a new numbered file, never a
   dashboard edit and never an edit to the baseline once pushed anywhere real.
   `scripts/migrate.mjs` applies each inside a transaction and records it in `_migrations`.
 - **`db/grants.sql` is not a migration** and re-runs on every `db:push`. Who may do what
@@ -772,8 +844,9 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
 
 - **One R2 bucket, two prefixes per board** — `posts/<name>.<ext>` and
   `thumbs/<name>.avif` for the gallery, `generative/posts/` and `generative/thumbs/` for
-  the AI board (`@common/board` picks the pair). Paths derive from `file_name` (the md5 of
-  the uploaded bytes), never stored. It was two
+  the AI board (`@common/board` picks the pair), and `collections/posts/` and
+  `collections/thumbs/` for the shelves (`@common/collections`, which is not a board).
+  Paths derive from `file_name` (the md5 of the uploaded bytes), never stored. It was two
   buckets, which is two public hostnames for two halves of the same thing; a prefix costs
   nothing. Objects are written with `Cache-Control: immutable` for a year, which is free
   correctness given the name *is* the content hash.

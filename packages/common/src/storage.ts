@@ -19,6 +19,7 @@
  */
 
 import { BOARD, type Board } from '@common/board'
+import { COLLECTION_POST_PREFIX, COLLECTION_THUMB_PREFIX } from '@common/collections'
 
 /**
  * **Two prefixes per board, and the board picks them** (`@common/board`). The gallery
@@ -37,6 +38,25 @@ export function postImagePath(fileName: string, fileExt: string, board: Board = 
 
 export function thumbnailPath(fileName: string, board: Board = 'post'): string {
   return `${BOARD[board].thumbPrefix}/${fileName}.avif`
+}
+
+/**
+ * The same two paths for a collection's images — `collections/posts/<name>.<ext>` and
+ * `collections/thumbs/<name>.avif`.
+ *
+ * Their own pair of functions rather than a third `Board`, for the reason
+ * `@common/collections` sets out: a collection post has no tags and no listing, so the
+ * lookup a board is would have had two null columns in it. What it does share is
+ * everything below this line — the name is still the md5 of the uploaded bytes, the
+ * thumbnail is still the same 384px AVIF, and the bucket is the same bucket under one more
+ * prefix.
+ */
+export function collectionImagePath(fileName: string, fileExt: string): string {
+  return `${COLLECTION_POST_PREFIX}/${fileName}.${fileExt}`
+}
+
+export function collectionThumbnailPath(fileName: string): string {
+  return `${COLLECTION_THUMB_PREFIX}/${fileName}.avif`
 }
 
 /** The public URL of a stored object. `base` is the bucket's public origin, with no

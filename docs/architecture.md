@@ -31,7 +31,7 @@ React — Electron's main process compiles it. See
 | Language | TypeScript (strict) | React 19 |
 | Styling | Tailwind CSS v4 | Mobile-first, dark theme only, no component library — plain utilities against the CSS variables in `globals.css` |
 | Database | Neon Postgres, via `postgres` (porsager) | One baseline in `db/migrations/`, applied by `scripts/migrate.mjs`. No RLS: three roles and their grants |
-| File storage | Cloudflare R2, via `@aws-sdk/client-s3` | One bucket, `posts/` and `thumbs/` prefixes, public-read through a custom domain |
+| File storage | Cloudflare R2, via `@aws-sdk/client-s3` | One bucket; `posts/` and `thumbs/`, the AI board's `generative/` pair, and `collections/` — public-read through a custom domain |
 | Auth | none | Removed. Possession of a desktop build is the write authorization |
 | Image processing | `sharp` | Both AVIF encoders in `@common/imgcmp/`. Only the desktop app runs them now; the root `tsc` still compiles them |
 | Desktop | Electron 44 + electron-vite | Packaged for Windows with electron-builder |
@@ -49,18 +49,19 @@ booru/
 ├── packages/
 │   ├── common/src/            # @common/* — one definition of everything shared
 │   │   ├── search.ts          # the ?query= grammar, ratings, searchHref
+│   │   ├── board.ts collections.ts # the two boards' names; the shelves', which are not one
 │   │   ├── tags.ts storage.ts # tag charset and colours; md5-derived paths
-│   │   ├── data/              # posts, search, shared (writes), tags, counters
+│   │   ├── data/              # posts, search, shared (writes), tags, counters, collections
 │   │   ├── imgcmp/            # for-post.ts, for-thumbnail.ts
 │   │   └── upload/pipeline.ts # createPostFromImage — one image in, one post out
 │   └── desktop/src/           # main / preload / renderer, plus shared/api.ts
 └── src/
-    ├── app/(public)/          # page.tsx (landing), posts/, tags/
+    ├── app/(public)/          # page.tsx (landing), posts/, ai-posts/, collections/, tags/
     ├── components/            # post-feed, post-card, tag-list, rating-list, search-bar…
     └── lib/
         ├── db.ts images.ts   # the one pool (booru_web); image URLs off NEXT_PUBLIC_CDN_URL
         ├── data/              # @common/data bound to that pool
-        └── actions/           # search.ts (the feed's next chunk), posts.ts (views)
+        └── actions/           # search.ts (the feed's next chunk), posts.ts and collections.ts (views)
 ```
 
 No `(auth)/`, no `upload/`, no `tags/manage/`, no `proxy.ts`. All four left when the
@@ -72,14 +73,20 @@ board dropped its accounts; git has them.
   database from a page or component. The one read that isn't an RSC is `loadMorePosts`
   in `lib/actions/search.ts` — the feed's next chunk, an action rather than a route
   handler so the data layer stays the only query surface.
-- **Writes:** there is one, `recordPostView`. A mutation being added to `src/` is almost
-  certainly being added to the wrong program — and `booru_web` holds `update (view_count)`
-  on the two post tables and nothing else anywhere, so the database refuses it rather than
-  a reviewer having to.
+- **Writes:** there is one, and it is the view counter — `recordPostView` for a post,
+  `recordCollectionPostView` for a shelved image. Any other mutation being added to `src/`
+  is almost certainly being added to the wrong program, and `booru_web` holds `update
+  (view_count)` on those three tables and nothing else anywhere, so the database refuses it
+  rather than a reviewer having to.
 - **Two boards, one set of functions.** `/posts` and `/ai-posts` read `posts` and
   `generative_posts`; every function in `@common/data/*` takes a `Board` and gets its table
   names from `@common/board`, defaulting to the gallery. The website's pages are the same
   pair of components (`PostListing`, `PostDetail`) rendered with a different board.
+- **Collections are the exception to the board pattern.** `/collections` reads
+  `collections` and `collection_posts`, which have no tags, no search and no `Board`: the
+  reads are `@common/data/collections` and take a collection id and a cursor. See
+  [database-schema.md](database-schema.md#collections-collection_posts) for why that is two
+  tables rather than a third board.
 - **One pool, not two clients.** It was `anon.ts` for reads and `admin.ts` carrying a
   service-role key just to count views; a column grant says the same thing and says it
   where it is enforced.
@@ -102,6 +109,11 @@ board dropped its accounts; git has them.
    already: no write path coins one.
 5. `syncTagPostCounts()` recomputes that board's count column for exactly the tags that
    moved.
+
+`createCollectionPostFromImage` is steps 1–4 into `collections/` with step 5 and the tags
+taken out. Steps 2 and 3 are literally the same code — `inspectImage`, `encodeImage`,
+`storeImage` in `@common/upload/pipeline.ts` — because the compression is an argument about
+bytes and has nothing to do with what table the row lands in.
 
 Compression is why this is a desktop app at all: it is seconds of CPU per file, which a
 free serverless tier bills by the second and kills at ten.
@@ -145,6 +157,9 @@ free serverless tier bills by the second and kills at ten.
   the board's name, `NEXT_PUBLIC_SITE_NAME`, which defaults to `Booru`.
 - Search-result URLs are `noindex, follow` and disallowed in `robots.txt` — the
   tag-combination space is unbounded. Post pages and `/tags` carry the indexable content.
+- Collections are indexed **as shelves**: `/collections` and each `/collections/[id]` are in
+  the sitemap, and an individual image is `noindex, follow`. A shelf is a fixed listing with
+  a name; the images inside it have no words on them and could be a great many.
 
 ## Mobile-first layout
 
@@ -154,7 +169,7 @@ The Danbooru reference is desktop-shaped; translate it like this:
 |---|---|---|
 | Fixed left sidebar (search + tag list) | Sticky top search bar; tag list in a slide-up drawer ("Tags" button) | Left sidebar returns, ~240px |
 | Dense thumbnail grid | 2–3 column grid, larger tap targets | 5–6 columns |
-| Top nav bar with many links | The sticky bar holds two things: Pubooru · Tags | Same bar, more room |
+| Top nav bar with many links | The sticky bar holds the wordmark and three or four items: 🤖 AI posts (behind a cookie) · 🗂️ Collections · 🏷️ Tags · ⚙️ Settings | Same bar, more room |
 | Pagination row | A feed — older chunks append as you reach the bottom, `start:<id>` the only cursor | Same |
 | Post page: image + sidebar metadata | Image full-width, tags/metadata below | Two-column |
 

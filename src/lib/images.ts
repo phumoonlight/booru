@@ -1,5 +1,11 @@
 import type { Board } from '@common/board'
-import { imageUrl, postImagePath, thumbnailPath } from '@common/storage'
+import {
+  collectionImagePath,
+  collectionThumbnailPath,
+  imageUrl,
+  postImagePath,
+  thumbnailPath,
+} from '@common/storage'
 import { cdnBase } from '@/config'
 
 /**
@@ -23,4 +29,13 @@ export function postImageUrl(fileName: string, fileExt: string, board: Board = '
 
 export function thumbnailUrl(fileName: string, board: Board = 'post'): string {
   return imageUrl(cdnBase(), thumbnailPath(fileName, board))
+}
+
+/** The same two, for a collection's images — one more prefix in the same bucket. */
+export function collectionImageUrl(fileName: string, fileExt: string): string {
+  return imageUrl(cdnBase(), collectionImagePath(fileName, fileExt))
+}
+
+export function collectionThumbUrl(fileName: string): string {
+  return imageUrl(cdnBase(), collectionThumbnailPath(fileName))
 }

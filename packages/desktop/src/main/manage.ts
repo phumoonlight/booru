@@ -127,8 +127,7 @@ export async function removePost(id: number, board: Board = 'post'): Promise<Man
 
   // The cached copy on disk, which is otherwise the one thing that would still draw this
   // post — the name is the md5, so nothing will ever ask for it again either.
-  thumbnails.delete(post.file_name)
-  dropThumb(post.file_name)
+  forgetThumbnail(post.file_name)
 
   clearTagCache()
   return { ok: true }
@@ -155,9 +154,17 @@ export async function removePost(id: number, board: Board = 'post'): Promise<Man
  */
 const thumbnails = new Map<string, string>()
 
-/** Memory, then `app-cache/thumbs` (`main/thumb-cache.ts`), then the board — each step
- *  filling in the ones before it, and only the last one costing anything. */
-export async function thumbnailDataUrl(fileName: string, board: Board = 'post'): Promise<string> {
+/**
+ * Memory, then `app-cache/thumbs` (`main/thumb-cache.ts`), then the network — each step
+ * filling in the ones before it, and only the last one costing anything.
+ *
+ * `path` is the object's path under the bucket, which is the only thing that differs
+ * between the two boards and the collections: the *name* is the md5 of the uploaded bytes
+ * either way, so the same image posted anywhere has the same thumbnail and the cache is
+ * rightly shared. Taking the path rather than a board is what lets the collections handler
+ * use this without `Board` growing a third member it is not.
+ */
+export async function cachedThumbnail(fileName: string, path: string): Promise<string> {
   const cached = thumbnails.get(fileName)
   if (cached) return cached
 
@@ -167,7 +174,7 @@ export async function thumbnailDataUrl(fileName: string, board: Board = 'post'):
     return stored
   }
 
-  const url = boardImageUrl(thumbnailPath(fileName, board))
+  const url = boardImageUrl(path)
   if (!url) return ''
 
   try {
@@ -182,4 +189,16 @@ export async function thumbnailDataUrl(fileName: string, board: Board = 'post'):
   } catch {
     return ''
   }
+}
+
+/** A post's thumbnail, on either board. */
+export async function thumbnailDataUrl(fileName: string, board: Board = 'post'): Promise<string> {
+  return cachedThumbnail(fileName, thumbnailPath(fileName, board))
+}
+
+/** A file that has just stopped existing anywhere — both caches, memory and disk. Used by
+ *  the post delete above and by the collection one, which has the same problem. */
+export function forgetThumbnail(fileName: string): void {
+  thumbnails.delete(fileName)
+  dropThumb(fileName)
 }

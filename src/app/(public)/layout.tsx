@@ -9,7 +9,8 @@ import { siteState } from '@/lib/data/site'
  * This one sits here rather than in a proxy (Next 16's `middleware.ts`) because the site
  * has none and adding one would put a database read on the edge runtime, in front of
  * every asset, to answer a question the page below is about to ask anyway. A layout is
- * the cheapest thing that wraps all six routes and it renders where the pool already is.
+ * the cheapest thing that wraps all eleven routes in the group and it renders where the pool
+ * already is.
  *
  * **But a layout only chooses what is drawn.** Swapping `children` for the notice does
  * not stop the route segment underneath from running — the router renders segments

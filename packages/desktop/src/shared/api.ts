@@ -5,6 +5,7 @@ import type { Post, PostPage } from '@common/data/posts'
 import type { UploadResult } from '@common/upload/pipeline'
 import type { FormSectionEdit, FormSections } from '@common/data/form-sections'
 import type { RuleKind, TagRules } from '@common/data/rules'
+import type { Collection, CollectionPostPage } from '@common/data/collections'
 import type { TagCatalogs } from './catalogs'
 import type { SiteState } from '@common/data/site'
 
@@ -109,6 +110,18 @@ export type AppStatus = {
 export type BrowseCacheFile = { at: number; query: string; posts: Post[]; hasMore: boolean }
 
 /**
+ * What a batch of files is being staged *for*, which is the only thing the duplicate check
+ * needs to know. The two boards ask "is this already a post here"; a collection asks "is
+ * this already on any shelf", because `collection_posts.file_name` is unique across the
+ * whole table.
+ *
+ * A union with `Board` rather than a third member of `Board` itself: a collection is not a
+ * board (`@common/collections`), and the only place the difference vanishes is here, where
+ * the question happens to be the same shape.
+ */
+export type StageTarget = Board | 'collection'
+
+/**
  * A file the main process has looked at: within the limits, decodable, and already
  * carrying the small preview the queue paints. `main/staging.ts` produces these.
  */
@@ -132,6 +145,9 @@ export type StageOutcome =
         /** The post already holding these bytes, or null — including when the board could
          *  not be reached, since that is not the same as knowing it is new. */
         duplicateOf: number | null
+        /** For a collection target, the shelf that post is on. Null everywhere else — a
+         *  post is identified by its number, and a shelved image by where it is shelved. */
+        duplicateIn: string | null
       })
   | { ok: false; path: string; name: string; error: string }
 
@@ -178,6 +194,10 @@ export type ApplyTagOutcome =
 /** A rename and a create both answer with the name as it was actually stored. */
 export type NamedOutcome = { ok: true; name: string } | { ok: false; error: string }
 
+/** The same, plus the id — a new shelf is opened straight after it is named, so the
+ *  screen would otherwise have to re-read the list to find out what it just made. */
+export type CollectionNamed = { ok: true; id: number; name: string } | { ok: false; error: string }
+
 export type PostAppApi = {
   getStatus: () => Promise<AppStatus>
   /** Writes and applies the compression preferences, answering with what was stored. */
@@ -185,10 +205,11 @@ export type PostAppApi = {
   /** `remember` writes the credentials to the save file; false wipes what was there. */
   /** Opens the OS picker. Returns the paths chosen, empty if cancelled. */
   chooseFiles: () => Promise<string[]>
-  /** `board` because staging asks "is this already up?", which is a per-board question. */
-  stageFiles: (paths: string[], board?: Board) => Promise<StageOutcome[]>
+  /** `target` because staging asks "is this already up?", and where that is asked decides
+   *  the answer — see `StageTarget`. */
+  stageFiles: (paths: string[], target?: StageTarget) => Promise<StageOutcome[]>
   /** Downloads images dragged in from a browser, then stages them like picked files. */
-  fetchImages: (urls: string[], board?: Board) => Promise<StageOutcome[]>
+  fetchImages: (urls: string[], target?: StageTarget) => Promise<StageOutcome[]>
   /**
    * A screen-sized version of one staged file, for the viewer a clicked row opens. Made
    * on request rather than kept in `StagedFile`, and '' if it couldn't be drawn.
@@ -312,6 +333,44 @@ export type PostAppApi = {
     maintenance: boolean
     message: string
   }) => Promise<{ ok: true; state: SiteState } | { ok: false; error: string }>
+  // ── Collections ──────────────────────────────────────────────────────────────
+  // A separate shelf of images with no tags on them, so none of these takes a `Board`:
+  // a collection is not one (`@common/collections`), and the switch in the header does
+  // nothing to this screen.
+
+  /** Every shelf, most recently touched first — including empty ones, unlike the website. */
+  listCollections: () => Promise<Collection[]>
+  /** Names a new shelf. A duplicate name is the one failure worth wording. */
+  createCollection: (name: string) => Promise<CollectionNamed>
+  renameCollection: (id: number, name: string) => Promise<NamedOutcome>
+  /** Refused while the shelf still holds anything — the whole rule of the feature. */
+  deleteCollection: (id: number) => Promise<Outcome>
+  /** One shelf's images, newest first. `after` is the cursor; there is no query. */
+  listCollectionPosts: (options: {
+    collectionId: number
+    after?: number
+    perPage?: number
+  }) => Promise<CollectionPostPage>
+  /** One image onto one shelf. No tags, which is why this is not `uploadPost`. */
+  uploadToCollection: (request: {
+    collectionId: number
+    path: string
+    rating: Rating
+    sourceUrl: string
+  }) => Promise<UploadResult>
+  /** A collection image's rating and source — the whole of what there is to edit in place. */
+  saveCollectionPost: (request: {
+    id: number
+    rating: Rating
+    sourceUrl: string
+  }) => Promise<Outcome>
+  /** Onto another shelf. Its own channel rather than a field on `saveCollectionPost`,
+   *  because it is a change to two collections rather than to one image. */
+  moveCollectionPost: (id: number, collectionId: number) => Promise<Outcome>
+  /** Removes the row and both of its stored images. */
+  deleteCollectionPost: (id: number) => Promise<Outcome>
+  collectionThumbnail: (fileName: string) => Promise<string>
+
   exportSettings: () => Promise<TransferResult>
   importSettings: () => Promise<TransferResult>
   /** Reveals `save.json` — preferences and tag rules — in the OS file manager. */
@@ -319,3 +378,4 @@ export type PostAppApi = {
 }
 
 export type { UploadResult } from '@common/upload/pipeline'
+export type { Collection, CollectionPost } from '@common/data/collections'

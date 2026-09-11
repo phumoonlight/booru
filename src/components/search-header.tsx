@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { SearchBar } from '@/components/search-bar'
 import { NavProgress } from '@/components/nav-progress'
 import { BOARD, type Board } from '@common/board'
+import { collectionsHref } from '@common/collections'
 import { isGenerativeEnabled } from '@/lib/generative-server'
 import { SITE_NAME } from '@/config'
 
@@ -11,7 +12,7 @@ import { SITE_NAME } from '@/config'
  * since the bottom tab bar was dropped, the site's only navigation. Rendered per page
  * rather than in the layout because only pages can read searchParams, and the bar has
  * to reflect the active query.
- * Two links, and neither of them is an account: the site has no login, because it has
+ * None of the links is an account: the site has no login, because it has
  * nothing a visitor could do with one. Uploading, editing, deleting and the tag
  * vocabulary all live in the desktop app (`packages/desktop`), which writes with a key
  * compiled into its own bundle. What is left here is a gallery anyone can read.
@@ -31,6 +32,7 @@ export async function SearchHeader({
   query = '',
   showSearch = true,
   board = 'post',
+  collections = false,
   menu,
 }: {
   query?: string
@@ -38,6 +40,13 @@ export async function SearchHeader({
   /** Which board this page belongs to: where the wordmark goes back to, where the search
       box submits, and which nav item is drawn as the one you are already on. */
   board?: Board
+  /**
+   * True on the three collection routes. Not a `Board`, because a collection is not one
+   * (`@common/collections`) — it is a section of the site with its own nav item, and this
+   * is the one thing the header needs to know about it: which item to mark as the page you
+   * are already on.
+   */
+  collections?: boolean
   /**
    * A control at the far left, ahead of the wordmark — the listing's tag drawer, and
    * nothing else so far. A slot rather than the drawer itself, because this file is a
@@ -85,6 +94,21 @@ export async function SearchHeader({
               <NavProgress />
             </Link>
           )}
+          {/* 🗂️ Collections, always drawn. Unlike 🤖 AI posts it is behind no cookie:
+              what is in there is not a tier or a kind of post a visitor might want kept
+              off their screen, it is a section of the site whose contents are simply not
+              in either gallery — and a section nothing links to is a section nobody finds.
+              It sits after the galleries and before Tags, which describes them. */}
+          <Link
+            href={collectionsHref()}
+            aria-current={collections ? 'page' : undefined}
+            className={`text-sm hover:text-foreground ${
+              collections ? 'text-foreground' : 'text-muted'
+            }`}
+          >
+            🗂️ Collections
+            <NavProgress />
+          </Link>
           <Link href="/tags" className="text-sm text-muted hover:text-foreground">
             🏷️ Tags
             <NavProgress />
@@ -117,10 +141,12 @@ export function SearchHeaderSkeleton() {
           <div className="pointer-fine:size-8 size-11 animate-pulse rounded-lg bg-surface" />
           <div className="h-7 w-32 animate-pulse rounded bg-surface sm:h-8" />
         </div>
-        {/* Two nav items, not three: 🤖 AI posts is behind a cookie the skeleton cannot
-            read, and reserving a slot for something usually absent leaves a gap on most
-            visits where the point of this file is that nothing moves. */}
+        {/* The three items that are always there — 🗂️ Collections, 🏷️ Tags, ⚙️ Settings.
+            🤖 AI posts is behind a cookie the skeleton cannot read, and reserving a slot
+            for something usually absent leaves a gap on most visits where the point of
+            this file is that nothing moves. */}
         <div className="flex items-center gap-3">
+          <div className="h-5 w-24 animate-pulse rounded bg-surface" />
           <div className="h-5 w-14 animate-pulse rounded bg-surface" />
           <div className="h-5 w-20 animate-pulse rounded bg-surface" />
         </div>

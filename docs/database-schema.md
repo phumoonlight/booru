@@ -12,6 +12,8 @@ posts            >─── post_tags            ───< tags ───< tag_
 generative_posts >─── generative_post_tags ───< tags
 
 tags >─── tag_form_sections ───< tag_form_section_deps >─── tags
+
+collections ───< collection_posts        (no tags, no link table)
 ```
 
 `tags.form_section_id` points at a section (`on delete set null`); a section's dependencies
@@ -23,7 +25,11 @@ own count column on it. A `generated boolean` on `posts` would have been the sma
 migration and could not have kept the two apart by default: every listing, walk, sitemap
 and counter would have had to remember the flag. See `generative_posts` below.
 
-Nine tables, no functions, no triggers. Eight describe what is on the board; the ninth,
+**Collections are the other shape.** `collections` and `collection_posts` touch `tags` not
+at all: an image on a shelf carries none, is never searched, belongs to exactly one shelf
+and is in neither gallery. That is why they are not a third board — see `collections` below.
+
+Eleven tables, no functions, no triggers. Ten describe what is on the board; the eleventh,
 `site_settings`, is a name and a string per setting and describes what the *website* is
 doing — today the maintenance switch and its notice, written by the desktop app and read on
 every visit that isn't answered from the site's ten-minute hold. Adding a setting to it is
@@ -41,6 +47,7 @@ so a form row is not a division of a category, and
 is in is a fact about the row rather than the parity of its position.
 `db/migrations/0005_generative_posts.sql` adds the second board — `generative_posts`,
 `generative_post_tags` and `tags.generative_post_count`.
+`db/migrations/0006_collections.sql` adds `collections` and `collection_posts`.
 
 `db/migrations/0001_baseline.sql` is the whole schema in foreign-key order — `posts` →
 `tag_form_sections` → `tags` → `tag_form_section_deps` → `post_tags` → `tag_rules` — ending
@@ -392,6 +399,78 @@ reads is a site that has forgotten what it was doing.
 
 ---
 
+## `collections`, `collection_posts`
+
+`db/migrations/0006_collections.sql`
+
+Named sets of images that are **not posts**: no tags, no search, each image on exactly one
+shelf, and none of them in either gallery. They exist because the board is a tag vocabulary
+and a one-off — the niche piece nobody would file under a tag — dilutes every tag it is
+given. A shelf is a better answer than a bad tag.
+
+### `collections`
+
+| column | type | notes |
+| --- | --- | --- |
+| `id` | `integer identity` | primary key |
+| `name` | `text not null` | prose, not a tag: spaces, capitals and punctuation. `readCollectionName` (`@common/collections`) settles the spelling — trimmed, whitespace collapsed, 64 characters |
+| `created_at` | `timestamptz not null default now()` | |
+| `updated_at` | `timestamptz not null default now()` | what the list is ordered by |
+
+`collections_name_key` is `unique (lower(name))` — `Sketches` and `sketches` are one shelf
+spelled two ways, and refusing the second is the useful answer. `collections_updated_idx` is
+`(updated_at desc, id desc)`, the list's own order.
+
+**`updated_at` is maintained in TypeScript**, by `touchCollection`
+(`@common/data/collections.ts`), and touched by a rename and by every image added or
+removed — inside the same transaction as the change. Not by a trigger, for the reason
+nothing else here is: a plpgsql body needs a migration to edit and reports an opaque error
+from inside a statement that was about something else. Correcting one image's rating does
+**not** touch it: the ordering answers "what has happened to this shelf", and a rating is a
+fact about one image.
+
+### `collection_posts`
+
+`posts`' columns minus everything about tags, plus the shelf it is on.
+
+| column | type | notes |
+| --- | --- | --- |
+| `id` | `integer identity` | primary key |
+| `collection_id` | `integer not null references collections (id)` | **no `on delete cascade`** — see below |
+| `file_name` | `text unique not null` | the md5 of the uploaded bytes, naming both stored objects. Unique across the whole table, not per shelf |
+| `file_ext` | `text not null` | `check in ('jpg','png','gif','webp','avif')` |
+| `file_size`, `width`, `height` | `integer not null` | of the **stored** image |
+| `rating` | `text not null default 'g'` | the same two tiers, so the site-wide NSFW setting means one thing everywhere |
+| `source_url` | `text` | |
+| `view_count` | `integer not null default 0` | incremented by the website, one column grant |
+| `created_at` | `timestamptz not null default now()` | |
+
+`collection_posts_collection_idx` is `(collection_id, id desc)` — every read of a shelf is
+"this shelf, newest first", cursored by id, because there is no search here to need
+anything else.
+
+**Invariants**
+
+- **A collection cannot be deleted while it holds anything.** The missing `on delete
+  cascade` is the enforcement; `deleteCollection` counts first only so the refusal can say
+  how many are in the way. A collection is the only container this schema has, and deleting
+  one by accident would take a set of images that exist nowhere else.
+- **An image lives on exactly one shelf**, which `file_name unique` says as well as the
+  feature does: two rows for the same bytes would be two rows pointing at one pair of
+  stored objects, since the prefix is shared, and deleting either would break the other.
+- The cover on a shelf card is **derived** — the newest image on it — not a column. A
+  `cover_post_id` would be a circular foreign key, a null to handle on every delete, and a
+  picker nobody asked for, to answer a question the newest image already answers.
+
+**Why not a third board.** `@common/board` is a lookup of three table names per board, two
+of which are about tags; a `BOARD.collection` entry would have carried a `postTags` and a
+`tagCount` that every read, counter and facet then had to test for, and a `path` the search
+grammar could address — which is the one thing this section must not be. The two boards are
+one page twice because a generated image *is* a post. A collection is a different shape, so
+it gets `@common/collections`, `@common/data/collections` and its own three routes.
+
+---
+
 ## Roles
 
 There is no RLS. There was, on every table, with a select policy and nothing else — the
@@ -401,8 +480,8 @@ key any more, so the boundary is drawn where Postgres draws boundaries:
 | role | held by | may |
 | --- | --- | --- |
 | `booru_owner` | the environment file, the migration runner only | everything, DDL included |
-| `booru_app` | compiled into the desktop bundle | `select, insert, update, delete` on the eight content tables, `select, insert, update` on `site_settings`; **no** create, alter or drop |
-| `booru_web` | Vercel | `select` on all nine; `update (view_count)` on `posts` **and** `generative_posts`; nothing else |
+| `booru_app` | compiled into the desktop bundle | `select, insert, update, delete` on the ten content tables, `select, insert, update` on `site_settings`; **no** create, alter or drop |
+| `booru_web` | Vercel | `select` on all eleven; `update (view_count)` on `posts`, `generative_posts` **and** `collection_posts`; nothing else |
 
 The grants are `db/grants.sql`, re-applied on every `db:push` and applied to whichever
 roles exist so a scratch database still migrates. `db/README.md` creates them.
@@ -414,8 +493,9 @@ authorization — with one addition that matters: `booru_app` owns nothing, so a
 extracted from a bundle can vandalise the data and cannot drop a table.
 
 Images are not in the database. They are one public R2 bucket — `posts/` and `thumbs/` for
-the gallery, `generative/posts/` and `generative/thumbs/` for the other board — read by URL
-and written only by the desktop app's bucket key.
+the gallery, `generative/posts/` and `generative/thumbs/` for the other board,
+`collections/posts/` and `collections/thumbs/` for the shelves — read by URL and written
+only by the desktop app's bucket key.
 
 ---
 

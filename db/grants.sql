@@ -35,7 +35,8 @@ do $$
 declare
   app_tables constant text[] := array['posts', 'tags', 'post_tags', 'tag_rules',
                                       'tag_form_sections', 'tag_form_section_deps',
-                                      'generative_posts', 'generative_post_tags'];
+                                      'generative_posts', 'generative_post_tags',
+                                      'collections', 'collection_posts'];
   entry text;
 begin
   if to_regrole('booru_web') is not null then
@@ -52,6 +53,10 @@ begin
     -- would hide that `posts` and `generative_posts` are the only two rows the website
     -- may touch at all.
     execute 'grant update (view_count) on public.generative_posts to booru_web';
+    -- And the third gallery. A collection post is not a post — no tags, no search, its own
+    -- pair of tables — but it is an image on a page that somebody looked at, and a view is
+    -- a view wherever it happens. Same single column, same reasoning.
+    execute 'grant update (view_count) on public.collection_posts to booru_web';
     -- What the site is doing — the maintenance switch, and whatever setting comes after
     -- it. Read on every visit that isn't answered from the ten-minute hold, and read only:
     -- a setting is changed from the desktop app, which is the half of this project that

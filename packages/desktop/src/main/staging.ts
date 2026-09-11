@@ -4,11 +4,11 @@ import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { pipeline } from 'node:stream/promises'
 import sharp, { type Metadata } from 'sharp'
-import type { Board } from '@common/board'
 import { findPostIdsByFileNames } from '@common/data/shared'
+import { findCollectionPostsByFileNames } from '@common/data/collections'
 import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL, MAX_PIXELS } from './limits'
 import { boardDb } from './db'
-import type { StageOutcome } from '../shared/api'
+import type { StageOutcome, StageTarget } from '../shared/api'
 
 /**
  * Turning a picked or dropped path into a row in the queue.
@@ -133,7 +133,18 @@ async function stageOne(path: string): Promise<StageOutcome> {
     return { ok: false, path, name, error: 'Could not read this file' }
   }
 
-  return { ok: true, path, name, size, width, height, preview, md5, duplicateOf: null }
+  return {
+    ok: true,
+    path,
+    name,
+    size,
+    width,
+    height,
+    preview,
+    md5,
+    duplicateOf: null,
+    duplicateIn: null,
+  }
 }
 
 /**
@@ -141,12 +152,15 @@ async function stageOne(path: string): Promise<StageOutcome> {
  * already spreads one decode across the thread pool, so running twenty at once would
  * only make the first row appear later.
  */
-export async function stageFiles(paths: string[], board: Board = 'post'): Promise<StageOutcome[]> {
+export async function stageFiles(
+  paths: string[],
+  target: StageTarget = 'post'
+): Promise<StageOutcome[]> {
   const outcomes: StageOutcome[] = []
   for (const path of paths) {
     outcomes.push(await stageOne(path))
   }
-  return markDuplicates(outcomes, board)
+  return markDuplicates(outcomes, target)
 }
 
 /**
@@ -158,11 +172,20 @@ export async function stageFiles(paths: string[], board: Board = 'post'): Promis
  * A failed query leaves every row a normal one: being unable to reach the board is not
  * evidence that a post is new, and the upload's own check is still there to say so.
  *
- * **Per board.** The same image on the gallery and on the AI board is two posts, which is
+ * **Per target.** The same image on the gallery and on the AI board is two posts, which is
  * correct — they are two boards — so what this asks is whether the file is already on the
  * one being uploaded to, which is the same question the pipeline's own check asks.
+ *
+ * A collection is the one target where the question is not scoped: `collection_posts.file_name`
+ * is unique across the whole table, because an image lives on exactly one shelf. So the
+ * answer there names the shelf as well as the row, and `duplicateIn` carries it — "already
+ * in Ukiyo-e studies" is the refusal somebody can act on, where a bare post number is one
+ * they would have to go and look up.
  */
-async function markDuplicates(outcomes: StageOutcome[], board: Board): Promise<StageOutcome[]> {
+async function markDuplicates(
+  outcomes: StageOutcome[],
+  target: StageTarget
+): Promise<StageOutcome[]> {
   const staged = outcomes.filter((outcome) => outcome.ok)
   if (staged.length === 0) return outcomes
 
@@ -170,21 +193,33 @@ async function markDuplicates(outcomes: StageOutcome[], board: Board): Promise<S
   const db = boardDb()
   if (!db) return outcomes
 
-  let existing: Map<string, number>
+  const names = staged.map((outcome) => outcome.md5)
+
+  let existing: Map<string, { id: number; collection_name?: string }>
   try {
-    existing = await findPostIdsByFileNames(
-      db,
-      staged.map((outcome) => outcome.md5),
-      board
-    )
+    existing =
+      target === 'collection'
+        ? await findCollectionPostsByFileNames(db, names)
+        : new Map(
+            [...(await findPostIdsByFileNames(db, names, target))].map(([name, id]) => [
+              name,
+              { id },
+            ])
+          )
   } catch (error) {
     console.error('Could not check for duplicates:', error instanceof Error ? error.message : error)
     return outcomes
   }
 
-  return outcomes.map((outcome) =>
-    outcome.ok ? { ...outcome, duplicateOf: existing.get(outcome.md5) ?? null } : outcome
-  )
+  return outcomes.map((outcome) => {
+    if (!outcome.ok) return outcome
+    const held = existing.get(outcome.md5)
+    return {
+      ...outcome,
+      duplicateOf: held?.id ?? null,
+      duplicateIn: held?.collection_name ?? null,
+    }
+  })
 }
 
 /**

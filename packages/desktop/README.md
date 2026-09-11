@@ -98,6 +98,8 @@ for your own board. Treat the installer accordingly: anyone who has it can write
 | `src/main/rules.ts` | reads and writes both sets on the board — `@common/data/rules.ts` underneath |
 | `src/main/form-sections.ts` | the rows the tag form draws, their order, and what each waits for |
 | `src/shared/catalogs.ts` | named sets of tags, applied when asked for by name |
+| `src/main/collections.ts` | the shelves: name one, rename it, delete an empty one, add an image, correct or remove one |
+| `src/renderer/src/components/collections.tsx` | 🗂️ Collections — the shelf list and one shelf open |
 
 The renderer holds no keys, no file access and no network. Every capability it has is one
 `ipcMain.handle` in [`src/main/ipc.ts`](src/main/ipc.ts) — including reading the file it
@@ -110,6 +112,13 @@ rather than being a mode in main: a mode there is read before every `await` in a
 so an upload begun on one board and finished after the switch was flipped would land on the
 other. `@common/board` holds the table names it resolves to.
 
+**And one screen the switch does nothing to.** 🗂️ Collections is a shelf of images with no
+tags on them, in neither gallery, each on exactly one shelf — so there is no mode to be in
+and none of its channels takes a `Board`. Adding images there is a batch with one rating,
+which is not the upload queue coming back: the queue died because tagging is per image, and
+a collection image has nothing per image to type. `@common/collections` is what it resolves
+its two table names and two object prefixes out of.
+
 One client: the service role, built from the key compiled into the main bundle. It was
 two — a session for the post row and the service role for storage and the counters — back
 when the board had accounts and `posts.uploader_id`.
@@ -121,6 +130,12 @@ can never go stale.
 
 ## Notes
 
+- Nothing about collections is cached. The tag index is cached because autocomplete asked
+  the same question on every keystroke and the browse grid because it is a screenful
+  somebody wants back; a shelf list is a handful of rows read when the screen opens, and a
+  cache would be a second thing that can be wrong about a name you just changed. Their
+  *thumbnails* are cached, in the same place the boards' are — the name is the md5, so the
+  same image is the same thumbnail wherever it was posted.
 - Tag autocomplete does not query per keystroke: `src/main/tag-cache.ts` keeps the board's
   tag list in `tag-cache.json` for a day and prefix-matches it in memory. It is dropped
   after every upload, by 🔄 on the Tags screen, and by Clear cache in settings.

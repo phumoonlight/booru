@@ -78,7 +78,7 @@ export function forgetSiteState(): void {
  * therefore drawing the notice and running the whole listing underneath it, one search
  * and one facet read per request, which is exactly the work closing the site is meant to
  * stop. It is the reason that file's DAL advice exists, and `lib/data/*` already being
- * the only query surface is what makes one guard cover all eight routes and the feed's
+ * the only query surface is what makes one guard cover all eleven routes and the feed's
  * server action together.
  *
  * Cheap in both states: while the site is up this is the same `cache()`d read the layout

@@ -26,8 +26,15 @@ function readSeen(): Record<string, number> {
   }
 }
 
-/** True when this browser already counted the post recently. Marks it if not. */
-function claimView(key: string): boolean {
+/**
+ * True when this browser already counted the post recently. Marks it if not.
+ *
+ * Exported for the collections counter, which counts a different table through a
+ * different action but owes the reader exactly the same promise: one view per image per
+ * hour, per browser. Two copies of this would be two `localStorage` maps racing each
+ * other to prune the same key space.
+ */
+export function claimView(key: string): boolean {
   if (seenThisSession.has(key)) return false
   seenThisSession.add(key)
 

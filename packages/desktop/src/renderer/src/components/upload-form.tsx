@@ -835,8 +835,12 @@ function PostLink({
  * Non-http entries are dropped here rather than in main: a `data:` URL from a canvas is
  * not something to send over the bridge, and the comment lines a uri-list may contain
  * are not addresses at all.
+ *
+ * Exported because the collections screen takes drops too, and a second reading of the
+ * same three flavours is a second place for one browser's quirk to be handled and not the
+ * other's.
  */
-function imageUrlsFrom(transfer: DataTransfer): string[] {
+export function imageUrlsFrom(transfer: DataTransfer): string[] {
   const found: string[] = []
 
   const add = (value: string) => {
