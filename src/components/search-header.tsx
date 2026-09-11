@@ -57,9 +57,15 @@ export async function SearchHeader({
           {menu}
           {/* The wordmark carries the bar — it outsizes the nav links rather than matching
               them. It goes to the gallery, not to `/`: the landing page is a front door,
-              and nothing behind it needs a way back to a search box it already has. */}
+              and nothing behind it needs a way back to a search box it already has.
+
+              **The gallery, on either board.** It is the site's name, so it goes to the
+              site's main listing wherever it is drawn — pointing it at `/ai-posts` while
+              you are there made it a second way of staying put, which is the one thing a
+              wordmark should never be. The way back to the AI listing is its own nav item,
+              which is beside this and marked as the page you are on. */}
           <Link
-            href={BOARD[board].path}
+            href={BOARD.post.path}
             className="truncate text-xl font-bold tracking-tight sm:text-2xl hover:underline"
           >
             {SITE_NAME}
