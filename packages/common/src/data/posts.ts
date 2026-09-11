@@ -1,3 +1,4 @@
+import { BOARD, type Board } from '@common/board'
 import { first, type Db } from '@common/db'
 import { RESTRICTED_RATINGS, type Rating } from '@common/search'
 import type { Tag } from '@common/tags'
@@ -11,6 +12,12 @@ import type { Tag } from '@common/tags'
  * Like everything else in this directory they take their handle rather than building
  * one. The web wraps them with `cache()` where a request reads the same row twice; that
  * is a React concern and stays on the web's side.
+ *
+ * **They also take a board** (`@common/board`), which is the table their row is in. One
+ * `Post` type for both, because a generated post is a post in every way a reader of this
+ * file cares about — the tables are column for column the same. What the board decides is
+ * which one is read, which link table joins the tags, and which column the tag counts
+ * come out of; nothing above this line has to know the names.
  */
 
 export type Post = {
@@ -52,21 +59,32 @@ export type PostPage = {
 
 /** How many posts the board holds. `::int` because `count(*)` is a `bigint`, which
  *  postgres.js hands back as a string. */
-export async function getPostCount(db: Db): Promise<number> {
-  const [row] = await db<{ count: number }[]>`select count(*)::int as count from posts`
+export async function getPostCount(db: Db, board: Board = 'post'): Promise<number> {
+  const [row] = await db<{ count: number }[]>`
+    select count(*)::int as count from ${db(BOARD[board].posts)}`
   return row?.count ?? 0
 }
 
-export async function getPost(db: Db, id: number): Promise<Post | null> {
-  return first(await db<Post[]>`select ${postColumns(db)} from posts where id = ${id}`)
+export async function getPost(db: Db, id: number, board: Board = 'post'): Promise<Post | null> {
+  return first(
+    await db<Post[]>`
+      select ${postColumns(db)} from ${db(BOARD[board].posts)} where id = ${id}`
+  )
 }
 
-export async function getPostTags(db: Db, postId: number): Promise<Tag[]> {
+/**
+ * The post's tags, each carrying **this board's** count. The column is aliased back to
+ * `post_count` on the way out, so a `Tag` is one shape everywhere and the chip beside a
+ * name on the AI listing says how many AI posts carry it rather than how many drawings do.
+ */
+export async function getPostTags(db: Db, postId: number, board: Board = 'post'): Promise<Tag[]> {
+  const { postTags, tagCount } = BOARD[board]
+
   // A join, where this was an embed. Ordered in SQL rather than sorted afterwards, since
   // the database is already reading the rows in an order and picking one costs nothing.
   return await db<Tag[]>`
-    select t.id, t.name, t.category, t.mark, t.post_count
-      from post_tags pt
+    select t.id, t.name, t.category, t.mark, t.${db(tagCount)} as post_count
+      from ${db(postTags)} pt
       join tags t on t.id = pt.tag_id
      where pt.post_id = ${postId}
      order by t.name`
@@ -78,11 +96,12 @@ export async function getPostTags(db: Db, postId: number): Promise<Tag[]> {
  */
 export async function getSitemapPosts(
   db: Db,
-  limit: number
+  limit: number,
+  board: Board = 'post'
 ): Promise<Pick<Post, 'id' | 'created_at'>[]> {
   return await db<Pick<Post, 'id' | 'created_at'>[]>`
     select id, to_char(created_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as created_at
-      from posts
+      from ${db(BOARD[board].posts)}
      where rating <> all(${[...RESTRICTED_RATINGS]})
      order by id desc
      limit ${limit}`

@@ -6,6 +6,7 @@ import type { Post } from '@/lib/data/posts'
 import { PostGrid, PostGridSkeleton } from '@/components/post-grid'
 import { NavProgress } from '@/components/nav-progress'
 import { loadMorePosts } from '@/lib/actions/search'
+import type { Board } from '@common/board'
 import { searchHref, withStart } from '@common/search'
 
 /**
@@ -63,6 +64,7 @@ export function PostFeed({
   resumable = false,
   moreHref,
   moreLabel,
+  board = 'post',
 }: {
   initialPosts: Post[]
   /** The listing's query. On /tags/[id] that is the tag name, which is why it is a prop
@@ -77,6 +79,9 @@ export function PostFeed({
   /** Where the listing ends: the tag page's way into the gallery. */
   moreHref?: string
   moreLabel?: string
+  /** Which board this feed is of — it decides the chunks it asks for, the cards it draws
+      and the address `replaceState` writes, all of which have to be the same board. */
+  board?: Board
 }) {
   // One entry per chunk, the server's first screenful included — the shape the dividers
   // are drawn from, so "where does a chunk begin" needs no arithmetic over a flat list.
@@ -115,7 +120,7 @@ export function PostFeed({
     setPending(true)
     setFailed(false)
     try {
-      const next = await loadMorePosts({ query, after: oldest.id, perPage })
+      const next = await loadMorePosts({ query, after: oldest.id, perPage, board })
       setHasMore(next.hasMore)
       // An empty chunk would draw a divider over nothing
       if (next.posts.length === 0) return
@@ -129,7 +134,7 @@ export function PostFeed({
       busy.current = false
       setPending(false)
     }
-  }, [canLoad, oldest, perPage, query])
+  }, [canLoad, oldest, perPage, query, board])
 
   useEffect(() => {
     if (!resumable) return
@@ -163,8 +168,8 @@ export function PostFeed({
     if (!resumable) return
     const first = chunks[current]?.[0]
     const at = current === 0 || !first ? query : withStart(query, first.id)
-    window.history.replaceState(null, '', searchHref(at))
-  }, [current, chunks, query, resumable])
+    window.history.replaceState(null, '', searchHref(at, board))
+  }, [current, chunks, query, board, resumable])
 
   useEffect(() => {
     const node = sentinel.current
@@ -192,6 +197,7 @@ export function PostFeed({
           <PostGrid
             posts={posts}
             query={query}
+            board={board}
             ref={(node) => {
               if (!node) return
               grids.current.set(node, index)
@@ -209,7 +215,7 @@ export function PostFeed({
           <div ref={sentinel} aria-hidden />
           {resumable && oldest ? (
             <a
-              href={searchHref(withStart(query, oldest.id - 1))}
+              href={searchHref(withStart(query, oldest.id - 1), board)}
               onClick={(event) => {
                 // Plain left-click only: cmd/ctrl-click and middle-click still open the
                 // next stretch in a tab, which is the point of it being a link.

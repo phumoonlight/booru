@@ -1,3 +1,4 @@
+import { BOARD, type Board } from '@common/board'
 import type { Db, DbPool } from '@common/db'
 import { syncTagPostCounts } from '@common/data/counters'
 import type { Rating } from '@common/search'
@@ -17,6 +18,14 @@ import type { Tag } from '@common/tags'
 // The counter is the exception and stays outside the transaction on purpose. It is
 // derived data, it recomputes rather than increments (./counters.ts), and it must not be
 // able to fail an upload that has already landed.
+//
+// **The post writes take a board** (`@common/board`), defaulting to the gallery, so every
+// caller written before the second board existed still writes where it always did. What
+// the board decides is three names — the post table, the link table and the tag count
+// column — and nothing else: a generated post is created, retagged and deleted by exactly
+// this code. `tags` itself is never board-dependent, which is the point of the vocabulary
+// being shared: `resolveTagIds` refuses a name the board has no row for whichever half of
+// the site is asking.
 
 export type PostFields = {
   file_name: string
@@ -37,8 +46,13 @@ export type PostFields = {
  * `fileName` is the md5 of the bytes: it is the name both stored files take, and being
  * derived from the content is what lets it answer this question at all.
  */
-export async function findPostIdByFileName(db: Db, fileName: string): Promise<number | null> {
-  const [row] = await db<{ id: number }[]>`select id from posts where file_name = ${fileName}`
+export async function findPostIdByFileName(
+  db: Db,
+  fileName: string,
+  board: Board = 'post'
+): Promise<number | null> {
+  const [row] = await db<{ id: number }[]>`
+    select id from ${db(BOARD[board].posts)} where file_name = ${fileName}`
   return row?.id ?? null
 }
 
@@ -53,12 +67,13 @@ export async function findPostIdByFileName(db: Db, fileName: string): Promise<nu
  */
 export async function findPostIdsByFileNames(
   db: Db,
-  fileNames: string[]
+  fileNames: string[],
+  board: Board = 'post'
 ): Promise<Map<string, number>> {
   if (fileNames.length === 0) return new Map()
 
   const rows = await db<{ id: number; file_name: string }[]>`
-    select id, file_name from posts where file_name = any(${fileNames})`
+    select id, file_name from ${db(BOARD[board].posts)} where file_name = any(${fileNames})`
   return new Map(rows.map((row) => [row.file_name, row.id]))
 }
 
@@ -77,10 +92,14 @@ export async function findPostIdsByFileNames(
  * It takes the pool rather than a `Db`, because only the pool can open a transaction —
  * the one function in this directory that does.
  */
-export async function createPostWithTags(db: DbPool, fields: PostFields): Promise<number> {
+export async function createPostWithTags(
+  db: DbPool,
+  fields: PostFields,
+  board: Board = 'post'
+): Promise<number> {
   const { id, moved } = await db.begin(async (tx) => {
     const [post] = await tx<{ id: number }[]>`
-      insert into posts ${tx({
+      insert into ${tx(BOARD[board].posts)} ${tx({
         file_name: fields.file_name,
         file_ext: fields.file_ext,
         file_size: fields.file_size,
@@ -90,10 +109,10 @@ export async function createPostWithTags(db: DbPool, fields: PostFields): Promis
         source_url: fields.source_url || null,
       })} returning id`
 
-    return { id: post.id, moved: await setPostTags(tx, post.id, fields.tags) }
+    return { id: post.id, moved: await setPostTags(tx, post.id, fields.tags, board) }
   })
 
-  await syncTagPostCounts(db, moved)
+  await syncTagPostCounts(db, moved, board)
   return id
 }
 
@@ -101,22 +120,23 @@ export async function createPostWithTags(db: DbPool, fields: PostFields): Promis
 export async function updatePostWithTags(
   db: DbPool,
   postId: number,
-  fields: Pick<PostFields, 'rating' | 'source_url' | 'tags'>
+  fields: Pick<PostFields, 'rating' | 'source_url' | 'tags'>,
+  board: Board = 'post'
 ): Promise<void> {
   const moved = await db.begin(async (tx) => {
     // `returning` is how "no such post" is detected — an update that matches nothing is
     // not an error, it just changes no row.
     const updated = await tx<{ id: number }[]>`
-      update posts
+      update ${tx(BOARD[board].posts)}
          set rating = ${fields.rating}, source_url = ${fields.source_url || null}
        where id = ${postId}
       returning id`
     if (updated.length === 0) throw new Error(`Post ${postId} not found`)
 
-    return setPostTags(tx, postId, fields.tags)
+    return setPostTags(tx, postId, fields.tags, board)
   })
 
-  await syncTagPostCounts(db, moved)
+  await syncTagPostCounts(db, moved, board)
 }
 
 /**
@@ -126,13 +146,15 @@ export async function updatePostWithTags(
  *
  * Shared by the delete path and nothing else now that the create path unwinds itself.
  */
-export async function deletePostRow(db: Db, postId: number): Promise<void> {
+export async function deletePostRow(db: Db, postId: number, board: Board = 'post'): Promise<void> {
+  const { posts, postTags } = BOARD[board]
+
   const rows = await db<{ tag_id: number }[]>`
-    with links as (select tag_id from post_tags where post_id = ${postId}),
-         gone as (delete from posts where id = ${postId})
+    with links as (select tag_id from ${db(postTags)} where post_id = ${postId}),
+         gone as (delete from ${db(posts)} where id = ${postId})
     select tag_id from links`
 
-  await syncTagPostCounts(db, rows.map((row) => row.tag_id))
+  await syncTagPostCounts(db, rows.map((row) => row.tag_id), board)
 }
 
 /**
@@ -176,8 +198,14 @@ export async function resolveTagIds(db: Db, names: string[]): Promise<number[]> 
  * only reorders the box moves no counter, and recounting every tag on the post would be
  * work with no answer to show for it.
  */
-async function setPostTags(db: Db, postId: number, names: string[]): Promise<number[]> {
+async function setPostTags(
+  db: Db,
+  postId: number,
+  names: string[],
+  board: Board = 'post'
+): Promise<number[]> {
   const wanted = await resolveTagIds(db, names)
+  const { postTags } = BOARD[board]
 
   // Each half `returning` what it actually touched, so the moved set comes back from the
   // writes themselves rather than from a read taken beforehand and trusted to still be
@@ -189,12 +217,12 @@ async function setPostTags(db: Db, postId: number, names: string[]): Promise<num
   // being told. Untyped, `all('{}')` is an error rather than the "matches nothing" it
   // reads as.
   const removed = await db<{ tag_id: number }[]>`
-    delete from post_tags
+    delete from ${db(postTags)}
      where post_id = ${postId} and tag_id <> all(${wanted}::int[])
     returning tag_id`
 
   const added = await db<{ tag_id: number }[]>`
-    insert into post_tags (post_id, tag_id)
+    insert into ${db(postTags)} (post_id, tag_id)
     select ${postId}, unnest(${wanted}::int[])
         on conflict do nothing
     returning tag_id`

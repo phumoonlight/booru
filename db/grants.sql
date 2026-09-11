@@ -34,7 +34,8 @@
 do $$
 declare
   app_tables constant text[] := array['posts', 'tags', 'post_tags', 'tag_rules',
-                                      'tag_form_sections', 'tag_form_section_deps'];
+                                      'tag_form_sections', 'tag_form_section_deps',
+                                      'generative_posts', 'generative_post_tags'];
   entry text;
 begin
   if to_regrole('booru_web') is not null then
@@ -45,6 +46,12 @@ begin
     -- The website's only write. A column grant rather than a policy, so the database
     -- refuses a stray update to `rating` instead of the code remembering not to make one.
     execute 'grant update (view_count) on public.posts to booru_web';
+    -- The same one column on the second board. A view counted there is still a view, and
+    -- the grant is written out a second time rather than looped because it is the one
+    -- thing in this file that is not "everything on these tables" — a loop over the list
+    -- would hide that `posts` and `generative_posts` are the only two rows the website
+    -- may touch at all.
+    execute 'grant update (view_count) on public.generative_posts to booru_web';
     -- What the site is doing — the maintenance switch, and whatever setting comes after
     -- it. Read on every visit that isn't answered from the ten-minute hold, and read only:
     -- a setting is changed from the desktop app, which is the half of this project that

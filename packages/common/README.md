@@ -25,9 +25,10 @@ where the file is.
 
 | | |
 |---|---|
+| `board.ts` | the two boards — post table, link table, count column, object prefixes and website path, spelled nowhere else |
 | `search.ts` | the `?query=` grammar — `splitQuery`, `searchHref`, the rating metatags, `RESTRICTED_RATINGS` |
 | `tags.ts` | tag parsing and the charset, `categoryColor`, `markColor` |
-| `storage.ts` | the md5-derived image paths, and the `ObjectStore` the upload writes through |
+| `storage.ts` | the md5-derived image paths, per board, and the `ObjectStore` the upload writes through |
 | `db.ts` | `Db`, the handle every function here takes, and `DbPool` for the two that open a transaction |
 | `data/posts.ts` | the `Post` row shape, `postColumns`, and the single-post reads |
 | `data/search.ts` | `searchPosts` — the whole query, tag resolution and cursor |

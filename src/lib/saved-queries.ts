@@ -1,6 +1,7 @@
 // Pure helpers for saved queries — no browser and no server, so the store, the sidebar
 // and the search bar all share one definition of what a saved query is.
 
+import type { Board } from '@common/board'
 import { withoutStart } from '@common/search'
 
 /**
@@ -17,7 +18,17 @@ export type SavedQuery = {
   at: number
 }
 
-export const SAVED_QUERIES_KEY = 'saved_queries'
+/**
+ * Where a board's shelf is kept. **The gallery keeps the unsuffixed key it has always
+ * had**, so nothing anyone saved before the second board existed is lost — and each other
+ * board gets its own, because a saved query is the address of a listing and the two
+ * listings are two addresses. One shared shelf would have offered you a search that
+ * returns nothing on the board you are standing on, with no way to tell which rows were
+ * which short of running them.
+ */
+export function savedQueriesKey(board: Board = 'post'): string {
+  return board === 'post' ? 'saved_queries' : `saved_queries:${board}`
+}
 
 /**
  * Enough to be a shelf, few enough to scan. Saved queries are meant to be re-run, and a

@@ -1,5 +1,6 @@
 'use server'
 
+import { isBoard, type Board } from '@common/board'
 import { incrementPostView } from '@/lib/data/posts'
 
 /**
@@ -12,9 +13,15 @@ import { incrementPostView } from '@/lib/data/posts'
  * Called from the browser once a post page is actually looked at — never on a read
  * path, so prefetches, `generateMetadata` and crawlers don't inflate the number. It
  * takes no user: a view is the one row change an anonymous visitor is allowed to cause,
- * and the id is the whole of what reaches the database.
+ * and the id and the board are the whole of what reaches the database.
+ *
+ * The board arrives from the browser like the id does, so it is checked the same way —
+ * `isBoard` rather than a cast, since it picks a table name. A nonsense value counts
+ * nothing rather than guessing at the gallery, which would attribute an AI post's view to
+ * whatever row holds that id on the other board.
  */
-export async function recordPostView(postId: number) {
+export async function recordPostView(postId: number, board: Board = 'post') {
   if (!Number.isInteger(postId) || postId < 1) return
-  await incrementPostView(postId)
+  if (!isBoard(board)) return
+  await incrementPostView(postId, board)
 }

@@ -73,8 +73,13 @@ board dropped its accounts; git has them.
   in `lib/actions/search.ts` — the feed's next chunk, an action rather than a route
   handler so the data layer stays the only query surface.
 - **Writes:** there is one, `recordPostView`. A mutation being added to `src/` is almost
-  certainly being added to the wrong program — and `booru_web` holds `update (view_count)
-  on posts` and nothing else, so the database refuses it rather than a reviewer having to.
+  certainly being added to the wrong program — and `booru_web` holds `update (view_count)`
+  on the two post tables and nothing else anywhere, so the database refuses it rather than
+  a reviewer having to.
+- **Two boards, one set of functions.** `/posts` and `/ai-posts` read `posts` and
+  `generative_posts`; every function in `@common/data/*` takes a `Board` and gets its table
+  names from `@common/board`, defaulting to the gallery. The website's pages are the same
+  pair of components (`PostListing`, `PostDetail`) rendered with a different board.
 - **One pool, not two clients.** It was `anon.ts` for reads and `admin.ts` carrying a
   service-role key just to count views; a column grant says the same thing and says it
   where it is enforced.
@@ -91,10 +96,12 @@ board dropped its accounts; git has them.
    is kept only if it beats the uploaded bytes; otherwise the original is stored
    byte-for-byte. Above the cap it is kept however it measures, being the only version
    inside the bound.
-4. Store `posts/{file_name}.{ext}` and `post-thumbnails/{file_name}.avif`, then
-   `createPostWithTags()` inserts the row, upserts the tags and links them. No
-   transaction: if tagging fails the post is deleted again, counters included.
-5. `syncTagPostCounts()` recomputes `tags.post_count` for exactly the tags that moved.
+4. Store `posts/{file_name}.{ext}` and `thumbs/{file_name}.avif` — or the AI board's
+   `generative/` pair, whichever board is being written — then `createPostWithTags()`
+   inserts the row and links its tags inside one transaction. Every name has to be a tag
+   already: no write path coins one.
+5. `syncTagPostCounts()` recomputes that board's count column for exactly the tags that
+   moved.
 
 Compression is why this is a desktop app at all: it is seconds of CPU per file, which a
 free serverless tier bills by the second and kills at ten.

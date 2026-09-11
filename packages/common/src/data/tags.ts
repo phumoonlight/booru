@@ -1,3 +1,4 @@
+import { BOARD, type Board } from '@common/board'
 import { first, isUniqueViolation, type Db } from '@common/db'
 import { syncTagPostCounts } from '@common/data/counters'
 import { markColor, parseTagInput, type Tag, type TagCategory } from '@common/tags'
@@ -228,19 +229,30 @@ export async function setTagMark(
 /**
  * Remove a tag from the board entirely — it comes off every post that carries it.
  *
- * `post_tags` has no cascade from `tags`, so its rows go first or the foreign key
- * refuses the delete; both are one statement, so a half-done delete is not a state this
- * can leave behind. `tag_rules` and `tag_form_section_deps` need no such step — both of
- * their keys cascade, so a deleted tag takes every rule and every dependency naming it,
- * which is the whole reason those are rows and not names in a file.
+ * **Every board's links, not the gallery's.** The vocabulary is shared and neither link
+ * table cascades from `tags`, so a single row in `generative_post_tags` is enough for the
+ * foreign key to refuse the whole delete. Both go first, in the same statement, so a
+ * half-done delete is not a state this can leave behind. `tag_rules` and
+ * `tag_form_section_deps` need no such step — both of their keys cascade, so a deleted tag
+ * takes every rule and every dependency naming it, which is the whole reason those are
+ * rows and not names in a file.
  *
- * No counter to recount: the only `post_count` these links fed belongs to the tag being
- * deleted. Other tags on those posts keep every link they had.
+ * The two boards are **written out** rather than folded over `BOARDS`: a fold says it in
+ * nested query fragments, which is the one construction in this file that cannot be read
+ * as SQL on the page, and a delete is the wrong statement to be clever in. A third board
+ * adds a line here — which is the shape of adding a third board generally (see
+ * `@common/board`), not a debt this function is carrying alone.
+ *
+ * No counter to recount: the only counts these links fed belong to the tag being deleted.
+ * Other tags on those posts keep every link they had.
  */
 export async function deleteTag(db: Db, id: number): Promise<TagOutcome> {
   try {
     await db`
-      with links as (delete from post_tags where tag_id = ${id})
+      with links_post as (
+             delete from ${db(BOARD.post.postTags)} where tag_id = ${id}),
+           links_generative as (
+             delete from ${db(BOARD.generative.postTags)} where tag_id = ${id})
       delete from tags where id = ${id}`
     return { ok: true }
   } catch (error) {
@@ -282,7 +294,8 @@ export type ApplyTagResult = {
 export async function applyTagToTagged(
   db: Db,
   rawTarget: string,
-  rawCondition: string
+  rawCondition: string,
+  board: Board = 'post'
 ): Promise<TagOutcome<ApplyTagResult>> {
   const target = readTagName(rawTarget)
   if ('error' in target) return { ok: false, error: target.error }
@@ -306,20 +319,25 @@ export async function applyTagToTagged(
       return { ok: false, error: `${target.name} is not a tag on this board — create it first.` }
     }
 
+    // One board at a time: the two are separate sets of posts, so "add `swimsuit` to
+    // everything tagged `bikini`" has a different answer on each, and one number reported
+    // for both would be a count of nothing in particular.
+    const postTags = BOARD[board].postTags
+
     // `matched` counts in the same snapshot as the insert, and is unaffected by it: the
     // rows going in carry the *target's* id, and this counts the condition's.
     const [counts] = await db<{ added: number; matched: number }[]>`
       with added as (
-        insert into post_tags (post_id, tag_id)
-        select pt.post_id, ${targetId} from post_tags pt where pt.tag_id = ${conditionId}
+        insert into ${db(postTags)} (post_id, tag_id)
+        select pt.post_id, ${targetId} from ${db(postTags)} pt where pt.tag_id = ${conditionId}
             on conflict do nothing
         returning post_id
       )
       select (select count(*)::int from added) as added,
-             (select count(*)::int from post_tags where tag_id = ${conditionId}) as matched`
+             (select count(*)::int from ${db(postTags)} where tag_id = ${conditionId}) as matched`
 
     // Only the target moved: the condition tag is on exactly the posts it was on before.
-    await syncTagPostCounts(db, [targetId])
+    await syncTagPostCounts(db, [targetId], board)
 
     return {
       ok: true,

@@ -5,6 +5,7 @@ import { POST_MAX_DIMENSION, compressImgForPost } from '@common/imgcmp/for-post'
 import { compressImgForThumbnail } from '@common/imgcmp/for-thumbnail'
 import { createPostWithTags, findPostIdByFileName, resolveTagIds } from '@common/data/shared'
 import { postImagePath, thumbnailPath, type ObjectStore } from '@common/storage'
+import type { Board } from '@common/board'
 import { RATINGS, type Rating } from '@common/search'
 import { parseTagInput } from '@common/tags'
 import type { DbPool } from '@common/db'
@@ -112,13 +113,20 @@ export function parsePostMetadata(
  * were one Supabase client that was both — a bucket and a schema behind one key — and
  * splitting them is what a separate database and a separate bucket made honest. Only the
  * desktop app holds either, since it is the only thing that writes.
+ *
+ * `board` picks the table the row lands in and the prefix the two objects land under
+ * (`@common/board`). Nothing else about the pipeline moves: the compression, the dedup
+ * hash, the limits and the tag resolution are the same questions on either board. It
+ * defaults to the gallery, so a caller that has never heard of the second board is
+ * unchanged.
  */
 export async function createPostFromImage(
   db: DbPool,
   store: ObjectStore,
   bytes: Buffer,
   metadata: PostMetadata,
-  limits: UploadLimits
+  limits: UploadLimits,
+  board: Board = 'post'
 ): Promise<UploadResult> {
   if (bytes.length === 0) {
     return { ok: false, error: 'Pick an image file' }
@@ -160,7 +168,9 @@ export async function createPostFromImage(
   // we re-encode below. Storage paths derive from it either way.
   const md5 = createHash('md5').update(bytes).digest('hex')
 
-  const existingPostId = await findPostIdByFileName(db, md5)
+  // Per board: the same image can be a post on both, which is correct — they are two
+  // boards, and the two rows point at two stored objects under two prefixes.
+  const existingPostId = await findPostIdByFileName(db, md5, board)
   if (existingPostId !== null) {
     return { ok: false, error: 'This image already exists', existingPostId }
   }
@@ -277,7 +287,7 @@ export async function createPostFromImage(
   // The files go in before the row, because the row is what makes them findable: an
   // object nothing points at is invisible litter, where a row pointing at a missing
   // object is a broken image on the board.
-  const imagePath = postImagePath(md5, postExt)
+  const imagePath = postImagePath(md5, postExt, board)
   try {
     await store.put(imagePath, postBuffer, CONTENT_TYPES[postExt])
   } catch (error) {
@@ -285,7 +295,7 @@ export async function createPostFromImage(
   }
 
   try {
-    await store.put(thumbnailPath(md5), thumbResult.buffer, 'image/avif')
+    await store.put(thumbnailPath(md5, board), thumbResult.buffer, 'image/avif')
   } catch (error) {
     await store.remove(imagePath)
     return { ok: false, error: `Thumbnail upload failed: ${message(error)}` }
@@ -293,23 +303,27 @@ export async function createPostFromImage(
 
   let postId: number
   try {
-    postId = await createPostWithTags(db, {
-      file_name: md5,
-      file_ext: postExt,
-      file_size: postBuffer.length,
-      width: postWidth,
-      height: postHeight,
-      rating: metadata.rating,
-      source_url: metadata.sourceUrl,
-      tags: metadata.tags,
-    })
+    postId = await createPostWithTags(
+      db,
+      {
+        file_name: md5,
+        file_ext: postExt,
+        file_size: postBuffer.length,
+        width: postWidth,
+        height: postHeight,
+        rating: metadata.rating,
+        source_url: metadata.sourceUrl,
+        tags: metadata.tags,
+      },
+      board
+    )
   } catch (error) {
     // The write itself is a transaction now, so there is no half-made post to undo —
     // only the two objects, which nothing would ever ask for again. Removing them is
     // what keeps a retry of the same image starting clean rather than uploading over
     // itself.
     await store.remove(imagePath)
-    await store.remove(thumbnailPath(md5))
+    await store.remove(thumbnailPath(md5, board))
     return { ok: false, error: `Database insert failed: ${message(error)}` }
   }
 

@@ -8,7 +8,8 @@ the two disagree, the migrations win and this file is the bug.
 **Shape:**
 
 ```
-posts >─── post_tags ───< tags ───< tag_rules >─── tags
+posts            >─── post_tags            ───< tags ───< tag_rules >─── tags
+generative_posts >─── generative_post_tags ───< tags
 
 tags >─── tag_form_sections ───< tag_form_section_deps >─── tags
 ```
@@ -16,7 +17,13 @@ tags >─── tag_form_sections ───< tag_form_section_deps >─── ta
 `tags.form_section_id` points at a section (`on delete set null`); a section's dependencies
 point back at tags.
 
-Seven tables, no functions, no triggers. Six describe what is on the board; the seventh,
+**Two boards over one vocabulary.** `posts` and `generative_posts` are the same table
+twice — column for column — and each has its own link table into the shared `tags`, and its
+own count column on it. A `generated boolean` on `posts` would have been the smaller
+migration and could not have kept the two apart by default: every listing, walk, sitemap
+and counter would have had to remember the flag. See `generative_posts` below.
+
+Nine tables, no functions, no triggers. Eight describe what is on the board; the ninth,
 `site_settings`, is a name and a string per setting and describes what the *website* is
 doing — today the maintenance switch and its notice, written by the desktop app and read on
 every visit that isn't answered from the site's ten-minute hold. Adding a setting to it is
@@ -32,6 +39,8 @@ where a post is tagged.
 so a form row is not a division of a category, and
 `db/migrations/0004_section_sides.sql` gives it a `side`, so which column of the form a row
 is in is a fact about the row rather than the parity of its position.
+`db/migrations/0005_generative_posts.sql` adds the second board — `generative_posts`,
+`generative_post_tags` and `tags.generative_post_count`.
 
 `db/migrations/0001_baseline.sql` is the whole schema in foreign-key order — `posts` →
 `tag_form_sections` → `tags` → `tag_form_section_deps` → `post_tags` → `tag_rules` — ending
@@ -93,7 +102,8 @@ served by the primary key, which Postgres reads backwards as cheaply as forwards
 | `mark` | `text` (nullable) | what is drawn in front of the name — a colour or up to three glyphs — usually null; every read selects it |
 | `form_section_id` | `smallint` (nullable) `→ tag_form_sections.id on delete set null` | which row of the **desktop tag form** the tag is offered on; null is no row, which is not offered at all. The website never reads it |
 | `implied_rating` | `text` (nullable) | a rating **floor** carried by this tag, stored as the letter like `posts.rating` — see [`tag_rules`](#tag_rules) |
-| `post_count` | `int not null default 0` | denormalized, see [Counters](#counters) |
+| `post_count` | `int not null default 0` | denormalized count of `post_tags`, see [Counters](#counters) |
+| `generative_post_count` | `int not null default 0` | the same number for the other board, from `generative_post_tags` (`db/migrations/0005_generative_posts.sql`) |
 | `created_at` | `timestamptz not null default now()` | |
 
 **Indexes:** PK on `id`; `unique` on `name` (this is what serves every `=` and `in (…)`
@@ -301,10 +311,45 @@ tag→posts and makes the recount an index-only scan.
 
 **Invariants**
 
-- Deleting a tag must delete its links first, or the foreign key refuses
-  (`deleteTag` in `@common/data/tags.ts`).
+- Deleting a tag must delete **every board's** links first, or the foreign key refuses —
+  one row in `generative_post_tags` is enough to refuse the whole statement (`deleteTag`
+  in `@common/data/tags.ts`, one `with` per board in one statement).
 - Deleting a post must read its links *before* the delete, or the cascade eats the list
   of tags that need recounting (`deletePostRow` in `@common/data/shared.ts`).
+
+---
+
+## `generative_posts`, `generative_post_tags`
+
+`db/migrations/0005_generative_posts.sql`
+
+The second board: images that were generated rather than drawn. `generative_posts` has
+**exactly the columns `posts` has** and `generative_post_tags` exactly the columns
+`post_tags` has, including the indexes — `generative_posts_rating_idx` and
+`generative_post_tags_tag_post_idx`. Nothing here is new; what is new is that it is a
+separate set of rows.
+
+**Why a table and not a column.** A generated image is a post in every way the site cares
+about, so `posts.generated boolean` was the obvious move and the wrong one: it makes mixing
+the two boards the *default*, and correct behaviour a thing every listing, neighbour walk,
+sitemap entry and counter has to remember. A separate table makes the mistake impossible to
+make silently, which is the same bargain the role grants take against RLS.
+
+**The vocabulary is shared; the counts are not.** Both boards point at `tags`, so a tag
+means one thing across the site and a rename carries everywhere. `tags.post_count` could not
+be shared: a tag on four hundred generated images and two drawings is not a tag with four
+hundred and two posts on either gallery. So `tags.generative_post_count` is the second
+count, recomputed by the same `syncTagPostCounts` with the board named.
+
+**Which names a query uses is `@common/board`**, one lookup of six strings per board — post
+table, link table, count column, two object prefixes and the website path. Every read and
+write in `@common/data/*` takes a `Board` and interpolates those with `db(...)`, as
+identifiers; the default is `'post'` everywhere, so nothing written before the second board
+existed changed meaning.
+
+`file_name` is unique **per board**, so the same image can be a post on both: two rows, two
+pairs of stored objects, under `generative/posts/` and `generative/thumbs/` rather than
+`posts/` and `thumbs/`.
 
 ---
 
@@ -356,8 +401,8 @@ key any more, so the boundary is drawn where Postgres draws boundaries:
 | role | held by | may |
 | --- | --- | --- |
 | `booru_owner` | the environment file, the migration runner only | everything, DDL included |
-| `booru_app` | compiled into the desktop bundle | `select, insert, update, delete` on the six content tables, `select, insert, update` on `site_settings`; **no** create, alter or drop |
-| `booru_web` | Vercel | `select` on all seven; `update (view_count) on posts`; nothing else |
+| `booru_app` | compiled into the desktop bundle | `select, insert, update, delete` on the eight content tables, `select, insert, update` on `site_settings`; **no** create, alter or drop |
+| `booru_web` | Vercel | `select` on all nine; `update (view_count)` on `posts` **and** `generative_posts`; nothing else |
 
 The grants are `db/grants.sql`, re-applied on every `db:push` and applied to whichever
 roles exist so a scratch database still migrates. `db/README.md` creates them.
@@ -368,8 +413,9 @@ desktop's is the same trust model it always had — possession of the installer 
 authorization — with one addition that matters: `booru_app` owns nothing, so a string
 extracted from a bundle can vandalise the data and cannot drop a table.
 
-Images are not in the database. They are one public R2 bucket, `posts/` and `thumbs/`,
-read by URL and written only by the desktop app's bucket key.
+Images are not in the database. They are one public R2 bucket — `posts/` and `thumbs/` for
+the gallery, `generative/posts/` and `generative/thumbs/` for the other board — read by URL
+and written only by the desktop app's bucket key.
 
 ---
 
@@ -398,7 +444,7 @@ that is what lets Electron's main process run the same code the website compiles
 
 ### Counters
 
-`@common/data/counters.ts` — `syncTagPostCounts(client, tagIds)`. Formerly the
+`@common/data/counters.ts` — `syncTagPostCounts(db, tagIds, board)`. Formerly the
 `tag_post_count` trigger on `post_tags`.
 
 - **Recompute, never increment.** PostgREST cannot express `post_count = post_count + 1`,
@@ -406,17 +452,20 @@ that is what lets Electron's main process run the same code the website compiles
   increment has no way of noticing it is behind. A recount reads the rows that define the
   number, so it is right regardless of what it finds and a stale write is repaired by the
   next one.
-- **Every write must call it** with exactly the tags it moved. Nothing does this
-  automatically now that the trigger is gone.
+- **Every write must call it** with exactly the tags it moved, **and with its own board**.
+  Nothing does this automatically now that the trigger is gone, and the column it recounts
+  and the table it recounts from both come out of `@common/board`, so the two can never be
+  picked from different boards.
 - **It logs and never throws.** By the time it runs the post write has already landed;
   failing the upload afterwards would trade a wrong number for a lost image.
 - `booru_app`, because that is the only role that can write at all.
 
 ### View counting
 
-`src/lib/data/posts.ts` — `incrementPostView()`. Formerly the `increment_post_view` RPC,
-then a compare-and-swap. **The only write the website makes**, and one statement:
-`update posts set view_count = view_count + 1`.
+`src/lib/data/posts.ts` — `incrementPostView(postId, board)`. Formerly the
+`increment_post_view` RPC, then a compare-and-swap. **The only write the website makes**,
+and one statement: `update <board's table> set view_count = view_count + 1`. The board
+arrives from an action, so it is checked against `BOARDS` before it names a table.
 
 - The retry loop is gone with PostgREST. It read the count and wrote back with an
   equality check on what it had read, up to three attempts, then dropped the view —
@@ -424,16 +473,19 @@ then a compare-and-swap. **The only write the website makes**, and one statement
 - It cannot recount the way the tag counter does: `view_count` is not derived from
   anything, because the rows that would define it are never stored. That is why this one
   increments and that one recomputes, and it is not an inconsistency.
-- `booru_web` holds `update (view_count) on posts` and no other write grant, so the
-  column-level grant is what makes this safe rather than the function being careful.
+- `booru_web` holds `update (view_count)` on the two post tables and no other write grant
+  anywhere, so the column-level grant is what makes this safe rather than the function
+  being careful.
   Called only from the `recordPostView` action, never on a read path, so prefetches,
   `generateMetadata` and crawlers don't inflate it.
 
 ### Search
 
-`@common/data/search.ts` — `searchPosts(client, { query, perPage, after })`. Formerly the
-`search_posts` SQL function. One implementation, run by both the website's listing and the
-desktop app's browse screen.
+`@common/data/search.ts` — `searchPosts(db, { query, perPage, after, board })`. Formerly
+the `search_posts` SQL function. One implementation, run by both the website's listings —
+`/posts` and `/ai-posts` — and the desktop app's browse screen. The board names the two
+tables the statement below reads and changes nothing else about it: `-tag` means the same
+thing on either.
 
 **One statement**, whatever was typed:
 

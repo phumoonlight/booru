@@ -1,10 +1,11 @@
 'use client'
 
 import { useSyncExternalStore } from 'react'
+import type { Board } from '@common/board'
 import {
   addSaved,
   parseSavedQueries,
-  SAVED_QUERIES_KEY,
+  savedQueriesKey,
   savedKey,
   updateSaved,
   type SavedQuery,
@@ -12,36 +13,38 @@ import {
 
 // A module-level store rather than component state: more than one copy of the shelf can
 // be mounted at once, and both have to agree the moment either one saves.
-let cached: SavedQuery[] | null = null
-const listeners = new Set<() => void>()
+//
+// **One store per board**, because a shelf is per board (`savedQueriesKey`). Keyed rather
+// than duplicated, so the subscribe/read/write triple is written once — and the listeners
+// are keyed too: a save on one board must not re-render the other board's shelf into
+// claiming rows it does not hold.
+const cached: Partial<Record<Board, SavedQuery[]>> = {}
+const listeners: Partial<Record<Board, Set<() => void>>> = {}
 
-function read(): SavedQuery[] {
-  if (cached === null) {
-    try {
-      cached = parseSavedQueries(window.localStorage.getItem(SAVED_QUERIES_KEY))
-    } catch {
-      // Private mode / storage disabled: saving works for this page and vanishes with it
-      cached = []
-    }
-  }
-  return cached
+function subscribersOf(board: Board): Set<() => void> {
+  return (listeners[board] ??= new Set())
 }
 
-function write(next: SavedQuery[]) {
-  cached = next
+function read(board: Board): SavedQuery[] {
+  if (cached[board] === undefined) {
+    try {
+      cached[board] = parseSavedQueries(window.localStorage.getItem(savedQueriesKey(board)))
+    } catch {
+      // Private mode / storage disabled: saving works for this page and vanishes with it
+      cached[board] = []
+    }
+  }
+  return cached[board] as SavedQuery[]
+}
+
+function write(board: Board, next: SavedQuery[]) {
+  cached[board] = next
   try {
-    window.localStorage.setItem(SAVED_QUERIES_KEY, JSON.stringify(next))
+    window.localStorage.setItem(savedQueriesKey(board), JSON.stringify(next))
   } catch {
     // Nothing to do — the list holds until the tab is closed
   }
-  for (const listener of listeners) listener()
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
+  for (const listener of subscribersOf(board)) listener()
 }
 
 // Stable reference: the server has no saved queries, and a fresh [] each call would
@@ -54,19 +57,34 @@ const serverSnapshot = () => NONE
  * they belong to a visitor, not to the page, so nothing about them can be rendered ahead
  * of time. React swaps in the real list immediately after.
  */
-export function useSavedQueries(): SavedQuery[] {
-  return useSyncExternalStore(subscribe, read, serverSnapshot)
+export function useSavedQueries(board: Board = 'post'): SavedQuery[] {
+  // Both closures are rebuilt whenever the board changes, which is what makes
+  // `useSyncExternalStore` re-subscribe and re-read rather than keep the old board's list.
+  return useSyncExternalStore(
+    (listener) => {
+      const set = subscribersOf(board)
+      set.add(listener)
+      return () => {
+        set.delete(listener)
+      }
+    },
+    () => read(board),
+    serverSnapshot
+  )
 }
 
-export function saveQuery(query: string) {
-  write(addSaved(read(), query))
+export function saveQuery(query: string, board: Board = 'post') {
+  write(board, addSaved(read(board), query))
 }
 
-export function updateQuery(query: string) {
-  write(updateSaved(read(), query))
+export function updateQuery(query: string, board: Board = 'post') {
+  write(board, updateSaved(read(board), query))
 }
 
-export function removeQuery(query: string) {
+export function removeQuery(query: string, board: Board = 'post') {
   const key = savedKey(query)
-  write(read().filter((entry) => savedKey(entry.query) !== key))
+  write(
+    board,
+    read(board).filter((entry) => savedKey(entry.query) !== key)
+  )
 }

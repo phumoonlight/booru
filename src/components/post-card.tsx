@@ -3,6 +3,7 @@ import Link from 'next/link'
 import type { Post } from '@/lib/data/posts'
 import { StartHereBadge } from '@/components/start-here'
 import { thumbnailUrl } from '@/lib/images'
+import type { Board } from '@common/board'
 import { isRestricted, postHref, RATING_LABEL } from '@common/search'
 import { BLUR_DATA_URL } from '@/lib/blur'
 
@@ -14,17 +15,21 @@ export function PostCard({
   post,
   query = '',
   active = false,
+  board = 'post',
 }: {
   post: Post
   query?: string
   active?: boolean
+  /** Which board the row came from — it decides the post's URL and its thumbnail's
+      prefix, and the two must be the same one or a card links at a stranger. */
+  board?: Board
 }) {
   return (
     // The wrapper exists so the badge can sit over the thumbnail: nesting one link
     // inside another is not a thing, so the two are siblings and the group/positioning
     // moved up here.
     <div className="group relative h-full">
-      <StartHereBadge postId={post.id} query={query} active={active} />
+      <StartHereBadge postId={post.id} query={query} active={active} board={board} />
       {/* The adult tier says so on the thumbnail. A listing showing it is one where the
           setting is on, so this is a label rather than a gate — which corner of the grid
           a post is in is the one thing the card can't say otherwise. Only the restricted
@@ -35,7 +40,7 @@ export function PostCard({
         </span>
       )}
       <Link
-        href={postHref(post.id, query)}
+        href={postHref(post.id, query, board)}
         // A new tab, because the grid is a feed now: following a post in place throws
         // away every chunk loaded below the fold, and coming back lands you at the top
         // of whichever page the URL had reached rather than on the thumbnail you left.
@@ -63,7 +68,7 @@ export function PostCard({
         that reserves grid space, and the thumbnail keeps the post's ratio.
       */}
         <Image
-          src={thumbnailUrl(post.file_name)}
+          src={thumbnailUrl(post.file_name, board)}
           alt={`Post ${post.id}`}
           width={post.width}
           height={post.height}

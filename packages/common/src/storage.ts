@@ -18,19 +18,25 @@
  * value compiled into its bundle.
  */
 
-/** `posts/<name>.<ext>` — the AVIF when it beat the uploaded bytes, otherwise the
- *  original byte-for-byte. `file_ext` says which (see `@common/upload/pipeline`). */
-export const POST_PREFIX = 'posts'
+import { BOARD, type Board } from '@common/board'
 
-/** `thumbs/<name>.avif` — always AVIF, always 384px tall. */
-export const THUMB_PREFIX = 'thumbs'
-
-export function postImagePath(fileName: string, fileExt: string): string {
-  return `${POST_PREFIX}/${fileName}.${fileExt}`
+/**
+ * **Two prefixes per board, and the board picks them** (`@common/board`). The gallery
+ * keeps the two it has always had — `posts/` and `thumbs/`, so not one stored object
+ * moves — and the generated board gets its own folder beside them rather than its own
+ * bucket, which is the same trade this file already made once: a bucket is a public
+ * hostname, a prefix is free.
+ *
+ * `posts/<name>.<ext>` is the AVIF when it beat the uploaded bytes and the original
+ * byte-for-byte otherwise; `file_ext` says which (see `@common/upload/pipeline`).
+ * `thumbs/<name>.avif` is always AVIF and always 384px tall.
+ */
+export function postImagePath(fileName: string, fileExt: string, board: Board = 'post'): string {
+  return `${BOARD[board].postPrefix}/${fileName}.${fileExt}`
 }
 
-export function thumbnailPath(fileName: string): string {
-  return `${THUMB_PREFIX}/${fileName}.avif`
+export function thumbnailPath(fileName: string, board: Board = 'post'): string {
+  return `${BOARD[board].thumbPrefix}/${fileName}.avif`
 }
 
 /** The public URL of a stored object. `base` is the bucket's public origin, with no

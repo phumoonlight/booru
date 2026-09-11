@@ -2,6 +2,8 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { SearchBar } from '@/components/search-bar'
 import { NavProgress } from '@/components/nav-progress'
+import { BOARD, type Board } from '@common/board'
+import { isGenerativeEnabled } from '@/lib/generative-server'
 import { SITE_NAME } from '@/config'
 
 /**
@@ -17,14 +19,25 @@ import { SITE_NAME } from '@/config'
  * own page, which is already one fixed listing, and /tags, which has a filter box of its
  * own and would otherwise offer two boxes with no way to tell which one a tag name goes
  * into. The nav above it is the part every page still needs.
+ *
+ * **🤖 AI posts appears only once it has been switched on**, which is why this is an
+ * async server component: the setting is a cookie, and a nav drawn in the layout could
+ * not read the one thing that decides what is in it. It sits ahead of Tags because the
+ * two items before it are the two galleries, and Tags is what describes either of them.
+ * The wordmark goes back to the board you are reading rather than always to `/posts` —
+ * on the AI listing, "home" is that listing.
  */
-export function SearchHeader({
+export async function SearchHeader({
   query = '',
   showSearch = true,
+  board = 'post',
   menu,
 }: {
   query?: string
   showSearch?: boolean
+  /** Which board this page belongs to: where the wordmark goes back to, where the search
+      box submits, and which nav item is drawn as the one you are already on. */
+  board?: Board
   /**
    * A control at the far left, ahead of the wordmark — the listing's tag drawer, and
    * nothing else so far. A slot rather than the drawer itself, because this file is a
@@ -33,6 +46,10 @@ export function SearchHeader({
    */
   menu?: ReactNode
 }) {
+  // Drawn if the setting is on — or if you are already on it, since a nav that hid the
+  // page you are looking at would leave no way back to it but the address bar.
+  const showGenerative = board === 'generative' || (await isGenerativeEnabled())
+
   return (
     <div className="sticky top-0 z-30 -mx-3 border-b border-border bg-background/95 px-3 py-3 backdrop-blur">
       <div className={`flex items-center justify-between gap-3 ${showSearch ? 'mb-2' : ''}`}>
@@ -42,7 +59,7 @@ export function SearchHeader({
               them. It goes to the gallery, not to `/`: the landing page is a front door,
               and nothing behind it needs a way back to a search box it already has. */}
           <Link
-            href="/posts"
+            href={BOARD[board].path}
             className="truncate text-xl font-bold tracking-tight sm:text-2xl hover:underline"
           >
             {SITE_NAME}
@@ -50,6 +67,18 @@ export function SearchHeader({
           </Link>
         </div>
         <nav className="flex items-center gap-3">
+          {showGenerative && (
+            <Link
+              href={BOARD.generative.path}
+              aria-current={board === 'generative' ? 'page' : undefined}
+              className={`text-sm hover:text-foreground ${
+                board === 'generative' ? 'text-foreground' : 'text-muted'
+              }`}
+            >
+              🤖 {BOARD.generative.label}
+              <NavProgress />
+            </Link>
+          )}
           <Link href="/tags" className="text-sm text-muted hover:text-foreground">
             🏷️ Tags
             <NavProgress />
@@ -63,7 +92,7 @@ export function SearchHeader({
         </nav>
       </div>
       {/* Keyed so navigation (back/forward, tag links) resets the input to the URL */}
-      {showSearch && <SearchBar key={query} initialQuery={query} />}
+      {showSearch && <SearchBar key={query} initialQuery={query} board={board} />}
     </div>
   )
 }
@@ -82,6 +111,9 @@ export function SearchHeaderSkeleton() {
           <div className="pointer-fine:size-8 size-11 animate-pulse rounded-lg bg-surface" />
           <div className="h-7 w-32 animate-pulse rounded bg-surface sm:h-8" />
         </div>
+        {/* Two nav items, not three: 🤖 AI posts is behind a cookie the skeleton cannot
+            read, and reserving a slot for something usually absent leaves a gap on most
+            visits where the point of this file is that nothing moves. */}
         <div className="flex items-center gap-3">
           <div className="h-5 w-14 animate-pulse rounded bg-surface" />
           <div className="h-5 w-20 animate-pulse rounded bg-surface" />

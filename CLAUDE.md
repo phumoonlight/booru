@@ -70,8 +70,9 @@ structure further down.
    environment, so a module that built its own could not run in Electron.
 4. **Nothing in `packages/common` imports `next/*`, `server-only` or React**, reads the
    environment, or hardcodes a limit. Electron's main process compiles these files.
-5. **Every write that moves tags must call `syncTagPostCounts`** with the tags it moved.
-   No trigger does it any more.
+5. **Every write that moves tags must call `syncTagPostCounts`** with the tags it moved
+   **and the board it moved them on**. No trigger does it any more, and the count column
+   and the link table it recounts from both come out of `@common/board`.
 6. **`createPostWithTags()` and `updatePostWithTags()` take the pool, not a `Db`** —
    they are the only two that open a transaction, which is what replaced the hand-written
    unwind. Everything else takes `Db` (postgres.js's `ISql`) so it can also be called
@@ -96,12 +97,20 @@ structure further down.
    `postHref()` the only thing that spells a post's. Tag links, facets and the feed
    derive from the first; the grid's cards and the detail page's arrows from the second,
    which is what carries `?query=` from the listing onto the post and back out again.
-10. **Re-measure with `npm run bench:avif` before changing a constant in
+   **Both take a board** and read the path out of `@common/board` — a second pair of
+   functions for `/ai-posts` would be this grammar written twice.
+10. **A table name is never spelled in a query** — `@common/board` holds the three per
+   board (`posts`, `post_tags`, the count column) and every read and write takes a `Board`
+   and interpolates them with `db(...)`, as identifiers. That is what makes the two boards
+   impossible to mix by accident, which is the whole reason `generative_posts` is a table
+   rather than a `generated boolean`. A board that arrives from the browser — an action's
+   argument — is checked with `isBoard` before it names anything.
+11. **Re-measure with `npm run bench:avif` before changing a constant in
    `@common/imgcmp/`.** Those numbers were measured, not chosen.
-11. **`select count(*)` needs `::int`.** postgres.js hands a `bigint` back as a *string*,
+12. **`select count(*)` needs `::int`.** postgres.js hands a `bigint` back as a *string*,
     to avoid silently losing precision. That is also why `posts.id` and `tags.id` are
     `integer` rather than `bigint` — see the baseline migration's note.
-12. **Every change under `packages/desktop` raises the version in
+13. **Every change under `packages/desktop` raises the version in
     `packages/desktop/package.json`.** About reads it (`app.getVersion()`) and
     electron-builder stamps it on the installer, so a build that was not bumped is
     indistinguishable from the one before it — on screen and on disk alike.
@@ -112,7 +121,7 @@ structure further down.
   isn't an RSC is `loadMorePosts` in `lib/actions/search.ts` — the feed's next chunk, an
   action rather than a route handler so the data layer stays the only query surface.
 - **The website's only write is `recordPostView`**, because a visitor's view still counts.
-  It is `update posts set view_count = view_count + 1` — atomic again, where PostgREST
+  It is `update <the board's table> set view_count = view_count + 1` — atomic again, where PostgREST
   forced a three-attempt compare-and-swap that dropped the view under contention.
 - **One pool, `src/lib/db.ts`**, `server-only`, connecting as `booru_web`. It was two
   clients — an anon one for reads and a service-role one that could bypass every policy
@@ -145,10 +154,10 @@ The post write path, the search, the counters, both encoders, and the pure helpe
 
 ## The website (`src/`)
 
-- **Eight routes**, and none of them writes: `/`, `/posts`, `/posts/[id]`, `/tags`,
-  `/tags/[id]`, `/settings`, `robots.txt`, `sitemap.xml`. There is no `/upload`,
-  `/login`, `/account`, `/tags/manage` or `src/proxy.ts` (Next 16's `middleware.ts`) —
-  see [History](#history).
+- **Ten routes**, and none of them writes: `/`, `/posts`, `/posts/[id]`, `/ai-posts`,
+  `/ai-posts/[id]`, `/tags`, `/tags/[id]`, `/settings`, `robots.txt`, `sitemap.xml`. There
+  is no `/upload`, `/login`, `/account`, `/tags/manage` or `src/proxy.ts` (Next 16's
+  `middleware.ts`) — see [History](#history).
 - **The whole site closes behind one row.** `site_settings.maintenance`, flipped from the
   desktop app's settings screen, and read in `src/app/(public)/layout.tsx` — a layout
   rather than a proxy, since the site has none and the pool is already here. Closed, every
@@ -162,6 +171,26 @@ The post write path, the search, the counters, both encoders, and the pure helpe
   treated as serving: a blip must not close the site.
 - **The gallery is `/posts`, not `/`.** `/` is a landing page: wordmark, search box,
   emoji post count. `/?query=` redirects to the listing for old links.
+- **There are two boards, and they are one page twice.** `/ai-posts` is the generated
+  images — a separate table (`generative_posts`), a separate link table into the *same*
+  `tags`, a separate count column on it, and its own folder in the same bucket. What it is
+  not is a separate set of files: `PostListing` and `PostDetail` are the listing and the
+  post page, and each route is four lines that read a query and name a board. Two copies
+  was the alternative and is how the second one stops getting the fix the first one got.
+  The board itself is `@common/board` — six strings per board, spelled nowhere else — and
+  every read, write, path and href takes one, defaulting to `'post'`, so nothing written
+  before the second board existed changed meaning. **The vocabulary is shared and the
+  counts are not**: `blue_hair` means one thing across the site, and a tag on four hundred
+  generated images and two drawings is not a tag with four hundred and two posts on either
+  gallery.
+- **🤖 AI posts is behind a cookie, and only the nav item is.** `lib/generative.ts` holds
+  the spelling and `lib/generative-server.ts` reads it, split for the reason the NSFW pair
+  is. Switched off, the item is not drawn and `/ai-posts` is still reachable — like a
+  post's own URL, this is what the site volunteers rather than a gate. The whole board is
+  `noindex` and out of `sitemap.xml`: a section a visitor has to switch on is not one to
+  arrive at from a search engine. Its settings control is a **plain checkbox**, beside the
+  pot rather than inside it — the pot exists because what NSFW changes is hard to say in a
+  sentence, and "there is a second gallery" is not.
 - **`?query=` is the only param the listing has** (`SEARCH_PARAM` in `@common/search`),
   space-separated, `-tag` excludes. Ratings and the cursor ride in the same string as
   `rating:r18` and `start:900` metatags — nothing outside `splitQuery` and
@@ -192,7 +221,7 @@ The post write path, the search, the counters, both encoders, and the pure helpe
   the requested quality by 50/80 for AVIF, so the default 75 became quality 47 at effort
   3, for a resize its optimizer could not perform anyway (`withoutEnlargement`).
 - **The adult tiers are off by default, behind one cookie.** `/settings` is the site's
-  only preferences page and Enable NSFW is its only setting; `lib/nsfw.ts` holds the
+  only preferences page, and NSFW and 🤖 AI posts are the two settings on it; `lib/nsfw.ts` holds the
   cookie's spelling and `lib/nsfw-server.ts` reads it, split because the checkbox that
   writes it is a client component and `next/headers` anywhere in that import graph is a
   build error. `lib/data/search.ts` applies it to *every* listing the site renders, so a
@@ -201,7 +230,8 @@ The post write path, the search, the counters, both encoders, and the pure helpe
   every post and obscured some of them client-side.
 - **Saved queries are `localStorage`**, so they need no account (`lib/saved-queries.ts`,
   module store in `use-saved-queries.ts` — the sidebar renders twice and both copies must
-  agree). A row's identity is its tags, the query minus `start:`, which is what lets 💾
+  agree). **One shelf per board**, since a saved query is a listing's whole address and the
+  two listings are two addresses; the gallery keeps the unsuffixed key it always had. A row's identity is its tags, the query minus `start:`, which is what lets 💾
   move a saved cursor without a second row or any selection state.
 - Pages fall back to `<SetupNotice />` when `isDatabaseConfigured()` is false, so the app
   is browsable before the environment file has been filled in.
@@ -287,6 +317,14 @@ behind a session, because there is none.
 
 - **Open site** is the header item that is not a view: it opens the board in the browser
   via `searchHref('')` and is never drawn active, because it goes somewhere else.
+- **The desktop app writes the gallery only, so far.** The write path underneath it is
+  board-aware — `createPostFromImage`, `createPostWithTags`, `updatePostWithTags`,
+  `deletePostRow` and `applyTagToTagged` all take a `Board` and default to `'post'`, so
+  every screen here means exactly what it always did — but nothing in this window yet
+  offers a choice of board, which is why `generative_posts` starts empty and fills only
+  once one is added. What that costs is one control (Upload, Browse and the post editor
+  each need to know which board they are on); what it bought is that none of the existing
+  screens had to change to get it.
 - **Upload is one image at a time** (`upload-form.tsx`). It was a queue — drop a folder,
   tag twenty cards, upload top to bottom, with reorder arrows, a fold per card, a done
   tick and an Apply-to-all bar. All of that was machinery for keeping twenty half-tagged
@@ -626,8 +664,8 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   that pushes has changed a live database on a hunch about what the author wanted, and the
   file is the part that can be reviewed before that happens.
 - **One baseline**, `db/migrations/0001_baseline.sql`: every table in foreign-key order
-  and its indexes, plus `0002_site_settings.sql`, `0003_sections_off_categories.sql` and
-  `0004_section_sides.sql`. Schema changes from here are **always** a new numbered file, never a
+  and its indexes, plus `0002_site_settings.sql`, `0003_sections_off_categories.sql`,
+  `0004_section_sides.sql` and `0005_generative_posts.sql`. Schema changes from here are **always** a new numbered file, never a
   dashboard edit and never an edit to the baseline once pushed anywhere real.
   `scripts/migrate.mjs` applies each inside a transaction and records it in `_migrations`.
 - **`db/grants.sql` is not a migration** and re-runs on every `db:push`. Who may do what
@@ -707,8 +745,10 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
 
 ## Images
 
-- **One R2 bucket, two prefixes** — `posts/<name>.<ext>` and `thumbs/<name>.avif`. Paths
-  derive from `posts.file_name` (the md5 of the uploaded bytes), never stored. It was two
+- **One R2 bucket, two prefixes per board** — `posts/<name>.<ext>` and
+  `thumbs/<name>.avif` for the gallery, `generative/posts/` and `generative/thumbs/` for
+  the AI board (`@common/board` picks the pair). Paths derive from `file_name` (the md5 of
+  the uploaded bytes), never stored. It was two
   buckets, which is two public hostnames for two halves of the same thing; a prefix costs
   nothing. Objects are written with `Cache-Control: immutable` for a year, which is free
   correctness given the name *is* the content hash.

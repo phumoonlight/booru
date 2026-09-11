@@ -1,3 +1,4 @@
+import { BOARD, type Board } from '@common/board'
 import type { Db } from '@common/db'
 import { postColumns, type Post, type PostPage } from '@common/data/posts'
 import { parseSearchQuery, resolveRatings, splitQuery, type Rating } from '@common/search'
@@ -20,6 +21,11 @@ import type { Tag } from '@common/tags'
  *
  * What replaces it is below: a correlated count for the includes and a `not exists` for
  * the excludes.
+ *
+ * **Every read here takes a board** (`@common/board`) and reads its table names out of
+ * it. The grammar, the cursor and the rating ceiling are the board's business not at all
+ * — `-tag` means the same thing on `/posts` and on `/ai-posts`, which is the whole reason
+ * the second board is a pair of table names rather than a second copy of this file.
  */
 
 /**
@@ -50,10 +56,13 @@ export async function searchPosts(
     perPage = POSTS_PER_PAGE,
     after,
     visibleRatings,
+    board = 'post',
   }: {
     /** Tags, rating metatags, and the `start:` cursor — the whole address of a listing. */
     query?: string
     perPage?: number
+    /** Which board is being listed. The gallery unless said otherwise. */
+    board?: Board
     /** Continue point: strictly older than this post. The feed's own, never in the URL. */
     after?: number
     /**
@@ -66,6 +75,7 @@ export async function searchPosts(
 ): Promise<PostPage> {
   const { include, exclude, ratings, excludeRatings, start } = splitQuery(parseSearchQuery(query))
   const allowed = resolveRatings({ ratings, excludeRatings }, visibleRatings)
+  const { posts, postTags } = BOARD[board]
 
   try {
     // It reads one row more than it returns, and that spare row is the whole answer to
@@ -96,15 +106,15 @@ export async function searchPosts(
     // offset 48 slides everything down one and hands you a post you already have.
     const rows = await db<Post[]>`
       select ${postColumns(db)}
-        from posts p
+        from ${db(posts)} p
        where (${allowed}::text[] is null or p.rating = any(${allowed}::text[]))
          and (select count(distinct pt.tag_id)
-                from post_tags pt
+                from ${db(postTags)} pt
                 join tags t on t.id = pt.tag_id
                where pt.post_id = p.id
                  and t.name = any(${include}::text[])) = ${include.length}
          and not exists (select 1
-                           from post_tags pt
+                           from ${db(postTags)} pt
                            join tags t on t.id = pt.tag_id
                           where pt.post_id = p.id
                             and t.name = any(${exclude}::text[]))
@@ -146,24 +156,26 @@ export async function searchNeighbours(
     id,
     query = '',
     visibleRatings,
-  }: { id: number; query?: string; visibleRatings?: readonly Rating[] }
+    board = 'post',
+  }: { id: number; query?: string; visibleRatings?: readonly Rating[]; board?: Board }
 ): Promise<{ prevId: number | null; nextId: number | null }> {
   const { include, exclude, ratings, excludeRatings } = splitQuery(parseSearchQuery(query))
   const allowed = resolveRatings({ ratings, excludeRatings }, visibleRatings)
+  const { posts, postTags } = BOARD[board]
 
   try {
     const [row] = await db<{ prev_id: number | null; next_id: number | null }[]>`
       with matching as not materialized (
         select p.id
-          from posts p
+          from ${db(posts)} p
          where (${allowed}::text[] is null or p.rating = any(${allowed}::text[]))
            and (select count(distinct pt.tag_id)
-                  from post_tags pt
+                  from ${db(postTags)} pt
                   join tags t on t.id = pt.tag_id
                  where pt.post_id = p.id
                    and t.name = any(${include}::text[])) = ${include.length}
            and not exists (select 1
-                             from post_tags pt
+                             from ${db(postTags)} pt
                              join tags t on t.id = pt.tag_id
                             where pt.post_id = p.id
                               and t.name = any(${exclude}::text[]))
@@ -194,17 +206,25 @@ export async function searchNeighbours(
  */
 export async function getTagsForPosts(
   db: Db,
-  postIds: number[]
+  postIds: number[],
+  board: Board = 'post'
 ): Promise<{ tag: Tag; count: number }[]> {
   if (postIds.length === 0) return []
 
+  const { postTags, tagCount } = BOARD[board]
+
+  // The count column is this board's and comes back aliased to `post_count`, so a `Tag`
+  // keeps one shape wherever it is drawn — the number beside a tag in the AI listing's
+  // drawer is how many AI posts carry it, which is the only figure that page can compare
+  // anything against.
   const rows = await db<(Tag & { on_page: number })[]>`
-    select t.id, t.name, t.category, t.mark, t.post_count, count(*)::int as on_page
-      from post_tags pt
+    select t.id, t.name, t.category, t.mark, t.${db(tagCount)} as post_count,
+           count(*)::int as on_page
+      from ${db(postTags)} pt
       join tags t on t.id = pt.tag_id
      where pt.post_id = any(${postIds})
      group by t.id
-     order by on_page desc, t.post_count desc, t.name`
+     order by on_page desc, t.${db(tagCount)} desc, t.name`
 
   // `on_page` ordered the rows and has done its job by here; the number beside a tag in
   // the sidebar is its site-wide count, not its count on this screenful.

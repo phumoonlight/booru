@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { NavProgress } from '@/components/nav-progress'
 import { categoryColor, categoryLabel, categoryOrder, markColor, type Tag } from '@common/tags'
+import type { Board } from '@common/board'
 import { parseSearchQuery, searchHref, tagLabel, withTag, withoutTag } from '@common/search'
 
 /**
@@ -117,7 +118,15 @@ export type TagEntry = { tag: Tag; count: number }
  * `min-h-9` buys a thumb-sized target, but a mouse doesn't need one and the slack reads as
  * a gappy list, so fine pointers get rows just tall enough for the text.
  */
-function TagRow({ entry, currentQuery }: { entry: TagEntry; currentQuery: string }) {
+function TagRow({
+  entry,
+  currentQuery,
+  board,
+}: {
+  entry: TagEntry
+  currentQuery: string
+  board: Board
+}) {
   const { tag, count } = entry
   const { include, exclude } = parseSearchQuery(currentQuery)
   const included = include.includes(tag.name)
@@ -127,7 +136,7 @@ function TagRow({ entry, currentQuery }: { entry: TagEntry; currentQuery: string
   return (
     <li className="group flex items-center gap-1">
       <Link
-        href={searchHref(tag.name)}
+        href={searchHref(tag.name, board)}
         aria-label={`Search only ${label}`}
         className={`pointer-fine:min-h-7 min-h-9 flex-1 py-1 text-sm hover:underline ${categoryColor(tag.category)} ${
           included ? 'font-semibold underline' : ''
@@ -143,7 +152,8 @@ function TagRow({ entry, currentQuery }: { entry: TagEntry; currentQuery: string
           currentQuery.trim()
             ? {
                 href: searchHref(
-                  included ? withoutTag(currentQuery, tag.name) : withTag(currentQuery, tag.name)
+                  included ? withoutTag(currentQuery, tag.name) : withTag(currentQuery, tag.name),
+                  board
                 ),
                 label: included ? `Remove ${label} from the search` : `Add ${label} to the search`,
                 on: included,
@@ -154,7 +164,8 @@ function TagRow({ entry, currentQuery }: { entry: TagEntry; currentQuery: string
           href: searchHref(
             excluded
               ? withoutTag(currentQuery, tag.name)
-              : withTag(currentQuery, tag.name, 'exclude')
+              : withTag(currentQuery, tag.name, 'exclude'),
+            board
           ),
           label: excluded ? `Stop excluding ${label}` : `Exclude ${label}`,
           on: excluded,
@@ -181,7 +192,15 @@ function TagRow({ entry, currentQuery }: { entry: TagEntry; currentQuery: string
  * No underline either: a border, a ground and a category colour are already saying this
  * is pressable, and underlining the word inside the button on hover says it twice.
  */
-function TagPill({ entry, currentQuery }: { entry: TagEntry; currentQuery: string }) {
+function TagPill({
+  entry,
+  currentQuery,
+  board,
+}: {
+  entry: TagEntry
+  currentQuery: string
+  board: Board
+}) {
   const { tag, count } = entry
   const { include, exclude } = parseSearchQuery(currentQuery)
   const included = include.includes(tag.name)
@@ -191,7 +210,7 @@ function TagPill({ entry, currentQuery }: { entry: TagEntry; currentQuery: strin
   return (
     <li>
       <Link
-        href={searchHref(tag.name)}
+        href={searchHref(tag.name, board)}
         aria-label={`Search only ${label}`}
         className="flex items-center gap-2 rounded-full border border-border bg-surface py-0.5 pl-2.5 pr-3 hover:border-muted"
       >
@@ -233,9 +252,15 @@ export function GroupedTagList({
   empty = 'No tags here.',
   headings = 'every',
   flow = 'list',
+  board = 'post',
 }: {
   entries: TagEntry[]
   currentQuery?: string
+  /** Which listing a tag link lands in. A tag means the same thing on both boards, so
+      the name is the same either way — what changes is which one you end up looking at,
+      and a facet that sent you off the board you were reading would be the drawer
+      undoing the page it belongs to. */
+  board?: Board
   empty?: string
   headings?: 'every' | 'named'
   /** `pills` wraps the tags across the width instead of down it — see `TagPill`. */
@@ -269,9 +294,9 @@ export function GroupedTagList({
   const list = pills ? 'flex flex-wrap gap-1.5' : 'flex flex-col gap-0.5'
   const draw = (entry: TagEntry) =>
     pills ? (
-      <TagPill key={entry.tag.id} entry={entry} currentQuery={currentQuery} />
+      <TagPill key={entry.tag.id} entry={entry} currentQuery={currentQuery} board={board} />
     ) : (
-      <TagRow key={entry.tag.id} entry={entry} currentQuery={currentQuery} />
+      <TagRow key={entry.tag.id} entry={entry} currentQuery={currentQuery} board={board} />
     )
 
   return (

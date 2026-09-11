@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { NavProgress } from '@/components/nav-progress'
+import type { Board } from '@common/board'
 import { searchHref, withStart } from '@common/search'
 
 /**
@@ -19,16 +20,19 @@ export function StartHereBadge({
   postId,
   query,
   active,
+  board = 'post',
 }: {
   postId: number
   /** The listing's current query — the cursor replaces any start: already in it. */
   query: string
   /** This post is already where the listing starts. */
   active?: boolean
+  /** Which listing is being pinned. A cursor only means anything on its own board. */
+  board?: Board
 }) {
   return (
     <Link
-      href={searchHref(withStart(query, postId))}
+      href={searchHref(withStart(query, postId), board)}
       title={active ? 'The listing starts here' : 'Start the listing here'}
       aria-label={`Start the listing at post ${postId}`}
       aria-current={active ? 'true' : undefined}
@@ -47,10 +51,18 @@ export function StartHereBadge({
  * card underneath to fight with — so it says what it is. It is also the only way in on a
  * phone, which is why it sits in the header beside the walk to the neighbouring posts.
  */
-export function StartHereLink({ postId, query = '' }: { postId: number; query?: string }) {
+export function StartHereLink({
+  postId,
+  query = '',
+  board = 'post',
+}: {
+  postId: number
+  query?: string
+  board?: Board
+}) {
   return (
     <Link
-      href={searchHref(withStart(query, postId))}
+      href={searchHref(withStart(query, postId), board)}
       title="Browse the gallery from this post"
       className="flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 text-xl opacity-60 transition-opacity hover:opacity-100"
     >

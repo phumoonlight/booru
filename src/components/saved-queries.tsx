@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { NavProgress } from '@/components/nav-progress'
 import { findSaved, type SavedQuery } from '@/lib/saved-queries'
 import { removeQuery, saveQuery, updateQuery, useSavedQueries } from '@/lib/use-saved-queries'
+import type { Board } from '@common/board'
 import { searchHref, startOf, tagLabel, withoutStart } from '@common/search'
 
 /** Relative and coarse — a saved query is "where I was", and the hour is noise. */
@@ -16,7 +17,7 @@ function ago(at: number): string {
   return `${Math.floor(days / 30)}mo ago`
 }
 
-function Row({ entry }: { entry: SavedQuery }) {
+function Row({ entry, board }: { entry: SavedQuery; board: Board }) {
   // The manage panel's confirmation, kept whole rather than shrunk into the ✕ itself.
   // Arming that button and firing it from the same pixel meant a double-tap removed the
   // row outright — so the tap that removes is a different button, in a place the first
@@ -44,7 +45,7 @@ function Row({ entry }: { entry: SavedQuery }) {
         </button>
         <button
           type="button"
-          onClick={() => removeQuery(entry.query)}
+          onClick={() => removeQuery(entry.query, board)}
           className="pointer-fine:min-h-8 flex min-h-11 items-center rounded-lg bg-red-500 px-2 text-xs font-medium text-background"
         >
           Remove
@@ -56,7 +57,7 @@ function Row({ entry }: { entry: SavedQuery }) {
   return (
     <li className="flex shrink-0 items-center rounded-lg border border-border">
       <Link
-        href={searchHref(entry.query)}
+        href={searchHref(entry.query, board)}
         title={start === null ? ago(entry.at) : `from #${start} · ${ago(entry.at)}`}
         className="pointer-fine:min-h-8 flex min-h-11 max-w-56 items-center gap-1 rounded-lg px-2 text-sm hover:text-accent"
       >
@@ -94,8 +95,15 @@ function Row({ entry }: { entry: SavedQuery }) {
  * needs no selection state, because a saved query *is* its tags: the entry whose tags
  * match the current ones is the one you came from.
  */
-export function SavedQueries({ currentQuery }: { currentQuery: string }) {
-  const saved = useSavedQueries()
+export function SavedQueries({
+  currentQuery,
+  board = 'post',
+}: {
+  currentQuery: string
+  /** Whose shelf this is. Each board keeps its own — see `savedQueriesKey`. */
+  board?: Board
+}) {
+  const saved = useSavedQueries(board)
   const current = currentQuery.trim()
   const match = current ? findSaved(saved, current) : undefined
   const drifted = match !== undefined && match.query !== current
@@ -111,7 +119,7 @@ export function SavedQueries({ currentQuery }: { currentQuery: string }) {
       {drifted && (
         <button
           type="button"
-          onClick={() => updateQuery(current)}
+          onClick={() => updateQuery(current, board)}
           title={`Update "${withoutStart(match.query) || 'All posts'}" to start here`}
           className="pointer-fine:min-h-8 flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-border text-sm hover:border-accent"
         >
@@ -122,7 +130,7 @@ export function SavedQueries({ currentQuery }: { currentQuery: string }) {
       {current && !match && (
         <button
           type="button"
-          onClick={() => saveQuery(current)}
+          onClick={() => saveQuery(current, board)}
           title="Save this search"
           className="pointer-fine:min-h-8 flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-border text-sm hover:border-accent"
         >
@@ -135,7 +143,7 @@ export function SavedQueries({ currentQuery }: { currentQuery: string }) {
           the page, which is the whole point of moving it out of the sidebar. */}
       <ul className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
         {saved.map((entry) => (
-          <Row key={entry.query} entry={entry} />
+          <Row key={entry.query} entry={entry} board={board} />
         ))}
       </ul>
     </div>

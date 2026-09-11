@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useTransition } from 'react'
 import { NavProgress, NavProgressBar } from '@/components/nav-progress'
+import type { Board } from '@common/board'
 import { postHref } from '@common/search'
 
 /**
@@ -51,10 +52,13 @@ export function PostNav({
   prevId,
   nextId,
   query = '',
+  board = 'post',
 }: {
   prevId: number | null
   nextId: number | null
   query?: string
+  /** The walk stays on the board it started on — the two number their posts apart. */
+  board?: Board
 }) {
   const router = useRouter()
   // The post page has no `loading.tsx` any more — the router holds the post on screen
@@ -73,12 +77,12 @@ export function PostNav({
       if (id === null) return
 
       event.preventDefault()
-      startTransition(() => router.push(postHref(id, query)))
+      startTransition(() => router.push(postHref(id, query, board)))
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [prevId, nextId, query, router])
+  }, [prevId, nextId, query, board, router])
 
   if (!prevId && !nextId) return null
 
@@ -87,7 +91,7 @@ export function PostNav({
       {pending && <NavProgressBar />}
       {prevId && (
         <Link
-          href={postHref(prevId, query)}
+          href={postHref(prevId, query, board)}
           title="Newer post (←)"
           aria-label="Newer post"
           // Both neighbours, in full. A post page is dynamic — it reads the NSFW cookie —
@@ -103,7 +107,7 @@ export function PostNav({
       )}
       {nextId && (
         <Link
-          href={postHref(nextId, query)}
+          href={postHref(nextId, query, board)}
           title="Older post (→)"
           aria-label="Older post"
           prefetch

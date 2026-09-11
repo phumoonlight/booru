@@ -1,6 +1,7 @@
 import type { CSSProperties, Ref } from 'react'
 import type { Post } from '@/lib/data/posts'
 import { PostCard } from '@/components/post-card'
+import type { Board } from '@common/board'
 import { startOf } from '@common/search'
 
 /**
@@ -51,10 +52,12 @@ function itemStyle(width: number, height: number): CSSProperties {
 export function PostGrid({
   posts,
   query = '',
+  board = 'post',
   ref,
 }: {
   posts: Post[]
   query?: string
+  board?: Board
   ref?: Ref<HTMLUListElement>
 }) {
   const start = startOf(query)
@@ -63,7 +66,7 @@ export function PostGrid({
     <ul ref={ref} className={ROW}>
       {posts.map((post) => (
         <li key={post.id} className="min-w-0" style={itemStyle(post.width, post.height)}>
-          <PostCard post={post} query={query} active={post.id === start} />
+          <PostCard post={post} query={query} active={post.id === start} board={board} />
         </li>
       ))}
     </ul>

@@ -6,6 +6,7 @@ import { suggestTags } from '@/lib/actions/search'
 import { NavProgressBar } from '@/components/nav-progress'
 import { TagMark } from '@/components/tag-list'
 import type { Tag } from '@common/tags'
+import type { Board } from '@common/board'
 import { queryTokens, searchHref, SEARCH_PARAM, tagLabel, withoutTag } from '@common/search'
 
 const DEBOUNCE_MS = 200
@@ -15,9 +16,14 @@ export function SearchBar({
   // The landing page has no query to reflect back, so its chip row would only ever be
   // a duplicate of what the input already shows.
   showChips = true,
+  board = 'post',
 }: {
   initialQuery?: string
   showChips?: boolean
+  /** Which listing a search lands in. The box is the same box on both boards — the
+      grammar and the autocomplete are the board's business not at all — so this is only
+      the path the push goes to. */
+  board?: Board
 }) {
   const router = useRouter()
   // The push is a transition purely to know when it lands: a query rewrite keeps the
@@ -58,7 +64,7 @@ export function SearchBar({
 
   function submit(query: string) {
     setOpen(false)
-    startNavigation(() => router.push(searchHref(query)))
+    startNavigation(() => router.push(searchHref(query, board)))
   }
 
   /** Replaces the token under the cursor with the chosen tag, keeping any `-`. */

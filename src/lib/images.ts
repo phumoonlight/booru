@@ -1,3 +1,4 @@
+import type { Board } from '@common/board'
 import { imageUrl, postImagePath, thumbnailPath } from '@common/storage'
 import { cdnBase } from '@/config'
 
@@ -16,10 +17,10 @@ import { cdnBase } from '@/config'
  * origin images are served from — it is in the markup of every page.
  */
 
-export function postImageUrl(fileName: string, fileExt: string): string {
-  return imageUrl(cdnBase(), postImagePath(fileName, fileExt))
+export function postImageUrl(fileName: string, fileExt: string, board: Board = 'post'): string {
+  return imageUrl(cdnBase(), postImagePath(fileName, fileExt, board))
 }
 
-export function thumbnailUrl(fileName: string): string {
-  return imageUrl(cdnBase(), thumbnailPath(fileName))
+export function thumbnailUrl(fileName: string, board: Board = 'post'): string {
+  return imageUrl(cdnBase(), thumbnailPath(fileName, board))
 }

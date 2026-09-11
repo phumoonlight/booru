@@ -1,5 +1,6 @@
 'use server'
 
+import { isBoard, type Board } from '@common/board'
 import { searchPosts, POSTS_PER_PAGE } from '@/lib/data/search'
 import { searchTags } from '@/lib/data/tags'
 import type { Post } from '@/lib/data/posts'
@@ -26,19 +27,23 @@ export async function loadMorePosts({
   query,
   after,
   perPage,
+  board = 'post',
 }: {
   query: string
   after: number
   /** A listing may run at its own size — the tag page shows ten at a time. Clamped
       here, because it arrives from the browser like everything else. */
   perPage?: number
+  /** Which listing is being continued. Checked rather than cast: it picks a table. */
+  board?: Board
 }): Promise<{ posts: Post[]; hasMore: boolean }> {
   if (!Number.isInteger(after) || after <= 0) return { posts: [], hasMore: false }
+  if (!isBoard(board)) return { posts: [], hasMore: false }
 
   const size =
     perPage !== undefined && Number.isInteger(perPage)
       ? Math.min(Math.max(perPage, 1), POSTS_PER_PAGE)
       : POSTS_PER_PAGE
 
-  return searchPosts({ query, after, perPage: size })
+  return searchPosts({ query, after, perPage: size, board })
 }

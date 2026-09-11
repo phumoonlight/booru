@@ -1,3 +1,5 @@
+import { BOARD, type Board } from '@common/board'
+
 // Pure query-string helpers — shared by server components and the client search bar.
 // URL is the state: /posts?query=blue_hair+solo+-photo&from=900
 
@@ -64,19 +66,27 @@ export function withoutTag(raw: string, tag: string): string {
 }
 
 /** Where the gallery lives. `/` is the front door and shows no posts. */
-export const POSTS_PATH = '/posts'
+export const POSTS_PATH = BOARD.post.path
 
 /**
  * Search URL for a query. That is the whole address now: where the listing starts
  * travels inside the query as a `start:` metatag, so there is no second param to keep
  * in step and nothing to forget to carry when a link is built.
+ *
+ * **The board is the other half of the address**, and it is an argument rather than a
+ * second function for the same reason the query is not two params: `/ai-posts` is the
+ * same listing of the same shape reading a different table, so a second `aiSearchHref`
+ * would be this file's grammar written twice and one of the two would fall behind. It
+ * defaults to the gallery, so every link built before the second board existed still
+ * points where it did.
  */
-export function searchHref(query: string): string {
+export function searchHref(query: string, board: Board = 'post'): string {
+  const path = BOARD[board].path
   const trimmed = query.trim()
-  if (!trimmed) return POSTS_PATH
+  if (!trimmed) return path
   const params = new URLSearchParams()
   params.set(SEARCH_PARAM, trimmed)
-  return `${POSTS_PATH}?${params.toString()}`
+  return `${path}?${params.toString()}`
 }
 
 /**
@@ -88,8 +98,8 @@ export function searchHref(query: string): string {
  * Spelled here for the reason `searchHref` is — a link that forgets to carry the query
  * silently drops you out of the search you were in, which is a bug nobody reports.
  */
-export function postHref(id: number, query = ''): string {
-  const path = `${POSTS_PATH}/${id}`
+export function postHref(id: number, query = '', board: Board = 'post'): string {
+  const path = `${BOARD[board].path}/${id}`
   const trimmed = query.trim()
   if (!trimmed) return path
   const params = new URLSearchParams()

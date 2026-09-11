@@ -1,3 +1,4 @@
+import { BOARD, type Board } from '@common/board'
 import type { Db } from '@common/db'
 
 /**
@@ -21,10 +22,28 @@ import type { Db } from '@common/db'
  * file (invariant 3).
  */
 
-/** Recount `tags.post_count` from `post_tags` for exactly these tags. */
-export async function syncTagPostCounts(db: Db, tagIds: number[]): Promise<void> {
+/**
+ * Recount this board's count column from this board's link table, for exactly these tags.
+ *
+ * **Two counts, one statement.** A tag is shared by both boards and counted separately on
+ * each (see `db/migrations/0005_generative_posts.sql`): four hundred generated posts and
+ * two drawn ones is not a tag with four hundred and two posts on the gallery in front of
+ * you. Which pair of names to use is the board's, out of `@common/board`, so the column
+ * and the table it is recounted from can never be picked from different boards.
+ *
+ * Both identifiers are interpolated with `db(...)`, which escapes them as identifiers
+ * rather than sending them as values — and both come from a frozen lookup, not from
+ * anything typed in.
+ */
+export async function syncTagPostCounts(
+  db: Db,
+  tagIds: number[],
+  board: Board = 'post'
+): Promise<void> {
   const ids = [...new Set(tagIds)]
   if (ids.length === 0) return
+
+  const { postTags, tagCount } = BOARD[board]
 
   try {
     // One statement for the whole set. It was a `Promise.all` of two round trips per tag
@@ -34,11 +53,11 @@ export async function syncTagPostCounts(db: Db, tagIds: number[]): Promise<void>
     // atomically per row rather than read-then-write.
     await db`
       update tags t
-         set post_count = (select count(*) from post_tags pt where pt.tag_id = t.id)
+         set ${db(tagCount)} = (select count(*) from ${db(postTags)} pt where pt.tag_id = t.id)
        where t.id = any(${ids})`
   } catch (error) {
     console.error(
-      `Could not recount post_count for tags ${ids.join(', ')}:`,
+      `Could not recount ${tagCount} for tags ${ids.join(', ')}:`,
       error instanceof Error ? error.message : error
     )
   }

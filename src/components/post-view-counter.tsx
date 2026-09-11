@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import type { Board } from '@common/board'
 import { recordPostView } from '@/lib/actions/posts'
 
 /** How long one browser's view of a post keeps counting as the same view. */
@@ -9,7 +10,10 @@ const STORAGE_KEY = 'viewed_posts'
 
 // Survives client-side navigation away and back; the storage map survives reloads.
 // Both are advisory — the counter is a popularity signal, not an audited metric.
-const seenThisSession = new Set<number>()
+// Keyed `<board>:<id>`, because the two boards number their posts independently: #12 on
+// one is not #12 on the other, and one Set of bare ids would have let a view of one
+// suppress a view of the other for the rest of the session.
+const seenThisSession = new Set<string>()
 
 function readSeen(): Record<string, number> {
   try {
@@ -23,17 +27,17 @@ function readSeen(): Record<string, number> {
 }
 
 /** True when this browser already counted the post recently. Marks it if not. */
-function claimView(postId: number): boolean {
-  if (seenThisSession.has(postId)) return false
-  seenThisSession.add(postId)
+function claimView(key: string): boolean {
+  if (seenThisSession.has(key)) return false
+  seenThisSession.add(key)
 
   const now = Date.now()
   const seen = readSeen()
-  const last = seen[String(postId)]
+  const last = seen[key]
   if (typeof last === 'number' && now - last < COOLDOWN_MS) return false
 
   // Prune while we're here, so the map can't grow without bound
-  const next: Record<string, number> = { [postId]: now }
+  const next: Record<string, number> = { [key]: now }
   for (const [id, at] of Object.entries(seen)) {
     if (typeof at === 'number' && now - at < COOLDOWN_MS) next[id] ??= at
   }
@@ -51,18 +55,19 @@ function claimView(postId: number): boolean {
  * most once per COOLDOWN_MS per browser. Renders nothing — it exists so a server
  * render, a prefetch or a crawler hitting generateMetadata never counts as a view.
  */
-export function PostViewCounter({ postId }: { postId: number }) {
+export function PostViewCounter({ postId, board = 'post' }: { postId: number; board?: Board }) {
   useEffect(() => {
     let cancelled = false
+    const key = `${board}:${postId}`
     // React 19 dev remounts effects; the flag keeps that from double-counting.
     const timer = setTimeout(() => {
-      if (!cancelled && claimView(postId)) void recordPostView(postId)
+      if (!cancelled && claimView(key)) void recordPostView(postId, board)
     }, 0)
     return () => {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [postId])
+  }, [postId, board])
 
   return null
 }
