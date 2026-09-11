@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useReducer, useState } from 'react'
 import { BOARDS, type Board } from '@common/board'
 import {
   TAG_CATEGORIES,
@@ -127,39 +127,73 @@ export function TagIndex({
   const recommendations = useRecommendations()
   const formSections = useFormSections()
   const catalogs = useCatalogs()
+  /**
+   * **The list is read from the module cache as it is drawn, not copied into state.**
+   *
+   * It was a copy, and a copy is what made the mode switch wrong: the effect that filled
+   * it returned early whenever the board it switched to was already cached, so the first
+   * switch re-read the other board and switching back left the rows of one board showing
+   * the counts of the other, for as long as the screen stayed open. Deriving it is not a
+   * patch on that — it removes the thing that could disagree. `cached[board]` is the only
+   * answer to "what does this board's index say", and there is now one of it.
+   *
+   * This screen is deliberately **not** remounted when the mode changes, unlike Browse
+   * which is keyed on it: the filter you typed, the tag you have open and which categories
+   * you unfolded are all worth keeping across a switch, since a switch is a question about
+   * counts rather than about what you were doing.
+   *
+   * `bump` is what tells React the module-level object moved — a mutation outside React is
+   * invisible to it. A reducer rather than a counter in `useState`, so there is no number
+   * to name and nothing reading it.
+   */
+  const [, bump] = useReducer((n: number) => n + 1, 0)
   const held = cached[board] ?? null
-  const [tags, setTags] = useState<Tag[] | null>(held?.tags ?? null)
-  const [fetchedAt, setFetchedAt] = useState<number | null>(held?.at ?? null)
-  // Starts true when there is nothing cached, because the effect below is about to read
-  // and this render is already the loading one. Setting it from inside the effect said
-  // the same thing one render later, which is a cascading render React now lints for.
-  const [loading, setLoading] = useState(held === null)
-  // Why the list could not be read, or ''. `listTags` throws now rather than answering with
-  // an empty list — a refused query and a board with no tags are not the same thing — so
-  // this screen has to have somewhere to put the difference. Without it a failed read left
-  // `tags` null and "Loading…" on screen for good, with Refresh disabled by the same flag.
-  const [loadError, setLoadError] = useState('')
+  const tags = held?.tags ?? null
+  const fetchedAt = held?.at ?? null
 
-  // Only when there is nothing to show. Coming back to this screen paints the list it
-  // painted last time, and the 🔄 beside the title is how you ask for a new one.
+  /**
+   * Why the list could not be read, or ''. `listTags` throws now rather than answering with
+   * an empty list — a refused query and a board with no tags are not the same thing — so
+   * this screen has to have somewhere to put the difference. Without it a failed read left
+   * `tags` null and "Loading…" on screen for good, with Refresh disabled by the same flag.
+   *
+   * It carries the board it happened on, so switching mode clears it without anything
+   * having to remember to: a failure is about one board's read and says nothing about the
+   * other's.
+   */
+  const [failure, setFailure] = useState<{ board: Board; message: string } | null>(null)
+  const loadError = failure?.board === board ? failure.message : ''
+
+  /** True while 🔄 is re-reading. The ordinary first read needs no flag: with nothing
+   *  cached and no error, "loading" is what having no rows *means*. */
+  const [refreshing, setRefreshing] = useState(false)
+  const loading = refreshing || (tags === null && loadError === '')
+
+  /**
+   * Only when there is nothing to show — for this board. Coming back to this screen, or
+   * switching back to a board read earlier, paints the list already held; the 🔄 beside the
+   * title is how you ask for a new one.
+   *
+   * Nothing is set synchronously here. The rows and the "Loading…" under them both derive
+   * from the cache, so a board with no copy yet already draws as loading on the render the
+   * switch causes, one round trip before this effect could have said so.
+   */
   useEffect(() => {
     if (cached[board]) return
+
     let alive = true
     void window.api
       .listTags(board)
       .then((next) => {
-        const now = Date.now()
-        cached[board] = { tags: next, at: now }
-        if (!alive) return
-        setTags(next)
-        setFetchedAt(now)
+        cached[board] = { tags: next, at: Date.now() }
+        if (alive) bump()
       })
       .catch((error: unknown) => {
         if (!alive) return
-        setLoadError(error instanceof Error ? error.message : 'Could not read the tags.')
-      })
-      .finally(() => {
-        if (alive) setLoading(false)
+        setFailure({
+          board,
+          message: error instanceof Error ? error.message : 'Could not read the tags.',
+        })
       })
     return () => {
       alive = false
@@ -168,7 +202,7 @@ export function TagIndex({
 
   async function refresh() {
     openTag(null)
-    setLoading(true)
+    setRefreshing(true)
     // Both copies, or the button lies: main keeps the index for a day (`main/tag-cache.ts`)
     // and would hand back the same list this screen is already showing. 🔄 means "read the
     // board", which is a thing only main can do.
@@ -186,17 +220,18 @@ export function TagIndex({
     ])
     try {
       const next = await window.api.listTags(board)
-      const now = Date.now()
-      cached[board] = { tags: next, at: now }
-      setTags(next)
-      setFetchedAt(now)
-      setLoadError('')
+      cached[board] = { tags: next, at: Date.now() }
+      setFailure(null)
+      bump()
     } catch (error) {
       // The list already on screen stands: a failed re-read is a reason to say so, not a
       // reason to throw away the copy that is still the best answer anyone has.
-      setLoadError(error instanceof Error ? error.message : 'Could not read the tags.')
+      setFailure({
+        board,
+        message: error instanceof Error ? error.message : 'Could not read the tags.',
+      })
     } finally {
-      setLoading(false)
+      setRefreshing(false)
     }
   }
 
