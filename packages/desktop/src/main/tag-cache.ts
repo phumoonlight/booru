@@ -1,3 +1,4 @@
+import { BOARDS, type Board } from '@common/board'
 import { listTags } from '@common/data/shared'
 import type { Tag } from '@common/tags'
 import { dropCache, isFresh, readCache, writeCache } from './app-cache'
@@ -24,9 +25,20 @@ import { boardDb } from './db'
  * file is settings, meant to be read and hand-edited, and this is derived data that can
  * be thrown away at any moment without losing anything. The folder and the day it is kept
  * for are `main/app-cache.ts`, shared with the browse grid.
+ *
+ * **One copy per board**, and only because of the number. Names, categories, marks and
+ * sections are one vocabulary across both boards — a tag means the same thing either side
+ * — but `post_count` does not, and the count is what orders the index and what every
+ * screen draws beside a name. Two counts on one row was the alternative: it reads every
+ * tag's second count on every fill, to be used only when the mode is switched, and it puts
+ * a shape in this file that `Tag` does not have anywhere else. A second file costs one
+ * extra read the first time you tag on the other board, and nothing after that.
  */
 
-const CACHE_FILE = 'tags.json'
+/** The gallery keeps the name it has always had, so an existing cache is still read. */
+function cacheFile(board: Board): string {
+  return board === 'post' ? 'tags.json' : `tags.${board}.json`
+}
 
 /**
  * Far above any board this app is pointed at, and a limit rather than no limit because
@@ -41,13 +53,13 @@ export const TAG_INDEX_LIMIT = 500
 type CacheFile = { at: number; tags: Tag[] }
 
 /** The copy consulted on every keystroke. Reading the file that often would undo the
- *  point of having one. `undefined` means the file has not been looked at yet. */
-let memory: CacheFile | null | undefined
-/** One fill at a time, however many lookups arrive while it runs. */
-let filling: Promise<CacheFile | null> | null = null
+ *  point of having one. `undefined` means that board's file has not been looked at yet. */
+const memory: Partial<Record<Board, CacheFile | null>> = {}
+/** One fill at a time per board, however many lookups arrive while it runs. */
+const filling: Partial<Record<Board, Promise<CacheFile | null> | null>> = {}
 
-function readFile(): CacheFile | null {
-  const parsed = readCache(CACHE_FILE)
+function readFile(board: Board): CacheFile | null {
+  const parsed = readCache(cacheFile(board))
   if (!parsed) return null
 
   const { at, tags } = parsed as Partial<CacheFile>
@@ -69,33 +81,38 @@ function readFile(): CacheFile | null {
  * far better answer to "what is this tag called" than no autocomplete at all, and the
  * next keystroke will try again.
  */
-async function ensureTags(): Promise<CacheFile | null> {
-  if (memory === undefined) memory = readFile()
-  if (memory && isFresh(memory.at)) return memory
-  if (filling) return filling
+async function ensureTags(board: Board): Promise<CacheFile | null> {
+  if (memory[board] === undefined) memory[board] = readFile(board)
+  const held = memory[board]
+  if (held && isFresh(held.at)) return held
+  const inFlight = filling[board]
+  if (inFlight) return inFlight
 
-  filling = (async () => {
+  const fill = (async () => {
     const db = boardDb()
     // An unconfigured bundle has nothing to read with, and an empty cache would then be
     // written over a good one. The stale copy stands.
-    if (!db) return memory ?? null
+    if (!db) return memory[board] ?? null
 
     try {
-      const tags = await listTags(db, CACHE_LIMIT)
+      const tags = await listTags(db, CACHE_LIMIT, board)
       // An empty board is a legitimate answer; an empty *reply* to a board that had tags
       // a minute ago is not, and overwriting on one is how a cache goes blank for a day.
-      if (tags.length === 0 && memory && memory.tags.length > 0) return memory
-      memory = { at: Date.now(), tags }
-      writeCache(CACHE_FILE, memory)
-      return memory
+      const previous = memory[board]
+      if (tags.length === 0 && previous && previous.tags.length > 0) return previous
+      const next = { at: Date.now(), tags }
+      memory[board] = next
+      writeCache(cacheFile(board), next)
+      return next
     } catch {
-      return memory ?? null
+      return memory[board] ?? null
     } finally {
-      filling = null
+      filling[board] = null
     }
   })()
 
-  return filling
+  filling[board] = fill
+  return fill
 }
 
 /**
@@ -106,11 +123,15 @@ async function ensureTags(): Promise<CacheFile | null> {
  * `null` means "ask the board instead": either there is nothing cached yet, or the read
  * hit its ceiling and the tag being typed may be one of the ones that didn't fit.
  */
-export async function cachedSuggestions(query: string, limit = 8): Promise<Tag[] | null> {
+export async function cachedSuggestions(
+  query: string,
+  limit = 8,
+  board: Board = 'post'
+): Promise<Tag[] | null> {
   const needle = query.trim().toLowerCase()
   if (!needle) return []
 
-  const cache = await ensureTags()
+  const cache = await ensureTags(board)
   if (!cache || cache.tags.length === 0 || cache.tags.length >= CACHE_LIMIT) return null
 
   return cache.tags
@@ -120,8 +141,8 @@ export async function cachedSuggestions(query: string, limit = 8): Promise<Tag[]
 }
 
 /** The Tags screen's list, from the same copy. `null` if there is nothing to serve. */
-export async function cachedIndex(): Promise<Tag[] | null> {
-  const cache = await ensureTags()
+export async function cachedIndex(board: Board = 'post'): Promise<Tag[] | null> {
+  const cache = await ensureTags(board)
   // Already ordered by the read: most used first, ties by name
   return cache ? cache.tags.slice(0, TAG_INDEX_LIMIT) : null
 }
@@ -150,16 +171,20 @@ export async function cachedIndex(): Promise<Tag[] | null> {
  * newer about everything else, and touching it would postpone the daily read that is the
  * only thing catching a rename made from another install.
  */
-export function bumpTagCounts(names: string[], delta: number): void {
+export function bumpTagCounts(names: string[], delta: number, board: Board = 'post'): void {
   if (names.length === 0) return
   // The file may hold a copy nothing has asked for yet this session. Patching memory
   // alone would leave that one behind to be served, stale, for the rest of the day.
-  if (memory === undefined) memory = readFile()
-  if (!memory) return
+  //
+  // Only this board's copy moves. The same tag's count on the other board did not change,
+  // which is the whole reason the two are separate columns.
+  if (memory[board] === undefined) memory[board] = readFile(board)
+  const held = memory[board]
+  if (!held) return
 
   const wanted = new Set(names)
   let touched = false
-  for (const tag of memory.tags) {
+  for (const tag of held.tags) {
     if (!wanted.has(tag.name)) continue
     tag.post_count = Math.max(0, tag.post_count + delta)
     touched = true
@@ -170,8 +195,8 @@ export function bumpTagCounts(names: string[], delta: number): void {
   // another is in the right place for the autocomplete without a second sort on the way
   // out. `cachedSuggestions` sorts its own matches anyway; this is for `cachedIndex`,
   // which trusts the order and slices.
-  memory.tags.sort((a, b) => b.post_count - a.post_count || a.name.localeCompare(b.name))
-  writeCache(CACHE_FILE, memory)
+  held.tags.sort((a, b) => b.post_count - a.post_count || a.name.localeCompare(b.name))
+  writeCache(cacheFile(board), held)
 }
 
 /**
@@ -181,13 +206,27 @@ export function bumpTagCounts(names: string[], delta: number): void {
  * posts. A finished upload no longer calls this; it patches the counts instead, which is
  * all an upload can move — see `bumpTagCounts`.
  */
+/**
+ * Both boards, always. Every caller is a write that changed a tag *row* — a name, a
+ * category, a mark, a section, or the row going away — and that is the vocabulary, which
+ * both copies hold. A count is the only per-board thing in here, and a count is not what
+ * drops this.
+ */
 export function clearTagCache(): void {
-  memory = null
-  dropCache(CACHE_FILE)
+  for (const board of BOARDS) {
+    memory[board] = null
+    dropCache(cacheFile(board))
+  }
 }
 
-/** What the settings screen shows: how much is held, and how old it is. */
+/**
+ * What the settings screen shows: how much is held, and how old it is. The gallery's copy,
+ * because that is the one every install has — the screen is answering "is there a cache,
+ * and is it stale", and a second row for a board this machine may never have tagged on
+ * would read as a problem rather than as an answer.
+ */
 export function tagCacheStatus(): { count: number; at: number | null } {
-  if (memory === undefined) memory = readFile()
-  return { count: memory?.tags.length ?? 0, at: memory?.at ?? null }
+  if (memory.post === undefined) memory.post = readFile('post')
+  const held = memory.post
+  return { count: held?.tags.length ?? 0, at: held?.at ?? null }
 }

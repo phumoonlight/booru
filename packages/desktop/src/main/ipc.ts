@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { app, BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron'
 import { z } from 'zod'
+import { BOARDS, type Board } from '@common/board'
 import { listTags, searchTags } from '@common/data/shared'
 import * as manageTags from '@common/data/tags'
 import { searchPosts } from '@common/data/search'
@@ -46,6 +47,14 @@ import type { UploadResult } from '@common/upload/pipeline'
  * handler that doesn't exist is a capability the window doesn't have.
  *
  * The arguments arrive from a page and are treated that way — parsed, not trusted.
+ *
+ * **The board rides on the call.** Which of the two boards the window is in is the
+ * renderer's state, and every channel that touches a post or a count takes it as an
+ * argument rather than this process holding a mode. A mode here would be read at the top
+ * of a handler, which is before every `await` in it: an upload begun on one board and
+ * finished after the switch was flipped would land on the other, and nothing in the answer
+ * would say so. It is parsed like everything else — `boardSchema` — because it picks a
+ * table name.
  */
 
 // Defaulted rather than required, so a half-filled message from the window still lands
@@ -61,6 +70,24 @@ const preferencesSchema = z.object({
 
 const postIdSchema = z.number().int().positive()
 
+/**
+ * Which board a call is about. Defaulted to the gallery, so a message from an older
+ * renderer — or one of the handlers that has no board to send — means what it always did.
+ */
+const boardSchema = z.enum(BOARDS).optional().default('post')
+
+/**
+ * The board off a positional argument, for the handlers that take one beside an id.
+ *
+ * `parse`, not `safeParse`: absent is a legitimate message and becomes the gallery, but a
+ * value that is *present and not a board* is a bug in the window, and answering it by
+ * quietly writing to the gallery is how a post lands where nobody sent it. It can only be
+ * reached from this bundle, so the throw is a bridge error nobody will ever see.
+ */
+function readBoard(raw: unknown): Board {
+  return boardSchema.parse(raw)
+}
+
 // The website's maintenance switch. The message is bounded here as a ceiling and trimmed
 // to 500 by `setSiteState`, which is the one that decides what a stored notice looks like
 // — this only stops a pasted essay crossing the bridge.
@@ -71,6 +98,7 @@ const siteStateSchema = z.object({
 
 const browseSchema = z.object({
   query: z.string().max(500).optional().default(''),
+  board: boardSchema,
   after: z.number().int().positive().optional(),
   // How big a screenful is belongs to the window drawing it, not to this process and not
   // to `@common/data/search`, whose default is the website's page size. Bounded here
@@ -86,12 +114,14 @@ const browseSchema = z.object({
  */
 const browseCacheSchema = z.object({
   query: z.string().max(500),
+  board: boardSchema,
   hasMore: z.boolean(),
   posts: z.array(z.looseObject({ id: z.number().int().positive() })).max(2000),
 })
 
 const savePostSchema = z.object({
   id: postIdSchema,
+  board: boardSchema,
   tags: z.string(),
   rating: z.string(),
   sourceUrl: z.string(),
@@ -150,6 +180,7 @@ const stagedStateSchema = z.object({
 
 const uploadSchema = z.object({
   path: z.string().min(1),
+  board: boardSchema,
   tags: z.string(),
   rating: z.string(),
   sourceUrl: z.string(),
@@ -228,9 +259,11 @@ export function registerIpc(): void {
     return result.canceled ? [] : result.filePaths
   })
 
-  ipcMain.handle('files:stage', async (_event, paths: unknown) => {
+  ipcMain.handle('files:stage', async (_event, paths: unknown, board: unknown) => {
     const parsed = z.array(z.string().min(1)).max(200).safeParse(paths)
-    return parsed.success ? stageFiles(parsed.data) : []
+    // The board is here because staging asks the duplicate question, and the answer is
+    // per board: the same bytes on the gallery and on the AI board are two posts.
+    return parsed.success ? stageFiles(parsed.data, readBoard(board)) : []
   })
 
   /**
@@ -249,9 +282,9 @@ export function registerIpc(): void {
    * The addresses come from a page, so they are parsed as URLs before anything fetches
    * them, and the handler answers in the same shape `files:stage` does.
    */
-  ipcMain.handle('files:fetch', async (_event, urls: unknown) => {
+  ipcMain.handle('files:fetch', async (_event, urls: unknown, board: unknown) => {
     const parsed = z.array(z.url()).max(50).safeParse(urls)
-    return parsed.success ? downloadImages(parsed.data) : []
+    return parsed.success ? downloadImages(parsed.data, readBoard(board)) : []
   })
 
   /**
@@ -259,15 +292,19 @@ export function registerIpc(): void {
    * /tags page, capped the same way. Grouping and sorting are the screen's, not this
    * handler's: the cap is decided by post count and the display order isn't.
    */
-  ipcMain.handle('tags:list', async (): Promise<Tag[]> => {
+  ipcMain.handle('tags:list', async (_event, board: unknown): Promise<Tag[]> => {
+    // The board decides one column: the count. The names, categories, marks and sections
+    // are one vocabulary across both, which is why this screen is not two screens.
+    const on = readBoard(board)
+
     // The cache is the same read, kept for a day — `main/tag-cache.ts`. It falls through
     // to the board only when there is nothing cached and nothing it could fill from.
-    const cached = await cachedIndex()
+    const cached = await cachedIndex(on)
     if (cached) return cached
 
     const db = boardDb()
     if (!db) return []
-    return listTags(db, TAG_INDEX_LIMIT)
+    return listTags(db, TAG_INDEX_LIMIT, on)
   })
 
   /**
@@ -275,20 +312,24 @@ export function registerIpc(): void {
    * there is one, which is nearly always and costs nothing; the query behind the fallback
    * is the same one the web's `suggestTags` action runs.
    */
-  ipcMain.handle('tags:suggest', async (_event, query: unknown): Promise<TagSuggestion[]> => {
-    const parsed = z.string().max(64).safeParse(query)
-    if (!parsed.success) return []
+  ipcMain.handle(
+    'tags:suggest',
+    async (_event, query: unknown, board: unknown): Promise<TagSuggestion[]> => {
+      const parsed = z.string().max(64).safeParse(query)
+      if (!parsed.success) return []
+      const on = readBoard(board)
 
-    const suggest = (tags: Tag[]): TagSuggestion[] =>
-      tags.map(({ name, category, post_count }) => ({ name, category, post_count }))
+      const suggest = (tags: Tag[]): TagSuggestion[] =>
+        tags.map(({ name, category, post_count }) => ({ name, category, post_count }))
 
-    const cached = await cachedSuggestions(parsed.data)
-    if (cached) return suggest(cached)
+      const cached = await cachedSuggestions(parsed.data, 8, on)
+      if (cached) return suggest(cached)
 
-    const db = boardDb()
-    if (!db) return []
-    return suggest(await searchTags(db, parsed.data))
-  })
+      const db = boardDb()
+      if (!db) return []
+      return suggest(await searchTags(db, parsed.data, 8, on))
+    }
+  )
 
   /**
    * Throws the cached index away, for when it has somehow gone wrong — a tag renamed on
@@ -303,18 +344,25 @@ export function registerIpc(): void {
    * past: reading once at startup, writing whenever the rows on screen change, and
    * dropping when 🔄 or a new search says what it holds is no longer what it wants.
    */
-  ipcMain.handle('browse:read-cache', async (): Promise<BrowseCacheFile | null> => readBrowseCache())
+  ipcMain.handle(
+    'browse:read-cache',
+    async (_event, board: unknown): Promise<BrowseCacheFile | null> =>
+      readBrowseCache(readBoard(board))
+  )
 
   ipcMain.handle('browse:write-cache', async (_event, raw: unknown): Promise<void> => {
     const parsed = browseCacheSchema.safeParse(raw)
     // A grid that will not parse is one this build could not have drawn, so nothing is
     // written and the copy already on disk stands.
     if (!parsed.success) return
-    const { query, posts, hasMore } = parsed.data
-    writeBrowseCache({ at: Date.now(), query, posts: posts as PostPage['posts'], hasMore })
+    const { query, posts, hasMore, board } = parsed.data
+    writeBrowseCache({ at: Date.now(), query, posts: posts as PostPage['posts'], hasMore }, board)
   })
 
-  ipcMain.handle('browse:clear-cache', async (): Promise<void> => clearBrowseCache())
+  ipcMain.handle(
+    'browse:clear-cache',
+    async (_event, board: unknown): Promise<void> => clearBrowseCache(readBoard(board))
+  )
 
   /**
    * The tag rules, which are the board's now rather than this machine's — they moved off
@@ -405,14 +453,16 @@ export function registerIpc(): void {
       store,
       bytes,
       metadata.metadata,
-      DESKTOP_UPLOAD_LIMITS
+      DESKTOP_UPLOAD_LIMITS,
+      parsed.data.board
     )
     // An upload moves `post_count` and moves nothing else — it cannot coin a tag, so no
     // name, category, mark or section in the cached index can have changed. The counts of
     // the tags it applied are patched in place rather than the whole index being thrown
     // away: dropping it meant the next tag field re-read the entire board, once per
-    // upload. `bumpTagCounts` has why +1 is exact and needs no query.
-    if (result.ok) bumpTagCounts(parseTagInput(parsed.data.tags).tags, 1)
+    // upload. `bumpTagCounts` has why +1 is exact and needs no query. Only this board's
+    // copy moves; the same tags on the other board gained nothing.
+    if (result.ok) bumpTagCounts(parseTagInput(parsed.data.tags).tags, 1, parsed.data.board)
     return result
   })
 
@@ -432,38 +482,45 @@ export function registerIpc(): void {
       query: parsed.data.query,
       after: parsed.data.after,
       perPage: parsed.data.perPage,
+      board: parsed.data.board,
     })
   })
 
   /** One post and its tags — what the editor opens with. */
-  ipcMain.handle('posts:get', async (_event, id: unknown): Promise<LoadedPost | null> => {
-    const parsed = postIdSchema.safeParse(id)
-    return parsed.success ? loadPost(parsed.data) : null
-  })
+  ipcMain.handle(
+    'posts:get',
+    async (_event, id: unknown, board: unknown): Promise<LoadedPost | null> => {
+      const parsed = postIdSchema.safeParse(id)
+      return parsed.success ? loadPost(parsed.data, readBoard(board)) : null
+    }
+  )
 
   ipcMain.handle('posts:save', async (_event, raw: unknown) => {
     const parsed = savePostSchema.safeParse(raw)
     if (!parsed.success) return { ok: false as const, error: 'Nothing to save' }
-    const { id, tags, rating, sourceUrl } = parsed.data
-    return savePost(id, tags, rating, sourceUrl)
+    const { id, tags, rating, sourceUrl, board } = parsed.data
+    return savePost(id, tags, rating, sourceUrl, board)
   })
 
-  ipcMain.handle('posts:delete', async (_event, id: unknown) => {
+  ipcMain.handle('posts:delete', async (_event, id: unknown, board: unknown) => {
     const parsed = postIdSchema.safeParse(id)
     if (!parsed.success) return { ok: false as const, error: 'No such post' }
-    return removePost(parsed.data)
+    return removePost(parsed.data, readBoard(board))
   })
 
   /**
    * A thumbnail, as a data: URL. The window's CSP lets it load `self` and `data:` and
    * nothing else, which is worth more than the round trip this costs — `main/manage.ts`.
    */
-  ipcMain.handle('posts:thumbnail', async (_event, fileName: unknown): Promise<string> => {
-    // Still the md5 shape: `file_name` is what the column is called, and the md5 of the
-    // bytes is what it holds, so anything else is not a name this board ever wrote.
-    const parsed = z.string().regex(/^[0-9a-f]{32}$/).safeParse(fileName)
-    return parsed.success ? thumbnailDataUrl(parsed.data) : ''
-  })
+  ipcMain.handle(
+    'posts:thumbnail',
+    async (_event, fileName: unknown, board: unknown): Promise<string> => {
+      // Still the md5 shape: `file_name` is what the column is called, and the md5 of the
+      // bytes is what it holds, so anything else is not a name this board ever wrote.
+      const parsed = z.string().regex(/^[0-9a-f]{32}$/).safeParse(fileName)
+      return parsed.success ? thumbnailDataUrl(parsed.data, readBoard(board)) : ''
+    }
+  )
 
   // ── The tag vocabulary ───────────────────────────────────────────────
   // The five operations that were /tags/manage. Each one answers `{ ok }` or
@@ -571,23 +628,29 @@ export function registerIpc(): void {
    * answers with the counts rather than a bare ok: "added to 3, 41 already had it" is
    * the difference between a rule that did something and one already satisfied.
    */
-  ipcMain.handle('tags:apply', async (_event, target: unknown, condition: unknown) => {
-    const db = boardDb()
-    if (!db) return { ok: false as const, error: 'Not set up yet' }
-    const parsedTarget = tagNameSchema.safeParse(target)
-    const parsedCondition = tagNameSchema.safeParse(condition)
-    if (!parsedTarget.success || !parsedCondition.success) {
-      return { ok: false as const, error: 'Type a tag name.' }
-    }
+  ipcMain.handle(
+    'tags:apply',
+    async (_event, target: unknown, condition: unknown, board: unknown) => {
+      const db = boardDb()
+      if (!db) return { ok: false as const, error: 'Not set up yet' }
+      const parsedTarget = tagNameSchema.safeParse(target)
+      const parsedCondition = tagNameSchema.safeParse(condition)
+      if (!parsedTarget.success || !parsedCondition.success) {
+        return { ok: false as const, error: 'Type a tag name.' }
+      }
 
-    const result = await manageTags.applyTagToTagged(
-      db,
-      parsedTarget.data,
-      parsedCondition.data
-    )
-    if (result.ok) clearTagCache()
-    return result
-  })
+      // One board's posts, the one the window is in. The two are different sets, so the
+      // counts this answers with would be a number about nothing if it did both.
+      const result = await manageTags.applyTagToTagged(
+        db,
+        parsedTarget.data,
+        parsedCondition.data,
+        readBoard(board)
+      )
+      if (result.ok) clearTagCache()
+      return result
+    }
+  )
 
   /**
    * What the upload screen holds, pushed on every change. `on`, not `handle`: nothing is

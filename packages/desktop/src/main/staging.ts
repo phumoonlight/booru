@@ -4,6 +4,7 @@ import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { pipeline } from 'node:stream/promises'
 import sharp, { type Metadata } from 'sharp'
+import type { Board } from '@common/board'
 import { findPostIdsByFileNames } from '@common/data/shared'
 import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL, MAX_PIXELS } from './limits'
 import { boardDb } from './db'
@@ -140,12 +141,12 @@ async function stageOne(path: string): Promise<StageOutcome> {
  * already spreads one decode across the thread pool, so running twenty at once would
  * only make the first row appear later.
  */
-export async function stageFiles(paths: string[]): Promise<StageOutcome[]> {
+export async function stageFiles(paths: string[], board: Board = 'post'): Promise<StageOutcome[]> {
   const outcomes: StageOutcome[] = []
   for (const path of paths) {
     outcomes.push(await stageOne(path))
   }
-  return markDuplicates(outcomes)
+  return markDuplicates(outcomes, board)
 }
 
 /**
@@ -156,8 +157,12 @@ export async function stageFiles(paths: string[]): Promise<StageOutcome[]> {
  *
  * A failed query leaves every row a normal one: being unable to reach the board is not
  * evidence that a post is new, and the upload's own check is still there to say so.
+ *
+ * **Per board.** The same image on the gallery and on the AI board is two posts, which is
+ * correct — they are two boards — so what this asks is whether the file is already on the
+ * one being uploaded to, which is the same question the pipeline's own check asks.
  */
-async function markDuplicates(outcomes: StageOutcome[]): Promise<StageOutcome[]> {
+async function markDuplicates(outcomes: StageOutcome[], board: Board): Promise<StageOutcome[]> {
   const staged = outcomes.filter((outcome) => outcome.ok)
   if (staged.length === 0) return outcomes
 
@@ -169,7 +174,8 @@ async function markDuplicates(outcomes: StageOutcome[]): Promise<StageOutcome[]>
   try {
     existing = await findPostIdsByFileNames(
       db,
-      staged.map((outcome) => outcome.md5)
+      staged.map((outcome) => outcome.md5),
+      board
     )
   } catch (error) {
     console.error('Could not check for duplicates:', error instanceof Error ? error.message : error)

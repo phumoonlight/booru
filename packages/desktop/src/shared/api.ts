@@ -1,3 +1,4 @@
+import type { Board } from '@common/board'
 import type { Rating } from '@common/search'
 import type { Tag, TagCategory } from '@common/tags'
 import type { Post, PostPage } from '@common/data/posts'
@@ -14,6 +15,13 @@ import type { SiteState } from '@common/data/site'
  *
  * Types only — imported by the preload bridge, by the renderer, and by the handlers, so
  * a channel that changes shape breaks all three at once instead of at runtime.
+ *
+ * **Every channel about a post or a count takes a `Board`.** Which of the two boards the
+ * window is in is the renderer's state (`renderer/src/board-store.ts`) and travels with
+ * the call, so an upload or an edit lands where it was begun even if the switch is flipped
+ * while it is in flight. It is optional on every signature and defaults to the gallery,
+ * which is what makes the channels that do not care — the vocabulary, the rules, the
+ * sections, the settings — unchanged: a tag means the same thing on both boards.
  */
 
 /**
@@ -131,6 +139,8 @@ export type TagSuggestion = { name: string; category: TagCategory; post_count: n
 
 export type UploadRequest = {
   path: string
+  /** Which board the post lands on. Omitted is the gallery. */
+  board?: Board
   /** Space-separated, exactly as the tag field renders it — the pipeline parses it. */
   tags: string
   rating: Rating
@@ -175,9 +185,10 @@ export type PostAppApi = {
   /** `remember` writes the credentials to the save file; false wipes what was there. */
   /** Opens the OS picker. Returns the paths chosen, empty if cancelled. */
   chooseFiles: () => Promise<string[]>
-  stageFiles: (paths: string[]) => Promise<StageOutcome[]>
+  /** `board` because staging asks "is this already up?", which is a per-board question. */
+  stageFiles: (paths: string[], board?: Board) => Promise<StageOutcome[]>
   /** Downloads images dragged in from a browser, then stages them like picked files. */
-  fetchImages: (urls: string[]) => Promise<StageOutcome[]>
+  fetchImages: (urls: string[], board?: Board) => Promise<StageOutcome[]>
   /**
    * A screen-sized version of one staged file, for the viewer a clicked row opens. Made
    * on request rather than kept in `StagedFile`, and '' if it couldn't be drawn.
@@ -185,17 +196,26 @@ export type PostAppApi = {
   previewFile: (path: string) => Promise<string>
   /** Drag-and-drop hands the renderer a `File` with no path on it; this asks Electron for one. */
   pathForFile: (file: File) => string
-  /** The board's tag index, most used first — what the Tags screen paints. */
-  listTags: () => Promise<Tag[]>
-  suggestTags: (query: string) => Promise<TagSuggestion[]>
+  /**
+   * The board's tag index, most used first — what the Tags screen paints. The *vocabulary*
+   * is the same list on either board; `board` decides only the count beside each name,
+   * which is also what orders it.
+   */
+  listTags: (board?: Board) => Promise<Tag[]>
+  suggestTags: (query: string, board?: Board) => Promise<TagSuggestion[]>
   /** Throws away the cached tag index; the next lookup reads the board again. */
   clearTagCache: () => Promise<void>
   /** The browse grid from the last session, if it is less than a day old — `main/browse-cache.ts`. */
-  readBrowseCache: () => Promise<BrowseCacheFile | null>
+  readBrowseCache: (board?: Board) => Promise<BrowseCacheFile | null>
   /** Hands the rows on screen to disk, stamped with the moment they are written. */
-  writeBrowseCache: (cache: { query: string; posts: Post[]; hasMore: boolean }) => Promise<void>
+  writeBrowseCache: (cache: {
+    query: string
+    posts: Post[]
+    hasMore: boolean
+    board?: Board
+  }) => Promise<void>
   /** Drops the stored grid, so the next launch reads the board instead of drawing this. */
-  clearBrowseCache: () => Promise<void>
+  clearBrowseCache: (board?: Board) => Promise<void>
   /**
    * The board's tag rules of one kind — `'implies'` is applied by itself
    * (`shared/implications.ts`), `'recommends'` is only offered
@@ -228,24 +248,29 @@ export type PostAppApi = {
    * is the grid's own screenful — omitted, the read falls back to the website's page
    * size, which is a page's decision and not this window's.
    */
-  searchPosts: (options: { query?: string; after?: number; perPage?: number }) =>
-    Promise<PostPage>
+  searchPosts: (options: {
+    query?: string
+    after?: number
+    perPage?: number
+    board?: Board
+  }) => Promise<PostPage>
   /** One post and its tags, for the editor. */
-  getPost: (id: number) => Promise<LoadedPost | null>
+  getPost: (id: number, board?: Board) => Promise<LoadedPost | null>
   /** Rewrites a post's rating, source and whole tag set. */
   savePost: (request: {
     id: number
     tags: string
     rating: Rating
     sourceUrl: string
+    board?: Board
   }) => Promise<Outcome>
   /** Removes the post row and both of its stored images. */
-  deletePost: (id: number) => Promise<Outcome>
+  deletePost: (id: number, board?: Board) => Promise<Outcome>
   /**
    * A post's thumbnail as a `data:` URL. Fetched by main because the window's CSP allows
    * `self` and `data:` and nothing else, which is a rule worth an IPC hop to keep.
    */
-  postThumbnail: (fileName: string) => Promise<string>
+  postThumbnail: (fileName: string, board?: Board) => Promise<string>
   /** `sectionId` is a row of `tag_form_sections`, or null for none. */
   createTag: (
     name: string,
@@ -260,8 +285,13 @@ export type PostAppApi = {
   /** Sets the glyphs drawn in front of the tag's name, or clears them with ''. */
   setTagMark: (id: number, mark: string) => Promise<Outcome>
   deleteTag: (id: number) => Promise<Outcome>
-  /** Adds one tag to every post already carrying another. */
-  applyTagToTagged: (target: string, condition: string) => Promise<ApplyTagOutcome>
+  /** Adds one tag to every post already carrying another — on one board, since the two
+   *  are different sets of posts and the counts it answers with are the point. */
+  applyTagToTagged: (
+    target: string,
+    condition: string,
+    board?: Board
+  ) => Promise<ApplyTagOutcome>
   /** Tells main what the upload screen holds, so closing can ask before dropping it. */
   reportStaged: (state: StagedState) => void
   openExternal: (url: string) => Promise<void>

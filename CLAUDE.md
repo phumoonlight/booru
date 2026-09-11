@@ -317,14 +317,30 @@ behind a session, because there is none.
 
 - **Open site** is the header item that is not a view: it opens the board in the browser
   via `searchHref('')` and is never drawn active, because it goes somewhere else.
-- **The desktop app writes the gallery only, so far.** The write path underneath it is
-  board-aware — `createPostFromImage`, `createPostWithTags`, `updatePostWithTags`,
-  `deletePostRow` and `applyTagToTagged` all take a `Board` and default to `'post'`, so
-  every screen here means exactly what it always did — but nothing in this window yet
-  offers a choice of board, which is why `generative_posts` starts empty and fills only
-  once one is added. What that costs is one control (Upload, Browse and the post editor
-  each need to know which board they are on); what it bought is that none of the existing
-  screens had to change to get it.
+- **Which board it is working on is a mode, and the switch is in the header** — a pair of
+  segments beside Open site, 🖼️ Posts and 🤖 AI posts, drawn as the one that is on. One
+  switch rather than a choice on each screen: it is the same answer for Upload, Browse, the
+  post editor and the Tags grid's counts, and a picker per screen is four places for them
+  to disagree about what you are working on. It lives in `renderer/src/board-store.ts`, a
+  module-level store like Browse's query and the rule store, because every screen unmounts
+  whenever something is in front of it.
+  **It is not a mode in main.** A board held there is read at the top of a handler, which
+  is before every `await` in it, so an upload begun on one board and finished after the
+  switch was flipped would land on the other with nothing in the answer to say so. Every
+  channel that touches a post or a count takes a `Board` instead, parsed at the bridge like
+  every other argument because it picks a table name, and defaulting to the gallery so the
+  channels that do not care are unchanged. The Upload button names the board it will write
+  to, because the switch is across the window from the one press that cannot be taken back.
+  It is not written to `save.json`: which board you were last on is a fact about a session,
+  and opening the app on the AI board a week later having forgotten is how a post lands on
+  the wrong one. The window opens on the gallery.
+  What is per board underneath: the browse grid and its query (in the renderer and in
+  `app-cache/browse.<board>.json`), the tag index (`app-cache/tags.<board>.json`) and the
+  Tags screen's copy of it, and the duplicate check at staging — the same bytes on both
+  boards are two posts, which is correct. What is **not**: the thumbnail cache, since
+  `file_name` is the md5 and the thumbnail of an image is the same file whichever board it
+  is posted to; and `CategoryTagField`'s index of names, which carries no count and so is
+  one vocabulary either side.
 - **Upload is one image at a time** (`upload-form.tsx`). It was a queue — drop a folder,
   tag twenty cards, upload top to bottom, with reorder arrows, a fold per card, a done
   tick and an Apply-to-all bar. All of that was machinery for keeping twenty half-tagged

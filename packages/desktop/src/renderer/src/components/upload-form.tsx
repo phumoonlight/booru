@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RATING_COLOR, RATING_LABEL, RATINGS, tagLabel, type Rating } from '@common/search'
+import { postHref, RATING_COLOR, RATING_LABEL, RATINGS, tagLabel, type Rating } from '@common/search'
+import { boardLabel, currentBoard, useBoard } from '../board-store'
 import { BUTTON_SM } from './buttons'
 import { TrashIcon } from './icons'
 import { ImageViewer } from './image-viewer'
@@ -118,6 +119,10 @@ export function UploadForm({
   /** Open this post in the editor — the way back into a post whose tags need another look. */
   onReview: (postId: number) => void
 }) {
+  // Which board an upload from this screen lands on. Read as state so the button below
+  // repaints when the header's switch moves; the press itself reads the store again, so
+  // what is sent cannot be a render behind what is drawn.
+  const board = useBoard()
   const [dragging, setDragging] = useState(false)
   // What the staging step is doing, or null. A label rather than a flag: reading a
   // picked file and fetching one off the web take visibly different amounts of time.
@@ -225,7 +230,7 @@ export function UploadForm({
           : []
       setStaging('Reading image…')
       try {
-        absorb(await window.api.stageFiles(paths.slice(0, 1)), extra)
+        absorb(await window.api.stageFiles(paths.slice(0, 1), currentBoard()), extra)
       } finally {
         setStaging(null)
       }
@@ -243,7 +248,7 @@ export function UploadForm({
           : []
       setStaging('Downloading…')
       try {
-        absorb(await window.api.fetchImages(urls.slice(0, 1)), extra)
+        absorb(await window.api.fetchImages(urls.slice(0, 1), currentBoard()), extra)
       } finally {
         setStaging(null)
       }
@@ -301,8 +306,12 @@ export function UploadForm({
 
     let result: UploadResult
     try {
+      // Read once, here, rather than in the handler: the board the upload is *for* is the
+      // one that was selected when Upload was pressed, and this call is awaited.
+      const board = currentBoard()
       result = await window.api.uploadPost({
         path: item.file.path,
+        board,
         tags: seedsToInput(item.tags, rules),
         rating: item.rating,
         sourceUrl: item.sourceUrl,
@@ -321,7 +330,7 @@ export function UploadForm({
       invalidateBrowse()
       // Awaited, unlike the queue's, which could not wait: there is nothing behind this
       // one, and the list it fills in is the whole point of the screen it lands on.
-      const loaded = await window.api.getPost(postId)
+      const loaded = await window.api.getPost(postId, currentBoard())
       if (loaded) {
         patch({ postTags: loaded.tags.map(({ name, category }) => ({ name, category })) })
       }
@@ -623,7 +632,14 @@ export function UploadForm({
               disabled={working}
               className="flex min-h-11 flex-1 items-center justify-center rounded-lg bg-accent px-4 text-sm font-medium text-background disabled:opacity-50"
             >
-              {busy ? 'Compressing and uploading…' : 'Upload'}
+              {/* The board is named on the button, not only in the header switch. This is
+                  the press that cannot be taken back — the post is made, the files are
+                  stored — and "Upload" alone was true when there was one board to upload
+                  to. The switch is across the window from here, which is exactly the
+                  distance at which nobody re-reads it. */}
+              {busy
+                ? 'Compressing and uploading…'
+                : `Upload to ${boardLabel(board).toLowerCase()}`}
             </button>
           </div>
         )}
@@ -788,12 +804,18 @@ function PostLink({
   postId: number | undefined
   label: string
 }) {
+  // Read from the store rather than passed down: this sits three components deep inside
+  // two that have no other reason to know which board they are on.
+  const board = useBoard()
+
   if (postId === undefined) return null
   if (!siteUrl) return <span className="text-muted">{label}</span>
   return (
     <button
       type="button"
-      onClick={() => void window.api.openExternal(`${siteUrl}/posts/${postId}`)}
+      // `postHref` spells the path — the web's own rule, and what puts an AI post on
+      // `/ai-posts/<id>` rather than on the gallery's.
+      onClick={() => void window.api.openExternal(`${siteUrl}${postHref(postId, '', board)}`)}
       className="text-accent underline-offset-2 hover:underline"
     >
       {label}

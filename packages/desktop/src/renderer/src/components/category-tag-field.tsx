@@ -79,6 +79,10 @@ const listeners = new Set<() => void>()
 
 function loadIndex(): Promise<void> {
   if (inflight) return inflight
+  // No board. This copy holds names, categories, marks and sections and no count, and
+  // those are one vocabulary across both boards — which is the whole reason the two share
+  // a `tags` table. Only the Tags grid's copy is per board, because that one draws and
+  // sorts by `post_count`.
   inflight = window.api
     .listTags()
     .catch(() => [] as Tag[])

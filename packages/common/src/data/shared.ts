@@ -247,15 +247,27 @@ async function setPostTags(
  * `tags`. The two return the same rows regardless: `tags.name` is checked against
  * `^[a-z0-9_().-]+$`, so it can only be lowercase, and the needle is lowercased below.
  */
-export async function searchTags(db: Db, query: string, limit = 8): Promise<Tag[]> {
+export async function searchTags(
+  db: Db,
+  query: string,
+  limit = 8,
+  board: Board = 'post'
+): Promise<Tag[]> {
   const needle = query.trim().toLowerCase().replace(/[\\%_]/g, '\\$&')
   if (!needle) return []
 
+  // The board's own count, aliased back to `post_count`, so a `Tag` is one shape wherever
+  // it is drawn — and `order by` names the column rather than the alias, because ordering
+  // a suggestion list by the other board's popularity is the bug this parameter exists to
+  // stop. `tags_post_count_idx` serves the gallery's ordering only; the other board's is a
+  // sort over the rows the prefix matched, which is a handful.
+  const count = BOARD[board].tagCount
+
   return await db<Tag[]>`
-    select id, name, category, mark, post_count
+    select id, name, category, mark, ${db(count)} as post_count
       from tags
      where name like ${`${needle}%`}
-     order by post_count desc, name
+     order by ${db(count)} desc, name
      limit ${limit}`
 }
 
@@ -275,15 +287,20 @@ export async function searchTags(db: Db, query: string, limit = 8): Promise<Tag[
  * the name off a tag any more: the form and the sections screen both hold the whole list of
  * rows in a store and match on the id, which is what the id was for.
  */
-export async function listTags(db: Db, limit = 200): Promise<Tag[]> {
+export async function listTags(db: Db, limit = 200, board: Board = 'post'): Promise<Tag[]> {
   // Thrown rather than answered with an empty list — the caller does not catch this, and
   // that is deliberate. A read that fails and a board with no tags are not the same
   // thing, and the screens cannot tell them apart: "no tags yet" is what a broken query
   // looked like for as long as it took to notice. Every other read in this file is a page
   // that degrades; this one is the vocabulary.
+  // The count is the board's, aliased to `post_count` as in `searchTags` — the names,
+  // categories, marks and sections are one list on either board, and the number beside
+  // them is the one thing that is not.
+  const count = BOARD[board].tagCount
+
   return await db<Tag[]>`
-    select id, name, category, mark, post_count, form_section_id
+    select id, name, category, mark, ${db(count)} as post_count, form_section_id
       from tags
-     order by post_count desc, name
+     order by ${db(count)} desc, name
      limit ${limit}`
 }

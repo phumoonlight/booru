@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app, net } from 'electron'
 import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL } from './limits'
+import type { Board } from '@common/board'
 import { stageFiles } from './staging'
 import type { StageOutcome } from '../shared/api'
 
@@ -194,7 +195,7 @@ function fileNameFor(url: URL, contentType: string): string {
   return known ? base : base + (EXT_FOR_TYPE[contentType] ?? '.img')
 }
 
-async function downloadOne(address: string): Promise<StageOutcome> {
+async function downloadOne(address: string, board: Board): Promise<StageOutcome> {
   let url: URL
   try {
     url = new URL(address)
@@ -269,15 +270,18 @@ async function downloadOne(address: string): Promise<StageOutcome> {
     return { ok: false, path: address, name, error: 'Could not save the download' }
   }
 
-  const [staged] = await stageFiles([file])
+  const [staged] = await stageFiles([file], board)
   return staged
 }
 
 /** Downloads each address and stages what came back. Sequential, like `stageFiles`. */
-export async function downloadImages(addresses: string[]): Promise<StageOutcome[]> {
+export async function downloadImages(
+  addresses: string[],
+  board: Board = 'post'
+): Promise<StageOutcome[]> {
   const outcomes: StageOutcome[] = []
   for (const address of addresses) {
-    outcomes.push(await downloadOne(address))
+    outcomes.push(await downloadOne(address, board))
   }
   return outcomes
 }

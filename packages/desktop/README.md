@@ -91,6 +91,7 @@ for your own board. Treat the installer accordingly: anyone who has it can write
 | `src/preload` | the bridge; the only thing the window can reach |
 | `src/renderer` | the React window: the upload form, browse, tags (and their rules), settings, about |
 | `src/shared/api.ts` | the types across the bridge, imported by all three |
+| `src/renderer/src/board-store.ts` | which of the two boards the window is working on — the header's switch |
 | `src/shared/implications.ts` | rules the app applies: what they are, and the pure code that applies them |
 | `src/shared/recommendations.ts` | rules the app only offers, same shape |
 
@@ -101,6 +102,13 @@ for your own board. Treat the installer accordingly: anyone who has it can write
 The renderer holds no keys, no file access and no network. Every capability it has is one
 `ipcMain.handle` in [`src/main/ipc.ts`](src/main/ipc.ts) — including reading the file it
 is about to upload, which never crosses the bridge as bytes.
+
+**Two boards, one window.** The header's switch picks the gallery or the generated images,
+and it decides where an upload lands, what Browse lists, what the editor edits and which
+count the Tags grid draws. The board is the renderer's state and travels with every call
+rather than being a mode in main: a mode there is read before every `await` in a handler,
+so an upload begun on one board and finished after the switch was flipped would land on the
+other. `@common/board` holds the table names it resolves to.
 
 One client: the service role, built from the key compiled into the main bundle. It was
 two — a session for the post row and the service role for storage and the counters — back

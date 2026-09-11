@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
+import { BOARDS } from '@common/board'
 import { searchHref } from '@common/search'
+import { BOARD_EMOJI, boardLabel, setBoard, useBoard } from './board-store'
 import { About } from './components/about'
 import { Browse, browseFor, hydrateBrowseCache } from './components/browse'
 import { Settings } from './components/settings'
@@ -18,9 +20,19 @@ import type { AppStatus } from '../../shared/api'
  * the build itself refuses to produce. About is the other exception to the screen order —
  * it answers "what am I running", a fair question of a copy that cannot reach its board
  * at all.
+ *
+ * **The board is a mode, and the switch is in the header.** There are two of them — the
+ * gallery and the generated images — and which one you are on decides where an upload
+ * lands, what Browse lists, what the post editor edits and which count the Tags grid
+ * draws. One switch rather than a choice on each of those screens: it is the same answer
+ * to all four, and a per-screen picker is four places for them to disagree about what you
+ * are working on. It lives in `board-store.ts` rather than in this component's state for
+ * the reason Browse keeps its query there — the screens unmount whenever something is in
+ * front of them.
  */
 export function App() {
   const [status, setStatus] = useState<AppStatus | null>(null)
+  const board = useBoard()
   const [view, setView] = useState<'upload' | 'browse' | 'tags' | 'settings' | 'about'>('upload')
   // A post the queue asked to review after uploading it. Held here because it is the one
   // thing one screen sends another, and cleared by any ordinary navigation — otherwise
@@ -77,12 +89,16 @@ export function App() {
       // on this screen can change which board the app talks to.
       <Settings status={status} onChanged={() => void refresh()} />
     ) : view === 'browse' ? (
-      <Browse siteUrl={status.siteUrl} initialEdit={reviewing} />
+      // Keyed on the board: switching mode is a fresh mount that seeds from that board's
+      // remembered query and grid, rather than an update that would leave the other
+      // board's rows on screen until the read landed.
+      <Browse key={board} board={board} siteUrl={status.siteUrl} initialEdit={reviewing} />
     ) : view === 'tags' ? (
       // Its posts, on a tag's panel, hands the query to Browse and switches to it —
       // `browseFor` seeds the module-level box that view mounts from, so this is one
       // call rather than another id threaded through `App` the way `reviewing` is.
       <TagIndex
+        board={board}
         onBrowse={(query) => {
           browseFor(query)
           setReviewing(null)
@@ -114,19 +130,55 @@ export function App() {
           '/posts', which is the web's own rule about which file spells that path. An
           empty slot when the build carries no site URL, rather than a dead heading.
         */}
-        {status.siteUrl ? (
-          <button
-            type="button"
-            onClick={() => void window.api.openExternal(`${status.siteUrl}${searchHref('')}`)}
-            title="Open the board in your browser"
-            className="flex items-center gap-1.5 text-sm font-bold tracking-tight text-muted transition-colors hover:text-foreground"
+        <div className="flex min-w-0 items-center gap-3">
+          {status.siteUrl ? (
+            <button
+              type="button"
+              onClick={() =>
+                void window.api.openExternal(`${status.siteUrl}${searchHref('', board)}`)
+              }
+              title="Open this board in your browser"
+              className="flex items-center gap-1.5 text-sm font-bold tracking-tight text-muted transition-colors hover:text-foreground"
+            >
+              <span aria-hidden>🖼️</span>
+              Open site
+            </button>
+          ) : (
+            <span />
+          )}
+
+          {/*
+            Which board everything on this window is about. A pair of segments rather than
+            a dropdown or a checkbox: there are two of them, both are worth reading at a
+            glance, and the thing you most need to know here is which one is *on* — a
+            closed menu showing one name is a control you have to open to be sure about.
+            It sits beside Open site rather than among the screens on the right, because it
+            is not a screen: every item over there stays where it is when this is pressed.
+          */}
+          <div
+            role="group"
+            aria-label="Board"
+            className="flex items-center gap-0.5 rounded-lg border border-border p-0.5"
           >
-            <span aria-hidden>🖼️</span>
-            Open site
-          </button>
-        ) : (
-          <span />
-        )}
+            {BOARDS.map((on) => (
+              <button
+                key={on}
+                type="button"
+                onClick={() => setBoard(on)}
+                aria-pressed={on === board}
+                title={`Work on ${boardLabel(on)}`}
+                className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-xs transition-colors ${
+                  on === board
+                    ? 'bg-accent font-semibold text-background'
+                    : 'text-muted hover:text-foreground'
+                }`}
+              >
+                <span aria-hidden>{BOARD_EMOJI[on]}</span>
+                {boardLabel(on)}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           {/* The upload form, and the way back to it from every other screen — the one
               item here that is the app's actual job, so it leads the row. */}

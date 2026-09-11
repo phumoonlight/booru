@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { BOARDS, type Board } from '@common/board'
 import { RATING_COLOR, RATING_LABEL } from '@common/search'
 import { categoryColor } from '@common/tags'
 import type { Post } from '@common/data/posts'
 import type { TagSuggestion } from '../../../shared/api'
+import { currentBoard } from '../board-store'
 import { PostEditor } from './post-editor'
 import { BUTTON, BUTTON_SUBMIT, buttonToggle } from './buttons'
 
@@ -22,13 +24,18 @@ import { BUTTON, BUTTON_SUBMIT, buttonToggle } from './buttons'
  * Thumbnails come across the bridge as `data:` URLs (`main/manage.ts`). The window's CSP
  * is `img-src 'self' data:` and stays that way — a grid is not worth being the reason
  * this page can reach the network.
+ *
+ * **Everything remembered here is per board** (`renderer/src/board-store.ts`). The query
+ * you were running and the rows it found are two different screens on the two boards, and
+ * one slot would mean switching mode twice to get back to what you were doing. `App` keys
+ * this view on the board, so switching remounts it and it seeds from that board's copy.
  */
 
-/** What the last visit was looking at. The view unmounts when another is in front of
- *  it, and coming back to an empty box after finding a post is a search typed twice. It
- *  outlives the window too, coming back with the stored grid below — the same argument one
- *  day further out, since the app is closed far more often than this view is. */
-let lastQuery = ''
+/** What the last visit to each board was looking at. The view unmounts when another is in
+ *  front of it, and coming back to an empty box after finding a post is a search typed
+ *  twice. It outlives the window too, coming back with the stored grid below — the same
+ *  argument one day further out, since the app is closed far more often than this view is. */
+const lastQuery: Record<Board, string> = { post: '', generative: '' }
 
 /**
  * Points the next mount of Browse at a query, without being Browse.
@@ -40,8 +47,8 @@ let lastQuery = ''
  * cache held for a different query, and keeps one held for this exact query, which is the
  * right answer both ways.
  */
-export function browseFor(query: string): void {
-  lastQuery = query
+export function browseFor(query: string, board: Board = currentBoard()): void {
+  lastQuery[board] = query
 }
 
 /**
@@ -103,16 +110,20 @@ function itemStyle(width: number, height: number): CSSProperties {
  * holds it for a day, which is as long as rows anyone would recognise are worth drawing.
  * This copy is still the one every render reads; the file is only how it starts.
  */
-let cached: { query: string; posts: Post[]; hasMore: boolean; at: number } | null = null
+type CachedGrid = { query: string; posts: Post[]; hasMore: boolean; at: number }
 
-function remember(query: string, posts: Post[], hasMore: boolean): void {
+const cached: Partial<Record<Board, CachedGrid | null>> = {}
+
+/** The board is passed rather than read here: the reads that call this are awaited, and a
+ *  switch that landed while one was in flight would file its rows under the wrong board. */
+function remember(query: string, posts: Post[], hasMore: boolean, board: Board): void {
   // `at` is the last read, Load more included: what the line beside the title answers is
   // "how old is what I am looking at", and a chunk that landed a second ago is part of it.
-  cached = { query, posts, hasMore, at: Date.now() }
-  // And through to `app-cache/browse-cache.json`, so the same rows survive the window
-  // closing. Not awaited: the grid is already drawn from the copy above, and a write that
-  // fails costs the next launch a read it was going to be able to do anyway.
-  void window.api.writeBrowseCache({ query, posts, hasMore })
+  cached[board] = { query, posts, hasMore, at: Date.now() }
+  // And through to `app-cache/browse.json`, so the same rows survive the window closing.
+  // Not awaited: the grid is already drawn from the copy above, and a write that fails
+  // costs the next launch a read it was going to be able to do anyway.
+  void window.api.writeBrowseCache({ query, posts, hasMore, board })
 }
 
 /**
@@ -124,9 +135,9 @@ function remember(query: string, posts: Post[], hasMore: boolean): void {
  * The file goes with it. A cache in two places that can be invalidated in one is a cache
  * that comes back from the dead on the next launch.
  */
-export function invalidateBrowse(): void {
-  cached = null
-  void window.api.clearBrowseCache()
+export function invalidateBrowse(board: Board = currentBoard()): void {
+  cached[board] = null
+  void window.api.clearBrowseCache(board)
 }
 
 /**
@@ -143,10 +154,18 @@ export function invalidateBrowse(): void {
  * the same as not having stored it.
  */
 export async function hydrateBrowseCache(): Promise<void> {
-  const file = await window.api.readBrowseCache()
-  if (!file) return
-  cached = { query: file.query, posts: file.posts, hasMore: file.hasMore, at: file.at }
-  lastQuery = file.query
+  // Both boards, on the way up. The window opens on the gallery, but switching mode is one
+  // press and a read behind an IPC round trip at that moment is the grid arriving after
+  // the mount that was meant to seed from it — the same reasoning that put this before the
+  // first render at all. Two small files, read once.
+  await Promise.all(
+    BOARDS.map(async (board) => {
+      const file = await window.api.readBrowseCache(board)
+      if (!file) return
+      cached[board] = { query: file.query, posts: file.posts, hasMore: file.hasMore, at: file.at }
+      lastQuery[board] = file.query
+    })
+  )
 }
 
 /**
@@ -163,11 +182,14 @@ const thumbnails = new Map<string, string>()
  * screen's tag import draws the same grid of posts, and a second copy of every image in
  * the window is the one thing this cache exists to avoid.
  */
-export async function thumbnailFor(fileName: string): Promise<string> {
+export async function thumbnailFor(
+  fileName: string,
+  board: Board = currentBoard()
+): Promise<string> {
   const held = thumbnails.get(fileName)
   if (held !== undefined) return held
 
-  const url = await window.api.postThumbnail(fileName)
+  const url = await window.api.postThumbnail(fileName, board)
   // A failed fetch answers '' — not remembered, so asking again re-asks the board.
   if (url) thumbnails.set(fileName, url)
   return url
@@ -234,20 +256,30 @@ function asPostId(query: string): number | null {
  * post number there means the same thing it means here, and a second implementation of
  * that convenience would be a second place for it to disagree.
  */
-export async function readPosts(query: string): Promise<{ posts: Post[]; hasMore: boolean }> {
+export async function readPosts(
+  query: string,
+  board: Board = currentBoard()
+): Promise<{ posts: Post[]; hasMore: boolean }> {
   const id = asPostId(query)
   if (id !== null) {
-    const loaded = await window.api.getPost(id)
+    const loaded = await window.api.getPost(id, board)
     if (loaded) return { posts: [loaded.post], hasMore: false }
   }
-  return window.api.searchPosts({ query, perPage: CHUNK })
+  return window.api.searchPosts({ query, perPage: CHUNK, board })
 }
 
 export function Browse({
   siteUrl,
+  board,
   initialEdit = null,
 }: {
   siteUrl: string
+  /**
+   * Which board is being browsed. `App` also keys this component on it, so a switch is a
+   * fresh mount that seeds from that board's remembered query and grid rather than an
+   * update that would leave the other board's rows on screen while the read ran.
+   */
+  board: Board
   /**
    * A post to open the editor on straight away — the queue's Review after an upload. A
    * prop rather than the module-level trick `lastQuery` uses, because this screen is
@@ -259,10 +291,11 @@ export function Browse({
   // The cache is only ever held for `lastQuery`, which is where the box below starts,
   // so the two agree by construction — checked rather than assumed, since a grid seeded
   // with rows that answer another query is the one way this could lie.
-  const seed = cached?.query === lastQuery ? cached : null
+  const held = cached[board] ?? null
+  const seed = held?.query === lastQuery[board] ? held : null
 
-  const [query, setQuery] = useState(lastQuery)
-  const [submitted, setSubmitted] = useState(lastQuery)
+  const [query, setQuery] = useState(lastQuery[board])
+  const [submitted, setSubmitted] = useState(lastQuery[board])
   const [posts, setPosts] = useState<Post[]>(seed?.posts ?? [])
   const [hasMore, setHasMore] = useState(seed?.hasMore ?? false)
   const [fetchedAt, setFetchedAt] = useState<number | null>(seed?.at ?? null)
@@ -291,7 +324,7 @@ export function Browse({
   // a one-shot flag is spent by the first run and the second replaces a grid of several
   // chunks with a fresh first one — which is exactly what visiting Tags and coming back
   // used to do.
-  const readFor = useRef<string | null>(seed !== null ? `${lastQuery}:0` : null)
+  const readFor = useRef<string | null>(seed !== null ? `${lastQuery[board]}:0` : null)
 
   // Autocomplete for the box below. The names come from the same cached index the tag
   // fields use (`main/tag-cache.ts`), so a keystroke is a prefix match in memory rather
@@ -307,18 +340,18 @@ export function Browse({
     const key = `${submitted}:${nonce}`
     if (readFor.current === key) return
     readFor.current = key
-    void readPosts(submitted).then((page) => {
-      remember(submitted, page.posts, page.hasMore)
+    void readPosts(submitted, board).then((page) => {
+      remember(submitted, page.posts, page.hasMore, board)
       // A reply the screen has moved on from is dropped here rather than by a flag the
       // cleanup clears: StrictMode tears the first mount's effect down immediately, and a
       // flag would cancel the only read this view ever runs.
       if (readFor.current !== key) return
       setPosts(page.posts)
       setHasMore(page.hasMore)
-      setFetchedAt(cached?.at ?? null)
+      setFetchedAt(cached[board]?.at ?? null)
       setLoading(false)
     })
-  }, [submitted, nonce])
+  }, [submitted, nonce, board])
 
   // A leading `-` excludes the tag it names, so it is part of the query and not of the
   // word: `-sol` is asking to complete `solo`. A `:` is a metatag — `rating:`, `start:` —
@@ -330,13 +363,13 @@ export function Browse({
   useEffect(() => {
     if (!completing) return
     let alive = true
-    void window.api.suggestTags(needle).then((tags) => {
+    void window.api.suggestTags(needle, board).then((tags) => {
       if (alive) setOptions(tags)
     })
     return () => {
       alive = false
     }
-  }, [needle, completing])
+  }, [needle, completing, board])
 
   /**
    * What is actually under the box, worked out as it is drawn rather than stored.
@@ -379,17 +412,18 @@ export function Browse({
       query: submitted,
       after: last.id,
       perPage: CHUNK,
+      board,
     })
     // Appended, never replaced: a chunk landing must not reflow rows already scrolled past.
     setPosts((current) => {
       const next = [...current, ...page.posts]
       // Remembered here too, or coming back would drop every chunk but the first and
       // leave you scrolling the same rows a second time.
-      remember(submitted, next, page.hasMore)
+      remember(submitted, next, page.hasMore, board)
       return next
     })
     setHasMore(page.hasMore)
-    setFetchedAt(cached?.at ?? null)
+    setFetchedAt(cached[board]?.at ?? null)
     setLoading(false)
     return page.posts
   }
@@ -402,7 +436,7 @@ export function Browse({
   }
 
   function submit(next: string) {
-    lastQuery = next
+    lastQuery[board] = next
     // The remembered rows answer the old query and would otherwise sit under the new one
     // until the read lands.
     invalidateBrowse()
@@ -444,6 +478,7 @@ export function Browse({
         // the last one's tags and picture up until the read lands.
         key={editing}
         postId={editing}
+        board={board}
         siteUrl={siteUrl}
         onSaved={() => setStale(true)}
         onDeleted={closeAndReload}

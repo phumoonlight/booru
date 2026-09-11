@@ -1,3 +1,4 @@
+import type { Board } from '@common/board'
 import { deletePostRow, updatePostWithTags } from '@common/data/shared'
 import { getPost, getPostTags, type Post } from '@common/data/posts'
 import { postImagePath, thumbnailPath } from '@common/storage'
@@ -20,6 +21,11 @@ import { boardImageUrl } from './config'
  * The work itself is still `@common/data/shared`, the same functions the upload path
  * calls. What is added here is what the web actions added: the storage objects on the
  * way out, and the cached tag index on the way through.
+ *
+ * Every one of them takes the **board** the window is in, which is the table the row is
+ * in and the prefix its two objects are under. It arrives with the call rather than being
+ * held here: an edit begun on one board and finished after the mode was switched has to
+ * land where it started, and a mode kept in this process is exactly how it would not.
  */
 
 export type ManageOutcome = { ok: true } | { ok: false; error: string }
@@ -29,13 +35,13 @@ export type LoadedPost = {
   tags: Tag[]
 }
 
-export async function loadPost(id: number): Promise<LoadedPost | null> {
+export async function loadPost(id: number, board: Board = 'post'): Promise<LoadedPost | null> {
   const db = boardDb()
   if (!db) return null
 
-  const post = await getPost(db, id)
+  const post = await getPost(db, id, board)
   if (!post) return null
-  return { post, tags: await getPostTags(db, id) }
+  return { post, tags: await getPostTags(db, id, board) }
 }
 
 /**
@@ -52,7 +58,8 @@ export async function savePost(
   id: number,
   rawTags: string,
   rawRating: string,
-  sourceUrl: string
+  sourceUrl: string,
+  board: Board = 'post'
 ): Promise<ManageOutcome> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
@@ -71,7 +78,7 @@ export async function savePost(
   if (tags.length === 0) return { ok: false, error: 'A post needs at least one tag.' }
 
   try {
-    await updatePostWithTags(db, id, { rating, source_url: sourceUrl, tags })
+    await updatePostWithTags(db, id, { rating, source_url: sourceUrl, tags }, board)
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not save the post.' }
   }
@@ -90,15 +97,15 @@ export async function savePost(
  * leave a row pointing at nothing. The row read comes before either, because the paths
  * derive from `file_name` and nothing stores them.
  */
-export async function removePost(id: number): Promise<ManageOutcome> {
+export async function removePost(id: number, board: Board = 'post'): Promise<ManageOutcome> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
 
-  const post = await getPost(db, id)
+  const post = await getPost(db, id, board)
   if (!post) return { ok: false, error: `Post ${id} not found.` }
 
   try {
-    await deletePostRow(db, id)
+    await deletePostRow(db, id, board)
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Delete failed.' }
   }
@@ -110,10 +117,10 @@ export async function removePost(id: number): Promise<ManageOutcome> {
   if (store) {
     await Promise.all([
       store
-        .remove(postImagePath(post.file_name, post.file_ext))
+        .remove(postImagePath(post.file_name, post.file_ext, board))
         .catch((error: unknown) => console.error('Could not remove the post image:', error)),
       store
-        .remove(thumbnailPath(post.file_name))
+        .remove(thumbnailPath(post.file_name, board))
         .catch((error: unknown) => console.error('Could not remove the thumbnail:', error)),
     ])
   }
@@ -138,12 +145,19 @@ export async function removePost(id: number): Promise<ManageOutcome> {
  * Cached by file name for the life of the window. That name is the md5 of the bytes, so
  * a thumbnail at a given name is that file and can never go stale — scrolling back up
  * should not re-fetch what it just had.
+ *
+ * **Both boards share the cache, and that is correct**: the name is the md5 of the
+ * uploaded bytes and the thumbnail is what this app's encoder makes of them, so the same
+ * image posted to both boards has the same thumbnail under the same name. Only the *fetch*
+ * is per board, because the two are stored under different prefixes. What the sharing
+ * costs is that deleting a post drops a thumbnail the other board may still be drawing —
+ * one re-fetch, of a file a few kilobytes long.
  */
 const thumbnails = new Map<string, string>()
 
 /** Memory, then `app-cache/thumbs` (`main/thumb-cache.ts`), then the board — each step
  *  filling in the ones before it, and only the last one costing anything. */
-export async function thumbnailDataUrl(fileName: string): Promise<string> {
+export async function thumbnailDataUrl(fileName: string, board: Board = 'post'): Promise<string> {
   const cached = thumbnails.get(fileName)
   if (cached) return cached
 
@@ -153,7 +167,7 @@ export async function thumbnailDataUrl(fileName: string): Promise<string> {
     return stored
   }
 
-  const url = boardImageUrl(thumbnailPath(fileName))
+  const url = boardImageUrl(thumbnailPath(fileName, board))
   if (!url) return ''
 
   try {

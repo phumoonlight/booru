@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { RATING_COLOR, RATING_LABEL, RATINGS, type Rating } from '@common/search'
+import type { Board } from '@common/board'
+import { postHref, RATING_COLOR, RATING_LABEL, RATINGS, type Rating } from '@common/search'
 import type { Post } from '@common/data/posts'
 import { BUTTON, BUTTON_SM } from './buttons'
 import { CategoryTagField } from './category-tag-field'
@@ -29,6 +30,7 @@ import { invalidateTags } from './tag-index'
  */
 export function PostEditor({
   postId,
+  board = 'post',
   siteUrl,
   onSaved,
   onDeleted,
@@ -38,6 +40,9 @@ export function PostEditor({
   onJump = null,
 }: {
   postId: number
+  /** Which board the post is on. Every write here names it, so an edit begun before the
+      mode was switched still lands on the row it opened. */
+  board?: Board
   siteUrl: string
   /** A write landed: the grid behind this screen is now holding a stale row. */
   onSaved: () => void
@@ -79,7 +84,7 @@ export function PostEditor({
 
   useEffect(() => {
     let alive = true
-    void window.api.getPost(postId).then((loaded) => {
+    void window.api.getPost(postId, board).then((loaded) => {
       if (!alive) return
       if (!loaded) {
         setMissing(true)
@@ -91,14 +96,14 @@ export function PostEditor({
         rating: loaded.post.rating,
         sourceUrl: loaded.post.source_url ?? '',
       })
-      void window.api.postThumbnail(loaded.post.file_name).then((url) => {
+      void window.api.postThumbnail(loaded.post.file_name, board).then((url) => {
         if (alive) setThumb(url)
       })
     })
     return () => {
       alive = false
     }
-  }, [postId])
+  }, [postId, board])
 
   /**
    * ← and → walk the grid. On `window`, because there is nothing on this screen that
@@ -135,6 +140,7 @@ export function PostEditor({
 
     const result = await window.api.savePost({
       id: postId,
+      board,
       tags: next.tags.map((tag) => tag.name).join(' '),
       rating: next.rating,
       sourceUrl: next.sourceUrl,
@@ -158,7 +164,7 @@ export function PostEditor({
   async function remove() {
     setBusy(true)
     setError('')
-    const result = await window.api.deletePost(postId)
+    const result = await window.api.deletePost(postId, board)
     setBusy(false)
     if (!result.ok) {
       setError(result.error)
@@ -209,7 +215,9 @@ export function PostEditor({
         {siteUrl && (
           <button
             type="button"
-            onClick={() => void window.api.openExternal(`${siteUrl}/posts/${postId}`)}
+            // `postHref` rather than a literal path, which is the web's own rule about
+            // which file spells one — and it is what puts an AI post on `/ai-posts/<id>`.
+            onClick={() => void window.api.openExternal(`${siteUrl}${postHref(postId, '', board)}`)}
             className={BUTTON_SM}
           >
             <span aria-hidden>🖼️</span> Open on the board

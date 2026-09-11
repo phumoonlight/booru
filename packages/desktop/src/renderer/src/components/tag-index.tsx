@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { BOARDS, type Board } from '@common/board'
 import {
   TAG_CATEGORIES,
   categoryColor,
@@ -47,16 +48,27 @@ type Picking = { into: RuleKind; tag: string } | { into: 'catalog'; name: string
  * worth asking for: hence 🔄 beside the title, and `invalidateTags()` below.
  *
  * Deliberately not persisted. It is a session's convenience, not state worth a file.
+ *
+ * **One per board**, because the number is per board. The names, categories, marks and
+ * sections in it are one vocabulary either side — which is why this is one screen and not
+ * two — but `post_count` is the column this grid sorts by and draws, and a count from the
+ * other board would be the one wrong thing on a screen otherwise entirely about the
+ * vocabulary.
  */
-let cached: { tags: Tag[]; at: number } | null = null
+const cached: Partial<Record<Board, { tags: Tag[]; at: number } | null>> = {}
 
 /**
  * Drops the cache without fetching, so the next visit reads the board again. Called when
- * an upload lands: a post creates tags and moves counts, which is exactly the moment a
- * remembered index becomes wrong.
+ * an upload or an edit lands: that moves counts, which is exactly the moment a remembered
+ * index becomes wrong.
+ *
+ * Both boards, because the callers that matter most — a rename, a delete — change the
+ * vocabulary, which both copies hold. An upload only moves one board's counts and drops
+ * the other's copy for nothing; a read it did not need is a cheaper mistake than a count
+ * nobody notices is stale.
  */
 export function invalidateTags(): void {
-  cached = null
+  for (const board of BOARDS) cached[board] = null
 }
 
 /**
@@ -82,7 +94,14 @@ export function invalidateTags(): void {
  * sit in the header row, where they are not attached to whichever row happens to be under
  * the pointer.
  */
-export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
+export function TagIndex({
+  board,
+  onBrowse,
+}: {
+  /** Which board's counts this grid shows, and which board Apply by tag applies on. */
+  board: Board
+  onBrowse: (query: string) => void
+}) {
   const [editing, setEditing] = useState<Tag | null>(null)
   const [panel, setPanel] = useState<'none' | 'create' | 'apply' | 'catalogs'>('none')
   const [diagram, setDiagram] = useState(false)
@@ -108,12 +127,13 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
   const recommendations = useRecommendations()
   const formSections = useFormSections()
   const catalogs = useCatalogs()
-  const [tags, setTags] = useState<Tag[] | null>(cached?.tags ?? null)
-  const [fetchedAt, setFetchedAt] = useState<number | null>(cached?.at ?? null)
+  const held = cached[board] ?? null
+  const [tags, setTags] = useState<Tag[] | null>(held?.tags ?? null)
+  const [fetchedAt, setFetchedAt] = useState<number | null>(held?.at ?? null)
   // Starts true when there is nothing cached, because the effect below is about to read
   // and this render is already the loading one. Setting it from inside the effect said
   // the same thing one render later, which is a cascading render React now lints for.
-  const [loading, setLoading] = useState(cached === null)
+  const [loading, setLoading] = useState(held === null)
   // Why the list could not be read, or ''. `listTags` throws now rather than answering with
   // an empty list — a refused query and a board with no tags are not the same thing — so
   // this screen has to have somewhere to put the difference. Without it a failed read left
@@ -123,15 +143,16 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
   // Only when there is nothing to show. Coming back to this screen paints the list it
   // painted last time, and the 🔄 beside the title is how you ask for a new one.
   useEffect(() => {
-    if (cached) return
+    if (cached[board]) return
     let alive = true
     void window.api
-      .listTags()
+      .listTags(board)
       .then((next) => {
-        cached = { tags: next, at: Date.now() }
+        const now = Date.now()
+        cached[board] = { tags: next, at: now }
         if (!alive) return
         setTags(next)
-        setFetchedAt(cached.at)
+        setFetchedAt(now)
       })
       .catch((error: unknown) => {
         if (!alive) return
@@ -143,7 +164,7 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
     return () => {
       alive = false
     }
-  }, [])
+  }, [board])
 
   async function refresh() {
     openTag(null)
@@ -164,10 +185,11 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
       reloadFormSections(),
     ])
     try {
-      const next = await window.api.listTags()
-      cached = { tags: next, at: Date.now() }
+      const next = await window.api.listTags(board)
+      const now = Date.now()
+      cached[board] = { tags: next, at: now }
       setTags(next)
-      setFetchedAt(cached.at)
+      setFetchedAt(now)
       setLoadError('')
     } catch (error) {
       // The list already on screen stands: a failed re-read is a reason to say so, not a
@@ -432,7 +454,7 @@ export function TagIndex({ onBrowse }: { onBrowse: (query: string) => void }) {
 
 
       {panel === 'create' && <CreateTag onDone={() => void refresh()} />}
-      {panel === 'apply' && <ApplyTag onDone={() => void refresh()} />}
+      {panel === 'apply' && <ApplyTag board={board} onDone={() => void refresh()} />}
       {panel === 'catalogs' && (
         <TagCatalogs
           tags={tags}
@@ -775,7 +797,7 @@ function CreateTag({ onDone }: { onDone: () => void }) {
  * "added to 3, 41 already had it" is the difference between a rule that did something
  * and one that was already satisfied.
  */
-function ApplyTag({ onDone }: { onDone: () => void }) {
+function ApplyTag({ board, onDone }: { board: Board; onDone: () => void }) {
   const [target, setTarget] = useState('')
   const [condition, setCondition] = useState('')
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
@@ -784,7 +806,7 @@ function ApplyTag({ onDone }: { onDone: () => void }) {
   async function submit() {
     setBusy(true)
     setMessage(null)
-    const result = await window.api.applyTagToTagged(target, condition)
+    const result = await window.api.applyTagToTagged(target, condition, board)
     setBusy(false)
     if (result.ok) {
       setMessage({

@@ -1,3 +1,4 @@
+import type { Board } from '@common/board'
 import { dropCache, isFresh, readCache, writeCache } from './app-cache'
 import type { BrowseCacheFile } from '../shared/api'
 
@@ -16,7 +17,15 @@ import type { BrowseCacheFile } from '../shared/api'
  * for.
  */
 
-const CACHE_FILE = 'browse.json'
+/**
+ * A file per board. The grid you left open on the gallery and the grid you left open on
+ * the AI board are two different screens, and one slot would have meant switching mode
+ * twice to get back to what you were doing. The gallery keeps the name it has always had,
+ * so the file already on disk is still read.
+ */
+function cacheFile(board: Board): string {
+  return board === 'post' ? 'browse.json' : `browse.${board}.json`
+}
 
 /**
  * What was on screen, if it is still worth showing. A day-old grid is dropped rather than
@@ -24,26 +33,27 @@ const CACHE_FILE = 'browse.json'
  * deleted yesterday would be drawn as it was, and there is no autocomplete to lose by
  * asking the board again.
  */
-export function readBrowseCache(): BrowseCacheFile | null {
-  const parsed = readCache(CACHE_FILE)
+export function readBrowseCache(board: Board = 'post'): BrowseCacheFile | null {
+  const file = cacheFile(board)
+  const parsed = readCache(file)
   if (!parsed) return null
 
   const { at, query, posts, hasMore } = parsed as Partial<BrowseCacheFile>
   if (typeof at !== 'number' || typeof query !== 'string') return null
   if (!Array.isArray(posts) || typeof hasMore !== 'boolean') return null
   if (!isFresh(at)) {
-    dropCache(CACHE_FILE)
+    dropCache(file)
     return null
   }
   return { at, query, posts, hasMore }
 }
 
-export function writeBrowseCache(cache: BrowseCacheFile): void {
-  writeCache(CACHE_FILE, cache)
+export function writeBrowseCache(cache: BrowseCacheFile, board: Board = 'post'): void {
+  writeCache(cacheFile(board), cache)
 }
 
 /** Dropped by the grid's own 🔄, by a new search, and by an upload landing — the same
  *  three moments that drop the renderer's copy, because they are one cache in two places. */
-export function clearBrowseCache(): void {
-  dropCache(CACHE_FILE)
+export function clearBrowseCache(board: Board = 'post'): void {
+  dropCache(cacheFile(board))
 }
