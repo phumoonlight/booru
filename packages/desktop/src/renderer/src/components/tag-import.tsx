@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { RATING_COLOR, RATING_LABEL, tagLabel } from '@common/search'
 import { categoryColor } from '@common/tags'
 import type { Post } from '@common/data/posts'
+import { useBoard } from '../board-store'
 import { readPosts, thumbnailFor } from './browse'
 import type { TagSeed } from './tag-seed'
 
@@ -17,6 +18,11 @@ import type { TagSeed } from './tag-seed'
  * It is Browse's search in a dialog, deliberately — `readPosts` and the thumbnail cache
  * are that screen's, so a query means the same thing here, a bare number is still a post
  * number, and a picture already on screen once is not fetched twice.
+ *
+ * **Every read here names the board**, including the one that fetches the chosen post's
+ * tags. That one defaulted to the gallery while the grid above it was the AI board's, so
+ * picking a generated post handed back whatever the gallery's post of the same number
+ * carries — a list of tags that had nothing to do with the picture that was clicked.
  *
  * Picking is two steps. A grid of thumbnails is a poor place to be sure, so a click reads
  * the post's tags and shows them, and nothing is copied until the button under them is
@@ -44,12 +50,13 @@ export function TagImport({
   const [loading, setLoading] = useState(true)
   const [chosen, setChosen] = useState<{ id: number; tags: TagSeed[] } | null>(null)
   const [reading, setReading] = useState<number | null>(null)
+  const board = useBoard()
 
   // Nothing sets loading from in here: this render is already the loading one, and the
   // search box below turns it back on when it asks for something else.
   useEffect(() => {
     let alive = true
-    void readPosts(submitted).then((page) => {
+    void readPosts(submitted, board).then((page) => {
       if (!alive) return
       setPosts(page.posts)
       setLoading(false)
@@ -57,7 +64,7 @@ export function TagImport({
     return () => {
       alive = false
     }
-  }, [submitted])
+  }, [submitted, board])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -69,7 +76,7 @@ export function TagImport({
 
   async function choose(post: Post) {
     setReading(post.id)
-    const loaded = await window.api.getPost(post.id)
+    const loaded = await window.api.getPost(post.id, board)
     setReading(null)
     if (!loaded) return
     setChosen({
@@ -199,16 +206,19 @@ function Thumb({
   onChoose: () => void
 }) {
   const [src, setSrc] = useState('')
+  // The card fetches its own thumbnail, so it needs the board the same way the reads above
+  // do — the two prefixes are what tell one board's stored files from the other's.
+  const board = useBoard()
 
   useEffect(() => {
     let alive = true
-    void thumbnailFor(post.file_name).then((url) => {
+    void thumbnailFor(post.file_name, board).then((url) => {
       if (alive) setSrc(url)
     })
     return () => {
       alive = false
     }
-  }, [post.file_name])
+  }, [post.file_name, board])
 
   return (
     <button
