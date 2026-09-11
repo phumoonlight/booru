@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import * as read from '@common/data/search'
+import { serving } from '@/lib/data/site'
 import { visibleRatings } from '@/lib/nsfw-server'
 
 /**
@@ -18,6 +19,10 @@ export { POSTS_PER_PAGE, FEED_CHUNK_SIZE } from '@common/data/search'
  * the next is not something to have to remember at four call sites.
  */
 export async function searchPosts(options: Parameters<typeof read.searchPosts>[1] = {}) {
+  // A closed board runs no listing. The notice is what the visitor gets either way — this
+  // is what stops the search from running underneath it; see `serving()`.
+  if (!(await serving())) return { posts: [], hasMore: false }
+
   return read.searchPosts(db(), {
     ...options,
     visibleRatings: await visibleRatings(),
@@ -30,6 +35,9 @@ export async function searchPosts(options: Parameters<typeof read.searchPosts>[1
  * would not have shown, and cannot step out of the search that led here.
  */
 export async function getSearchNeighbours(options: { id: number; query?: string }) {
+  // The arrows simply aren't there, which is what they already do on a failed read.
+  if (!(await serving())) return { prevId: null, nextId: null }
+
   return read.searchNeighbours(db(), {
     ...options,
     visibleRatings: await visibleRatings(),
@@ -37,5 +45,7 @@ export async function getSearchNeighbours(options: { id: number; query?: string 
 }
 
 export async function getTagsForPosts(postIds: number[]) {
+  if (!(await serving())) return []
+
   return read.getTagsForPosts(db(), postIds)
 }

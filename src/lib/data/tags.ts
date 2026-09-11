@@ -1,5 +1,6 @@
 import 'server-only'
 import { db } from '@/lib/db'
+import { serving } from '@/lib/data/site'
 import { listTags, searchTags as sharedSearchTags } from '@common/data/shared'
 import * as tags from '@common/data/tags'
 import { categoryOrder, type Tag, type TagCategory } from '@common/tags'
@@ -12,11 +13,15 @@ import { TAGS_PER_PAGE } from '@/lib/tags-url'
  */
 
 export async function getTagByName(name: string): Promise<Tag | null> {
+  if (!(await serving())) return null
+
   return tags.getTagByName(db(), name)
 }
 
 /** One tag by id — the tag page's own address, so a rename never breaks a link. */
 export async function getTagById(id: number): Promise<Tag | null> {
+  if (!(await serving())) return null
+
   return tags.getTagById(db(), id)
 }
 
@@ -51,6 +56,10 @@ const TAG_CACHE_LIMIT = 10_000
 let tagCache: { at: number; tags: Tag[] } | null = null
 
 export async function getTags(): Promise<Tag[]> {
+  // Before the window, for the reason a failure is not cached either: a closed board must
+  // not leave a day-long copy of nothing behind for the board that comes back.
+  if (!(await serving())) return []
+
   if (tagCache && Date.now() - tagCache.at < TAG_CACHE_TTL_MS) return tagCache.tags
 
   try {
@@ -125,5 +134,9 @@ export async function browseTags({
 /** Tag autocomplete — the query is in `@common/data/shared`, which the desktop app
  * also runs. */
 export async function searchTags(query: string, limit = 8): Promise<Tag[]> {
+  // The autocomplete is a server action, which is the other thing a layout does not gate:
+  // a box left open in a tab when the board closed would otherwise still be querying.
+  if (!(await serving())) return []
+
   return sharedSearchTags(db(), query, limit)
 }

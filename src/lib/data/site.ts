@@ -65,3 +65,30 @@ export const siteState = cache(async (): Promise<SiteState> => {
 export function forgetSiteState(): void {
   held = null
 }
+
+/**
+ * Is the board answering reads at all — the guard every other function in `lib/data/`
+ * opens with.
+ *
+ * **The gate has to be here rather than in the layout.** `(public)/layout.tsx` swaps
+ * `children` for the notice, which decides what a visitor *sees* and nothing else: the
+ * router renders route segments itself, so a layout that hides one does not stop it from
+ * running (Next's own guidance on the same mistake made with an auth check —
+ * `node_modules/next/dist/docs/01-app/02-guides/authentication.md`). A closed board was
+ * therefore drawing the notice and running the whole listing underneath it, one search
+ * and one facet read per request, which is exactly the work closing the site is meant to
+ * stop. It is the reason that file's DAL advice exists, and `lib/data/*` already being
+ * the only query surface is what makes one guard cover all eight routes and the feed's
+ * server action together.
+ *
+ * Cheap in both states: while the site is up this is the same `cache()`d read the layout
+ * already made in this request, and while it is closed the ten-minute hold means it is
+ * usually no query at all.
+ *
+ * `getSitemapPosts` is the deliberate exception and does not call this — `sitemap.xml`
+ * and `robots.txt` sit outside the gate because they are what a crawler reads to decide
+ * whether to come back.
+ */
+export async function serving(): Promise<boolean> {
+  return !(await siteState()).maintenance
+}

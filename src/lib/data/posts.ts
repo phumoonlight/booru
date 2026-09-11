@@ -1,5 +1,6 @@
 import { cache } from 'react'
 import { db } from '@/lib/db'
+import { serving } from '@/lib/data/site'
 import * as read from '@common/data/posts'
 
 /**
@@ -45,23 +46,42 @@ let countCache: { at: number; count: number } | null = null
  * the landing page shows the number and nothing else about them.
  */
 export async function getPostCount(): Promise<number> {
+  // The landing page is behind the notice too, so nobody is waiting on this number.
+  // Checked before the window is consulted, so a closed board neither reads nor caches.
+  if (!(await serving())) return 0
+
   if (countCache && Date.now() - countCache.at < COUNT_TTL_MS) return countCache.count
   const count = await read.getPostCount(db())
   countCache = { at: Date.now(), count }
   return count
 }
 
-// Cached because the post page and its generateMetadata both need the same rows
-export const getPost = cache((id: number) => read.getPost(db(), id))
+// Cached because the post page and its generateMetadata both need the same rows.
+// `generateMetadata` is the half that made this worth guarding twice over: it runs for a
+// route the maintenance notice has replaced, so a closed board was still reading a post
+// and its tags to title a page nobody was being shown.
+export const getPost = cache(async (id: number) =>
+  (await serving()) ? read.getPost(db(), id) : null
+)
 
-export const getPostTags = cache((postId: number) => read.getPostTags(db(), postId))
+export const getPostTags = cache(async (postId: number) =>
+  (await serving()) ? read.getPostTags(db(), postId) : []
+)
 
 export async function getPostTagNames(postId: number): Promise<string[]> {
   const tags = await getPostTags(postId)
   return tags.map((t) => t.name)
 }
 
-/** Ids + dates of indexable posts, newest first — the sitemap's source. */
+/**
+ * Ids + dates of indexable posts, newest first — the sitemap's source.
+ *
+ * **The one read with no `serving()` guard**, deliberately: `sitemap.xml` and
+ * `robots.txt` sit outside the maintenance gate because they are what a crawler reads to
+ * decide whether to come back, and answering them with nothing during an hour of
+ * maintenance is a way to be dropped from an index over something temporary. It is also
+ * the cheap one to leave open — an hourly ISR route rather than a query per visit.
+ */
 export async function getSitemapPosts(limit: number) {
   return read.getSitemapPosts(db(), limit)
 }
@@ -86,5 +106,10 @@ export async function getSitemapPosts(limit: number) {
  * function remembering not to make one. Nothing but an id reaches here.
  */
 export async function incrementPostView(postId: number): Promise<void> {
+  // A post nobody was shown was not viewed. `PostViewCounter` never mounts behind the
+  // notice, so this is belt and braces — but it is also the only write the site makes,
+  // and a closed board making one is the thing worth being sure about.
+  if (!(await serving())) return
+
   await db()`update posts set view_count = view_count + 1 where id = ${postId}`
 }
