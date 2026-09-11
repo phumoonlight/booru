@@ -56,6 +56,19 @@ export function cdnBase(): string {
   return (process.env.NEXT_PUBLIC_CDN_URL ?? '').replace(/\/+$/, '')
 }
 
+/**
+ * Whether `lib/request-log.ts` writes a line per read. On unless `LOG_READS=off`, so the
+ * board can be watched without a redeploy to start and one to stop — the traffic being
+ * chased is other people's, which means it is happening in production or not at all.
+ *
+ * Here rather than beside the logger because this file is the only one in `src/` that
+ * reads `process.env`, and a diagnostic switch is exactly the kind of variable that ends
+ * up spelled two ways in two files.
+ */
+export function logReads(): boolean {
+  return process.env.LOG_READS !== 'off'
+}
+
 /** The board, as `booru_web`. Read only by `lib/db.ts`, which is `server-only`. */
 export function databaseUrl(): string | undefined {
   return process.env.DATABASE_URL

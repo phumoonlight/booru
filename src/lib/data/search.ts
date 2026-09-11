@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import * as read from '@common/data/search'
 import { serving } from '@/lib/data/site'
+import { logRead } from '@/lib/request-log'
 import { visibleRatings } from '@/lib/nsfw-server'
 
 /**
@@ -23,10 +24,23 @@ export async function searchPosts(options: Parameters<typeof read.searchPosts>[1
   // is what stops the search from running underneath it; see `serving()`.
   if (!(await serving())) return { posts: [], hasMore: false }
 
-  return read.searchPosts(db(), {
+  const started = Date.now()
+  const page = await read.searchPosts(db(), {
     ...options,
     visibleRatings: await visibleRatings(),
   })
+
+  // The one read worth naming its caller: it runs on every listing, every feed chunk and
+  // every tag sample, and `kind=action` is the half no page render accounts for.
+  await logRead('search', {
+    q: options.query ?? '',
+    after: options.after,
+    n: options.perPage,
+    rows: page.posts.length,
+    ms: Date.now() - started,
+  })
+
+  return page
 }
 
 /**
@@ -47,5 +61,16 @@ export async function getSearchNeighbours(options: { id: number; query?: string 
 export async function getTagsForPosts(postIds: number[]) {
   if (!(await serving())) return []
 
-  return read.getTagsForPosts(db(), postIds)
+  const started = Date.now()
+  const entries = await read.getTagsForPosts(db(), postIds)
+
+  // Logged beside the search because it is the listing's *other* read and the one that
+  // actually moves bytes — a screenful of posts can carry several hundred tag rows.
+  await logRead('facets', {
+    posts: postIds.length,
+    rows: entries.length,
+    ms: Date.now() - started,
+  })
+
+  return entries
 }

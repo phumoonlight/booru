@@ -1,6 +1,7 @@
 import 'server-only'
 import { db } from '@/lib/db'
 import { serving } from '@/lib/data/site'
+import { logRead } from '@/lib/request-log'
 import { listTags, searchTags as sharedSearchTags } from '@common/data/shared'
 import * as tags from '@common/data/tags'
 import { categoryOrder, type Tag, type TagCategory } from '@common/tags'
@@ -63,8 +64,12 @@ export async function getTags(): Promise<Tag[]> {
   if (tagCache && Date.now() - tagCache.at < TAG_CACHE_TTL_MS) return tagCache.tags
 
   try {
+    const started = Date.now()
     const tags = await listTags(db(), TAG_CACHE_LIMIT)
     tagCache = { at: Date.now(), tags }
+    // By some way the largest read the site makes — the whole vocabulary, up to ten
+    // thousand rows. It should be rare; a log line per cold instance says whether it is.
+    await logRead('tags', { rows: tags.length, ms: Date.now() - started })
     return tags
   } catch (error) {
     console.error('Could not read the tags:', error instanceof Error ? error.message : error)
