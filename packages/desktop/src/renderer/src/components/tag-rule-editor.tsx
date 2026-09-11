@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   asRating,
   RATING_COLOR,
@@ -8,7 +8,9 @@ import {
   tagLabel,
   type Rating,
 } from '@common/search'
-import { BUTTON_ON_SURFACE } from './buttons'
+import { categoryColor, categoryLabel, type Tag } from '@common/tags'
+import { FIELD } from './panel'
+import { useTagIndex } from './category-tag-field'
 import type { RuleKind } from '@common/data/rules'
 import { saveImplication, useImplications, useImplicationsSaving } from '../implications'
 import {
@@ -28,9 +30,8 @@ export type { RuleKind }
  * different kind, set by the menu rather than picked from the grid, so it passes through
  * untouched.
  *
- * Exported because the two halves of a pick live in different components — the panel
- * starts it, the grid in `tag-index.tsx` answers it — and the writing has to mean the
- * same thing from both.
+ * Still exported: it is the one spelling of what adding and removing a name mean, and the
+ * chips' ✕ and the search list below both go through it.
  */
 export function toggleRuleName(current: string[], name: string): string[] {
   return current.includes(name) ? current.filter((entry) => entry !== name) : [...current, name]
@@ -46,29 +47,30 @@ export function toggleRuleName(current: string[], name: string): string[] {
  * against an autocomplete rather than against the list. Here the trigger is the row that
  * was clicked, so there is nothing to type on the left and nothing to misspell.
  *
- * **The right side is not typed either.** Choose turns the grid below into the picker:
- * click tags to tick them into the rule, click them again to take them out, Done or
- * Escape to stop. A rule can only name tags the board actually has — which was already
- * the rule everywhere a post is tagged (`CategoryTagField` offers existing tags only),
- * and is now true here too, on the one screen where coining the missing one is a button
- * away. What it costs is a rule written ahead of the tag it names; that was never worth
- * much, since such a rule sits silent until the tag exists.
+ * **The right side is still not typed — it is searched.** Each column has a box, and a
+ * name is added by picking it out of what the box finds. A rule can only name tags the
+ * board actually has, which was already the rule everywhere a post is tagged
+ * (`CategoryTagField` offers existing tags only) and is true here too, on the one screen
+ * where coining the missing one is a button away. What it costs is a rule written ahead of
+ * the tag it names; that was never worth much, since such a rule sits silent until the tag
+ * exists.
+ *
+ * It was **Choose from the list**, which turned the whole grid below into the picker:
+ * click tags to tick them in, Done or Escape to stop. That read well on a board of thirty
+ * tags and stopped working on one of several hundred — the answer is one name, the grid is
+ * a page of folded categories, and finding it meant scrolling past everything the rule is
+ * not about with a panel pinned over the top of it. A box is the same promise (only names
+ * the board has) asked the other way round: say what you are looking for rather than go
+ * and find it. The grid keeps its picking mode for catalogs, which is a different job —
+ * a catalog is a *set*, gathered by reading down a list, and it is what that gesture was
+ * always good at.
  *
  * The rules themselves live on the board now, on `tag_rules`, so a rule survives a
  * rename of either tag it names and goes when one of them does. What this panel sends is
  * one tag's whole list — the tag whose panel is open, which is the only one it can have
  * an opinion about.
  */
-export function TagRuleEditor({
-  tag,
-  picking,
-  onPick,
-}: {
-  tag: string
-  /** Which rule the grid below is currently filling in, if either. */
-  picking: RuleKind | null
-  onPick: (kind: RuleKind | null) => void
-}) {
+export function TagRuleEditor({ tag }: { tag: string }) {
   const implications = useImplications()
   const recommendations = useRecommendations()
   // Per rule set, not one flag for the panel: the two columns are written by separate
@@ -116,7 +118,12 @@ export function TagRuleEditor({
           label={(name) => `Stop ${tag} adding ${name}`}
         />
 
-        <ChooseButton kind="implies" picking={picking} onPick={onPick} tag={tag} verb="imply" />
+        <RuleSearch
+          tag={tag}
+          chosen={impliedTags}
+          onAdd={(name) => void saveImplication(tag, toggleRuleName(impliedNow, name))}
+          label={`Search a tag for ${tagLabel(tag)} to imply`}
+        />
 
         {/* A floor, not a setting: it lifts an image rated lower and leaves a higher one
             alone, which is `raisedRating` and is said here rather than left to be
@@ -183,12 +190,11 @@ export function TagRuleEditor({
           label={(name) => `Stop ${tag} offering ${name}`}
         />
 
-        <ChooseButton
-          kind="recommends"
-          picking={picking}
-          onPick={onPick}
+        <RuleSearch
           tag={tag}
-          verb="recommend"
+          chosen={offeredNow}
+          onAdd={(name) => void saveRecommendation(tag, toggleRuleName(offeredNow, name))}
+          label={`Search a tag for ${tagLabel(tag)} to recommend`}
         />
       </section>
 
@@ -217,54 +223,160 @@ function Saving({ on }: { on: boolean }) {
   )
 }
 
+/** How many matches are drawn. Enough to see you have narrowed it, short enough that the
+ *  answer to a word too vague to be one name is "type more" rather than a second scroll. */
+const MATCH_LIMIT = 8
+
 /**
- * Starts and stops the pick, and while it is running says what the grid below has become
- * — a list that changed what a click on it does has to say so somewhere, and the button
- * that changed it is the honest place.
+ * The box a consequence is added from: type, then click a name.
  *
- * Only one of the two can be picking at a time: pressing the other switches, which is what
- * you meant, rather than leaving two rules both claiming the next click.
+ * **Nothing is added by typing.** The list under the box is the whole of what this control
+ * can do, so a rule can still only name a tag the board has — the promise the grid picker
+ * made, kept while dropping the scrolling that made it unusable on a real vocabulary. A
+ * name that matches nothing says so, and naming it is the ➕ New tag at the top of this
+ * screen.
+ *
+ * Matched against the stored spelling with spaces read as underscores, so the box takes
+ * `blue archive` and `blue_archive` alike — the same courtesy the tag picker's box and the
+ * grid's filter both offer.
+ *
+ * The list is derived as it is drawn rather than held in state, which is what keeps it
+ * from being briefly wrong about what was typed — `Browse`'s box takes the same line.
+ * What is already in the rule is left out, and so is the tag the rule is about: a tag
+ * implying itself is the one rule that can never fire.
  */
-function ChooseButton({
-  kind,
-  picking,
-  onPick,
+function RuleSearch({
   tag,
-  verb,
+  chosen,
+  onAdd,
+  label,
 }: {
-  kind: RuleKind
-  picking: RuleKind | null
-  onPick: (kind: RuleKind | null) => void
+  /** The tag the rule is about — excluded from its own consequences. */
   tag: string
-  verb: string
+  /** What the rule already names, so the list does not offer them twice. */
+  chosen: string[]
+  onAdd: (name: string) => void
+  label: string
 }) {
-  const active = picking === kind
+  const all = useTagIndex()
+  const [query, setQuery] = useState('')
+  const [highlight, setHighlight] = useState(-1)
+  const box = useRef<HTMLInputElement>(null)
+
+  const typed = query.trim().toLowerCase().replace(/ /g, '_')
+
+  const matches = useMemo(() => {
+    if (!typed) return []
+    const taken = new Set([...chosen, tag])
+    return (all ?? [])
+      .filter((option) => !taken.has(option.name) && option.name.includes(typed))
+      // A tag whose name *starts* with what was typed is nearly always the one meant, and
+      // the index arrives in count order, which on a board of several hundred puts a
+      // popular tag that merely contains the word ahead of the one being spelled out.
+      .sort((a, b) => Number(b.name.startsWith(typed)) - Number(a.name.startsWith(typed)))
+      .slice(0, MATCH_LIMIT)
+  }, [all, chosen, tag, typed])
+
+  // The list shrinks as the word grows, so the highlight has to be clamped rather than
+  // reset in an effect — an index left pointing past the end would take Enter with it.
+  const active = highlight < matches.length ? highlight : -1
+
+  function add(name: string) {
+    onAdd(name)
+    // Cleared and handed back, so the next one is typed rather than reached for: adding
+    // two or three consequences at a sitting is the ordinary shape of writing a rule.
+    setQuery('')
+    setHighlight(-1)
+    box.current?.focus()
+  }
+
+  function onKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Escape' && query) {
+      event.preventDefault()
+      setQuery('')
+      setHighlight(-1)
+      return
+    }
+    if (matches.length === 0) return
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setHighlight((index) => (index + 1) % matches.length)
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setHighlight((index) => (index <= 0 ? matches.length - 1 : index - 1))
+    } else if (event.key === 'Enter') {
+      event.preventDefault()
+      // With nothing highlighted the first match is what Enter means: it is the one the
+      // list is already claiming is the answer.
+      const picked = matches[active === -1 ? 0 : active]
+      if (picked) add(picked.name)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-1">
-      <button
-        type="button"
-        onClick={() => onPick(active ? null : kind)}
-        className={`${BUTTON_ON_SURFACE} self-start ${
-          active ? 'bg-accent/15 font-semibold text-accent' : 'text-accent'
-        }`}
-      >
-        {active ? (
-          <>
-            <span aria-hidden>✅</span> Done
-          </>
-        ) : (
-          <>
-            <span aria-hidden>👆</span> Choose from the list
-          </>
-        )}
-      </button>
-      {active && (
-        <p className="text-xs text-accent">
-          Click tags below to add or remove what {tagLabel(tag)} should {verb}. Escape stops.
-        </p>
+      <input
+        ref={box}
+        type="search"
+        value={query}
+        onChange={(event) => {
+          setQuery(event.target.value)
+          setHighlight(-1)
+        }}
+        onKeyDown={onKeyDown}
+        aria-label={label}
+        // An example rather than a description, which is this app's rule for a placeholder:
+        // it shows the spelling and the separator at once, where "search tags" teaches
+        // nothing a label has not already said.
+        placeholder="blue_hair"
+        className={FIELD}
+      />
+
+      {typed !== '' && (
+        <ul className="flex flex-col">
+          {matches.length === 0 ? (
+            <li className="px-1 py-1 text-xs text-muted">
+              No tag matches &ldquo;{query.trim()}&rdquo; — ➕ New tag names one.
+            </li>
+          ) : (
+            matches.map((option, index) => (
+              <Match
+                key={option.id}
+                tag={option}
+                active={index === active}
+                onPick={() => add(option.name)}
+              />
+            ))
+          )}
+        </ul>
       )}
     </div>
+  )
+}
+
+/** One name the box found. The category is on it in its own colour — the one thing a bare
+ *  name cannot say, and what tells two similar spellings apart. */
+function Match({ tag, active, onPick }: { tag: Tag; active: boolean; onPick: () => void }) {
+  return (
+    <li>
+      <button
+        type="button"
+        // `mousedown`, not `click`: the box keeps focus through a press, so the list does
+        // not have to survive a blur to be clickable.
+        onMouseDown={(event) => {
+          event.preventDefault()
+          onPick()
+        }}
+        className={`flex w-full items-baseline gap-2 rounded px-1 py-1 text-left text-xs transition-colors ${
+          active ? 'bg-background' : 'hover:bg-background'
+        }`}
+      >
+        <span className={`font-mono ${categoryColor(tag.category)}`}>{tag.name}</span>
+        <span className="ml-auto text-[0.65rem] uppercase tracking-wide text-muted">
+          {categoryLabel(tag.category)}
+        </span>
+      </button>
+    </li>
   )
 }
 

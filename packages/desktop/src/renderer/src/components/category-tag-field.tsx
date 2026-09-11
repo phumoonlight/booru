@@ -105,7 +105,12 @@ export function invalidateTagNames(): void {
   void loadIndex()
 }
 
-function useTagIndex(): Tag[] | null {
+/**
+ * The board's tags as names, categories, marks and sections — no counts, and so one list
+ * whichever board the window is on. Exported because the tag rule editor searches the same
+ * vocabulary: a rule may only name a tag the board has, which is this list exactly.
+ */
+export function useTagIndex(): Tag[] | null {
   const [, bump] = useState(0)
 
   useEffect(() => {

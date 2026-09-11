@@ -507,10 +507,12 @@ behind a session, because there is none.
   and the filter being what makes a few hundred tags browsable now that the grid is also a
   picker. Every button is unbordered (`HEADER_LINK` / `headerToggle`, shared with Browse); the box
   keeps its border, being the one thing you type into. **The grid has two
-  meanings**: ordinarily a click opens that tag, and while one of the open tag's two
-  rules or a catalog is being filled in (`picking` in `TagIndex`, a union of the two) a
-  click toggles that tag in *that* instead, with
-  the count column showing ✓/＋ rather than a number for as long as that lasts. The
+  meanings**: ordinarily a click opens that tag, and while a **catalog** is being filled in
+  (`picking` in `TagIndex`) a click toggles that tag in it instead, with
+  the count column showing ✓/＋ rather than a number for as long as that lasts. It answered
+  a tag's two rules the same way until those became searches — a catalog is a *set*, gathered
+  by reading a list and ticking what belongs, which is the job this gesture is good at; a
+  rule is one name, which is the job it was bad at. The
   catalogs panel and a tag's own both pin to the top of the scroller, so `showPanel` makes
   them take turns and ends any pick with the panel that was answering it. **Its
   posts** hands the tag name to Browse via `browseFor` and switches to it, rather than
@@ -532,13 +534,20 @@ because a rule is written *about* a tag and the screen with every tag on it — 
 category, count — was the other one. They had their own screen whose first box named the
 trigger; that box was the whole problem, since the name it asked you to type was already
 on the list next door. The trigger is now the row that was clicked, so a rule has a left
-side that cannot be misspelled. **The right side is not typed either** — Choose turns the
-grid below into the picker and a click ticks a tag into the rule — so a rule can only name
-tags the board has, which is the rule everywhere a post is tagged and is now true here, on
-the one screen where coining the missing one is a button away. What that costs is the form
-that wrote several rules at once (`white_bra black_bra red_bra → bra`), now three
-selections, and a rule written ahead of the tag it names — which used to sit silent and
-now fails the upload that fires it, since no write path coins a tag any more.
+side that cannot be misspelled. **The right side is still not typed — it is searched.**
+Each column has a box, and a name is added by picking it out of what the box finds, so a
+rule can only name tags the board has: the rule everywhere a post is tagged, true here too,
+on the one screen where coining the missing one is a button away. It was 👆 Choose from the
+list, which turned the whole grid below into the picker — and that read well on thirty tags
+and stopped working somewhere around a hundred, since the answer to a rule is *one name* and
+finding it meant scrolling a page of folded categories with a panel pinned over the top of
+it. A box is the same promise asked the other way round: say what you are looking for rather
+than go and find it. A word that matches nothing says so and points at ➕ New tag; ↑↓ and
+Enter work, and picking clears the box and keeps the caret, since a rule is usually two or
+three consequences at a sitting. What that costs is the form that wrote several rules at
+once (`white_bra black_bra red_bra → bra`), now three searches, and a rule written ahead of
+the tag it names — which used to sit silent and now fails the upload that fires it, since no
+write path coins a tag any more.
 `rule-diagram.tsx` is the other half: 🗺️ Rule map, top right of Tags, draws every rule at
 once as the forest it is — implications chain, and one row per rule is exactly what hides
 that. Read-only, because a screen that both explains and edits invites an edit made on a

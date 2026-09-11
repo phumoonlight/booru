@@ -17,13 +17,13 @@ import { FIELD, Panel } from './panel'
 import { FormSectionsView } from './form-sections'
 import { RuleDiagram } from './rule-diagram'
 import { TagCatalogs } from './tag-catalogs'
-import { TagRuleEditor, toggleRuleName, type RuleKind } from './tag-rule-editor'
+import { TagRuleEditor } from './tag-rule-editor'
 import { toggleCatalogTag } from '../../../shared/catalogs'
 import { saveCatalogs, useCatalogs } from '../catalogs'
 import { reloadFormSections, useFormSections } from '../form-sections'
 import type { FormSection } from '@common/data/form-sections'
-import { reloadImplications, saveImplication, useImplications } from '../implications'
-import { reloadRecommendations, saveRecommendation, useRecommendations } from '../recommendations'
+import { reloadImplications, useImplications } from '../implications'
+import { reloadRecommendations, useRecommendations } from '../recommendations'
 
 /**
  * What a click on the tag grid is currently answering, when it is not simply opening a tag.
@@ -37,7 +37,21 @@ import { reloadRecommendations, saveRecommendation, useRecommendations } from '.
  * now, off the chips it already draws — which is the whole board's tags, laid out by row,
  * so the picker that gesture needed is there rather than here.
  */
-type Picking = { into: RuleKind; tag: string } | { into: 'catalog'; name: string }
+/**
+ * What the grid is filling in instead of opening a tag — a catalog, and only a catalog.
+ *
+ * It answered a tag's two rules as well, until searching replaced that (see
+ * `tag-rule-editor.tsx`): the answer to a rule is one name, and hunting for it down a page
+ * of folded categories with a panel pinned over the top stopped working somewhere around a
+ * hundred tags. A catalog is the job this gesture is actually good at — it is a *set*,
+ * gathered by reading a list and ticking what belongs, which is reading you were going to
+ * do anyway.
+ *
+ * Still a shape rather than a bare name, because "which catalog" is what the grid has to
+ * carry and a `string | null` would say "a catalog is open" with the same value it uses
+ * for its name.
+ */
+type Picking = { into: 'catalog'; name: string }
 
 /**
  * The last index read, kept outside React on purpose. This screen is unmounted whenever
@@ -83,9 +97,11 @@ export function invalidateTags(): void {
  * web page is: you arrive holding a name.
  *
  * Clicking a tag opens its editor: rename it, recategorize it, delete it, write its rules,
- * or open it on the board. That same click is also how a rule is *filled in*: with the
- * panel open and one of its two Choose buttons pressed, the grid stops being a list of
- * tags to manage and becomes the picker for the rule being written — see `pickTag` below.
+ * or open it on the board. That same click is also how a **catalog** is filled in: with the
+ * catalogs panel open and one of them being gathered, the grid stops being a list of tags
+ * to manage and becomes the picker for that catalog — see `pickTag` below. Rules used to
+ * work the same way and are searched now, on their own panel, because the answer to a rule
+ * is one name rather than a set (`tag-rule-editor.tsx`).
  *
  * Managing a tag was the website's /tags/manage screen until the board lost its login —
  * the site holds an anon key and the schema has no write policy for it, so the vocabulary
@@ -123,8 +139,6 @@ export function TagIndex({
   // right default — the fold is about what you are looking at now, where the tag list is
   // about what the board holds.
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const implications = useImplications()
-  const recommendations = useRecommendations()
   const formSections = useFormSections()
   const catalogs = useCatalogs()
   /**
@@ -252,22 +266,10 @@ export function TagIndex({
       if (panel === 'catalogs') setPanel('none')
       return
     }
-    if (picking.into === 'catalog') {
-      void saveCatalogs(toggleCatalogTag(catalogs, picking.name, tag.name))
-      return
-    }
-    if (tag.name === picking.tag) return
-    if (picking.into === 'implies') {
-      void saveImplication(picking.tag, toggleRuleName(implications[picking.tag] ?? [], tag.name))
-    } else {
-      void saveRecommendation(
-        picking.tag,
-        toggleRuleName(recommendations[picking.tag] ?? [], tag.name)
-      )
-    }
+    void saveCatalogs(toggleCatalogTag(catalogs, picking.name, tag.name))
   }
 
-  /** Closing the panel, or opening another tag's, ends any pick with it. */
+  /** Closing the panel, or opening another tag's, ends any catalog pick with it. */
   function openTag(tag: Tag | null) {
     setEditing(tag)
     setPicking(null)
@@ -276,7 +278,7 @@ export function TagIndex({
   /**
    * Which panel sits above the list. Pressing the one already open closes it.
    *
-   * Any change ends a pick, because the panel being filled in may be the one leaving — a
+   * Any change ends a pick, because the catalog being filled in may be the one leaving — a
    * grid still answering a catalog that is no longer on screen is a list whose clicks go
    * somewhere you cannot see. Opening the catalogs also closes a tag: both of those panels
    * pin to the top of the scroller, so they take turns.
@@ -298,30 +300,8 @@ export function TagIndex({
     return () => window.removeEventListener('keydown', onKey)
   }, [picking])
 
-  // The names already in whatever is being filled in, so the grid can mark them
-  const ruleSet = { implies: implications, recommends: recommendations }
-  const picked = new Set(
-    picking === null
-      ? []
-      : picking.into === 'catalog'
-        ? catalogs[picking.name] ?? []
-        : ruleSet[picking.into][picking.tag] ?? []
-  )
-
-  /**
-   * Why a tag cannot go into whatever is being filled in, or null if it can.
-   *
-   * One case: a **rule** cannot name the tag it is about, a tag implying itself being the
-   * one rule that can never fire. A catalog refuses nothing — it is about a set of images,
-   * not about a tag.
-   *
-   * Answered as the sentence the grid shows, so the reason is written once and lands in the
-   * title of the cell it is about.
-   */
-  const inertReason = (tag: Tag): string | null => {
-    if (!picking || picking.into === 'catalog') return null
-    return tag.name === picking.tag ? `${tagLabel(tag.name)} is the tag this rule is about` : null
-  }
+  // The names already in the catalog being filled in, so the grid can mark them
+  const picked = new Set(picking === null ? [] : (catalogs[picking.name] ?? []))
 
   // Matched against the stored spelling with spaces read as underscores, so the box takes
   // `blue archive` and `blue_archive` alike — the same courtesy the tag picker's does.
@@ -335,9 +315,9 @@ export function TagIndex({
    *
    * **Filtering and picking force every one open.** Both are moments when the answer is a
    * tag you cannot see yet — a filter that matched four tags in three folded categories
-   * would look like a filter that matched nothing, and a rule being filled in from a folded
-   * grid is a screen with nothing to click. The fold is remembered underneath, so clearing
-   * the box puts back what you had open.
+   * would look like a filter that matched nothing, and a catalog being filled in from a
+   * folded grid is a screen with nothing to click. The fold is remembered underneath, so
+   * clearing the box puts back what you had open.
    *
    * Nothing here is a request: the whole index is already in memory, and unfolding is
    * `display` and not a read. What made the board expensive was re-reading that index after
@@ -507,10 +487,6 @@ export function TagIndex({
           tag={editing}
           onBrowse={onBrowse}
           sections={formSections}
-          // The rule editor knows about its own two kinds and nothing else; a catalog
-          // pick is somebody else's business and reads to it as no pick at all.
-          picking={picking && picking.into !== 'catalog' ? picking.into : null}
-          onPick={(kind) => setPicking(kind ? { into: kind, tag: editing.name } : null)}
           onClose={() => openTag(null)}
           onDone={() => void refresh()}
         />
@@ -569,7 +545,6 @@ export function TagIndex({
                   onSelect={pickTag}
                   picking={picking !== null}
                   picked={picked}
-                  inert={inertReason}
                 />
               )}
             </section>
@@ -594,7 +569,6 @@ function TagGrid({
   onSelect,
   picking = false,
   picked,
-  inert,
 }: {
   tags: Tag[]
   category: TagCategory
@@ -602,38 +576,27 @@ function TagGrid({
   onSelect: (tag: Tag) => void
   /** The grid is answering a pick rather than opening a tag — see `pickTag`. */
   picking?: boolean
-  /** Names already in whatever is being filled in. */
+  /** Names already in the catalog being filled in. */
   picked?: Set<string>
-  /**
-   * Why this tag cannot be picked into what is open, or null if it can. A predicate rather
-   * than a name, because the answer differs by what is being filled in — a rule cannot name
-   * the tag it is about, a section cannot wait for a tag it holds — and both are the same
-   * shape on screen: greyed, unclickable, and saying why.
-   */
-  inert?: (tag: Tag) => string | null
 }) {
   return (
     <ul className="grid grid-cols-2 overflow-hidden rounded-lg border border-border sm:grid-cols-3 lg:grid-cols-4">
       {tags.map((tag) => {
         const chosen = picked?.has(tag.name) ?? false
-        const refused = picking ? (inert?.(tag) ?? null) : null
 
         return (
           <li key={tag.id} className="-mb-px -mr-px border-b border-r border-border">
             <button
               type="button"
               onClick={() => onSelect(tag)}
-              disabled={refused !== null}
               title={
-                refused !== null
-                  ? refused
-                  : picking
-                    ? chosen
-                      ? `Take ${tagLabel(tag.name)} back off the rule`
-                      : `Add ${tagLabel(tag.name)} to the rule`
-                    : `Manage ${tagLabel(tag.name)}`
+                picking
+                  ? chosen
+                    ? `Take ${tagLabel(tag.name)} back out of the catalog`
+                    : `Put ${tagLabel(tag.name)} in the catalog`
+                  : `Manage ${tagLabel(tag.name)}`
               }
-              className={`flex min-h-9 w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface disabled:opacity-30 disabled:hover:bg-transparent ${
+              className={`flex min-h-9 w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface ${
                 chosen ? 'bg-accent/10' : editingId === tag.id && !picking ? 'bg-surface' : ''
               } ${categoryColor(category)}`}
             >
@@ -642,7 +605,7 @@ function TagGrid({
               <TagMark mark={tag.mark} />
               <span className="min-w-0 flex-1 truncate">{tagLabel(tag.name)}</span>
               {/* While picking, the fixed right-hand slot says whether this tag is in the
-                  rule instead of how many posts carry it. Membership is the only thing
+                  catalog instead of how many posts carry it. Membership is the only thing
                   being decided, and it is what the count's column is worth during it — a
                   ✓ in a place the eye already scans beats a tick tucked beside the name. */}
               <span
@@ -650,7 +613,7 @@ function TagGrid({
                   picking && chosen ? 'text-accent' : 'text-muted'
                 }`}
               >
-                {picking ? (chosen ? '✓' : refused !== null ? '' : '＋') : tag.post_count}
+                {picking ? (chosen ? '✓' : '＋') : tag.post_count}
               </span>
             </button>
           </li>
@@ -901,16 +864,12 @@ function EditTag({
   tag,
   onBrowse,
   sections,
-  picking,
-  onPick,
   onClose,
   onDone,
 }: {
   tag: Tag
   onBrowse: (query: string) => void
   sections: FormSection[]
-  picking: RuleKind | null
-  onPick: (kind: RuleKind | null) => void
   onClose: () => void
   onDone: () => void
 }) {
@@ -1005,10 +964,10 @@ function EditTag({
               before the panel is opened: a tag with no rules is most tags. */}
           <button
             type="button"
-            onClick={() => {
-              if (showRules) onPick(null)
-              setToggled(!showRules)
-            }}
+            // Nothing to end any more: the rules are written from their own boxes, so
+            // folding the panel away takes the boxes with it and leaves nothing behind
+            // claiming the next click on the grid.
+            onClick={() => setToggled(!showRules)}
             className={`${BUTTON_ON_SURFACE} ${showRules ? 'text-accent' : ''}`}
           >
             🔗 Rules{ruleCount > 0 ? ` (${ruleCount})` : ''}
@@ -1099,7 +1058,7 @@ function EditTag({
           Against `tag.name`, not the name being typed above: a rule is written against a
           spelling that exists, and re-keying this on every keystroke in the name field
           would throw away a half-typed rule per character. */}
-      {showRules && <TagRuleEditor tag={tag.name} picking={picking} onPick={onPick} />}
+      {showRules && <TagRuleEditor tag={tag.name} />}
 
       {/* Drawn as what it is, like the post editor's. A tag is not only a row: deleting it
           takes it off every post carrying it, and that is the number worth reading before
