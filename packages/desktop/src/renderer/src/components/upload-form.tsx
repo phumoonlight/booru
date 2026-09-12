@@ -562,7 +562,6 @@ export function UploadForm({
                     disabled={busy}
                     imply
                     recommend
-                    catalogs
                   />
 
                   <div className="flex flex-col gap-3 sm:flex-row">

@@ -28,7 +28,7 @@ export function About({ status }: { status: AppStatus }) {
           {/* Only on a checkout run by `desktop:dev`. An installed copy shows nothing at
               all rather than a "Release" badge saying the ordinary thing — the tag is
               here to catch the moment you are reading the wrong window's version, or
-              wondering where a catalog went (a dev run keeps its own `save.json`). */}
+              wondering where a preference went (a dev run keeps its own `save.json`). */}
           {status.development && (
             <span className="rounded border border-[#ead084] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#ead084]">
               Development

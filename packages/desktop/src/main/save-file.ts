@@ -13,16 +13,19 @@ import { app } from 'electron'
  * lives in the bundle, and the session token and remembered password went with the
  * login. It is still written 0600, which costs nothing.
  *
- * Two sections: the compression preferences and `catalogs`, the named sets of tags that
- * are applied when asked for by name. They share a file so there is one thing to look at,
- * back up or delete, and the catalogs are the section most worth opening the file for,
- * being a list you may well want to paste a hundred entries into at once.
+ * One section now: the compression preferences.
  *
  * `session`, `credentials`, `config`, `implications` and `recommendations` are names this
  * type still knows, and only so what an older version wrote under them can be deleted —
  * see `dropStoredConfig()`, `dropStoredLogin()` and `dropStoredRules()`. The two rule
  * sets moved onto the board's `tag_rules` table, where a rule can follow the tag it names
  * instead of going quietly dead when that tag is renamed.
+ *
+ * `catalogs` is known for a different reason: the tag catalogs are gone, but a copy that
+ * had them still has them in here, and that section is the only place they ever lived.
+ * Nothing reads or writes it any more and nothing deletes it either — dropping a set of
+ * names somebody gathered by hand, on the launch after an upgrade, is not this app's
+ * decision to make.
  */
 
 const SAVE_FILE = 'save.json'

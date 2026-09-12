@@ -6,7 +6,6 @@ import type { UploadResult } from '@common/upload/pipeline'
 import type { FormSectionEdit, FormSections } from '@common/data/form-sections'
 import type { RuleKind, TagRules } from '@common/data/rules'
 import type { Collection, CollectionPostPage } from '@common/data/collections'
-import type { TagCatalogs } from './catalogs'
 import type { SiteState } from '@common/data/site'
 
 /**
@@ -258,9 +257,6 @@ export type PostAppApi = {
    */
   listFormSections: () => Promise<FormSections>
   saveFormSections: (edit: FormSectionEdit) => Promise<{ sections: FormSections; error?: string }>
-  /** The named sets of tags this machine keeps — `shared/catalogs.ts` has what they are. */
-  listCatalogs: () => Promise<TagCatalogs>
-  saveCatalogs: (catalogs: TagCatalogs) => Promise<TagCatalogs>
   uploadPost: (request: UploadRequest) => Promise<UploadResult>
   /**
    * Browse the board. The same query grammar the website's search bar uses — one

@@ -61,9 +61,9 @@ export function toggleRuleName(current: string[], name: string): string[] {
  * a page of folded categories, and finding it meant scrolling past everything the rule is
  * not about with a panel pinned over the top of it. A box is the same promise (only names
  * the board has) asked the other way round: say what you are looking for rather than go
- * and find it. The grid keeps its picking mode for catalogs, which is a different job —
- * a catalog is a *set*, gathered by reading down a list, and it is what that gesture was
- * always good at.
+ * and find it. The grid has no picking mode at all now: the tag catalogs were the other
+ * thing filled in that way, and they are gone. That gesture was good at gathering a *set* by
+ * reading down a list, and bad at the job a rule is — finding one name.
  *
  * The rules themselves live on the board now, on `tag_rules`, so a rule survives a
  * rename of either tag it names and goes when one of them does. What this panel sends is

@@ -20,7 +20,7 @@ import { useEffect, useSyncExternalStore } from 'react'
  * `W` is what a write takes, which is not the same question for all three users. The two
  * rule sets write one tag's list at a time — that is the unit a rule is written in, the
  * panel that edits one has exactly that tag open, and the write can then touch that tag's
- * rows alone. The catalogs are still a section of a file that is rewritten whole either
+ * rows alone, where a whole-file section was rewritten whole either
  * way, so they pass the whole map. Both hand back the set as it now stands.
  */
 export type RuleStore<T, W extends unknown[]> = {

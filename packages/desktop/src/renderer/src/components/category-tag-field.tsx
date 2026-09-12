@@ -3,7 +3,6 @@ import { categoryColor, formSectionLabel, isSpacer, markColor, type Tag } from '
 import { tagLabel } from '@common/search'
 import { impliedTags, type ImplicationRules } from '../../../shared/implications'
 import { recommendedTags } from '../../../shared/recommendations'
-import { useCatalogs } from '../catalogs'
 import { useFormSections } from '../form-sections'
 import type { FormSection } from '@common/data/form-sections'
 import { useImplications } from '../implications'
@@ -145,7 +144,6 @@ export function CategoryTagField({
   disabled = false,
   imply = false,
   recommend = false,
-  catalogs = false,
 }: {
   value: TagSeed[]
   onChange: (next: TagSeed[]) => void
@@ -165,12 +163,6 @@ export function CategoryTagField({
   imply?: boolean
   /** Offer what usually goes with these. Nothing happens until a chip is pressed. */
   recommend?: boolean
-  /**
-   * Put 📚 Catalogs on the heading row: the saved sets of tags, applied by name. On
-   * wherever a post is tagged — the queue's cards, the bulk bar and the post editor — since
-   * "these twelve tags again" is the same job whether the post exists yet or not.
-   */
-  catalogs?: boolean
 }) {
   // Which row's picker is open, by section id, or null. A row is a section and nothing
   // else now, so one number says which — where a category and a section together used to
@@ -229,27 +221,6 @@ export function CategoryTagField({
    */
   const satisfied = new Set([...names, ...implied])
 
-  /**
-   * A whole catalog at once. The names arrive without categories — that is `TagCatalogs`'s
-   * own decision, so a recategorized tag cannot leave a stale colour behind in a file — and
-   * they are looked up here, in the same index the picker offers from.
-   *
-   * **A name the index does not have is skipped**, which is the rule everywhere else on
-   * this field: nothing here coins a tag. A catalog can name one that has since been
-   * deleted or renamed, and quietly recreating it at upload is exactly how a board grows a
-   * second spelling of something.
-   */
-  const applyCatalog = (names: string[]) => {
-    const known = new Map((all ?? []).map((tag) => [tag.name, tag.category]))
-    const next = [...value]
-    for (const name of names) {
-      const category = known.get(name)
-      if (category === undefined || next.some((tag) => tag.name === name)) continue
-      next.push({ name, category })
-    }
-    onChange(next)
-  }
-
   // The rows the post already has something on, so a section whose condition is not met is
   // still drawn while it is holding a tag. A row that vanishes takes a tag you can no
   // longer see or remove, and the post editor would save it straight back.
@@ -294,9 +265,6 @@ export function CategoryTagField({
     <section className={`flex flex-col gap-1 ${disabled ? 'opacity-50' : ''}`}>
       <div className="flex min-h-7 items-center gap-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</h2>
-        {catalogs && (
-          <CatalogMenu all={all} have={names} onApply={applyCatalog} disabled={disabled} />
-        )}
         {actions}
       </div>
 
@@ -563,106 +531,6 @@ function SectionRow({
           charged a click to reopen for every tag after the first. Close and Escape are
           the way out. */}
       {adding && picker}
-    </div>
-  )
-}
-
-/**
- * The saved catalogs, as a menu on the tag field's heading row.
- *
- * A press applies the whole set, which is the entire point: a catalog is the answer to
- * "these twelve tags again", and anything more ceremonious than one press is the retyping
- * it was made to end. There is no confirmation because there is nothing to confirm — every
- * tag it adds is a chip on the rows below with its own ✕, and the field is where you were
- * looking anyway.
- *
- * **Each row says what it would actually add**, not how many tags it holds. A catalog is
- * used repeatedly against posts that already share half of it, and "＋3" is the difference
- * between a press that does something and one that does nothing — which is also why a row
- * with nothing left to give is drawn as spent rather than hidden. Naming a tag the board no
- * longer has counts as nothing to give: `applyCatalog` skips it, so the count must too.
- *
- * A menu rather than a row of buttons, unlike the catalogs panel on the Tags screen. That
- * screen is *about* catalogs and has room to lay them out; this is a line above a tag field
- * on a card in a queue of twenty, and the tags are what the card is for.
- */
-function CatalogMenu({
-  all,
-  have,
-  onApply,
-  disabled,
-}: {
-  all: Tag[] | null
-  /** What the post already carries, so a row can say what is left of it. */
-  have: string[]
-  onApply: (names: string[]) => void
-  disabled: boolean
-}) {
-  const [open, setOpen] = useState(false)
-  const catalogs = useCatalogs()
-  const names = Object.keys(catalogs)
-
-  // Nothing saved is nothing to offer, and a menu that opens on one line of prose is worse
-  // than the absence of the button: the Tags screen is where a catalog is made, and this
-  // control appearing the moment there is one is how that connects.
-  if (names.length === 0) return null
-
-  const known = new Set((all ?? []).map((tag) => tag.name))
-  const taken = new Set(have)
-  const addable = (name: string): string[] =>
-    catalogs[name].filter((tag) => known.has(tag) && !taken.has(tag))
-
-  return (
-    <div className="relative flex items-center">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        disabled={disabled}
-        aria-expanded={open}
-        title="Apply a saved set of tags"
-        // The same shape as the import button that sits beside it on a queue card, rather
-        // than one of the page's own: this row is a heading with controls riding on it, and
-        // they should be the same height and the same weight as each other.
-        className={`flex min-h-7 items-center rounded px-1 text-xs transition-colors disabled:opacity-50 ${
-          open ? 'text-accent' : 'text-muted hover:text-foreground'
-        }`}
-      >
-        <span aria-hidden>📚</span>&nbsp;Catalogs
-      </button>
-
-      {open && (
-        // Floating, like the rule editor's note: unfolded in place it would push the
-        // category rows down the card and take them back up again on close, on the one
-        // screen where the rows are what you are reading.
-        <div className="absolute left-0 top-full z-20 mt-1 flex w-64 flex-col gap-0.5 rounded-lg border border-border bg-background p-1 shadow-lg">
-          {names.map((name) => {
-            const adding = addable(name)
-            return (
-              <button
-                key={name}
-                type="button"
-                disabled={adding.length === 0}
-                onClick={() => {
-                  onApply(catalogs[name])
-                  setOpen(false)
-                }}
-                title={
-                  adding.length === 0
-                    ? `${name} adds nothing this post does not already have`
-                    : adding.map(tagLabel).join(', ')
-                }
-                className="flex min-h-8 items-center gap-2 rounded px-2 text-left text-xs transition-colors hover:bg-surface disabled:text-muted disabled:hover:bg-transparent"
-              >
-                <span aria-hidden>📚</span>
-                <span className="min-w-0 flex-1 truncate">{name}</span>
-                <span className="shrink-0 tabular-nums text-muted">
-                  {adding.length === 0 ? '✓' : `＋${adding.length}`}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      )}
     </div>
   )
 }

@@ -6,7 +6,6 @@ import type {
   PreferencesInput,
 } from '../../../shared/api'
 import { BUTTON_ON_SURFACE, BUTTON_SM } from './buttons'
-import { reloadCatalogs } from '../catalogs'
 import type { SiteState } from '@common/data/site'
 
 /**
@@ -104,10 +103,9 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
    * A dismissed picker says nothing at all — it is the answer to a question you asked and
    * then withdrew, and a line reporting it is a line to dismiss in turn.
    *
-   * An import replaces sections of a file two things in this window are holding a copy
-   * of: the catalog store, which reads once per launch, and the preference fields above,
-   * seeded from what main is running with. Both are re-read rather than left to disagree
-   * with the file until the next restart.
+   * An import replaces the section the preference fields above are seeded from, so they
+   * are re-read rather than left showing what main was running with until the next
+   * restart.
    */
   async function transfer(direction: 'export' | 'import') {
     setTransferring(true)
@@ -123,7 +121,6 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
     }
 
     if (direction === 'import') {
-      await reloadCatalogs()
       // Re-seeded from what main is now running with, exactly as `useState` seeded it —
       // `onChanged` refreshes the status App holds, but these fields are state and would
       // otherwise keep showing the numbers from before the import until a restart.
@@ -201,15 +198,14 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
 
         {/* Everything you can do to `save.json` as a file, in one row. The folder is a
             path nobody would guess, which is the whole reason the other two exist: moving
-            settings to a laptop, or keeping a copy of a few hundred catalog entries
-            before trying something, was four steps through a folder you had to be
-            shown. */}
+            settings to a laptop, or keeping a copy before trying something, was four
+            steps through a folder you had to be shown. */}
         <div className="flex flex-wrap items-center gap-1">
           <button
             type="button"
             onClick={() => void transfer('export')}
             disabled={transferring}
-            title="Write preferences and catalogs to a file you choose"
+            title="Write preferences to a file you choose"
             className={BUTTON_SM}
           >
             <span aria-hidden>📤</span> Export settings
@@ -218,7 +214,7 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
             type="button"
             onClick={() => void transfer('import')}
             disabled={transferring}
-            title="Read preferences and catalogs back from a file"
+            title="Read preferences back from a file"
             className={BUTTON_SM}
           >
             <span aria-hidden>📥</span> Import settings
@@ -236,7 +232,7 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
             bundle, not stored — and that is worth saying, since a file called "settings"
             from an app that writes to a database sounds like it should not leave. */}
         <p className="text-xs text-muted">
-          Preferences and your tag catalogs, as plain JSON. Nothing secret is in it: the
+          Your compression preferences, as plain JSON. Nothing secret is in it: the
           board’s keys are compiled into the app, not saved here. An import takes only the
           sections the file has, and leaves the rest alone. Tag rules are not in here —
           they live on the board, so every install already has the same ones.

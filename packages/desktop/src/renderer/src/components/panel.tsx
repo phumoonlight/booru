@@ -2,7 +2,6 @@
  * The bordered card the Tags screen puts every form in, and the field inside it.
  *
  * They were defined in `tag-index.tsx`, where the three panels that first used them live.
- * The catalogs panel is a fourth and sits in a file of its own — a panel that manages named
  * sets of tags has nothing to do with the tag grid beyond borrowing its chrome — so the
  * chrome moved here rather than being imported back out of the screen that also imports the
  * panel, which is a cycle.
@@ -25,11 +24,9 @@ export function Panel({
    */
   actions?: React.ReactNode
   /**
-   * Stay at the top of the scroller while the list moves under it. Two panels need it, and
-   * for one reason: the tag grid below is what they are being filled in from. The edit
-   * panel is opened by clicking a row that can be a screen and a half down a board's worth
-   * of tags, and the catalogs panel spends its time being answered by clicks on that same
-   * grid — in both cases the panel would otherwise scroll away from the thing it is about.
+   * Stay at the top of the scroller while the list moves under it. The edit panel is opened
+   * by clicking a row that can be a screen and a half down a board's worth of tags, and
+   * would otherwise scroll away from the tag it is about.
    *
    * Sticky rather than moving the panel down beside the row: the list is a four-column
    * grid, and a form spliced into it either breaks the columns or pushes the row you are

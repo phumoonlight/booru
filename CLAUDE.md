@@ -346,13 +346,15 @@ is bad at — see [packages/desktop/README.md](packages/desktop/README.md). It i
 - **The settings readout shows the database *host*, never its URL.** A connection string
   carries a password where the Supabase project URL it replaced carried nothing, and this
   is a screen somebody might screenshot.
-- **`save.json` holds preferences and the tag catalogs, and nothing else**
+- **`save.json` holds the compression preferences and nothing else**
   (`main/save-file.ts`), and the settings screen can **write it out and read it back**
   (`main/transfer.ts`). Export is a byte copy — it is meant to be the file. Import is
-  section by section through the same `normalize…` the IPC channels use, so it can only
-  produce a file this build could have written, and a section the file lacks is left alone
-  rather than cleared — and the tag rules are no longer among the sections it carries.
-  Plain readable text on purpose: it can be inspected, hand-edited
+  section by section, so it can only produce a file this build could have written, and a
+  section the file lacks is left alone rather than cleared — which is now one section, the
+  tag rules having moved to the board and the catalogs having gone. A `catalogs` section an
+  older copy wrote is left where it is rather than deleted like the login and the stored
+  keys: those were liabilities, and that one is the only copy of a set of names somebody
+  gathered by hand. Plain readable text on purpose: it can be inspected, hand-edited
   and copied, and there is nothing secret left in it. `userData` is pinned in
   `main/index.ts` rather than defaulting to the app's display name, so renaming the app
   doesn't move the settings — `pubooru-desktop` packaged, `pubooru-desktop-dev` in a
@@ -581,20 +583,18 @@ behind a session, because there is none.
   Sections screen's question, one click away, and `listTags` stopped carrying the row's
   *name* with it when the last reader of that spelling went: both screens hold the rows in a
   store and match on the id. It is *not* split by
-  section's condition, which belongs to the section and is read on the Sections panel. Two rows carry the controls: New tag, Apply by tag, Catalogs and Rule map on
+  section's condition, which belongs to the section and is read on the Sections panel. Two rows carry the controls: New tag, Apply by tag and Rule map on
   the title line, then a toolbar of Refresh and a full-width filter box, which is Browse's
   search bar drawn the same way — the first three being what is not about a row you are pointing at,
-  and the filter being what makes a few hundred tags browsable now that the grid is also a
-  picker. Every button is unbordered (`HEADER_LINK` / `headerToggle`, shared with Browse); the box
-  keeps its border, being the one thing you type into. **The grid has two
-  meanings**: ordinarily a click opens that tag, and while a **catalog** is being filled in
-  (`picking` in `TagIndex`) a click toggles that tag in it instead, with
-  the count column showing ✓/＋ rather than a number for as long as that lasts. It answered
-  a tag's two rules the same way until those became searches — a catalog is a *set*, gathered
-  by reading a list and ticking what belongs, which is the job this gesture is good at; a
-  rule is one name, which is the job it was bad at. The
-  catalogs panel and a tag's own both pin to the top of the scroller, so `showPanel` makes
-  them take turns and ends any pick with the panel that was answering it. **Its
+  and the filter being what makes a few hundred tags browsable. Every button is unbordered
+  (`HEADER_LINK` / `headerToggle`, shared with Browse); the box
+  keeps its border, being the one thing you type into. **A click on the grid means one
+  thing**: it opens that tag. It meant two while the grid was also a picker — a click
+  ticking the tag into whatever was being filled in, with the count column showing ✓/＋ for
+  as long as that lasted. Both users of it are gone: a tag's two rules became searches,
+  since the answer to a rule is one name and hunting for it down a page of folded categories
+  stopped working somewhere around a hundred tags, and the catalogs that gesture actually
+  suited went with the feature. **Its
   posts** hands the tag name to Browse via `browseFor` and switches to it, rather than
   opening `/tags/<id>` in a browser — the reason to ask what a tag is on is usually to fix
   one of them, and only this window can. The category menu is `TAG_CATEGORIES` — **adding one is a line there plus
@@ -674,25 +674,6 @@ screen's 🔄, which is also where a rename or a delete lands, re-reads both set
   the chain is walked by choosing. Anything already typed or implied is left out. No
   ratings: a rating is not a chip you press, and `TAG_PATTERN` drops the token on its
   colon for free.
-
-**Tag catalogs** — the other section of `save.json` and the third answer to "what else
-goes on this post?", `{ name: [tag, …] }` like the two rule sets were, same `normalize…`
-doubling as the IPC validation, same module-level store. Still a file, because a catalog
-is a way of working rather than a fact about a tag — and it is written whole, which is why
-`createRuleStore` is parameterized on what a write takes. What makes it a different thing
-is *who asks*: an implication fires by itself and a recommendation offers itself, and a
-catalog does neither until it is picked **by name** — so it holds what is true of a set of
-images rather than of a tag, which is what no rule can say. It is built on the Tags screen
-(`tag-catalogs.tsx`, ➕ New names one, 👆 Choose fills it from the grid, 📋 From a post
-fills it from a post via the upload form's own `TagImport`) and applied from
-`CategoryTagField`'s `catalogs` prop, which puts 📚 Catalogs on the heading row of every tag
-field — the upload form and the post editor — so it reaches a post being made and one
-already on the board alike. **Names only**: no rating, for the recommendations' reason, and no category, which
-is looked up in the board's index when the catalog is applied — a stored one would be a
-lie the first time a tag is recategorized. A name the index doesn't have is skipped rather
-than coined, and the menu's `＋n` counts what a press would actually add. **An empty
-catalog survives `normalizeCatalogs`**, unlike an empty rule: naming one before filling it
-is the ordinary order, and the delete button is what removes one.
 
 **Tag index cache** (`main/tag-cache.ts`) — the board's tags on disk for a day, serving
 both `tags:list` and `tags:suggest`. Autocomplete was a query per pause in typing, which
@@ -952,6 +933,7 @@ current.
 | The `@web` alias into the website's `src/` | Made the site's internal layout part of the desktop build; where a file sits answers "is this shared?" now |
 | `ensureTagIds` — the `on conflict do nothing` upsert every post write ran | Coined a tag from a typo, in an app where naming one is the Tags screen's job; and Postgres draws the identity default before it tests the conflict, so every tag a post already had spent a `tags.id` on every save |
 | The `implications` and `recommendations` sections of `save.json` | Keyed by name, so a rule died silently when the tag it named was renamed or deleted, and the rules were one machine's — `tag_rules` is keyed by id |
+| **Tag catalogs** — `shared/catalogs.ts`, `main/catalogs.ts`, `renderer/src/catalogs.ts`, `tag-catalogs.tsx`, the grid's picking mode, `CategoryTagField`'s 📚 Catalogs menu and the `catalogs` section of `save.json` | A third answer to "what else goes on this post?", beside two that answer it without being asked. A catalog was picked by name, which made it a way of working rather than a fact about a tag — and so the one thing here that was still one machine's, unbacked, invisible to the board, and needing a name invented before it held anything. The two rules cover what a tag implies and what usually goes with it; a set of tags true of a batch of images is what dragging that batch's first post through 📋 From a post already did |
 | `packages/desktop/changelog/` | A file per release, for a cadence this app does not have; the reasoning belongs in the commit and beside the code |
 | `packages/desktop/build-id` | A second number saying what `package.json`'s version already said, and the version has the advantage of being what electron-builder stamped on the copy actually running |
 | The upload **queue** — `upload-queue.tsx`, the reorder arrows, the per-card fold, the done tick, the Apply-to-all bar | Machinery for keeping twenty half-tagged images straight. Tagging is per image however they are stacked, so the queue postponed the slow part rather than removing it, and charged twenty cards of unsaved state for one press of Upload |

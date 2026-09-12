@@ -13,7 +13,6 @@ import { loadConfig, revealSaveFile } from './config'
 import { loadPreferences, savePreferences } from './preferences'
 import { listBrowsers, openUrl } from './browser'
 import { loadRules, saveRule } from './rules'
-import { loadCatalogs, saveCatalogs } from './catalogs'
 import { loadFormSections, saveFormSections } from './form-sections'
 import { previewFile, stageFiles } from './staging'
 import { downloadImages } from './download'
@@ -48,7 +47,6 @@ import type { FormSections } from '@common/data/form-sections'
 import type { AppStatus, BrowseCacheFile, PreferencesInput, TagSuggestion } from '../shared/api'
 import type { Collection, CollectionPostPage } from '@common/data/collections'
 import type { TagRules } from '@common/data/rules'
-import type { TagCatalogs } from '../shared/catalogs'
 import type { Tag } from '@common/tags'
 import type { PostPage } from '@common/data/posts'
 import type { SiteState } from '@common/data/site'
@@ -450,17 +448,6 @@ export function registerIpc(): void {
     if (!parsed.success) throw new Error('That is not an edit to a section.')
     return saveFormSections(parsed.data)
   })
-
-  /**
-   * The named tag sets, the third section of the same file and the same two channels —
-   * `normalizeCatalogs` inside is the parse, as it is for both rule sets.
-   */
-  ipcMain.handle('catalogs:list', async (): Promise<TagCatalogs> => loadCatalogs())
-
-  ipcMain.handle(
-    'catalogs:save',
-    async (_event, raw: unknown): Promise<TagCatalogs> => saveCatalogs(raw)
-  )
 
   /**
    * One file, one post — the same one-call-per-image shape the web queue uses, so each

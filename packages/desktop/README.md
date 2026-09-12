@@ -68,11 +68,11 @@ Earlier versions asked for those values on first launch and kept them in `save.j
 which put the board's writing credential on every machine that ran the app — a copy this
 version deletes on startup if it finds one.
 
-`save.json` now holds the compression preferences and the tag catalogs, and nothing else,
-as plain readable text — the catalogs being a `{ name: [tag, …] }` object worth opening the
-file for once there are more of them than you want to type in one at a time. The two sets
-of tag rules were in here too until they moved onto the board's `tag_rules` table, where a
-rule follows the tag it names through a rename and every install has the same ones. `desktop:dev` uses a folder of its own (`pubooru-desktop-dev` beside
+`save.json` now holds the compression preferences and nothing else, as plain readable
+text. The two sets of tag rules were in here until they moved onto the board's `tag_rules`
+table, where a rule follows the tag it names through a rename and every install has the
+same ones; the tag catalogs were the last thing in here that was not a preference, and they
+are gone. `desktop:dev` uses a folder of its own (`pubooru-desktop-dev` beside
 `pubooru-desktop`), so working on the app never disturbs the copy you use, and both can
 be open at once.
 
@@ -97,7 +97,6 @@ for your own board. Treat the installer accordingly: anyone who has it can write
 
 | `src/main/rules.ts` | reads and writes both sets on the board — `@common/data/rules.ts` underneath |
 | `src/main/form-sections.ts` | the rows the tag form draws, their order, and what each waits for |
-| `src/shared/catalogs.ts` | named sets of tags, applied when asked for by name |
 | `src/main/collections.ts` | the shelves: name one, rename it, delete an empty one, add an image, correct or remove one |
 | `src/renderer/src/components/collections.tsx` | 🗂️ Collections — the shelf list and one shelf open |
 

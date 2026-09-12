@@ -989,9 +989,9 @@ function TagChip({
  * quiet state is one word — Always — and not an empty list of nothing. The condition appears
  * as you give it one.
  *
- * The tags are **picked, never typed**, the same gesture a tag rule and a catalog are filled
- * in with and for the same reason: a condition may only ever name tags the board has, and
- * every one of them is on the screen already.
+ * The tags are **picked, never typed**, for the reason a tag rule's are searched rather
+ * than typed: a condition may only ever name tags the board has, and every one of them is
+ * on the screen already.
  */
 function SectionDeps({
   section,

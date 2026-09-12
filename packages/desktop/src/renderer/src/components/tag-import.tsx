@@ -39,7 +39,7 @@ export function TagImport({
   onClose: () => void
   /**
    * What the tags are being copied *into*, for the one line that says so. The queue's cards
-   * were the only caller until the Tags screen started building catalogs the same way, and
+   * are the only caller, and
    * "what the card already has" is a lie on a screen with no cards on it.
    */
   destination?: string

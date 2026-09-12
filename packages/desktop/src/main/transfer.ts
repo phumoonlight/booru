@@ -1,9 +1,8 @@
 import { copyFileSync, readFileSync } from 'node:fs'
 import { app, dialog } from 'electron'
 import type { TransferResult } from '../shared/api'
-import { normalizeCatalogs } from '../shared/catalogs'
 import { loadPreferences, savePreferences } from './preferences'
-import { savePath, writeSection } from './save-file'
+import { savePath } from './save-file'
 
 /**
  * `save.json` out to a file you choose, and back in from one.
@@ -12,7 +11,7 @@ import { savePath, writeSection } from './save-file'
  * whole point of dropping the encryption. What it did not have was a way to *find* it: the
  * data folder is a path nobody would guess, and "open the folder, copy the file, put it on
  * the other machine, find the folder there" is four steps to move settings between a
- * desktop and a laptop, or to keep a copy of a few hundred catalog entries before trying
+ * desktop and a laptop, or to keep a copy of the compression settings before trying
  * something.
  *
  * The tag rules used to travel this way too. They are the board's now — moving them
@@ -120,11 +119,6 @@ export async function importSave(): Promise<TransferResult> {
   const document = parsed as Record<string, unknown>
   const took: string[] = []
 
-  if ('catalogs' in document) {
-    const catalogs = normalizeCatalogs(document.catalogs)
-    writeSection('catalogs', catalogs)
-    took.push(count(Object.keys(catalogs).length, 'catalog'))
-  }
   const preferences = document.preferences
   if (preferences && typeof preferences === 'object' && !Array.isArray(preferences)) {
     // Merged onto what is already stored rather than replacing it, so a file written by a
@@ -136,12 +130,8 @@ export async function importSave(): Promise<TransferResult> {
   if (took.length === 0) {
     return {
       ok: false,
-      error: 'Nothing in that file to import — no preferences, no tag rules, no catalogs.',
+      error: 'Nothing in that file to import — no preferences in it.',
     }
   }
   return { ok: true, path: file, message: `Imported ${took.join(', ')}.` }
-}
-
-function count(n: number, noun: string): string {
-  return `${n} ${noun}${n === 1 ? '' : 's'}`
 }
