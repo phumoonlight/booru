@@ -185,8 +185,12 @@ export async function setTagCategory(
  * follows, which is the whole reason that table has ids; a name here would have been the
  * tag's own copy of a spelling, going stale the moment the row it names is corrected.
  *
- * Nothing is validated beyond what the foreign key does: an id that is not a section is
- * refused by the database rather than checked twice.
+ * An id that is not a section is refused by the foreign key rather than checked twice. The
+ * one thing checked here is the other way round: a row **cannot wait for a tag that is on
+ * it**, so a tag cannot be filed onto a row whose condition names it. That is the same
+ * refusal `editFormSections` makes about the same pair, from the other end — the condition
+ * decides whether the row is drawn, and the row is the only place its tags are offered from,
+ * so the two together are a row that can never be opened to answer its own condition.
  */
 export async function setTagFormSection(
   db: Db,
@@ -194,6 +198,19 @@ export async function setTagFormSection(
   sectionId: number | null
 ): Promise<TagOutcome> {
   try {
+    if (sectionId !== null) {
+      const waits = await db<{ name: string }[]>`
+        select s.name from tag_form_section_deps d
+          join tag_form_sections s on s.id = d.section_id
+         where d.section_id = ${sectionId} and d.tag_id = ${id}`
+      if (waits.length > 0) {
+        return {
+          ok: false,
+          error: `${waits[0].name} waits for this tag, so it cannot also be offered from that row — the row would never be drawn.`,
+        }
+      }
+    }
+
     await db`update tags set form_section_id = ${sectionId} where id = ${id}`
     return { ok: true }
   } catch (error) {

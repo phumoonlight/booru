@@ -485,6 +485,14 @@ behind a session, because there is none.
   reading the line below the box. A row the post already has a tag on is drawn whatever its
   condition says — a row that vanishes takes a tag you can no longer see or remove, and the
   post editor would save it straight back.
+  **A row never waits for a tag that is on it.** The condition decides whether the row is
+  drawn, and the row is the only place its own tags are offered from, so such a rule can
+  never be answered: the tag that would satisfy it is behind a ＋ the condition is keeping
+  shut. Both writes that could reach that pair refuse it — `editFormSections`' `deps` edit
+  and `setTagFormSection`, from either end — because a stale window, a hand-run statement and
+  a tag filed onto the row *afterwards* all arrive at the same deadlock and two of the three
+  never see a screen. The Sections view draws the picking row's own chips faded and inert, so
+  the refusal is a chip that never offered itself rather than an error after the click.
 
   This replaced two things. **Form groups** (`tag_rules` kind 2) hid tags *inside* a picker,
   so the row was still drawn with a ＋ that opened onto nothing and could not say why. And
@@ -900,6 +908,13 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
     instead of appending one.
   - `buttonToggle` is accent while what it opened is open — the whole of what an outline
     used to say. `BUTTON_SUBMIT` is accent always, for the control that finishes a form.
+  - **A control with two positions is a pair of segments in a track**, not two buttons:
+    `SEGMENTS` and `segment(active)`, the shape the header's board switch always had and now
+    the only spelling of it. Browse's 🔳 Grid / 📐 Ratio and the Sections screen's 🧾 Detailed
+    / 📋 Compact were two `buttonToggle`s, where the only difference between "Compact is on"
+    and "Compact would turn on" was one word in accent — a state you had to already know to
+    read. A border around both says they are one control before either label is; the filled
+    one is where you are.
   - **The exception is text that genuinely is a link** — a URL or a post number in a line
     of prose, in About, Settings and a finished upload. Those stay `text-accent
     hover:underline`, because they go somewhere and a person should know that before

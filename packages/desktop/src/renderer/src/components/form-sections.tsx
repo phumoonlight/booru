@@ -7,7 +7,14 @@ import {
   type Tag,
 } from '@common/tags'
 import { tagLabel } from '@common/search'
-import { BUTTON, BUTTON_ON_SURFACE, BUTTON_SUBMIT_ON_SURFACE } from './buttons'
+import {
+  BUTTON,
+  BUTTON_ON_SURFACE,
+  BUTTON_SUBMIT_ON_SURFACE,
+  buttonToggle,
+  SEGMENTS,
+  segment,
+} from './buttons'
 import { FIELD } from './panel'
 import { TagMark } from './category-tag-field'
 import { toggleRuleName } from './tag-rule-editor'
@@ -41,6 +48,19 @@ import type { DepsMode, FormSection } from '@common/data/form-sections'
  * tag's own panel, having gone looking for it, rather than by letting go a few pixels short
  * of a card.
  */
+
+/**
+ * How much of a card is drawn. Module-level for the reason Browse's layout is: this view is
+ * unmounted whenever something is in front of it, and a way of looking you chose a minute ago
+ * is not a thing to choose again. Not written out — a preference, and not one worth being
+ * `save.json`'s.
+ *
+ * Detailed is the screen as it was: the condition, and every tag on the row. Compact is the
+ * names alone, which is what the *order* is read from — twenty rows of chips is a page of
+ * scrolling to answer "what comes after what", and dragging a card the length of it.
+ */
+let detail: 'detailed' | 'compact' = 'detailed'
+
 export function FormSectionsView({
   tags,
   onClose,
@@ -57,8 +77,12 @@ export function FormSectionsView({
   const sections = useFormSections()
   const saving = useFormSectionsSaving()
   const [typed, setTyped] = useState('')
-  const [filter, setFilter] = useState('')
   const [error, setError] = useState('')
+  const [detailed, setDetailed] = useState(detail === 'detailed')
+  // Whether the box that names a new row is open. Not module-level like `detail`: a half-typed
+  // name is not a way of looking at the screen, and a box left open from last time would be a
+  // caret waiting on a screen you came back to for something else.
+  const [naming, setNaming] = useState(false)
   // What is being dragged, which is two different things onto the same targets: a card
   // reorders the form, a tag files itself. Held rather than read off `dataTransfer`, whose
   // contents a dragover is not allowed to see — and the drop has to know which it is before
@@ -90,15 +114,17 @@ export function FormSectionsView({
     onClose()
   }
 
-  // Escape backs out one step at a time: out of a pick if one is open, out of the screen
-  // otherwise. A single key that did both would close the view on the press meant to stop
-  // choosing dependencies. Re-registered every render rather than kept on a dependency
-  // list, since what it closes depends on state it would otherwise be holding a stale copy
-  // of — one listener either way.
+  // Escape backs out one step at a time: out of a pick, then out of the box that names a new
+  // row, and only then out of the screen. A single key that went straight to the last of
+  // those would close the view on the press meant to stop choosing dependencies, or on the
+  // one meant to abandon a half-typed name. Re-registered every render rather than kept on a
+  // dependency list, since what it closes depends on state it would otherwise be holding a
+  // stale copy of — one listener either way.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       if (picking !== null) setPicking(null)
+      else if (naming) setNaming(false)
       else leave()
     }
     window.addEventListener('keydown', onKey)
@@ -185,6 +211,11 @@ export function FormSectionsView({
    *  toggles that tag into the condition. */
   const clickTag = (tag: Tag) => {
     if (picking === null) return
+    // A row cannot wait for a tag that is on it — see `editFormSections`, which refuses the
+    // same pair at the board. Guarded here as well so the chips on the row doing the asking
+    // are simply not answers: a click that goes out and comes back as an error is a worse
+    // way to say "not that one" than a chip that never offered itself.
+    if (sectionOf(tag) === picking) return
     const section = sections.find((row) => row.id === picking)
     if (!section) return
     void apply({
@@ -194,14 +225,6 @@ export function FormSectionsView({
       names: toggleRuleName(section.deps, tag.name),
     })
   }
-
-  // Matched against the stored spelling with spaces read as underscores, so the box takes
-  // `blue archive` and `blue_archive` alike — the same courtesy every other tag box here
-  // does. It narrows the chips and never the cards: a row that vanished because nothing on
-  // it matched would be a row you cannot drop onto.
-  const typedFilter = filter.trim().toLowerCase().replace(/ /g, '_')
-  const visible = (list: Tag[]): Tag[] =>
-    typedFilter ? list.filter((tag) => tag.name.includes(typedFilter)) : list
 
   const byName = (list: Tag[]): Tag[] =>
     [...list].sort((a, b) => tagLabel(a.name).localeCompare(tagLabel(b.name)))
@@ -218,6 +241,13 @@ export function FormSectionsView({
     picking === null ? [] : (sections.find((row) => row.id === picking)?.deps ?? [])
   )
 
+  /**
+   * Compact is overridden while a row is asking for its condition: the answer is a tag, and
+   * a screen of names alone would hide every chip a pick is answered from. The choice itself
+   * is left alone underneath, so ending the pick puts compact back.
+   */
+  const showTags = detailed || picking !== null
+
   return (
     // Opaque rather than a scrim, like the rule map: this is the whole vocabulary laid out,
     // and the grid showing through would be the same names again in another arrangement.
@@ -231,61 +261,101 @@ export function FormSectionsView({
             {sections.length} row{sections.length === 1 ? '' : 's'} · {unfiled.length} on no row
           </span>
           <Saving on={saving} />
-          <button type="button" onClick={leave} className={`${BUTTON} ml-auto`}>
-            <span aria-hidden>❌</span> Close
-          </button>
-        </div>
-
-        <p className="max-w-3xl text-sm text-muted">
-          The rows the upload form draws, in the order it draws them, and what is on each.
-          Drag a tag onto a card to put it on that row. Drag a card by its grip onto another
-          card to move the row there — either column — or into the space under a column to
-          send it to the end of that one. A tag on no row is not offered anywhere in the form, and taking one back off is
-          done on that tag&apos;s own panel. A row may hold tags of any category, and a row with a
-          condition is drawn only when the post satisfies it.
-        </p>
-
-        <div className="flex flex-wrap gap-2">
-          {/* Narrows the chips, which is what makes a board of a few hundred tags something
-              you can drag one out of. Its border stays, being the one thing here you type
-              into rather than press — and it leads the row, the way Browse's and the Tags
-              screen's filters do. */}
-          <input
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-            placeholder="blue_hair"
-            spellCheck={false}
-            className={`${FIELD} min-w-40 flex-1 font-mono`}
-          />
-          <input
-            value={typed}
-            onChange={(event) => setTyped(event.target.value)}
-            onKeyDown={(event) => event.key === 'Enter' && add()}
-            placeholder="hair color"
-            spellCheck={false}
-            className={`${FIELD} min-w-40 flex-1`}
-          />
+          {/* Folded, because naming a row is a thing done once in a sitting and the box was
+              on screen for the whole of every other one — a field with a caret in it at the
+              top of a screen otherwise made of drag targets, and the width of the window
+              given to the rarest control on it. A gap needs no name and so needs no form:
+              its ➕ makes one on the press, where the other opens the box that names one. */}
           <button
             type="button"
-            onClick={add}
-            disabled={saving || normalizeFormSection(typed) === null}
-            className={`${BUTTON_SUBMIT_ON_SURFACE} disabled:opacity-50`}
+            onClick={() => setNaming(!naming)}
+            className={buttonToggle(naming)}
           >
             <span aria-hidden>➕</span> New section
           </button>
           {/* A row that holds nothing and is drawn as a gap on the form. It needs no name —
               a gap is a gap — so it is its own button rather than a name you would have to
-              invent, and it lands on the shorter column like any other new row. */}
+              invent, and it lands on the shorter column like any other new row. It takes the
+              same ➕ as the button beside it, both making a row; ␣ was the thing being made
+              rather than the making of it, and at this size read as a speck. */}
           <button
             type="button"
             onClick={() => void apply({ do: 'create', name: newSpacerName() })}
             disabled={saving}
             title="A blank row, for lining the two columns up against each other"
-            className={`${BUTTON_ON_SURFACE} disabled:opacity-50`}
+            className={BUTTON}
           >
-            <span aria-hidden>␣</span> Space
+            <span aria-hidden>➕</span> Space
+          </button>
+          {/* Two ways of looking at the same rows, drawn as the switch it is — see `SEGMENTS`.
+              The same control Browse's layout pair and the header's board switch are. */}
+          <div role="group" aria-label="Detail" className={`ml-auto ${SEGMENTS}`}>
+            <button
+              type="button"
+              onClick={() => {
+                detail = 'detailed'
+                setDetailed(true)
+              }}
+              aria-pressed={detailed}
+              title="Each row with its condition and every tag on it"
+              className={segment(detailed)}
+            >
+              <span aria-hidden>🧾</span> Detailed
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                detail = 'compact'
+                setDetailed(false)
+              }}
+              aria-pressed={!detailed}
+              title="Names alone — the order at a glance"
+              className={segment(!detailed)}
+            >
+              <span aria-hidden>📋</span> Compact
+            </button>
+          </div>
+          <button type="button" onClick={leave} className={BUTTON}>
+            <span aria-hidden>❌</span> Close
           </button>
         </div>
+
+        <p className="max-w-3xl text-sm text-muted">
+          The upload form&apos;s rows. Drag a tag onto a card to file it; drag a card by its
+          grip to move the row. A tag on no row is offered nowhere.
+        </p>
+
+        {/* No tag filter here, unlike the Tags grid. A filter narrows what is drawn, and what
+            is drawn on this screen is *where things are* — a card holding three of its twelve
+            tags is a row you would then file against a picture of itself, and a chip dragged
+            out of one lands on a card whose contents you have been shown a fraction of.
+            Finding one tag is the Tags screen's job, one click away; this one is for reading
+            the rows. */}
+        {naming && (
+          <div className="flex flex-wrap gap-2">
+            {/* Focused on the way in, since it is the only reason the row is here, and closing
+                on Escape — the way out a text field otherwise does not have, and the same key
+                the rest of this screen backs out with. It stays open on Create: naming rows is
+                done in runs, and the one press that ends the run is the ➕ above. */}
+            <input
+              autoFocus
+              value={typed}
+              onChange={(event) => setTyped(event.target.value)}
+              onKeyDown={(event) => event.key === 'Enter' && add()}
+              placeholder="hair color"
+              spellCheck={false}
+              className={`${FIELD} min-w-40 flex-1`}
+            />
+            <button
+              type="button"
+              onClick={add}
+              disabled={saving || normalizeFormSection(typed) === null}
+              className={`${BUTTON_SUBMIT_ON_SURFACE} disabled:opacity-50`}
+            >
+              <span aria-hidden>➕</span> Create
+            </button>
+          </div>
+        )}
 
         {error && <p className="text-sm text-[#ff5d5f]">{error}</p>}
 
@@ -297,36 +367,36 @@ export function FormSectionsView({
           <>
             {/* The unfiled tags, and the reason this screen is worth opening. Dashed, and
                 not a drop target: a border that says "things come out of here" without
-                pretending to accept them back. */}
-            <section className="flex flex-col gap-1">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
-                On no row ({unfiled.length})
-              </h2>
-              <div className="flex min-h-14 flex-wrap content-start items-center gap-1 rounded-lg border border-dashed border-border p-2">
-                {visible(unfiled).map((tag) => (
-                  <TagChip
-                    key={tag.id}
-                    tag={tag}
-                    picking={picking !== null}
-                    chosen={depNames.has(tag.name)}
-                    onClick={() => clickTag(tag)}
-                    onDragStart={() => setDragging({ kind: 'tag', id: tag.id })}
-                    onDragEnd={() => {
-                      setDragging(null)
-                      setOver(null)
-                    }}
-                  />
-                ))}
-                {unfiled.length === 0 && (
-                  <p className="px-1 text-xs text-muted">
-                    Every tag is on a row — the form offers all of them.
-                  </p>
-                )}
-                {unfiled.length > 0 && visible(unfiled).length === 0 && (
-                  <p className="px-1 text-xs text-muted">Nothing here matches “{typedFilter}”.</p>
-                )}
-              </div>
-            </section>
+                pretending to accept them back.
+
+                Gone entirely when there are none, rather than an empty box saying so. It is
+                a pile of work to get through, and a pile with nothing in it is not a state
+                worth drawing — the count in the heading above already says none, and the
+                sentence that used to sit here was a line of reassurance taking the height of
+                a row of chips at the top of every screenful. */}
+            {unfiled.length > 0 && (
+              <section className="flex flex-col gap-1">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
+                  On no row ({unfiled.length})
+                </h2>
+                <div className="flex min-h-14 flex-wrap content-start items-center gap-1 rounded-lg border border-dashed border-border p-2">
+                  {unfiled.map((tag) => (
+                    <TagChip
+                      key={tag.id}
+                      tag={tag}
+                      picking={picking !== null}
+                      chosen={depNames.has(tag.name)}
+                      onClick={() => clickTag(tag)}
+                      onDragStart={() => setDragging({ kind: 'tag', id: tag.id })}
+                      onDragEnd={() => {
+                        setDragging(null)
+                        setOver(null)
+                      }}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
 
             {sections.length === 0 ? (
               <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
@@ -423,8 +493,7 @@ export function FormSectionsView({
                           key={section.id}
                           section={section}
                           index={at}
-                          tags={visible(byName(all.filter((tag) => sectionOf(tag) === section.id)))}
-                          held={all.filter((tag) => sectionOf(tag) === section.id).length}
+                          tags={byName(all.filter((tag) => sectionOf(tag) === section.id))}
                           over={
                             over?.kind !== 'card' || over.id !== section.id || dragging === null
                               ? null
@@ -437,6 +506,8 @@ export function FormSectionsView({
                                     : 'above'
                           }
                           picking={picking === section.id}
+                          choosing={picking !== null}
+                          showTags={showTags}
                           depNames={depNames}
                           onPick={() => setPicking(picking === section.id ? null : section.id)}
                           onClickTag={clickTag}
@@ -512,9 +583,10 @@ function SectionCard({
   section,
   index,
   tags,
-  held,
   over,
   picking,
+  choosing,
+  showTags,
   depNames,
   onPick,
   onClickTag,
@@ -530,10 +602,8 @@ function SectionCard({
 }: {
   section: FormSection
   index: number
-  /** What to draw, after the filter. */
+  /** Everything on this row. There is no filter on this screen, so it is also the count. */
   tags: Tag[]
-  /** What it actually holds, so the count does not drop as the filter narrows. */
-  held: number
   /**
    * What letting go here would do, or null for nothing. A tag lands *on* this card, so the
    * card lights up; another card lands in the gap above or below it, so the gap does — a
@@ -542,7 +612,18 @@ function SectionCard({
    * before letting go.
    */
   over: 'tag' | 'above' | 'below' | null
+  /** This row is the one asking for its condition — the ✅ Done state of its own button. */
   picking: boolean
+  /**
+   * *Some* row is asking, which is what a chip needs to know. It is not the same question:
+   * a pick is answered from every tag on the screen, not from the card that opened it, so a
+   * chip drawn as an ordinary draggable name while another card was waiting for an answer
+   * toggled that card's condition on a click that looked like nothing at all — and a tag
+   * already in the condition was highlighted on one card out of every card holding it.
+   */
+  choosing: boolean
+  /** Whether the condition and the chips are drawn at all — see `detail`. */
+  showTags: boolean
   depNames: Set<string>
   onPick: () => void
   onClickTag: (tag: Tag) => void
@@ -556,6 +637,12 @@ function SectionCard({
   onRemoveDep: (name: string) => void
   onDelete: () => void
 }) {
+  // Asked before a row goes, even though nothing on it is lost with it. What it costs is
+  // still a thing you built — a name, a condition, a place in a column, and a set of tags
+  // filed one drag at a time — and the ✕ that takes it sits a few pixels from the grip that
+  // is pressed every time a row is moved. Card-local, so two rows cannot both be asking.
+  const [confirming, setConfirming] = useState(false)
+
   return (
     <div
       onDragOver={(event) => {
@@ -581,7 +668,11 @@ function SectionCard({
         over === 'below' ? 'border-b-2 border-b-accent' : ''
       }`}
     >
-      <div className="flex items-center gap-1 border-b border-border px-1 py-1">
+      <div
+        className={`flex items-center gap-1 px-1 py-1 ${
+          showTags || confirming ? 'border-b border-border' : ''
+        }`}
+      >
         {/* The grip is what is draggable, not the card: the card holds a text field, and a
             `draggable` ancestor takes the pointer's selection of that text away. It is also
             the honest answer to "what here can I pick up" on a card that is otherwise a drop
@@ -605,48 +696,99 @@ function SectionCard({
           {index + 1}
         </span>
         <SectionName name={section.name} onRename={onRename} />
-        <span className="shrink-0 text-xs tabular-nums text-muted">{held}</span>
-        {/* No confirmation: the tags on this row are not deleted with it. The foreign key is
-            `on delete set null`, so they go back to being on no row — a re-file rather than a
-            loss, and they reappear in the strip at the top of this screen. */}
+        {/* Compact draws no condition, and a row that comes and goes is not a thing to learn
+            by opening the card back up. One glyph and its count says there is one; what it
+            is remains the detailed view's answer. */}
+        {!showTags && section.deps.length > 0 && (
+          <span
+            title={`Shown when ${section.depsMode === 'any' ? 'any one' : 'all'} of ${section.deps.join(', ')} ${section.depsMode === 'any' ? 'is' : 'are'} on the post`}
+            className="shrink-0 text-xs text-muted"
+          >
+            <span aria-hidden>👁</span> {section.deps.length}
+          </span>
+        )}
+        <span className="shrink-0 text-xs tabular-nums text-muted">{tags.length}</span>
         <button
           type="button"
-          onClick={onDelete}
+          onClick={() => setConfirming(!confirming)}
           aria-label={`Remove the ${section.name} row`}
+          aria-pressed={confirming}
           title="Remove this row — its tags go back to being on no row"
-          className={`${BUTTON_ON_SURFACE} hover:text-[#ff5d5f]`}
+          className={`${BUTTON_ON_SURFACE} ${
+            confirming ? 'text-[#ff5d5f]' : 'hover:text-[#ff5d5f]'
+          }`}
         >
           ✕
         </button>
       </div>
 
-      <SectionDeps
-        section={section}
-        picking={picking}
-        onPick={onPick}
-        onMode={onMode}
-        onRemove={onRemoveDep}
-      />
+      {/* Said out loud rather than done on the press, and said in full: what a row's ✕ costs
+          is not obvious either way round. Nothing on it is deleted — the foreign key is
+          `on delete set null`, so its tags go back to being on no row and reappear in the
+          strip at the top — but they stop being offered anywhere in the form until each one
+          is filed again, which on a row of twenty is the afternoon this screen exists to
+          save. The way out sits where the hand was already going. */}
+      {confirming && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-[#ff5d5f] bg-[#ff5d5f]/5 p-2 text-xs">
+          <span className="text-muted">
+            Remove “{section.name}”?{' '}
+            {tags.length === 0
+              ? 'Nothing is on it.'
+              : `Its ${tags.length} tag${tags.length === 1 ? '' : 's'} go back to being on no row, and stop being offered until ${tags.length === 1 ? 'it is' : 'they are'} filed again.`}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirming(false)
+              onDelete()
+            }}
+            className="ml-auto min-h-8 rounded-lg bg-[#ff5d5f] px-3 text-xs font-semibold text-[#0d0f14] transition-opacity hover:opacity-90"
+          >
+            Remove it
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            className="min-h-8 rounded-lg border border-border px-3 text-xs transition-colors hover:bg-background"
+          >
+            Keep it
+          </button>
+        </div>
+      )}
 
-      <div className="flex min-h-16 flex-wrap content-start gap-1 p-2">
-        {tags.map((tag) => (
-          <TagChip
-            key={tag.id}
-            tag={tag}
-            onSurface
+      {/* Compact stops here: a name, its number and what it holds. The condition and the
+          chips are the rest of the card, and the rest of its height. */}
+      {showTags && (
+        <>
+          <SectionDeps
+            section={section}
             picking={picking}
-            chosen={depNames.has(tag.name)}
-            onClick={() => onClickTag(tag)}
-            onDragStart={() => onDragTag(tag.id)}
-            onDragEnd={onDragEnd}
+            onPick={onPick}
+            onMode={onMode}
+            onRemove={onRemoveDep}
           />
-        ))}
-        {tags.length === 0 && (
-          <p className="px-1 py-2 text-xs text-muted">
-            {held === 0 ? 'Drag a tag here.' : 'Nothing on this row matches.'}
-          </p>
-        )}
-      </div>
+
+          <div className="flex min-h-16 flex-wrap content-start gap-1 p-2">
+            {tags.map((tag) => (
+              <TagChip
+                key={tag.id}
+                tag={tag}
+                onSurface
+                picking={choosing}
+                // Its own tags are not answers to its own condition.
+                blocked={picking}
+                chosen={depNames.has(tag.name)}
+                onClick={() => onClickTag(tag)}
+                onDragStart={() => onDragTag(tag.id)}
+                onDragEnd={onDragEnd}
+              />
+            ))}
+            {tags.length === 0 && (
+              <p className="px-1 py-2 text-xs text-muted">Drag a tag here.</p>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -678,6 +820,11 @@ function SpacerCard({
   onDrop: () => void
   onDelete: () => void
 }) {
+  // Asked here too, and for the plainer half of the reason a row's is: the ✕ is a few pixels
+  // from the grip, and a gap is the one card whose whole worth is *where it is* — put back,
+  // it lands on the shorter column rather than where it was taken from.
+  const [confirming, setConfirming] = useState(false)
+
   return (
     <div
       onDragOver={(event) => {
@@ -714,16 +861,41 @@ function SpacerCard({
       >
         ⠿
       </span>
-      <span className="flex-1 text-xs uppercase tracking-wide text-muted">Space</span>
-      <button
-        type="button"
-        onClick={onDelete}
-        aria-label="Remove this space"
-        title="Remove this space"
-        className={`${BUTTON_ON_SURFACE} hover:text-[#ff5d5f]`}
-      >
-        ✕
-      </button>
+      {confirming ? (
+        <>
+          <span className="flex-1 text-xs text-muted">Remove this space?</span>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirming(false)
+              onDelete()
+            }}
+            className="min-h-8 rounded-lg bg-[#ff5d5f] px-3 text-xs font-semibold text-[#0d0f14] transition-opacity hover:opacity-90"
+          >
+            Remove it
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            className="min-h-8 rounded-lg border border-border px-3 text-xs transition-colors hover:bg-background"
+          >
+            Keep it
+          </button>
+        </>
+      ) : (
+        <>
+          <span className="flex-1 text-xs uppercase tracking-wide text-muted">Space</span>
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            aria-label="Remove this space"
+            title="Remove this space"
+            className={`${BUTTON_ON_SURFACE} hover:text-[#ff5d5f]`}
+          >
+            ✕
+          </button>
+        </>
+      )}
     </div>
   )
 }
@@ -740,6 +912,7 @@ function TagChip({
   tag,
   onSurface = false,
   picking,
+  blocked = false,
   chosen,
   onClick,
   onDragStart,
@@ -750,14 +923,24 @@ function TagChip({
    *  `BUTTON_ON_SURFACE` is for. */
   onSurface?: boolean
   picking: boolean
+  /**
+   * This tag is on the row doing the asking, so it is not an answer it could ever take —
+   * a row that waits for its own tag is a row nothing can open. Drawn faded and inert for
+   * as long as the pick lasts, which says "not this one" where an error after the click
+   * would only say it afterwards.
+   */
+  blocked?: boolean
   chosen: boolean
   onClick: () => void
   onDragStart: () => void
   onDragEnd: () => void
 }) {
+  const inert = picking && blocked
+
   return (
     <button
       type="button"
+      disabled={inert}
       // Not while picking: a chip that both answers a question and can be dragged out of the
       // row it is answering from fires the wrong one about half the time.
       draggable={!picking}
@@ -769,23 +952,27 @@ function TagChip({
       onDragEnd={onDragEnd}
       onClick={onClick}
       title={
-        picking
-          ? chosen
-            ? `Stop this row waiting for ${tagLabel(tag.name)}`
-            : `Wait for ${tagLabel(tag.name)}`
-          : `Drag ${tagLabel(tag.name)} onto a row`
+        inert
+          ? `${tagLabel(tag.name)} is on this row — a row cannot wait for a tag it offers`
+          : picking
+            ? chosen
+              ? `Stop this row waiting for ${tagLabel(tag.name)}`
+              : `Wait for ${tagLabel(tag.name)}`
+            : `Drag ${tagLabel(tag.name)} onto a row`
       }
       className={`flex min-h-7 items-center gap-1.5 rounded-full border px-2.5 font-mono text-xs transition-colors ${
         picking ? '' : 'cursor-grab active:cursor-grabbing'
-      } ${
+      } ${inert ? 'opacity-40' : ''} ${
         chosen && picking
           ? 'border-accent bg-accent/10'
-          : `border-border ${onSurface ? 'bg-background' : 'bg-surface'} hover:border-accent`
+          : `border-border ${onSurface ? 'bg-background' : 'bg-surface'} ${
+              inert ? '' : 'hover:border-accent'
+            }`
       } ${categoryColor(tag.category)}`}
     >
       <TagMark mark={tag.mark} />
       {tagLabel(tag.name)}
-      {picking && (
+      {picking && !inert && (
         <span aria-hidden className={chosen ? 'text-accent' : 'text-muted'}>
           {chosen ? '✓' : '＋'}
         </span>
@@ -904,7 +1091,12 @@ function SectionName({ name, onRename }: { name: string; onRename: (next: string
       onBlur={commit}
       onKeyDown={(event) => {
         if (event.key === 'Enter') event.currentTarget.blur()
-        if (event.key === 'Escape') setDraft(null)
+        if (event.key === 'Escape') {
+          // The view's own Escape is on `window`, so without this the key that abandons a
+          // half-typed rename also closes the screen behind it.
+          event.stopPropagation()
+          setDraft(null)
+        }
       }}
       aria-label={`Rename ${name}`}
       spellCheck={false}

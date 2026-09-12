@@ -69,3 +69,28 @@ export const BUTTON_SUBMIT = `${SHAPE} min-h-9 px-3 text-sm text-accent hover:bg
 
 /** The same, inside a panel. */
 export const BUTTON_SUBMIT_ON_SURFACE = `${SHAPE} min-h-9 px-3 text-sm text-accent hover:bg-background`
+
+/**
+ * A pair of segments in a track — one control with two positions, drawn as the switch it is.
+ *
+ * The other shape on this screen is a *button*: no box at rest, a ground under the pointer,
+ * accent while what it opened is open. That reads well for a thing that happens when pressed
+ * and badly for a thing that is currently one way or the other, which is what these are.
+ * Browse's layout pair and the Sections screen's detail pair were drawn as two of those, and
+ * the only difference between "Compact is on" and "Compact would turn on" was one word in
+ * accent — a state you had to already know to read.
+ *
+ * The track is what fixes it. Two segments inside one border read as one control before
+ * either label is, the filled one is where you are, and the empty one is the other place you
+ * could be. The board switch in the header has been this shape all along and is the reason
+ * it is in here rather than written a third time.
+ *
+ * Used as a `role="group"` with an `aria-label`, its segments carrying `aria-pressed`.
+ */
+export const SEGMENTS = 'flex items-center gap-0.5 rounded-lg border border-border p-0.5'
+
+/** One position of it. Filled is *on*, which is the one thing this control has to say. */
+export const segment = (active: boolean): string =>
+  `flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs transition-colors ${
+    active ? 'bg-accent font-semibold text-background' : 'text-muted hover:text-foreground'
+  }`

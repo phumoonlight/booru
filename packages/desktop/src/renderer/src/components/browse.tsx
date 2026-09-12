@@ -6,7 +6,7 @@ import type { Post } from '@common/data/posts'
 import type { TagSuggestion } from '../../../shared/api'
 import { currentBoard } from '../board-store'
 import { PostEditor } from './post-editor'
-import { BUTTON, BUTTON_SUBMIT, buttonToggle } from './buttons'
+import { BUTTON, BUTTON_SUBMIT, SEGMENTS, segment } from './buttons'
 
 /**
  * Browsing the board, and editing what you find.
@@ -521,27 +521,31 @@ export function Browse({
         {/* Two ways of looking at the same rows, so a pair rather than one button whose
             label is whichever one you are not in — that reads as a command and gets
             pressed to get back to where you already were. */}
-        <div className="ml-auto flex items-center">
-          <LayoutButton
-            active={drawnAs === 'grid'}
+        <div role="group" aria-label="Layout" className={`ml-auto ${SEGMENTS}`}>
+          <button
+            type="button"
             onClick={() => {
               layout = 'grid'
               setDrawnAs('grid')
             }}
-            emoji="🔳"
-            label="Grid"
+            aria-pressed={drawnAs === 'grid'}
             title="Even columns, every thumbnail cropped square"
-          />
-          <LayoutButton
-            active={drawnAs === 'ratio'}
+            className={segment(drawnAs === 'grid')}
+          >
+            <span aria-hidden>🔳</span> Grid
+          </button>
+          <button
+            type="button"
             onClick={() => {
               layout = 'ratio'
               setDrawnAs('ratio')
             }}
-            emoji="📐"
-            label="Ratio"
+            aria-pressed={drawnAs === 'ratio'}
             title="Each image at its own shape, in rows of equal height"
-          />
+            className={segment(drawnAs === 'ratio')}
+          >
+            <span aria-hidden>📐</span> Ratio
+          </button>
         </div>
       </div>
 
@@ -767,36 +771,3 @@ function Card({
   )
 }
 
-/**
- * One half of the layout pair. Drawn like the Refresh beside it — glyph, word, underline
- * on hover — with the current one in accent rather than boxed, since a border here would
- * put two more rectangles in a title row that already has none.
- */
-function LayoutButton({
-  active,
-  onClick,
-  emoji,
-  label,
-  title,
-}: {
-  active: boolean
-  onClick: () => void
-  emoji: string
-  label: string
-  title: string
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      aria-pressed={active}
-      className={buttonToggle(active)}
-    >
-      <span aria-hidden className={active ? undefined : 'opacity-60'}>
-        {emoji}
-      </span>
-      <span className={active ? 'font-semibold' : undefined}>{label}</span>
-    </button>
-  )
-}

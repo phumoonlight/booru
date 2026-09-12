@@ -177,6 +177,30 @@ export async function editFormSections(
       // produce one; a stale window could.
       const ids = edit.names.length === 0 ? [] : await resolveTagIds(db, [...new Set(edit.names)])
 
+      // **A row cannot wait for a tag that is on it.** The condition decides whether the row
+      // is drawn at all, and the row is the only place its own tags are offered from, so
+      // such a rule can never come true by being answered: the tag that would satisfy it is
+      // behind the ＋ the condition is keeping shut. It is a deadlock written as a form, and
+      // the only way a post ever carries one of those tags is another row implying it.
+      //
+      // Checked here rather than only in the window because this is where the board is: a
+      // stale window, a hand-run statement and a tag filed onto the row *afterwards* all
+      // reach the same broken state, and two of the three never see the screen.
+      if (ids.length > 0) {
+        const onIt = await db<{ name: string }[]>`
+          select name from tags
+           where id = any(${ids}::int[]) and form_section_id = ${edit.id}
+           order by name`
+        if (onIt.length > 0) {
+          return {
+            ok: false,
+            error: `A row cannot wait for a tag that is on it — ${onIt
+              .map((tag) => tag.name)
+              .join(', ')} ${onIt.length === 1 ? 'is' : 'are'} offered from this row, so the row would never be drawn to offer ${onIt.length === 1 ? 'it' : 'them'}.`,
+          }
+        }
+      }
+
       await db`update tag_form_sections set deps_mode = ${edit.mode} where id = ${edit.id}`
 
       // Replaced whole rather than diffed: a section's dependencies are a set of a few

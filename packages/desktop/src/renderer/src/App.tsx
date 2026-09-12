@@ -3,6 +3,7 @@ import { BOARDS } from '@common/board'
 import { searchHref } from '@common/search'
 import { BOARD_EMOJI, boardLabel, setBoard, useBoard } from './board-store'
 import { About } from './components/about'
+import { SEGMENTS, segment } from './components/buttons'
 import { Browse, browseFor, hydrateBrowseCache } from './components/browse'
 import { Collections } from './components/collections'
 import { Settings } from './components/settings'
@@ -172,7 +173,7 @@ export function App() {
           <div
             role="group"
             aria-label="Board"
-            className="flex items-center gap-0.5 rounded-lg border border-border p-0.5"
+            className={SEGMENTS}
           >
             {BOARDS.map((on) => (
               <button
@@ -181,11 +182,7 @@ export function App() {
                 onClick={() => setBoard(on)}
                 aria-pressed={on === board}
                 title={`Work on ${boardLabel(on)}`}
-                className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-xs transition-colors ${
-                  on === board
-                    ? 'bg-accent font-semibold text-background'
-                    : 'text-muted hover:text-foreground'
-                }`}
+                className={segment(on === board)}
               >
                 <span aria-hidden>{BOARD_EMOJI[on]}</span>
                 {boardLabel(on)}
