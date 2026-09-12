@@ -3,7 +3,8 @@ import { RATING_COLOR, RATING_LABEL, tagLabel } from '@common/search'
 import { categoryColor } from '@common/tags'
 import type { Post } from '@common/data/posts'
 import { useBoard } from '../board-store'
-import { readPosts, thumbnailFor } from './browse'
+import { readPosts } from './browse-store'
+import { thumbnailFor } from './browse-thumbs'
 import type { TagSeed } from './tag-seed'
 
 /**

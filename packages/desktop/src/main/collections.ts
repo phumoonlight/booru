@@ -1,18 +1,20 @@
 import { readFile } from 'node:fs/promises'
 import {
   COLLECTION_PAGE_SIZE,
-  createCollection,
-  deleteCollection,
-  deleteCollectionPostRow,
   getCollectionPost,
   listCollectionPosts,
   listCollections,
-  moveCollectionPost,
-  renameCollection,
-  updateCollectionPost,
   type Collection,
   type CollectionPostPage,
 } from '@common/data/collections'
+import {
+  createCollection,
+  deleteCollection,
+  deleteCollectionPostRow,
+  moveCollectionPost,
+  renameCollection,
+  updateCollectionPost,
+} from '@common/data/collections-write'
 import { collectionImagePath, collectionThumbnailPath } from '@common/storage'
 import { createCollectionPostFromImage, type UploadResult } from '@common/upload/pipeline'
 import { RATINGS, type Rating } from '@common/search'

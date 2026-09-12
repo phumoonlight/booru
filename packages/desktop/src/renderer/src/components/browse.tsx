@@ -1,12 +1,20 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
-import { BOARDS, type Board } from '@common/board'
-import { RATING_COLOR, RATING_LABEL } from '@common/search'
-import { categoryColor } from '@common/tags'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Board } from '@common/board'
 import type { Post } from '@common/data/posts'
-import type { TagSuggestion } from '../../../shared/api'
-import { currentBoard } from '../board-store'
 import { PostEditor } from './post-editor'
-import { BUTTON, BUTTON_SUBMIT, SEGMENTS, segment } from './buttons'
+import { BUTTON, SEGMENTS, segment } from './buttons'
+import { Card } from './browse-card'
+import { BrowseSearchBox } from './browse-search-box'
+import { itemStyle } from './browse-layout'
+import {
+  cached,
+  CHUNK,
+  invalidateBrowse,
+  lastQuery,
+  readAt,
+  readPosts,
+  remember,
+} from './browse-store'
 
 /**
  * Browsing the board, and editing what you find.
@@ -30,27 +38,6 @@ import { BUTTON, BUTTON_SUBMIT, SEGMENTS, segment } from './buttons'
  * one slot would mean switching mode twice to get back to what you were doing. `App` keys
  * this view on the board, so switching remounts it and it seeds from that board's copy.
  */
-
-/** What the last visit to each board was looking at. The view unmounts when another is in
- *  front of it, and coming back to an empty box after finding a post is a search typed
- *  twice. It outlives the window too, coming back with the stored grid below — the same
- *  argument one day further out, since the app is closed far more often than this view is. */
-const lastQuery: Record<Board, string> = { post: '', generative: '' }
-
-/**
- * Points the next mount of Browse at a query, without being Browse.
- *
- * The Tags screen's "posts tagged this" goes through here: it is the same trick
- * `lastQuery` already is, used deliberately rather than as a convenience, and it works
- * because this view is mounted fresh every time it is switched to and reads `lastQuery`
- * on the way up. The grid cache is left alone — the seed check below already refuses a
- * cache held for a different query, and keeps one held for this exact query, which is the
- * right answer both ways.
- */
-export function browseFor(query: string, board: Board = currentBoard()): void {
-  lastQuery[board] = query
-}
-
 /**
  * How the grid is drawn. Module-level for the same reason the query is: this view is
  * unmounted whenever another is in front of it, and a layout you chose two screens ago is
@@ -60,213 +47,6 @@ export function browseFor(query: string, board: Board = currentBoard()): void {
  */
 type Layout = 'grid' | 'ratio'
 let layout: Layout = 'grid'
-
-/**
- * Rows of a fixed height, each image as wide as its own shape makes it — and a ragged
- * right edge, on purpose.
- *
- * It started as the website's justified rows (`src/components/post-grid.tsx`), where each
- * row is stretched to fill the line exactly. That is the right answer for a page and the
- * wrong one here: filling the line means the row's height is whatever the ratios in it
- * happen to need, so a row that drew a wide panorama came out short and every thumbnail
- * beside it shrank with it. Comparing two posts is most of what this screen is for, and
- * it was comparing them at sizes decided by what else landed on their line.
- *
- * So nothing grows. `--row-h` is the height of every image on the screen, the width is
- * `ratio × --row-h`, and whatever is left at the end of a line is left there. The gap at
- * the right edge is the price, and it is a much smaller one than a grid whose scale
- * wanders row by row.
- */
-
-/** Thumbnails are bounded to 768×384 (`@common/imgcmp/for-thumbnail`), so a panorama's
-    thumb is at most 2:1 however wide the post is. Laying it out at the post's own ratio
-    would reserve width the image cannot fill. */
-const MAX_RATIO = 2
-
-function ratioOf(width: number, height: number): number {
-  return Math.min(width / Math.max(height, 1), MAX_RATIO)
-}
-
-/**
- * The tile's width, and nothing else — no grow, no basis, no cap. The height comes from
- * the image box's own `aspectRatio` against this width, which works out to exactly
- * `--row-h` for every card on the screen.
- */
-function itemStyle(width: number, height: number): CSSProperties {
-  return { width: `calc(${ratioOf(width, height)} * var(--row-h))` }
-}
-
-/**
- * And what it was looking *at*: the rows already read for `lastQuery`, chunks from Load
- * more included. Same reasoning as the box, one step further — this screen is unmounted
- * whenever another view is in front of it, so opening Settings and coming back used to
- * re-run the search and re-fetch every thumbnail to arrive at the grid that was already
- * on screen a second ago. The board does not change while you are reading About.
- *
- * A cache that can go stale needs a way to say so, which is the 🔄 beside the title, and
- * `invalidateBrowse()` for the one moment the app knows it is wrong.
- *
- * It is also written out, so the grid survives the window closing — `main/browse-cache.ts`
- * holds it for a day, which is as long as rows anyone would recognise are worth drawing.
- * This copy is still the one every render reads; the file is only how it starts.
- */
-type CachedGrid = { query: string; posts: Post[]; hasMore: boolean; at: number }
-
-const cached: Partial<Record<Board, CachedGrid | null>> = {}
-
-/** The board is passed rather than read here: the reads that call this are awaited, and a
- *  switch that landed while one was in flight would file its rows under the wrong board. */
-function remember(query: string, posts: Post[], hasMore: boolean, board: Board): void {
-  // `at` is the last read, Load more included: what the line beside the title answers is
-  // "how old is what I am looking at", and a chunk that landed a second ago is part of it.
-  cached[board] = { query, posts, hasMore, at: Date.now() }
-  // And through to `app-cache/browse.json`, so the same rows survive the window closing.
-  // Not awaited: the grid is already drawn from the copy above, and a write that fails
-  // costs the next launch a read it was going to be able to do anyway.
-  void window.api.writeBrowseCache({ query, posts, hasMore, board })
-}
-
-/**
- * Drops the remembered grid without reading anything, so the next visit asks the board.
- * Called when an upload lands — the one change this window makes that the grid cannot
- * see, an edit being something it walked into the editor to do — and by 🔄, which is the
- * one way a person says it.
- *
- * The file goes with it. A cache in two places that can be invalidated in one is a cache
- * that comes back from the dead on the next launch.
- */
-export function invalidateBrowse(board: Board = currentBoard()): void {
-  cached[board] = null
-  void window.api.clearBrowseCache(board)
-}
-
-/**
- * The stored grid, back into the two module-level `let`s above, before anything renders.
- *
- * It has to happen first because `Browse` reads them synchronously on the way up — the
- * seed is what stops the mount running a search it did not need — and the file is behind
- * an IPC round trip. `App` awaits this alongside its first status read, which it is
- * already showing "Starting…" for, so the cost is nothing and the grid is either there or
- * not by the time any screen exists.
- *
- * The query comes back with the rows. Without it the box would be empty and the seed
- * check below would reject a cache held for a query nobody is asking any more, which is
- * the same as not having stored it.
- */
-export async function hydrateBrowseCache(): Promise<void> {
-  // Both boards, on the way up. The window opens on the gallery, but switching mode is one
-  // press and a read behind an IPC round trip at that moment is the grid arriving after
-  // the mount that was meant to seed from it — the same reasoning that put this before the
-  // first render at all. Two small files, read once.
-  await Promise.all(
-    BOARDS.map(async (board) => {
-      const file = await window.api.readBrowseCache(board)
-      if (!file) return
-      cached[board] = { query: file.query, posts: file.posts, hasMore: file.hasMore, at: file.at }
-      lastQuery[board] = file.query
-    })
-  )
-}
-
-/**
- * Thumbnails already across the bridge, by file name. `main/manage.ts` caches the bytes
- * on its side, so this saves the IPC round trip and the re-decode rather than the
- * download — enough to make a returning grid paint in one frame instead of filling in
- * tile by tile. Never invalidated: the name is the file's md5, so a name that comes back
- * is the same image by definition.
- */
-const thumbnails = new Map<string, string>()
-
-/**
- * A post's thumbnail, from that cache or from the bridge. Exported because the upload
- * screen's tag import draws the same grid of posts, and a second copy of every image in
- * the window is the one thing this cache exists to avoid.
- */
-export async function thumbnailFor(
-  fileName: string,
-  board: Board = currentBoard()
-): Promise<string> {
-  const held = thumbnails.get(fileName)
-  if (held !== undefined) return held
-
-  const url = await window.api.postThumbnail(fileName, board)
-  // A failed fetch answers '' — not remembered, so asking again re-asks the board.
-  if (url) thumbnails.set(fileName, url)
-  return url
-}
-
-/**
- * A screenful, and what Load more adds — passed on every read, because the default on the
- * other side is `POSTS_PER_PAGE`, the *website's* page size. This used to be a label
- * only: the button said 24 and the read that ran behind it came back with ten.
- */
-const CHUNK = 20
-
-/**
- * Five names under the box, and no more.
- *
- * The box takes a whole query — several tags, exclusions, a rating — so the list under it
- * is an aid to spelling one word, not a way of browsing the vocabulary. That is the Tags
- * screen, which has the whole of it with counts and categories. Five is what can be read
- * without moving your eyes off what you were typing; a longer list would cover the top row
- * of the grid you are searching, to offer tags nobody was going to read.
- */
-const SUGGESTION_LIMIT = 5
-
-/**
- * The word being typed, and everything before it. Space-separated is the whole of the
- * query grammar (`splitQuery`), so the token being completed is the last one — this box
- * is typed left to right and a completion lands where the caret is.
- */
-function typedToken(query: string): { before: string; token: string } {
-  const cut = query.lastIndexOf(' ')
-  return { before: query.slice(0, cut + 1), token: query.slice(cut + 1) }
-}
-
-/** How old the grid is: the time, and the date as well once it is no longer today's. */
-function readAt(at: number): string {
-  const when = new Date(at)
-  const time = when.toLocaleTimeString([], { timeStyle: 'short' })
-  return when.toDateString() === new Date().toDateString()
-    ? time
-    : `${when.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`
-}
-
-/**
- * A query that is nothing but a post number, or null.
- *
- * Typing `11` into this box means post 11 far more often than it means a tag called `11`,
- * and reaching one post by its number is what this window is usually for — you have the
- * id from an upload, from the board, from a report. It is a convenience of *this box* and
- * not of the search grammar: `@common/data/search` is shared with the website and there is
- * one implementation of it, so a bare number still means a tag everywhere else.
- *
- * The tag reading is not given up, only tried second — `2024` is a plausible tag name, and
- * a board that has one would otherwise lose it to a post number that may not even exist.
- */
-function asPostId(query: string): number | null {
-  const value = Number(query.trim())
-  return /^\d+$/.test(query.trim()) && Number.isSafeInteger(value) && value > 0 ? value : null
-}
-
-/**
- * One post, shaped like a page, so the id lookup and the search return the same thing.
- *
- * Exported for the upload screen's tag import, which is this box in a dialog: typing a
- * post number there means the same thing it means here, and a second implementation of
- * that convenience would be a second place for it to disagree.
- */
-export async function readPosts(
-  query: string,
-  board: Board = currentBoard()
-): Promise<{ posts: Post[]; hasMore: boolean }> {
-  const id = asPostId(query)
-  if (id !== null) {
-    const loaded = await window.api.getPost(id, board)
-    if (loaded) return { posts: [loaded.post], hasMore: false }
-  }
-  return window.api.searchPosts({ query, perPage: CHUNK, board })
-}
 
 export function Browse({
   siteUrl,
@@ -326,16 +106,6 @@ export function Browse({
   // used to do.
   const readFor = useRef<string | null>(seed !== null ? `${lastQuery[board]}:0` : null)
 
-  // Autocomplete for the box below. The names come from the same cached index the tag
-  // fields use (`main/tag-cache.ts`), so a keystroke is a prefix match in memory rather
-  // than a query — which is why there is no debounce here to explain away.
-  const [options, setOptions] = useState<TagSuggestion[]>([])
-  const [highlight, setHighlight] = useState(-1)
-  // Shut by Escape or by looking elsewhere, without throwing the names away: coming back
-  // to a box you were already typing in should not have to re-earn its list.
-  const [shut, setShut] = useState(false)
-  const box = useRef<HTMLInputElement>(null)
-
   useEffect(() => {
     const key = `${submitted}:${nonce}`
     if (readFor.current === key) return
@@ -352,56 +122,6 @@ export function Browse({
       setLoading(false)
     })
   }, [submitted, nonce, board])
-
-  // A leading `-` excludes the tag it names, so it is part of the query and not of the
-  // word: `-sol` is asking to complete `solo`. A `:` is a metatag — `rating:`, `start:` —
-  // and there is nothing in the tag index to complete it with.
-  const { before, token } = typedToken(query)
-  const needle = token.startsWith('-') ? token.slice(1) : token
-  const completing = needle !== '' && !needle.includes(':')
-
-  useEffect(() => {
-    if (!completing) return
-    let alive = true
-    void window.api.suggestTags(needle, board).then((tags) => {
-      if (alive) setOptions(tags)
-    })
-    return () => {
-      alive = false
-    }
-  }, [needle, completing, board])
-
-  /**
-   * What is actually under the box, worked out as it is drawn rather than stored.
-   *
-   * The read behind `options` is a round trip, so between a keystroke and its answer the
-   * list is holding names for the word as it was one letter ago. Filtering here means the
-   * list never shows a name that does not match what is on screen — it goes briefly short
-   * rather than briefly wrong — and it is what keeps the state out of the effect.
-   *
-   * What the rest of the query already names is left out, the tag just completed
-   * included, which would otherwise head its own list.
-   */
-  const already = new Set(
-    before
-      .split(' ')
-      .filter(Boolean)
-      .map((word) => (word.startsWith('-') ? word.slice(1) : word))
-  )
-  const showing =
-    shut || !completing
-      ? []
-      : options
-          .filter((tag) => tag.name.startsWith(needle) && !already.has(tag.name))
-          .slice(0, SUGGESTION_LIMIT)
-
-  /** Puts a name in place of the word being typed, with the trailing space that starts
-   *  the next one — the list is for building a query, not for ending one. */
-  function complete(name: string) {
-    setQuery(`${before}${token.startsWith('-') ? '-' : ''}${name} `)
-    setHighlight(-1)
-    box.current?.focus()
-  }
 
   /** Answers with what it appended, so the editor's → can step straight into it. */
   async function loadMore(): Promise<Post[]> {
@@ -549,114 +269,15 @@ export function Browse({
         </div>
       </div>
 
-      {/* A browser's toolbar: reload at the head of the row, then the box, filling
-          everything left. Refresh was in the far corner of the title row, which put the
-          two controls that both mean "read the board" at opposite ends of the screen —
-          and left the box beside it stopping short of the edge for no reason. */}
-      <form
-        onSubmit={(event) => {
-          event.preventDefault()
-          submit(query.trim())
-        }}
-        className="flex items-center gap-2"
-      >
-        <button
-          type="button"
-          onClick={refresh}
-          disabled={loading}
-          title="Read these posts again"
-          className={BUTTON}
-        >
-          {/* Faded, not spun. A spinner on a single glyph is a lot of motion in the corner
-              of the eye for a read that is usually over before it is noticed, and an emoji
-              rotating about its own box wobbles. Dimming says the same thing quietly. */}
-          <span aria-hidden className={`transition-opacity ${loading ? 'opacity-30' : ''}`}>
-            🔄
-          </span>
-          Refresh
-        </button>
-        {/* The box and its list are one thing on the row, so the list can be positioned
-            against the box rather than against the toolbar. */}
-        <div className="relative flex-1">
-          <input
-            ref={box}
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value)
-              setShut(false)
-              // Another letter is another list; keeping the row number would move the
-              // highlight onto whatever name happens to land there.
-              setHighlight(-1)
-            }}
-            onFocus={() => setShut(false)}
-            // Closed on the way out rather than on a click, which would land after the
-            // list had already gone; the options refuse the focus in the first place.
-            onBlur={() => setShut(true)}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') {
-                setShut(true)
-                return
-              }
-              if (showing.length === 0) return
-              if (event.key === 'ArrowDown') {
-                event.preventDefault()
-                setHighlight((at) => (at + 1) % showing.length)
-              } else if (event.key === 'ArrowUp') {
-                event.preventDefault()
-                setHighlight((at) => (at <= 0 ? showing.length : at) - 1)
-              } else if (event.key === 'Enter' && highlight >= 0) {
-                // Enter on a highlighted name completes it instead of searching: the
-                // query is half-typed, and running it now is never what was meant.
-                event.preventDefault()
-                complete(showing[highlight].name)
-              }
-            }}
-            placeholder="1girl blue_hair -solo rating:r18"
-            spellCheck={false}
-            className="min-h-9 w-full rounded-lg border border-border bg-surface px-3 py-1.5 font-mono text-sm outline-none focus:border-accent"
-          />
-          {showing.length > 0 && (
-            <ul className="absolute inset-x-0 top-full z-10 mt-1 overflow-hidden rounded-lg border border-border bg-surface">
-              {showing.map((tag, at) => (
-                <li key={tag.name}>
-                  <button
-                    type="button"
-                    // Never takes the focus, so the box keeps it and the blur above never
-                    // fires — a list that closed on mousedown could not be clicked.
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => complete(tag.name)}
-                    onMouseEnter={() => setHighlight(at)}
-                    className={`flex w-full items-center gap-3 px-3 py-1.5 text-left font-mono text-sm ${
-                      at === highlight ? 'bg-background' : ''
-                    }`}
-                  >
-                    {/* The name as it is typed, underscores and all — this box takes a
-                        query, not a label. Its colour is its category, which is what says
-                        a `blue_hair` from a `blue_archive` at a glance. */}
-                    <span className={categoryColor(tag.category)}>{tag.name}</span>
-                    <span className="ml-auto text-xs text-muted">{tag.post_count}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <button type="submit" className={BUTTON_SUBMIT}>
-          <span aria-hidden>🔍</span> Search
-        </button>
-        {submitted !== '' && (
-          <button
-            type="button"
-            onClick={() => {
-              setQuery('')
-              submit('')
-            }}
-            className={BUTTON}
-          >
-            <span aria-hidden>🧹</span> Clear
-          </button>
-        )}
-      </form>
+      <BrowseSearchBox
+        query={query}
+        setQuery={setQuery}
+        submitted={submitted}
+        loading={loading}
+        board={board}
+        onRefresh={refresh}
+        onSubmit={submit}
+      />
 
       {posts.length === 0 ? (
         <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
@@ -708,66 +329,3 @@ export function Browse({
     </div>
   )
 }
-
-/**
- * One thumbnail. It asks for its own image rather than being handed one: the grid can
- * hold a few hundred rows after enough scrolling, and fetching them all up front would
- * stall the first screenful behind the last.
- */
-function Card({
-  post,
-  layout: drawnAs,
-  onOpen,
-}: {
-  post: Post
-  layout: Layout
-  onOpen: () => void
-}) {
-  const [src, setSrc] = useState(thumbnails.get(post.file_name) ?? '')
-
-  useEffect(() => {
-    if (thumbnails.has(post.file_name)) return
-    let alive = true
-    void thumbnailFor(post.file_name).then((url) => {
-      if (alive) setSrc(url)
-    })
-    return () => {
-      alive = false
-    }
-  }, [post.file_name])
-
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      title={`Edit post ${post.id}`}
-      className="group flex w-full flex-col overflow-hidden rounded-lg border border-border bg-surface text-left transition-colors hover:border-accent"
-    >
-      {/* Square in the grid, the image's own shape in a ratio row — the only thing the
-          two layouts differ in. Against the tile's fixed `ratio × --row-h` width this
-          resolves to exactly `--row-h` tall, which is what keeps the row even. The strip below is the same either way: a caption
-          burned over the picture reads worse on a dark thumbnail than beside it, and a
-          card that changes what it *is* between layouts makes the toggle feel like two
-          screens rather than two ways of looking at one. */}
-      <div
-        className={`grid place-items-center overflow-hidden bg-background ${
-          drawnAs === 'ratio' ? '' : 'aspect-square'
-        }`}
-        style={
-          drawnAs === 'ratio' ? { aspectRatio: ratioOf(post.width, post.height) } : undefined
-        }
-      >
-        {src ? (
-          <img src={src} alt={`Post ${post.id}`} className="h-full w-full object-cover" />
-        ) : (
-          <span className="text-xs text-muted">…</span>
-        )}
-      </div>
-      <span className="flex items-center justify-between gap-1 px-1.5 py-1 text-[11px]">
-        <span className="text-muted">#{post.id}</span>
-        <span className={RATING_COLOR[post.rating]}>{RATING_LABEL[post.rating]}</span>
-      </span>
-    </button>
-  )
-}
-

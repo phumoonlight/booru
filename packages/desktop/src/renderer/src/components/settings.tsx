@@ -1,12 +1,13 @@
-import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useState } from 'react'
 import type {
   AppStatus,
   BrowserChoice,
   EncodePriority,
   PreferencesInput,
 } from '../../../shared/api'
-import { BUTTON_ON_SURFACE, BUTTON_SM } from './buttons'
-import type { SiteState } from '@common/data/site'
+import { BUTTON_SM } from './buttons'
+import { Choice, Field, Readout } from './settings-rows'
+import { SiteSwitch } from './settings-site'
 
 /**
  * Spelled out here rather than imported from `main/cpu.ts`, which owns the behaviour:
@@ -53,48 +54,9 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
     browser: status.browser.chosen,
   })
   const [editingThreads, setEditingThreads] = useState(false)
-  // Three states, not two. `undefined` is "not asked yet", `null` is "asked and the board
-  // did not answer" — and neither may be drawn as the switch being off, since off is the
-  // state that means visitors are being served.
-  const [site, setSite] = useState<SiteState | null | undefined>(undefined)
-  const [editingNotice, setEditingNotice] = useState(false)
-  const [siteError, setSiteError] = useState('')
   const [transferring, setTransferring] = useState(false)
   const [transferred, setTransferred] = useState<{ ok: boolean; text: string } | null>(null)
-
-  // Read once, when this screen mounts. There is no cache on the main side and none here:
-  // the switch is asked for at the moment somebody has come to look at it.
-  useEffect(() => {
-    void window.api.getSiteState().then(setSite)
-  }, [])
-
-  /**
-   * Move the switch, or re-word its notice — one write either way, because the notice is
-   * only ever read while the switch is on and saving them separately would let the site
-   * show yesterday's sentence for the moment between two calls.
-   *
-   * Optimistic, and put back on failure: this is the one control in the app whose effect
-   * is invisible from here, so a row that stayed where it was put while the board refused
-   * the write would be a lie about a live website.
-   */
-  async function saveSite(patch: { maintenance?: boolean; message?: string }) {
-    const before = site ?? { maintenance: false, message: '', updatedAt: 0 }
-    const next = {
-      maintenance: patch.maintenance ?? before.maintenance,
-      message: patch.message ?? before.message,
-    }
-
-    setSite({ ...before, ...next })
-    setEditingNotice(false)
-    const result = await window.api.saveSiteState(next)
-    if (result.ok) {
-      setSite(result.state)
-      setSiteError('')
-    } else {
-      setSite(site ?? null)
-      setSiteError(result.error)
-    }
-  }
+  // Three states, not two. `undefined` is "not asked yet", `null` is "asked and the board
 
   /**
    * Export or import `save.json`. Both open their picker on the main side, so there is
@@ -181,8 +143,8 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
             <Readout label="Images" value={status.cdnUrl} />
             <Readout label="Board" value={status.siteUrl} />
             <p className="text-xs text-muted">
-              The database login and the bucket keys are compiled in with these. They are not
-              shown, and nothing writes them to disk.
+              The database login and the bucket keys are compiled in with these. They are not shown,
+              and nothing writes them to disk.
             </p>
           </>
         ) : (
@@ -190,9 +152,8 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
           // way — worth a sentence that says what is wrong rather than a connection error
           // from the first thing that tries to use it.
           <p className="rounded-lg border border-red-500/30 bg-red-500/15 px-3 py-2 text-sm text-red-400">
-            This build has no board baked into it, so there is nothing to upload to. Rebuild it
-            with DATABASE_URL_APP, NEXT_PUBLIC_CDN_URL, NEXT_PUBLIC_SITE_URL and the four R2
-            values set.
+            This build has no board baked into it, so there is nothing to upload to. Rebuild it with
+            DATABASE_URL_APP, NEXT_PUBLIC_CDN_URL, NEXT_PUBLIC_SITE_URL and the four R2 values set.
           </p>
         )}
 
@@ -232,10 +193,10 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
             bundle, not stored — and that is worth saying, since a file called "settings"
             from an app that writes to a database sounds like it should not leave. */}
         <p className="text-xs text-muted">
-          Your compression preferences, as plain JSON. Nothing secret is in it: the
-          board’s keys are compiled into the app, not saved here. An import takes only the
-          sections the file has, and leaves the rest alone. Tag rules are not in here —
-          they live on the board, so every install already has the same ones.
+          Your compression preferences, as plain JSON. Nothing secret is in it: the board’s keys are
+          compiled into the app, not saved here. An import takes only the sections the file has, and
+          leaves the rest alone. Tag rules are not in here — they live on the board, so every
+          install already has the same ones.
         </p>
         {transferred && (
           <p className={`text-sm ${transferred.ok ? 'text-muted' : 'text-[#ff5d5f]'}`}>
@@ -244,78 +205,7 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
         )}
       </div>
 
-      {/* The one thing on this screen that is about the *website* rather than about this
-          machine or this build. It is here because this app is the only program that can
-          reach the board to write, and a switch on Vercel would be a redeploy to close the
-          site and another to open it. */}
-      <div className="flex flex-col gap-4">
-        <div>
-          <h2 className="flex gap-1 text-lg font-bold tracking-tight">
-            <span aria-hidden>🚧</span>
-            Website
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            Closes the public site — every page becomes a notice with a Check status button,
-            and nothing on the board is touched. This window keeps working either way.
-          </p>
-        </div>
-
-        {site === undefined ? (
-          <p className="text-sm text-muted">Reading the board…</p>
-        ) : site === null ? (
-          // Not drawn as "off": off means visitors are being served, which is not something
-          // a copy that cannot reach the board is in a position to say.
-          <p className="rounded-lg border border-[#ff5d5f]/30 bg-[#ff5d5f]/10 px-3 py-2 text-sm text-[#ff5d5f]">
-            The board could not be asked, so the switch is not shown. Nothing here has
-            changed it.
-          </p>
-        ) : (
-          <>
-            <Choice
-              label="Public site"
-              value={site.maintenance ? 'closed' : 'serving'}
-              options={[
-                { value: 'serving', label: 'Serving' },
-                { value: 'closed', label: 'Maintenance' },
-              ]}
-              onChange={(next) => void saveSite({ maintenance: next === 'closed' })}
-              hint={
-                'A visitor already on the site sees the notice on their next page. One who ' +
-                'is looking at the notice sees the gallery again within ten minutes, or at ' +
-                'once if they press Check status.'
-              }
-            />
-
-            <Field
-              label="Notice"
-              placeholder="Back in an hour — re-tagging."
-              value={site.message}
-              hint={
-                'Shown under “Down for maintenance”, which is already on the page — so this ' +
-                'is for what a visitor cannot work out, like how long. Optional.'
-              }
-              editing={editingNotice}
-              onEdit={() => setEditingNotice(true)}
-              onSave={(next) => void saveSite({ message: next })}
-              onCancel={() => setEditingNotice(false)}
-            />
-
-            <Readout
-              label="Last changed"
-              value={
-                site.updatedAt === 0
-                  ? ''
-                  : new Date(site.updatedAt).toLocaleString([], {
-                      dateStyle: 'medium',
-                      timeStyle: 'short',
-                    })
-              }
-            />
-
-            {siteError && <p className="text-sm text-[#ff5d5f]">{siteError}</p>}
-          </>
-        )}
-      </div>
+      <SiteSwitch />
 
       {/* How hard this machine works while the queue runs — the only thing on this screen
           anyone can change, and the only thing about the computer rather than the board. */}
@@ -388,9 +278,9 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
             Tag cache
           </h2>
           <p className="mt-1 text-sm text-muted">
-            The board&rsquo;s tag list, kept for a day so typing a tag doesn&rsquo;t ask the
-            server on every keystroke. It refreshes itself when it expires, and it is dropped
-            the moment an upload finishes — a new post is what makes it wrong.
+            The board&rsquo;s tag list, kept for a day so typing a tag doesn&rsquo;t ask the server
+            on every keystroke. It refreshes itself when it expires, and it is dropped the moment an
+            upload finishes — a new post is what makes it wrong.
           </p>
         </div>
 
@@ -479,181 +369,5 @@ function BrowserPicker({
           : 'A browser that has been uninstalled since falls back to the system default.'}
       </span>
     </div>
-  )
-}
-
-/** Something the app knows and you cannot change — same row, without the Edit. */
-function Readout({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-1.5 text-sm">
-      {label}
-      <div className="flex min-h-11 items-center rounded-lg border border-border bg-surface px-3">
-        <span className={`min-w-0 flex-1 truncate font-mono text-xs ${value ? '' : 'text-muted'}`}>
-          {value || 'Not set'}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-/**
- * A setting with three answers rather than a value to type. No Edit step: the options
- * are already on screen, so an extra click to reveal what you can pick would buy the
- * protection a long typed value needs and this one does not.
- */
-function Choice<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-  hint,
-}: {
-  label: string
-  value: T
-  options: { value: T; label: string }[]
-  onChange: (next: T) => void
-  hint?: string
-}) {
-  return (
-    <div className="flex flex-col gap-1.5 text-sm">
-      {label}
-      <div
-        role="radiogroup"
-        aria-label={label}
-        className="flex min-h-11 items-center gap-1 rounded-lg border border-border bg-surface p-1"
-      >
-        {options.map((option) => {
-          const selected = option.value === value
-          return (
-            <button
-              key={option.value}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              onClick={() => onChange(option.value)}
-              className={`min-h-9 flex-1 rounded-md px-2 text-xs transition-colors ${
-                selected
-                  ? 'bg-accent text-background'
-                  : 'text-muted hover:bg-background hover:text-foreground'
-              }`}
-            >
-              {option.label}
-            </button>
-          )
-        })}
-      </div>
-      {hint && <span className="text-xs text-muted">{hint}</span>}
-    </div>
-  )
-}
-
-/**
- * A setting, shown. Edit swaps the row for the editor below, which is its own component
- * so it mounts with the current value as its draft and takes it away again on Cancel —
- * there is nowhere for a half-typed value to linger.
- */
-function Field({
-  label,
-  value,
-  editing,
-  onEdit,
-  onSave,
-  onCancel,
-  placeholder,
-  hint,
-  display,
-}: {
-  label: string
-  value: string
-  editing: boolean
-  onEdit: () => void
-  onSave: (next: string) => void
-  onCancel: () => void
-  placeholder?: string
-  hint?: string
-  /** What the row shows when it isn't being edited, if that differs from what you type
-   *  into it — a thread count reads better as "6 of 16 cores" than as a bare 6. */
-  display?: string
-}) {
-  return (
-    <div className="flex flex-col gap-1.5 text-sm">
-      {label}
-      {editing ? (
-        <Editor value={value} onSave={onSave} onCancel={onCancel} placeholder={placeholder} />
-      ) : (
-        <div className="flex min-h-11 items-center gap-2 rounded-lg border border-border bg-surface px-3">
-          <span
-            className={`min-w-0 flex-1 truncate font-mono text-xs ${value ? '' : 'text-muted'}`}
-          >
-            {display ?? (value || 'Not set')}
-          </span>
-          <button
-            type="button"
-            onClick={onEdit}
-            className={`${BUTTON_ON_SURFACE} whitespace-nowrap`}
-          >
-            <span aria-hidden>✏️</span> {value ? 'Edit' : 'Set'}
-          </button>
-        </div>
-      )}
-      {hint && <span className="text-xs text-muted">{hint}</span>}
-    </div>
-  )
-}
-
-function Editor({
-  value,
-  onSave,
-  onCancel,
-  placeholder,
-}: {
-  value: string
-  onSave: (next: string) => void
-  onCancel: () => void
-  placeholder?: string
-}) {
-  const [draft, setDraft] = useState(value)
-
-  function submit(event: FormEvent) {
-    event.preventDefault()
-    onSave(draft)
-  }
-
-  // Escape is the way out. Blur deliberately is not: reaching Save means clicking away
-  // from the input, and a cancel on blur would take the edit with it on the way there.
-  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === 'Escape') onCancel()
-  }
-
-  return (
-    <form
-      onSubmit={submit}
-      className="flex min-h-11 items-center gap-2 rounded-lg border border-accent bg-surface px-3"
-    >
-      <input
-        type="text"
-        autoFocus
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        spellCheck={false}
-        autoComplete="off"
-        className="min-w-0 flex-1 bg-transparent font-mono text-xs outline-none"
-      />
-      <button
-        type="button"
-        onClick={onCancel}
-        className={BUTTON_ON_SURFACE}
-      >
-        Cancel
-      </button>
-      <button
-        type="submit"
-        className={`${BUTTON_ON_SURFACE} whitespace-nowrap`}
-      >
-        <span aria-hidden>💾</span> Save
-      </button>
-    </form>
   )
 }

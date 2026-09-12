@@ -867,6 +867,18 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
 
 ## Style
 
+- **A file stays under 400 lines.** Past that, look for the seam and take the part that
+  has one across to a file of its own — a panel out of a screen, a group of handlers out
+  of `ipc.ts`, a stage out of the pipeline. It is a limit on how much has to be held in
+  the head at once, not a formatting rule, so a file at 410 that says one thing is better
+  left alone than cut at 399 in the middle of it.
+- **Two named exports a file, as a rule of thumb.** A third is the sign that a module has
+  started answering two questions, and the fix is usually the same seam the line count
+  points at. The exception is a module that exists precisely to be the one place a
+  vocabulary is spelled — `@common/search`, `@common/tags`, `@common/board`,
+  `@common/collections`, `shared/api.ts`, `components/buttons.ts` — where splitting is
+  what invariants 9 and 10 are there to prevent. Those are named, and the list is short on
+  purpose: a new file with five exports is not one of them.
 - Prettier (`.prettierrc`): no semicolons, single quotes, 100 cols, 2 spaces. Run
   nothing — match the surrounding file.
 - Comments explain *why*, in prose, and are common here — the measured trade-off, the
