@@ -72,6 +72,10 @@ export async function setArtistAi(db: Db, id: number, isAi: boolean): Promise<Ar
  * `now()` is the database's clock rather than the machine's: the list is ordered by these
  * stamps, and two installs whose clocks disagree would otherwise order one list two ways.
  * Answers with the stamp as stored, so the window can re-sort without a re-read.
+ *
+ * **Refused for an archived artist**, in the statement rather than by the window hiding the
+ * button: there is nothing to catch up on, and a stale window must not move a read date the
+ * archive list does not show.
  */
 export async function markArtistRead(
   db: Db,
@@ -79,10 +83,38 @@ export async function markArtistRead(
 ): Promise<ArtistOutcome<{ read_at: string }>> {
   const row = first(
     await db<{ read_at: string }[]>`
-      update ${db(artists)} set read_at = now() where id = ${id}
+      update ${db(artists)} set read_at = now() where id = ${id} and archived_at is null
       returning to_char(read_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as read_at`
   )
-  return row ? { ok: true, read_at: row.read_at } : { ok: false, error: 'No such artist.' }
+  if (row) return { ok: true, read_at: row.read_at }
+
+  const exists = first(await db<{ id: number }[]>`select id from ${db(artists)} where id = ${id}`)
+  return {
+    ok: false,
+    error: exists ? 'An archived artist cannot be marked read.' : 'No such artist.',
+  }
+}
+
+/**
+ * Moves an artist into the archive or back out of it, answering with the stamp as stored.
+ *
+ * Archiving one already archived keeps its date (`coalesce`) — a second press from a stale
+ * window is not a second archiving. `read_at` is not touched either way, so an artist
+ * brought back lands where their last read puts them.
+ */
+export async function setArtistArchived(
+  db: Db,
+  id: number,
+  archived: boolean
+): Promise<ArtistOutcome<{ archived_at: string | null }>> {
+  const row = first(
+    await db<{ archived_at: string | null }[]>`
+      update ${db(artists)}
+         set archived_at = case when ${archived}::bool then coalesce(archived_at, now()) end
+       where id = ${id}
+      returning to_char(archived_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as archived_at`
+  )
+  return row ? { ok: true, archived_at: row.archived_at } : { ok: false, error: 'No such artist.' }
 }
 
 /**

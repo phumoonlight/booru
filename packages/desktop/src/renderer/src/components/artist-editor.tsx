@@ -19,12 +19,15 @@ export function ArtistEditor({
   artist,
   onChanged,
   onKindChanged,
+  onArchive,
   onDeleted,
   onView,
 }: {
   artist: Artist
   onChanged: () => void
   onKindChanged: (isAi: boolean) => void
+  /** Absent for an artist already archived — the card's Unarchive is the way back. */
+  onArchive?: () => void
   onDeleted: () => void
   onView: (image: ArtistImage) => void
 }) {
@@ -226,7 +229,15 @@ export function ArtistEditor({
 
       {error && <p className="whitespace-pre-line text-xs text-[#ff5d5f]">{error}</p>}
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-1">
+        {/* Here rather than on the card: archiving is decided about an artist every so
+            often, not a thing to have within reach on every pass down the list. One press,
+            since Unarchive puts it straight back. */}
+        {onArchive && (
+          <button type="button" onClick={onArchive} className={BUTTON_ON_SURFACE}>
+            <span aria-hidden>🗄️</span> Archive
+          </button>
+        )}
         {/* Two presses: this takes the links, the examples and their stored files with it. */}
         <button
           type="button"

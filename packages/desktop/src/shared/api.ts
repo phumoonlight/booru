@@ -308,11 +308,7 @@ export type PostAppApi = {
   deleteTag: (id: number) => Promise<Outcome>
   /** Adds one tag to every post already carrying another — on one board, since the two
    *  are different sets of posts and the counts it answers with are the point. */
-  applyTagToTagged: (
-    target: string,
-    condition: string,
-    board?: Board
-  ) => Promise<ApplyTagOutcome>
+  applyTagToTagged: (target: string, condition: string, board?: Board) => Promise<ApplyTagOutcome>
   /** Tells main what the upload screen holds, so closing can ask before dropping it. */
   reportStaged: (state: StagedState) => void
   openExternal: (url: string) => Promise<void>
@@ -377,11 +373,18 @@ export type PostAppApi = {
   /** Every artist, never-read first, then oldest read to newest. */
   listArtists: () => Promise<Artist[]>
   createArtist: (name: string, isAi: boolean) => Promise<CollectionNamed>
+  /** Into the archive or back out, answering with the stamp as stored. `read_at` stays. */
+  setArtistArchived: (
+    id: number,
+    archived: boolean
+  ) => Promise<{ ok: true; archived_at: string | null } | { ok: false; error: string }>
   /** Moves an artist between the non-AI and AI lists; their read date stays. */
   setArtistAi: (id: number, isAi: boolean) => Promise<Outcome>
   renameArtist: (id: number, name: string) => Promise<NamedOutcome>
   /** Stamps `read_at` with the database's `now()`, answering with the stamp as stored. */
-  markArtistRead: (id: number) => Promise<{ ok: true; read_at: string } | { ok: false; error: string }>
+  markArtistRead: (
+    id: number
+  ) => Promise<{ ok: true; read_at: string } | { ok: false; error: string }>
   /** The artist, their addresses, their examples and the examples' stored objects. */
   deleteArtist: (id: number) => Promise<Outcome>
   addArtistUrl: (

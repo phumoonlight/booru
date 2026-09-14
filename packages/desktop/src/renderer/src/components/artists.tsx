@@ -3,7 +3,7 @@ import type { Artist, ArtistImage } from '../../../shared/api'
 import { BUTTON, BUTTON_SUBMIT_ON_SURFACE, buttonToggle } from './buttons'
 import { ArtistCard } from './artist-card'
 import { ArtistImageViewer } from './artist-images'
-import { ArtistKindSwitch } from './artist-kind'
+import { ArtistKindSwitch, ArtistListSwitch } from './artist-kind'
 import { FIELD, Panel } from './panel'
 
 /**
@@ -20,6 +20,10 @@ import { FIELD, Panel } from './panel'
  *
  * **Two lists, one at a time: non-AI and AI.** The switch in the title row picks which, and
  * opens on non-AI. Each keeps its own order; search narrows within the one on screen.
+ *
+ * **And an archive beside the reading list**, split the same two ways: artists no longer
+ * posting, kept for the record. Newest archived first; they cannot be marked read, and
+ * Unarchive puts them back where their last read says.
  */
 
 /** The last list read. The view unmounts whenever another is in front of it, and coming
@@ -38,6 +42,23 @@ let showingAi = false
 function rememberKind(isAi: boolean): boolean {
   showingAi = isAi
   return isAi
+}
+
+/** Whether the archive is on screen rather than the reading list — kept like the kind. */
+let showingArchive = false
+
+function rememberArchive(archive: boolean): boolean {
+  showingArchive = archive
+  return archive
+}
+
+/** The archive's order: most recently archived first, which is the one you are most likely
+ *  to be looking for. ISO strings compare as dates. */
+function byArchivedDate(a: Artist, b: Artist): number {
+  const at = a.archived_at ?? ''
+  const bt = b.archived_at ?? ''
+  if (at === bt) return a.id - b.id
+  return at < bt ? 1 : -1
 }
 
 /** The list's order, applied locally after a mark so the card moves without a re-read. The
@@ -74,9 +95,13 @@ export function Artists() {
   // What a new artist is saved as. Follows the list on screen until the form says otherwise,
   // since the list you are looking at is almost always the one you are adding to.
   const [newIsAi, setNewIsAi] = useState(showingAi)
+  const [archive, setArchive] = useState(showingArchive)
 
   const typed = search.trim().toLowerCase()
-  const ofKind = artists.filter((artist) => artist.is_ai === isAi)
+  const onList = artists.filter((artist) => (artist.archived_at !== null) === archive)
+  const ofKind = (archive ? [...onList].sort(byArchivedDate) : onList).filter(
+    (artist) => artist.is_ai === isAi
+  )
   const shown = typed ? ofKind.filter((artist) => matches(artist, typed)) : ofKind
 
   const showKind = (next: boolean) => {
@@ -112,8 +137,9 @@ export function Artists() {
     setNaming(false)
     setError(null)
     // Onto the list it was saved to, or the editor opened below would be on a list that is
-    // not on screen.
+    // not on screen — which also means off the archive, since a new artist is never on it.
     showKind(newIsAi)
+    setArchive(rememberArchive(false))
     // Straight into its editor: an artist is named because there are links and examples
     // to put on it. Never read, so it lands at the top, where the editor is on screen.
     setEditing(result.id)
@@ -131,6 +157,13 @@ export function Artists() {
               ? `${shown.length} of ${ofKind.length}`
               : `${ofKind.length} artist${ofKind.length === 1 ? '' : 's'}`}
         </span>
+        <ArtistListSwitch
+          archive={archive}
+          onChange={(next) => {
+            setArchive(rememberArchive(next))
+            setEditing(null)
+          }}
+        />
         <ArtistKindSwitch isAi={isAi} onChange={showKind} label="Which artists to show" />
         <div className="ml-auto flex items-center">
           <button
@@ -198,7 +231,9 @@ export function Artists() {
             ? 'Loading…'
             : typed
               ? `No artist matches ${search.trim()}.`
-              : `No ${isAi ? 'AI ' : ''}artists yet. ➕ New artist adds one.`}
+              : archive
+                ? `No archived ${isAi ? 'AI ' : ''}artists.`
+                : `No ${isAi ? 'AI ' : ''}artists yet. ➕ New artist adds one.`}
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
@@ -225,6 +260,19 @@ export function Artists() {
                 onKindChanged={(next) => {
                   showKind(next)
                   void refresh()
+                }}
+                // Off this list and onto the other, so the card leaves and its editor closes.
+                // Patched in place: the reading list keeps its read-date order and the archive
+                // sorts by this stamp as it draws.
+                onArchived={(archivedAt) => {
+                  setEditing(null)
+                  setArtists((rows) =>
+                    remember(
+                      rows.map((row) =>
+                        row.id === artist.id ? { ...row, archived_at: archivedAt } : row
+                      )
+                    )
+                  )
                 }}
                 onDeleted={() => {
                   setEditing(null)

@@ -26,6 +26,8 @@ export type Artist = {
   is_ai: boolean
   /** ISO-8601, or null for never — which sorts above every date. */
   read_at: string | null
+  /** ISO-8601 when the artist was moved to the archive, or null while on the reading list. */
+  archived_at: string | null
   urls: ArtistUrl[]
   images: ArtistImage[]
 }
@@ -44,9 +46,18 @@ const { artists, urls, images } = ARTIST_TABLES
  */
 export async function listArtists(db: Db): Promise<Artist[]> {
   const [rows, urlRows, imageRows] = await Promise.all([
-    db<{ id: number; name: string; is_ai: boolean; read_at: string | null }[]>`
+    db<
+      {
+        id: number
+        name: string
+        is_ai: boolean
+        read_at: string | null
+        archived_at: string | null
+      }[]
+    >`
       select a.id, a.name, a.is_ai,
-             to_char(a.read_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as read_at
+             to_char(a.read_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as read_at,
+             to_char(a.archived_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as archived_at
         from ${db(artists)} a
        order by a.read_at asc nulls first, a.id asc`,
     db<(ArtistUrl & { artist_id: number })[]>`

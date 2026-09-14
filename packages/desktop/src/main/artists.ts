@@ -9,6 +9,7 @@ import {
   removeArtistUrl,
   renameArtist,
   setArtistAi,
+  setArtistArchived,
 } from '@common/data/artists-write'
 import { artistImagePath, artistThumbnailPath } from '@common/storage'
 import { createArtistImageFromImage, type ArtistImageResult } from '@common/upload/artist'
@@ -48,6 +49,11 @@ export async function setAi(id: number, isAi: boolean) {
 export async function renameArtistRow(id: number, name: string) {
   const db = boardDb()
   return db ? renameArtist(db, id, name) : NOT_SET_UP
+}
+
+export async function setArchived(id: number, archived: boolean) {
+  const db = boardDb()
+  return db ? setArtistArchived(db, id, archived) : NOT_SET_UP
 }
 
 export async function markRead(id: number) {

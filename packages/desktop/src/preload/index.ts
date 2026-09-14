@@ -63,6 +63,7 @@ const api: PostAppApi = {
   listArtists: () => ipcRenderer.invoke('artists:list'),
   createArtist: (name, isAi) => ipcRenderer.invoke('artists:create', name, isAi),
   setArtistAi: (id, isAi) => ipcRenderer.invoke('artists:set-ai', id, isAi),
+  setArtistArchived: (id, archived) => ipcRenderer.invoke('artists:set-archived', id, archived),
   renameArtist: (id, name) => ipcRenderer.invoke('artists:rename', id, name),
   markArtistRead: (id) => ipcRenderer.invoke('artists:mark-read', id),
   deleteArtist: (id) => ipcRenderer.invoke('artists:delete', id),

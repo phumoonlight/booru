@@ -10,11 +10,10 @@ const DAY_MS = 24 * 60 * 60 * 1000
 
 const DATE = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 
-/** "12 Sep 2026 · 3 days ago", or "Never read". Days, not hours: this is a list you come
- *  back to over weeks, and "19 hours ago" is precision nobody is sorting by. */
-export function readLabel(readAt: string | null, now = Date.now()): string {
-  if (!readAt) return 'Never read'
-  const at = new Date(readAt)
+/** "12 Sep 2026 · 3 days ago". Days, not hours: this is a list you come back to over
+ *  weeks, and "19 hours ago" is precision nobody is sorting by. */
+function dateLabel(iso: string, now = Date.now()): string {
+  const at = new Date(iso)
   const days = Math.floor((now - at.getTime()) / DAY_MS)
   const ago = days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`
   return `${DATE.format(at)} · ${ago}`
@@ -32,6 +31,7 @@ export function ArtistCard({
   onRead,
   onChanged,
   onKindChanged,
+  onArchived,
   onDeleted,
   onView,
 }: {
@@ -41,11 +41,24 @@ export function ArtistCard({
   onRead: (readAt: string) => void
   onChanged: () => void
   onKindChanged: (isAi: boolean) => void
+  /** Into the archive or out of it, with the stamp as stored — null is back on the list. */
+  onArchived: (archivedAt: string | null) => void
   onDeleted: () => void
   onView: (image: ArtistImage) => void
 }) {
   const [error, setError] = useState<string | null>(null)
   const [marking, setMarking] = useState(false)
+  const archived = artist.archived_at !== null
+
+  async function setArchived(next: boolean) {
+    const result = await window.api.setArtistArchived(artist.id, next)
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    setError(null)
+    onArchived(result.archived_at)
+  }
 
   async function markRead() {
     setMarking(true)
@@ -70,20 +83,46 @@ export function ArtistCard({
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-3">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
           <h2 className="text-sm font-semibold">{artist.name}</h2>
-          <span className={`text-xs ${artist.read_at ? 'text-muted' : 'text-accent'}`}>
-            {readLabel(artist.read_at)}
-          </span>
+          {artist.archived_at !== null ? (
+            // The archive's date leads, being what that list is ordered by; the last read
+            // stays beside it, quieter, as the record of when this artist was last followed.
+            <>
+              <span className="text-xs text-accent">Archived {dateLabel(artist.archived_at)}</span>
+              <span className="text-xs text-muted">
+                {artist.read_at
+                  ? `last read ${DATE.format(new Date(artist.read_at))}`
+                  : 'never read'}
+              </span>
+            </>
+          ) : (
+            <span className={`text-xs ${artist.read_at ? 'text-muted' : 'text-accent'}`}>
+              {artist.read_at ? dateLabel(artist.read_at) : 'Never read'}
+            </span>
+          )}
         </div>
-        {/* Held, not clicked: it has no undo and it sends the card to the bottom of the
-            list, out from under the pointer — so a stray click must not reach it. */}
-        <HoldButton
-          onHold={() => void markRead()}
-          disabled={marking}
-          title="Hold to mark as read now"
-          className={BUTTON_ON_SURFACE}
-        >
-          <span aria-hidden>👁️</span> {marking ? 'Marking…' : 'Hold to mark read'}
-        </HoldButton>
+        {archived ? (
+          // A click, not a hold: the editor's Archive puts it straight back, and nothing
+          // about the artist's place in either list is lost by it.
+          <button
+            type="button"
+            onClick={() => void setArchived(false)}
+            title="Back onto the reading list"
+            className={BUTTON_ON_SURFACE}
+          >
+            <span aria-hidden>📤</span> Unarchive
+          </button>
+        ) : (
+          // Held, not clicked: it has no undo and it sends the card to the bottom of the
+          // list, out from under the pointer — so a stray click must not reach it.
+          <HoldButton
+            onHold={() => void markRead()}
+            disabled={marking}
+            title="Hold to mark as read now"
+            className={BUTTON_ON_SURFACE}
+          >
+            <span aria-hidden>👁️</span> {marking ? 'Marking…' : 'Hold to mark read'}
+          </HoldButton>
+        )}
         <button
           type="button"
           onClick={onToggleEdit}
@@ -120,6 +159,7 @@ export function ArtistCard({
           artist={artist}
           onChanged={onChanged}
           onKindChanged={onKindChanged}
+          onArchive={archived ? undefined : () => void setArchived(true)}
           onDeleted={onDeleted}
           onView={onView}
         />

@@ -12,6 +12,7 @@ import {
   removeUrl,
   renameArtistRow,
   setAi,
+  setArchived,
   uploadArtistImage,
 } from './artists'
 import { postIdSchema } from './ipc-parse'
@@ -48,6 +49,14 @@ export function registerArtistIpc(): void {
     if (!parsedId.success) return NO_ARTIST
     if (!parsedName.success) return { ok: false as const, error: 'Type a name.' }
     return renameArtistRow(parsedId.data, parsedName.data)
+  })
+
+  ipcMain.handle('artists:set-archived', async (_event, id: unknown, archived: unknown) => {
+    const parsedId = postIdSchema.safeParse(id)
+    const parsedArchived = z.boolean().safeParse(archived)
+    if (!parsedId.success) return NO_ARTIST
+    if (!parsedArchived.success) return { ok: false as const, error: 'Archive or not?' }
+    return setArchived(parsedId.data, parsedArchived.data)
   })
 
   ipcMain.handle('artists:mark-read', async (_event, id: unknown) => {
