@@ -18,6 +18,7 @@
  * unrelated capability was spelled next to every other.
  */
 import { registerAppIpc } from './ipc-app'
+import { registerArtistIpc } from './ipc-artists'
 import { registerCollectionIpc } from './ipc-collections'
 import { registerPostIpc } from './ipc-posts'
 import { registerTagIpc } from './ipc-tags'
@@ -27,4 +28,5 @@ export function registerIpc(): void {
   registerPostIpc()
   registerTagIpc()
   registerCollectionIpc()
+  registerArtistIpc()
 }

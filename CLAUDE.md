@@ -115,6 +115,9 @@ structure further down.
    has no `on delete cascade`, which is the enforcement; `deleteCollection` counts first only
    so the refusal can say how many are in the way. It is the only container this project has,
    and deleting one by accident would take a set of images that exist nowhere else.
+16. **Artists are the desktop app's alone.** `booru_web` has no grant on `artists`,
+   `artist_urls` or `artist_images`, so nothing in `src/` may read them — the query would be
+   refused. An artist touches no tag, board or collection either; see [Artists](#artists).
 11. **Re-measure with `npm run bench:avif` before changing a constant in
    `@common/imgcmp/`.** Those numbers were measured, not chosen.
 12. **`select count(*)` needs `::int`.** postgres.js hands a `bigint` back as a *string*,
@@ -312,6 +315,36 @@ own images, newest first, with no search box anywhere in the section.
   one image. The control is a menu of every shelf on the image's own panel, not a drag: the
   destination is usually a collection that is not on screen.
 
+## Artists
+
+A reading list on the desktop app — 🎨 Artists — and **nowhere else**: not on the website
+(invariant 16), not a tag (the board's `artist` category is unrelated), not a board, not a
+collection. `@common/artists` spells its tables, prefixes and what a name and an address
+are; `@common/data/artists` and `artists-write` are its queries; `@common/upload/artist` is
+the shared encode onto `artists/images/` and `artists/thumbs/`.
+
+- **An artist is a name, many links and many example images**, plus `read_at` and `is_ai`.
+  No other field, on purpose.
+- **Non-AI and AI are two lists on one screen**, a segment switch in the title row that
+  opens on non-AI. A column, not a second table: the boards split into tables because every
+  listing and counter would otherwise have to remember a flag, and this list has one read
+  that splits the rows as it draws them. Moving an artist across keeps `read_at`, and the
+  screen follows it over with the editor still open.
+- **The order is the feature: `read_at asc nulls first`.** Never-read at the top, then the
+  longest since caught up on. There is no read/unread flag — how far behind you are is a
+  date, and a boolean beside it is a second answer that could disagree.
+- **Mark read is held, not clicked** (`HoldButton`, 700ms). It has no undo and sends the
+  card to the bottom, out from under the pointer, so a stray click must not reach it; a
+  confirm dialog would be a second click on every use. It writes the database's `now()`.
+- **Examples are uploaded, never linked.** A link would need the window's CSP loosened or a
+  fetch per view in main, and pixiv refuses that fetch without its own `Referer`; links to
+  someone else's image also die. A drag out of a browser is still accepted — it is
+  downloaded and uploaded like a file.
+- **A link is unique across every artist**, and so is an example's md5: pasting an address
+  already saved names who has it, which is how a second row for one person is caught.
+- **Deleting an artist takes its links, its examples and their stored objects.** Unlike a
+  shelf, what is lost is a copy of work that exists elsewhere.
+
 ## The desktop app (`packages/desktop`)
 
 The upload page as a desktop app, because compression is CPU work a free serverless tier
@@ -385,7 +418,7 @@ only wall time. Both are process-wide, applied before the first encode and re-ap
 save. A POSIX host won't let a niced-down process raise itself back, so low → normal
 takes a restart; Windows, which this is packaged for, will.
 
-**Views** — `App.tsx` holds `'upload' | 'browse' | 'collections' | 'tags' | 'settings' | 'about'`, with
+**Views** — `App.tsx` holds `'upload' | 'browse' | 'collections' | 'artists' | 'tags' | 'settings' | 'about'`, with
 settings forced open only for a bundle built with no project. Nothing sits
 behind a session, because there is none.
 
@@ -395,7 +428,9 @@ behind a session, because there is none.
   segments beside Open site, 🖼️ Posts and 🤖 AI posts, drawn as the one that is on. One
   switch rather than a choice on each screen: it is the same answer for Upload, Browse, the
   post editor and the Tags grid's counts, and a picker per screen is four places for them
-  to disagree about what you are working on. It lives in `renderer/src/board-store.ts`, a
+  to disagree about what you are working on. **Drawn only on Upload, Browse and Tags** —
+  the screens it changes, which the nav lists first in that order; elsewhere it was a control
+  that did nothing where it was pressed. It lives in `renderer/src/board-store.ts`, a
   module-level store like Browse's query and the rule store, because every screen unmounts
   whenever something is in front of it.
   **It is not a mode in main.** A board held there is read at the top of a handler, which
@@ -751,7 +786,7 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   file is the part that can be reviewed before that happens.
 - **One baseline**, `db/migrations/0001_baseline.sql`: every table in foreign-key order
   and its indexes, plus `0002_site_settings.sql`, `0003_sections_off_categories.sql`,
-  `0004_section_sides.sql`, `0005_generative_posts.sql` and `0006_collections.sql`. Schema changes from here are **always** a new numbered file, never a
+  `0004_section_sides.sql`, `0005_generative_posts.sql`, `0006_collections.sql`, `0007_artists.sql` and `0008_artist_ai.sql`. Schema changes from here are **always** a new numbered file, never a
   dashboard edit and never an edit to the baseline once pushed anywhere real.
   `scripts/migrate.mjs` applies each inside a transaction and records it in `_migrations`.
 - **`db/grants.sql` is not a migration** and re-runs on every `db:push`. Who may do what
@@ -834,7 +869,8 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
 - **One R2 bucket, two prefixes per board** — `posts/<name>.<ext>` and
   `thumbs/<name>.avif` for the gallery, `generative/posts/` and `generative/thumbs/` for
   the AI board (`@common/board` picks the pair), and `collections/posts/` and
-  `collections/thumbs/` for the shelves (`@common/collections`, which is not a board).
+  `collections/thumbs/` for the shelves (`@common/collections`, which is not a board), and
+  `artists/images/` and `artists/thumbs/` for the artist list (`@common/artists`).
   Paths derive from `file_name` (the md5 of the uploaded bytes), never stored. It was two
   buckets, which is two public hostnames for two halves of the same thing; a prefix costs
   nothing. Objects are written with `Cache-Control: immutable` for a year, which is free
@@ -876,7 +912,7 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   started answering two questions, and the fix is usually the same seam the line count
   points at. The exception is a module that exists precisely to be the one place a
   vocabulary is spelled — `@common/search`, `@common/tags`, `@common/board`,
-  `@common/collections`, `shared/api.ts`, `components/buttons.ts` — where splitting is
+  `@common/collections`, `@common/artists`, `shared/api.ts`, `components/buttons.ts` — where splitting is
   what invariants 9 and 10 are there to prevent. Those are named, and the list is short on
   purpose: a new file with five exports is not one of them.
 - Prettier (`.prettierrc`): no semicolons, single quotes, 100 cols, 2 spaces. Run

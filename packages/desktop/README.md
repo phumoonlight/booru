@@ -99,6 +99,8 @@ for your own board. Treat the installer accordingly: anyone who has it can write
 | `src/main/form-sections.ts` | the rows the tag form draws, their order, and what each waits for |
 | `src/main/collections.ts` | the shelves: name one, rename it, delete an empty one, add an image, correct or remove one |
 | `src/renderer/src/components/collections.tsx` | 🗂️ Collections — the shelf list and one shelf open |
+| `src/main/artists.ts` | the artist list: name one, links, example images, mark read, delete with its images |
+| `src/renderer/src/components/artists.tsx` | 🎨 Artists — never-read first, oldest read to newest; Mark read is held, not clicked |
 
 The renderer holds no keys, no file access and no network. Every capability it has is one
 `ipcMain.handle` in [`src/main/ipc.ts`](src/main/ipc.ts) — including reading the file it

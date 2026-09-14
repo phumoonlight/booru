@@ -31,7 +31,7 @@ React — Electron's main process compiles it. See
 | Language | TypeScript (strict) | React 19 |
 | Styling | Tailwind CSS v4 | Mobile-first, dark theme only, no component library — plain utilities against the CSS variables in `globals.css` |
 | Database | Neon Postgres, via `postgres` (porsager) | One baseline in `db/migrations/`, applied by `scripts/migrate.mjs`. No RLS: three roles and their grants |
-| File storage | Cloudflare R2, via `@aws-sdk/client-s3` | One bucket; `posts/` and `thumbs/`, the AI board's `generative/` pair, and `collections/` — public-read through a custom domain |
+| File storage | Cloudflare R2, via `@aws-sdk/client-s3` | One bucket; `posts/` and `thumbs/`, the AI board's `generative/` pair, `collections/` and `artists/` — public-read through a custom domain |
 | Auth | none | Removed. Possession of a desktop build is the write authorization |
 | Image processing | `sharp` | Both AVIF encoders in `@common/imgcmp/`. Only the desktop app runs them now; the root `tsc` still compiles them |
 | Desktop | Electron 44 + electron-vite | Packaged for Windows with electron-builder |

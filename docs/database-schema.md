@@ -14,6 +14,9 @@ generative_posts >─── generative_post_tags ───< tags
 tags >─── tag_form_sections ───< tag_form_section_deps >─── tags
 
 collections ───< collection_posts        (no tags, no link table)
+
+artists ───< artist_urls                 (the desktop app's alone — no web grant)
+artists ───< artist_images
 ```
 
 `tags.form_section_id` points at a section (`on delete set null`); a section's dependencies
@@ -29,7 +32,8 @@ and counter would have had to remember the flag. See `generative_posts` below.
 at all: an image on a shelf carries none, is never searched, belongs to exactly one shelf
 and is in neither gallery. That is why they are not a third board — see `collections` below.
 
-Eleven tables, no functions, no triggers. Ten describe what is on the board; the eleventh,
+Fourteen tables, no functions, no triggers. Ten describe what is on the board; three are the
+desktop app's artist list, which the website holds no grant on; the last,
 `site_settings`, is a name and a string per setting and describes what the *website* is
 doing — today the maintenance switch and its notice, written by the desktop app and read on
 every visit that isn't answered from the site's ten-minute hold. Adding a setting to it is
@@ -48,6 +52,8 @@ is in is a fact about the row rather than the parity of its position.
 `db/migrations/0005_generative_posts.sql` adds the second board — `generative_posts`,
 `generative_post_tags` and `tags.generative_post_count`.
 `db/migrations/0006_collections.sql` adds `collections` and `collection_posts`.
+`db/migrations/0007_artists.sql` adds `artists`, `artist_urls` and `artist_images`, and
+`db/migrations/0008_artist_ai.sql` adds `artists.is_ai`.
 
 `db/migrations/0001_baseline.sql` is the whole schema in foreign-key order — `posts` →
 `tag_form_sections` → `tags` → `tag_form_section_deps` → `post_tags` → `tag_rules` — ending
@@ -494,7 +500,8 @@ extracted from a bundle can vandalise the data and cannot drop a table.
 
 Images are not in the database. They are one public R2 bucket — `posts/` and `thumbs/` for
 the gallery, `generative/posts/` and `generative/thumbs/` for the other board,
-`collections/posts/` and `collections/thumbs/` for the shelves — read by URL and written
+`collections/posts/` and `collections/thumbs/` for the shelves, `artists/images/` and
+`artists/thumbs/` for the artist list's examples — read by URL and written
 only by the desktop app's bucket key.
 
 ---
@@ -632,3 +639,31 @@ Tag implications, recommendations and form groups *do* exist — as
 [`tag_rules`](#tag_rules), keyed by tag id so a rename carries them and a delete takes
 them. Only the desktop app reads them. See
 [packages/desktop/README.md](../packages/desktop/README.md).
+
+---
+
+## `artists`, `artist_urls`, `artist_images`
+
+`db/migrations/0007_artists.sql`
+
+The desktop app's reading list: an artist, the addresses they post at, a few example
+images, and when they were last caught up on. **Separate from every other feature** — not a
+tag, not a board, not a collection — and **not on the website**: `db/grants.sql` gives
+`booru_web` no grant on any of the three, so the database refuses the read rather than a
+page remembering not to make one.
+
+| table | column | notes |
+| --- | --- | --- |
+| `artists` | `name text not null` | prose; `readArtistName` (`@common/artists`). `artists_name_key` is `unique (lower(name))` |
+| `artists` | `is_ai boolean not null default false` | AI-generated work; the desktop screen shows one kind at a time, split in TypeScript |
+| `artists` | `read_at timestamptz` | the whole of the list's order: `read_at asc nulls first, id asc` (`artists_read_idx`). Null is never read. No read/unread flag — how far behind you are is a date |
+| `artist_urls` | `artist_id … on delete cascade` | |
+| `artist_urls` | `url text unique not null` | normalized by `readArtistUrl`. Unique across **every** artist, so a pasted address already saved names who has it |
+| `artist_images` | `artist_id … on delete cascade` | the stored objects are removed by `removeArtist` in TypeScript, which reads the names first |
+| `artist_images` | `file_name text unique not null` | the md5, naming `artists/images/<md5>.<ext>` and `artists/thumbs/<md5>.avif`; unique across the table for the reason `collection_posts.file_name` is |
+| `artist_images` | `file_ext`, `file_size`, `width`, `height` | of the stored image, as on a post |
+
+**Mark as read is `read_at = now()`**, the database's clock, so two installs cannot order
+one list two ways. Uploaded images only — an example is never a link to another site's
+image, since the window cannot load one (CSP) and pixiv refuses the fetch without its own
+`Referer`.

@@ -18,6 +18,7 @@
  * value compiled into its bundle.
  */
 
+import { ARTIST_IMAGE_PREFIX, ARTIST_THUMB_PREFIX } from '@common/artists'
 import { BOARD, type Board } from '@common/board'
 import { COLLECTION_POST_PREFIX, COLLECTION_THUMB_PREFIX } from '@common/collections'
 
@@ -57,6 +58,16 @@ export function collectionImagePath(fileName: string, fileExt: string): string {
 
 export function collectionThumbnailPath(fileName: string): string {
   return `${COLLECTION_THUMB_PREFIX}/${fileName}.avif`
+}
+
+/** An artist's example image and its thumbnail — `artists/images/<name>.<ext>` and
+ *  `artists/thumbs/<name>.avif`. The same encode, one more prefix. */
+export function artistImagePath(fileName: string, fileExt: string): string {
+  return `${ARTIST_IMAGE_PREFIX}/${fileName}.${fileExt}`
+}
+
+export function artistThumbnailPath(fileName: string): string {
+  return `${ARTIST_THUMB_PREFIX}/${fileName}.avif`
 }
 
 /** The public URL of a stored object. `base` is the bucket's public origin, with no

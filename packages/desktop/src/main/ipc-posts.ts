@@ -50,11 +50,11 @@ const savePostSchema = z.object({
 })
 
 /**
- * Where a batch of files is being staged to. `'collection'` beside the two boards, because
+ * Where a batch of files is being staged to. `'collection'` and `'artist'` beside the two boards, because
  * that is the only thing the duplicate check needs to tell apart — see `StageTarget`.
  */
 const stageTargetSchema = z
-  .enum([...BOARDS, 'collection'])
+  .enum([...BOARDS, 'collection', 'artist'])
   .optional()
   .default('post')
 

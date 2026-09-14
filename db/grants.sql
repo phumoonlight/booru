@@ -77,6 +77,12 @@ begin
     -- stopped reading is harmless where a key the code still reads is a site that has
     -- forgotten what it was doing.
     execute 'grant select, insert, update on public.site_settings to booru_app';
+    -- The artist list. Not in `app_tables` because that list is also `booru_web`'s, and the
+    -- website has no business reading these: artists are the desktop app's alone, and the
+    -- absence of a grant is what keeps that true rather than a page remembering it.
+    foreach entry in array array['artists', 'artist_urls', 'artist_images'] loop
+      execute format('grant select, insert, update, delete on public.%I to booru_app', entry);
+    end loop;
   else
     raise notice 'booru_app does not exist — skipping its grants (see db/README.md)';
   end if;

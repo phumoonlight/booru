@@ -6,6 +6,8 @@ import type { UploadResult } from '@common/upload/pipeline'
 import type { FormSectionEdit, FormSections } from '@common/data/form-sections'
 import type { RuleKind, TagRules } from '@common/data/rules'
 import type { Collection, CollectionPostPage } from '@common/data/collections'
+import type { Artist, ArtistUrl } from '@common/data/artists'
+import type { ArtistImageResult } from '@common/upload/artist'
 import type { SiteState } from '@common/data/site'
 
 /**
@@ -116,9 +118,10 @@ export type BrowseCacheFile = { at: number; query: string; posts: Post[]; hasMor
  *
  * A union with `Board` rather than a third member of `Board` itself: a collection is not a
  * board (`@common/collections`), and the only place the difference vanishes is here, where
- * the question happens to be the same shape.
+ * the question happens to be the same shape. An artist's example images are the same shape
+ * again: unique across every artist, so the answer names whose they are.
  */
-export type StageTarget = Board | 'collection'
+export type StageTarget = Board | 'collection' | 'artist'
 
 /**
  * A file the main process has looked at: within the limits, decodable, and already
@@ -144,8 +147,9 @@ export type StageOutcome =
         /** The post already holding these bytes, or null — including when the board could
          *  not be reached, since that is not the same as knowing it is new. */
         duplicateOf: number | null
-        /** For a collection target, the shelf that post is on. Null everywhere else — a
-         *  post is identified by its number, and a shelved image by where it is shelved. */
+        /** For a collection target, the shelf that post is on; for an artist target, the
+         *  artist. Null everywhere else — a post is identified by its number, and a shelved
+         *  image by where it is shelved. */
         duplicateIn: string | null
       })
   | { ok: false; path: string; name: string; error: string }
@@ -366,6 +370,31 @@ export type PostAppApi = {
   /** Removes the row and both of its stored images. */
   deleteCollectionPost: (id: number) => Promise<Outcome>
   collectionThumbnail: (fileName: string) => Promise<string>
+  // ── Artists ──────────────────────────────────────────────────────────────────
+  // A reading list kept apart from everything else — not a tag, not a board, nowhere on
+  // the website — so none of these takes a `Board` either.
+
+  /** Every artist, never-read first, then oldest read to newest. */
+  listArtists: () => Promise<Artist[]>
+  createArtist: (name: string, isAi: boolean) => Promise<CollectionNamed>
+  /** Moves an artist between the non-AI and AI lists; their read date stays. */
+  setArtistAi: (id: number, isAi: boolean) => Promise<Outcome>
+  renameArtist: (id: number, name: string) => Promise<NamedOutcome>
+  /** Stamps `read_at` with the database's `now()`, answering with the stamp as stored. */
+  markArtistRead: (id: number) => Promise<{ ok: true; read_at: string } | { ok: false; error: string }>
+  /** The artist, their addresses, their examples and the examples' stored objects. */
+  deleteArtist: (id: number) => Promise<Outcome>
+  addArtistUrl: (
+    artistId: number,
+    url: string
+  ) => Promise<{ ok: true; url: ArtistUrl } | { ok: false; error: string }>
+  removeArtistUrl: (id: number) => Promise<Outcome>
+  /** One staged file onto one artist. */
+  uploadArtistImage: (artistId: number, path: string) => Promise<ArtistImageResult>
+  deleteArtistImage: (id: number) => Promise<Outcome>
+  artistThumbnail: (fileName: string) => Promise<string>
+  /** The stored example at full size, or '' — for the viewer a click opens. */
+  artistImage: (id: number) => Promise<string>
 
   exportSettings: () => Promise<TransferResult>
   importSettings: () => Promise<TransferResult>
@@ -375,3 +404,4 @@ export type PostAppApi = {
 
 export type { UploadResult } from '@common/upload/pipeline'
 export type { Collection, CollectionPost } from '@common/data/collections'
+export type { Artist, ArtistImage, ArtistUrl } from '@common/data/artists'

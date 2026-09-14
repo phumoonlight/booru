@@ -3,6 +3,7 @@ import { BOARDS } from '@common/board'
 import { searchHref } from '@common/search'
 import { BOARD_EMOJI, boardLabel, setBoard, useBoard } from './board-store'
 import { About } from './components/about'
+import { Artists } from './components/artists'
 import { SEGMENTS, segment } from './components/buttons'
 import { Browse } from './components/browse'
 import { browseFor, hydrateBrowseCache } from './components/browse-store'
@@ -13,7 +14,7 @@ import { UploadForm } from './components/upload-form'
 import type { AppStatus } from '../../shared/api'
 
 /**
- * Six screens, one of them always mounted. There is no login and no setup step: which
+ * Seven screens, one of them always mounted. There is no login and no setup step: which
  * board this build talks to was decided when it was built and compiled in
  * (`main/config.ts`), and the board itself has no accounts any more — this app writes
  * with the service-role key in its own bundle, which is why it is the only thing that
@@ -33,18 +34,17 @@ import type { AppStatus } from '../../shared/api'
  * the reason Browse keeps its query there — the screens unmount whenever something is in
  * front of them.
  *
- * **Collections is the one screen the switch does nothing to.** A collection is not a board
- * (`@common/collections`): its images carry no tags, are never searched and are in neither
- * gallery, so there is no mode to be in there and none of its channels takes one. The
- * switch stays drawn rather than being hidden on that screen — it is a mode the rest of the
- * window is still in, and a control that vanishes and comes back as you move between
- * screens is worse than one that is briefly beside the point.
+ * **The switch is drawn only on Upload, Browse and Tags**, the three screens it changes.
+ * Collections is not a board (`@common/collections`), 🎨 Artists is a reading list kept
+ * apart from everything else, and About and Settings are about the app — on any of those a
+ * switch in the header was a control that did nothing where it was pressed. The mode itself
+ * stays set while it is hidden.
  */
 export function App() {
   const [status, setStatus] = useState<AppStatus | null>(null)
   const board = useBoard()
   const [view, setView] = useState<
-    'upload' | 'browse' | 'collections' | 'tags' | 'settings' | 'about'
+    'upload' | 'browse' | 'collections' | 'artists' | 'tags' | 'settings' | 'about'
   >('upload')
   // A post the queue asked to review after uploading it. Held here because it is the one
   // thing one screen sends another, and cleared by any ordinary navigation — otherwise
@@ -109,6 +109,8 @@ export function App() {
       // No `key={board}`: this screen is the same screen whichever board the header is
       // showing, which is the whole of what a collection is not.
       <Collections siteUrl={status.siteUrl} />
+    ) : view === 'artists' ? (
+      <Artists />
     ) : view === 'tags' ? (
       // Its posts, on a tag's panel, hands the query to Browse and switches to it —
       // `browseFor` seeds the module-level box that view mounts from, so this is one
@@ -122,6 +124,11 @@ export function App() {
         }}
       />
     ) : null
+
+  // The screens the board switch changes. Settings forced open by an unconfigured build is
+  // none of them, whatever `view` still holds.
+  const boardScreen =
+    status.configured && (view === 'upload' || view === 'browse' || view === 'tags')
 
   /**
    * The only thing a nav item does. Pressing the one you were already on used to throw
@@ -170,35 +177,33 @@ export function App() {
             closed menu showing one name is a control you have to open to be sure about.
             It sits beside Open site rather than among the screens on the right, because it
             is not a screen: every item over there stays where it is when this is pressed.
+
+            Drawn only on the three screens it changes — Upload, Browse, Tags. Elsewhere it
+            was a control that did nothing where it was pressed, and the one place it
+            silently mattered was a screen you were not on.
           */}
-          <div
-            role="group"
-            aria-label="Board"
-            className={SEGMENTS}
-          >
-            {BOARDS.map((on) => (
-              <button
-                key={on}
-                type="button"
-                onClick={() => setBoard(on)}
-                aria-pressed={on === board}
-                title={`Work on ${boardLabel(on)}`}
-                className={segment(on === board)}
-              >
-                <span aria-hidden>{BOARD_EMOJI[on]}</span>
-                {boardLabel(on)}
-              </button>
-            ))}
-          </div>
+          {boardScreen && (
+            <div role="group" aria-label="Board" className={SEGMENTS}>
+              {BOARDS.map((on) => (
+                <button
+                  key={on}
+                  type="button"
+                  onClick={() => setBoard(on)}
+                  aria-pressed={on === board}
+                  title={`Work on ${boardLabel(on)}`}
+                  className={segment(on === board)}
+                >
+                  <span aria-hidden>{BOARD_EMOJI[on]}</span>
+                  {boardLabel(on)}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {/* The upload form, and the way back to it from every other screen — the one
               item here that is the app's actual job, so it leads the row. */}
-          <button
-            type="button"
-            onClick={go('upload')}
-            className={navClass(view === 'upload')}
-          >
+          <button type="button" onClick={go('upload')} className={navClass(view === 'upload')}>
             <span aria-hidden>📤</span>
             Upload
           </button>
@@ -214,10 +219,15 @@ export function App() {
             <span aria-hidden>🔍</span>
             Browse
           </button>
-          {/* The third gallery, and the one that is not a board. It sits after Browse
-              because it is the same job — putting images somewhere and fixing the ones
-              already there — over a different shelf, and before Tags because nothing in
-              here has a tag on it. */}
+          {/* Beside Browse, making the three screens the board switch is about one run:
+              Upload, Browse, Tags. Its rules are inside it — a rule is written about a tag,
+              and this is the screen with every tag on it. */}
+          <button type="button" onClick={go('tags')} className={navClass(view === 'tags')}>
+            <span aria-hidden>🏷️</span>
+            Tags
+          </button>
+          {/* The third gallery, and the one that is not a board — after the board's three
+              screens, since nothing in here has a tag on it. */}
           <button
             type="button"
             onClick={go('collections')}
@@ -227,14 +237,16 @@ export function App() {
             <span aria-hidden>🗂️</span>
             Collections
           </button>
-          {/* Tag rules used to be the item beside this one. They are inside it now: a
-              rule is written about a tag, and this is the screen with every tag on it —
-              click a row and its rules are on the same panel as its name, with the whole
-              map of them behind one button in that screen's corner. One less nav item
-              for what was always one habit. */}
-          <button type="button" onClick={go('tags')} className={navClass(view === 'tags')}>
-            <span aria-hidden>🏷️</span>
-            Tags
+          {/* A reading list, not a place images are put on the site: nothing in it reaches
+              the website and nothing in it has a tag. */}
+          <button
+            type="button"
+            onClick={go('artists')}
+            title="Artists to go back to, the longest unread first"
+            className={navClass(view === 'artists')}
+          >
+            <span aria-hidden>🎨</span>
+            Artists
           </button>
           <button type="button" onClick={go('about')} className={navClass(view === 'about')}>
             <span aria-hidden>ℹ️</span>

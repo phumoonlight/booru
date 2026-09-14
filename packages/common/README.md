@@ -27,6 +27,7 @@ where the file is.
 |---|---|
 | `board.ts` | the two boards — post table, link table, count column, object prefixes and website path, spelled nowhere else |
 | `collections.ts` | the shelves, which are deliberately **not** a third board: two table names, two object prefixes, three hrefs, and what counts as a name |
+| `artists.ts` | the desktop app's artist list: three table names, two object prefixes, what counts as a name and an address |
 | `search.ts` | the `?query=` grammar — `splitQuery`, `searchHref`, the rating metatags, `RESTRICTED_RATINGS` |
 | `tags.ts` | tag parsing and the charset, `categoryColor`, `markColor` |
 | `storage.ts` | the md5-derived image paths — per board, plus the collections' pair — and the `ObjectStore` the upload writes through |
@@ -39,9 +40,11 @@ where the file is.
 | `data/form-sections.ts` | the rows the desktop tag form draws, their order, and their dependencies |
 | `data/counters.ts` | `syncTagPostCounts` — recompute, never increment |
 | `data/collections.ts` | the shelves and what is on them: no tags, no search, a collection id and a cursor |
+| `data/artists.ts`, `data/artists-write.ts` | the artist list, never-read first; no web caller and no web grant |
 | `imgcmp/for-post.ts` | lossy AVIF (q50) for the stored image, bounded to `POST_MAX_DIMENSION` |
 | `imgcmp/for-thumbnail.ts` | lossy AVIF thumbnail, 384px tall |
 | `upload/pipeline.ts` | `createPostFromImage` and `createCollectionPostFromImage` — one image in, one row out, over one shared encode |
+| `upload/artist.ts` | `createArtistImageFromImage` — the same encode, onto an artist |
 
 ## The rules that keep it shareable
 

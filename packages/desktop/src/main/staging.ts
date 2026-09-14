@@ -6,6 +6,7 @@ import { pipeline } from 'node:stream/promises'
 import sharp, { type Metadata } from 'sharp'
 import { findPostIdsByFileNames } from '@common/data/shared'
 import { findCollectionPostsByFileNames } from '@common/data/collections'
+import { findArtistImagesByFileNames } from '@common/data/artists'
 import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL, MAX_PIXELS } from './limits'
 import { boardDb } from './db'
 import type { StageOutcome, StageTarget } from '../shared/api'
@@ -180,7 +181,8 @@ export async function stageFiles(
  * is unique across the whole table, because an image lives on exactly one shelf. So the
  * answer there names the shelf as well as the row, and `duplicateIn` carries it — "already
  * in Ukiyo-e studies" is the refusal somebody can act on, where a bare post number is one
- * they would have to go and look up.
+ * they would have to go and look up. An artist's examples are the same question again,
+ * answered with the artist's name.
  */
 async function markDuplicates(
   outcomes: StageOutcome[],
@@ -195,17 +197,19 @@ async function markDuplicates(
 
   const names = staged.map((outcome) => outcome.md5)
 
-  let existing: Map<string, { id: number; collection_name?: string }>
+  let existing: Map<string, { id: number; owner?: string }>
   try {
     existing =
       target === 'collection'
-        ? await findCollectionPostsByFileNames(db, names)
-        : new Map(
-            [...(await findPostIdsByFileNames(db, names, target))].map(([name, id]) => [
-              name,
-              { id },
-            ])
-          )
+        ? mapOwner(await findCollectionPostsByFileNames(db, names), 'collection_name')
+        : target === 'artist'
+          ? mapOwner(await findArtistImagesByFileNames(db, names), 'artist_name')
+          : new Map(
+              [...(await findPostIdsByFileNames(db, names, target))].map(([name, id]) => [
+                name,
+                { id },
+              ])
+            )
   } catch (error) {
     console.error('Could not check for duplicates:', error instanceof Error ? error.message : error)
     return outcomes
@@ -217,9 +221,17 @@ async function markDuplicates(
     return {
       ...outcome,
       duplicateOf: held?.id ?? null,
-      duplicateIn: held?.collection_name ?? null,
+      duplicateIn: held?.owner ?? null,
     }
   })
+}
+
+/** A name → owner map, whichever column the owner's name came back in. */
+function mapOwner<K extends string>(
+  rows: Map<string, { id: number } & Record<K, string>>,
+  key: K
+): Map<string, { id: number; owner: string }> {
+  return new Map([...rows].map(([name, row]) => [name, { id: row.id, owner: row[key] }]))
 }
 
 /**
