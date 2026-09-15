@@ -5,8 +5,10 @@ import { CollectionFeed } from '@/components/collection-feed'
 import { CollectionShelf } from '@/components/collection-shelf'
 import { NavProgress } from '@/components/nav-progress'
 import { SearchHeader } from '@/components/search-header'
+import { RestrictedNotice } from '@/components/restricted-notice'
 import { SetupNotice } from '@/components/setup-notice'
 import { isDatabaseConfigured } from '@/lib/db'
+import { isNsfwEnabled } from '@/lib/nsfw-server'
 import {
   COLLECTION_PAGE_SIZE,
   getCollection,
@@ -14,6 +16,7 @@ import {
   listCollections,
 } from '@/lib/data/collections'
 import { collectionsHref } from '@common/collections'
+import { isRestricted } from '@common/search'
 import { SITE_NAME } from '@/config'
 
 /**
@@ -81,6 +84,12 @@ export async function CollectionPage({ id }: { id: string }) {
   const collection = await getCollection(collectionId)
   if (!collection) notFound()
 
+  // The shelf's own rating, gated like a post's page: its URL is reachable without the
+  // list that leaves it out, and the notice rather than a 404 is what a post does.
+  if (isRestricted(collection.rating) && !(await isNsfwEnabled())) {
+    return <RestrictedNotice />
+  }
+
   const { posts, hasMore } = await listCollectionPosts(collectionId, {
     perPage: COLLECTION_PAGE_SIZE,
   })
@@ -98,7 +107,10 @@ export async function CollectionPage({ id }: { id: string }) {
           🗂️ Collections
           <NavProgress />
         </Link>
-        <h1 className="text-lg font-bold tracking-tight">{collection.name}</h1>
+        <h1 className="text-lg font-bold tracking-tight">
+          {collection.mark && <span className="mr-1.5">{collection.mark}</span>}
+          {collection.name}
+        </h1>
         <span className="text-xs text-muted">
           {collection.post_count} image{collection.post_count === 1 ? '' : 's'}
         </span>
@@ -127,6 +139,17 @@ export async function collectionMetadata(id: string): Promise<Metadata> {
   const collection = await getCollection(collectionId)
   if (!collection) {
     return { title: 'Collection not found', robots: { index: false, follow: false } }
+  }
+
+  // Titled like nothing in particular, for the reason a restricted post's metadata is: an
+  // unfurl is the reader who has not asked, and the name alone can say plenty.
+  if (isRestricted(collection.rating)) {
+    const hidden = !(await isNsfwEnabled())
+    return {
+      title: hidden ? 'Collection' : collection.name,
+      alternates: { canonical: `${collectionsHref()}/${collection.id}` },
+      robots: { index: false, follow: !hidden },
+    }
   }
 
   const description = `${collection.post_count} image${

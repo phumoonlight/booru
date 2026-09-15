@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { serving } from '@/lib/data/site'
 import { visibleRatings } from '@/lib/nsfw-server'
 import { COLLECTION_TABLES } from '@common/collections'
+import { SAFE_RATINGS } from '@common/search'
 import * as read from '@common/data/collections'
 
 /**
@@ -73,8 +74,8 @@ export async function collectionNeighbours(options: { id: number; collectionId: 
  * A collection page is one fixed listing with a name on it, which is a page worth
  * indexing; the images inside it are not, and there could be a great many of them. This is
  * the same call `/tags/[id]` makes for itself: the sample is indexed, the walk through it
- * is not. Restricted images are already left out of the count by the ceiling below, so a
- * shelf of them contributes nothing.
+ * is not. The safe tiers are the ceiling, so a restricted shelf is left out and a shelf
+ * holding only restricted images counts as empty — what a search engine is shown.
  *
  * **No `serving()` guard**, like `getSitemapPosts` and for the same reason: a crawler
  * reads this to decide whether to come back, and answering it with nothing during an hour
@@ -82,7 +83,7 @@ export async function collectionNeighbours(options: { id: number; collectionId: 
  */
 export async function getSitemapCollections() {
   try {
-    return await read.listCollections(db(), { visibleRatings: undefined, hideEmpty: true })
+    return await read.listCollections(db(), { visibleRatings: SAFE_RATINGS, hideEmpty: true })
   } catch (error) {
     // The one read in this file that swallows its failure, and the sitemap is why: it is
     // one document listing several kinds of page, so a section that cannot be read must

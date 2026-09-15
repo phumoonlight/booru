@@ -5,6 +5,8 @@ import type { Collection, CollectionPost } from '../../../shared/api'
 import { BUTTON_ON_SURFACE } from './buttons'
 import { FIELD, Panel } from './panel'
 import { thumbnailFor, thumbnails } from './collection-thumbs'
+import { ratioOf } from './browse-layout'
+import { shelfTitle } from './collection-form'
 
 /** One tile. It asks for its own image, for the reason Browse's card does: a shelf can be
  *  a few hundred rows after enough scrolling, and fetching them all up front would stall
@@ -30,7 +32,10 @@ export function ImageCard({ post, onOpen }: { post: CollectionPost; onOpen: () =
       title={`Image ${post.id}`}
       className="group flex w-full flex-col overflow-hidden rounded-lg border border-border bg-surface text-left transition-colors hover:border-accent"
     >
-      <div className="grid aspect-square place-items-center overflow-hidden bg-background">
+      <div
+        className="grid place-items-center overflow-hidden bg-background"
+        style={{ aspectRatio: ratioOf(post.width, post.height) }}
+      >
         {src ? (
           <img src={src} alt="" className="h-full w-full object-cover" />
         ) : (
@@ -153,7 +158,7 @@ export function ImagePanel({
           >
             {collections.map((collection) => (
               <option key={collection.id} value={collection.id}>
-                {collection.name}
+                {shelfTitle(collection)}
               </option>
             ))}
           </select>

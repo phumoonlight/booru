@@ -5,20 +5,26 @@ import {
   makeCollection,
   readCollectionPosts,
   readCollections,
+  editCollection,
   removeCollection,
   moveCollectionImage,
   removeCollectionPost,
-  renameCollectionRow,
   saveCollectionPost,
   uploadToCollection,
 } from './collections'
 import { postIdSchema } from './ipc-parse'
 import type { Collection, CollectionPostPage } from '@common/data/collections'
+import type { CollectionInput } from '@common/data/collections-write'
 import type { UploadResult } from '@common/upload/pipeline'
 
-/** A collection name arrives from a text box, so it is bounded here and settled by
- *  `readCollectionName` inside — the same division `tagNameSchema` and `readTagName` make. */
-const collectionNameSchema = z.string().max(200)
+/** A collection's name and mark arrive from text boxes, so they are bounded here and settled
+ *  by `readCollectionName` / `readCollectionMark` inside — the same division `tagNameSchema`
+ *  and `readTagName` make. The rating is checked against `RATINGS` in `./collections`. */
+const collectionSchema = z.object({
+  name: z.string().max(200),
+  mark: z.string().max(200),
+  rating: z.string(),
+})
 
 const collectionPostsSchema = z.object({
   collectionId: z.number().int().positive(),
@@ -46,20 +52,18 @@ const collectionSavePostSchema = z.object({
 export function registerCollectionIpc(): void {
   ipcMain.handle('collections:list', async (): Promise<Collection[]> => readCollections())
 
-  ipcMain.handle('collections:create', async (_event, name: unknown) => {
-    const parsed = collectionNameSchema.safeParse(name)
+  ipcMain.handle('collections:create', async (_event, raw: unknown) => {
+    const parsed = collectionSchema.safeParse(raw)
     if (!parsed.success) return { ok: false as const, error: 'Type a name for the collection.' }
-    return makeCollection(parsed.data)
+    return makeCollection(parsed.data as CollectionInput)
   })
 
-  ipcMain.handle('collections:rename', async (_event, id: unknown, name: unknown) => {
+  ipcMain.handle('collections:edit', async (_event, id: unknown, raw: unknown) => {
     const parsedId = postIdSchema.safeParse(id)
-    const parsedName = collectionNameSchema.safeParse(name)
+    const parsed = collectionSchema.safeParse(raw)
     if (!parsedId.success) return { ok: false as const, error: 'No such collection' }
-    if (!parsedName.success) {
-      return { ok: false as const, error: 'Type a name for the collection.' }
-    }
-    return renameCollectionRow(parsedId.data, parsedName.data)
+    if (!parsed.success) return { ok: false as const, error: 'Type a name for the collection.' }
+    return editCollection(parsedId.data, parsed.data as CollectionInput)
   })
 
   /**

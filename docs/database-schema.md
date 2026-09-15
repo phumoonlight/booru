@@ -422,6 +422,8 @@ given. A shelf is a better answer than a bad tag.
 | --- | --- | --- |
 | `id` | `integer identity` | primary key |
 | `name` | `text not null` | prose, not a tag: spaces, capitals and punctuation. `readCollectionName` (`@common/collections`) settles the spelling — trimmed, whitespace collapsed, 64 characters |
+| `mark` | `text` | `0011`. Free prefix text drawn before the name — an emoji, `[WIP]`. `readCollectionMark`, 12 graphemes; null for none |
+| `rating` | `text not null default 'g'` | `0011`. The shelf's own tier: restricted, the whole shelf is behind the NSFW setting. Narrows each image's rating, never lifts it |
 | `created_at` | `timestamptz not null default now()` | |
 | `updated_at` | `timestamptz not null default now()` | what the list is ordered by |
 

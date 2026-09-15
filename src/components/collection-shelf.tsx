@@ -72,7 +72,10 @@ function CollectionCard({ collection }: { collection: Collection }) {
       <div className="flex flex-col gap-0.5 px-2 py-2">
         {/* Two lines at most. A name is prose and can be long; three lines of it under a
             square makes the cards in a row different heights. */}
-        <span className="line-clamp-2 text-sm font-semibold">{collection.name}</span>
+        <span className="line-clamp-2 text-sm font-semibold">
+          {collection.mark && <span className="mr-1">{collection.mark}</span>}
+          {collection.name}
+        </span>
         <span className="text-xs text-muted">
           {collection.post_count} image{collection.post_count === 1 ? '' : 's'}
         </span>

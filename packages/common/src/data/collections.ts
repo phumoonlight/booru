@@ -47,6 +47,11 @@ export type CollectionPost = {
 export type Collection = {
   id: number
   name: string
+  /** Drawn in front of the name, as typed — `readCollectionMark` settles what may be. */
+  mark: string | null
+  /** The shelf's own tier. With it restricted and the adult tiers off, the shelf is not
+   *  listed and nothing on it is read, whatever each image is rated. */
+  rating: Rating
   post_count: number
   /** The newest post's `file_name`, or null for a shelf with nothing on it — the cover. */
   cover_file_name: string | null
@@ -72,6 +77,15 @@ const postColumns = (db: Db) => db`
   to_char(created_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as created_at`
 
 /**
+ * The shelf's own rating, as a condition on a `collection_posts` row. In the query rather
+ * than left to the page, because `loadMoreCollectionPosts` is an action anybody can call
+ * with any id — a restricted shelf's images must not be one request away from the notice.
+ */
+const shelfVisible = (db: Db, allowed: string[]) => db`
+  exists (select 1 from ${db(collections)} s
+           where s.id = collection_id and s.rating = any(${allowed}::text[]))`
+
+/**
  * Every shelf, most recently touched first.
  *
  * **The cover is derived, not stored.** A `cover_post_id` column would be a second thing
@@ -95,15 +109,18 @@ export async function listCollections(
 ): Promise<Collection[]> {
   const allowed = [...(visibleRatings ?? RATINGS)]
 
-  // The rating filter is on the join rather than in a `where`, so a shelf whose every
-  // image is behind the setting still produces a row — with a count of zero and no cover —
-  // and `hideEmpty` is then the one place that decides whether such a row is drawn.
+  // The images' rating filter is on the join rather than in the `where`, so a shelf whose
+  // every image is behind the setting still produces a row — with a count of zero and no
+  // cover — and `hideEmpty` is then the one place that decides whether such a row is drawn.
+  // The shelf's own rating is in the `where`: a restricted shelf is not a row at all.
   //
   // `array_agg(… order by p.id desc)[1]` rather than a lateral join: the group is already
   // being formed for the count, and taking its first element costs nothing more.
   return await db<Collection[]>`
     select c.id,
            c.name,
+           c.mark,
+           c.rating,
            count(p.id)::int as post_count,
            (array_agg(p.file_name order by p.id desc))[1] as cover_file_name,
            (array_agg(p.file_ext  order by p.id desc))[1] as cover_file_ext,
@@ -111,12 +128,19 @@ export async function listCollections(
       from ${db(collections)} c
       left join ${db(posts)} p
         on p.collection_id = c.id and p.rating = any(${allowed}::text[])
+     where c.rating = any(${allowed}::text[])
      group by c.id
     having (${hideEmpty}::bool = false or count(p.id) > 0)
      order by c.updated_at desc, c.id desc`
 }
 
-/** One shelf by id, with the same count and cover the list draws. */
+/**
+ * One shelf by id, with the same count and cover the list draws.
+ *
+ * **Not filtered on the shelf's own rating**, where the list is: a page reached by its own
+ * URL answers a restricted shelf with the notice rather than a 404, the way a post's page
+ * does, and it needs the row to know which it is.
+ */
 export async function getCollection(
   db: Db,
   id: number,
@@ -128,6 +152,8 @@ export async function getCollection(
     await db<Collection[]>`
       select c.id,
              c.name,
+             c.mark,
+             c.rating,
              count(p.id)::int as post_count,
              (array_agg(p.file_name order by p.id desc))[1] as cover_file_name,
              (array_agg(p.file_ext  order by p.id desc))[1] as cover_file_ext,
@@ -165,6 +191,7 @@ export async function listCollectionPosts(
         from ${db(posts)}
        where collection_id = ${collectionId}
          and rating = any(${allowed}::text[])
+         and ${shelfVisible(db, allowed)}
          and (${after ?? null}::int is null or id < ${after ?? null}::int)
        order by id desc
        limit ${perPage + 1}`
@@ -208,6 +235,7 @@ export async function collectionNeighbours(
       with shelf as not materialized (
         select id from ${db(posts)}
          where collection_id = ${collectionId} and rating = any(${allowed}::text[])
+           and ${shelfVisible(db, allowed)}
       )
       select (select id from shelf where id > ${id} order by id asc  limit 1) as prev_id,
              (select id from shelf where id < ${id} order by id desc limit 1) as next_id`

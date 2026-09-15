@@ -97,3 +97,29 @@ export function readCollectionName(raw: string): { name: string } | { error: str
   }
   return { name: cleaned }
 }
+
+/** Graphemes, not characters: a mark is usually an emoji, and 🧑‍🎨 is five UTF-16 units. */
+export const COLLECTION_MARK_MAX = 12
+
+/**
+ * The prefix drawn in front of a collection's name, as it will be stored — null for none.
+ *
+ * Anything a person would type there, unlike `readTagMark`: a shelf's mark is not a colour
+ * and not bound to emoji, since `[WIP]` or a year says something a glyph cannot. Only what
+ * the name gets — control characters out, whitespace collapsed — and a length, refused
+ * rather than truncated for the reason a tag's mark is.
+ */
+export function readCollectionMark(raw: string): { mark: string | null } | { error: string } {
+  const cleaned = [...raw]
+    .map((ch) => (ch < ' ' || ch === DEL ? ' ' : ch))
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!cleaned) return { mark: null }
+  const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+  const graphemes = [...segmenter.segment(cleaned)]
+  if (graphemes.length > COLLECTION_MARK_MAX) {
+    return { error: `A mark is ${COLLECTION_MARK_MAX} characters at most.` }
+  }
+  return { mark: cleaned }
+}

@@ -6,6 +6,7 @@ import type { UploadResult } from '@common/upload/pipeline'
 import type { FormSectionEdit, FormSections } from '@common/data/form-sections'
 import type { RuleKind, TagRules } from '@common/data/rules'
 import type { Collection, CollectionPostPage } from '@common/data/collections'
+import type { CollectionInput } from '@common/data/collections-write'
 import type { Artist, ArtistUrl } from '@common/data/artists'
 import type { ArtistImageResult } from '@common/upload/artist'
 import type { SiteState } from '@common/data/site'
@@ -201,6 +202,11 @@ export type NamedOutcome = { ok: true; name: string } | { ok: false; error: stri
  *  screen would otherwise have to re-read the list to find out what it just made. */
 export type CollectionNamed = { ok: true; id: number; name: string } | { ok: false; error: string }
 
+/** A shelf's edit, answering with what was stored — the mark is trimmed or cleared there. */
+export type CollectionEdited =
+  | { ok: true; name: string; mark: string | null; rating: Rating }
+  | { ok: false; error: string }
+
 export type PostAppApi = {
   getStatus: () => Promise<AppStatus>
   /** Writes and applies the compression preferences, answering with what was stored. */
@@ -337,8 +343,9 @@ export type PostAppApi = {
   /** Every shelf, most recently touched first — including empty ones, unlike the website. */
   listCollections: () => Promise<Collection[]>
   /** Names a new shelf. A duplicate name is the one failure worth wording. */
-  createCollection: (name: string) => Promise<CollectionNamed>
-  renameCollection: (id: number, name: string) => Promise<NamedOutcome>
+  createCollection: (input: CollectionInput) => Promise<CollectionNamed>
+  /** Its name, mark and rating, answering with each as stored. */
+  editCollection: (id: number, input: CollectionInput) => Promise<CollectionEdited>
   /** Refused while the shelf still holds anything — the whole rule of the feature. */
   deleteCollection: (id: number) => Promise<Outcome>
   /** One shelf's images, newest first. `after` is the cursor; there is no query. */
@@ -409,4 +416,5 @@ export type PostAppApi = {
 
 export type { UploadResult } from '@common/upload/pipeline'
 export type { Collection, CollectionPost } from '@common/data/collections'
+export type { CollectionInput } from '@common/data/collections-write'
 export type { Artist, ArtistImage, ArtistUrl } from '@common/data/artists'

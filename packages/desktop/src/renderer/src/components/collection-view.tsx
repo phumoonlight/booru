@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { collectionHref } from '@common/collections'
+import { RATING_COLOR, RATING_LABEL } from '@common/search'
 import type { Collection, CollectionPost } from '../../../shared/api'
-import { BUTTON, BUTTON_SM, BUTTON_SUBMIT_ON_SURFACE, buttonToggle } from './buttons'
-import { FIELD, Panel } from './panel'
+import { BUTTON, BUTTON_SM, buttonToggle } from './buttons'
+import { Panel } from './panel'
 import { imageUrlsFrom } from './image-urls'
+import { itemStyle } from './browse-layout'
+import { CollectionForm, shelfTitle } from './collection-form'
 import { ImageCard, ImagePanel } from './collection-image'
 import { StagingBox, useStaging } from './collection-staging'
 
@@ -20,25 +23,30 @@ const CHUNK = 40
  */
 export function CollectionView({
   collectionId,
-  name: initialName,
+  collection,
   collections,
   siteUrl,
   onBack,
 }: {
   collectionId: number
-  name: string
+  collection: Collection | undefined
   collections: Collection[]
   siteUrl: string
   onBack: () => void
 }) {
-  const [name, setName] = useState(initialName)
+  // What an edit here stored, over the row the list was holding — which is not re-read
+  // until the way out, and can still be on its way in when this screen mounts.
+  const [edited, setEdited] = useState<Pick<Collection, 'name' | 'mark' | 'rating'> | null>(
+    null
+  )
+  const shelf = edited ?? collection
+  const name = shelf?.name ?? 'Collection'
   const [posts, setPosts] = useState<CollectionPost[]>([])
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
   const [nonce, setNonce] = useState(0)
 
   const [renaming, setRenaming] = useState(false)
-  const [draftName, setDraftName] = useState(initialName)
   const [notice, setNotice] = useState<string | null>(null)
 
   const [dragging, setDragging] = useState(false)
@@ -83,18 +91,6 @@ export function CollectionView({
 
   const staging = useStaging(collectionId, reload)
 
-  async function rename() {
-    const result = await window.api.renameCollection(collectionId, draftName)
-    if (!result.ok) {
-      setNotice(result.error)
-      return
-    }
-    setName(result.name)
-    setDraftName(result.name)
-    setRenaming(false)
-    setNotice(null)
-  }
-
   async function destroy() {
     const result = await window.api.deleteCollection(collectionId)
     if (!result.ok) {
@@ -137,7 +133,15 @@ export function CollectionView({
         <button type="button" onClick={onBack} className={BUTTON_SM}>
           <span aria-hidden>⬅️</span> Collections
         </button>
-        <h1 className="text-lg font-bold tracking-tight">{name}</h1>
+        <h1 className="text-lg font-bold tracking-tight">
+          {shelf ? shelfTitle(shelf) : name}
+        </h1>
+        <span className="text-xs text-muted">#{collectionId}</span>
+        {shelf && (
+          <span className={`text-xs ${RATING_COLOR[shelf.rating]}`}>
+            {RATING_LABEL[shelf.rating]}
+          </span>
+        )}
         <span className="text-xs text-muted">
           {loading ? 'reading…' : `${posts.length} image${posts.length === 1 ? '' : 's'}`}
         </span>
@@ -146,13 +150,12 @@ export function CollectionView({
             type="button"
             onClick={() => {
               setRenaming((was) => !was)
-              setDraftName(name)
               setNotice(null)
             }}
             aria-pressed={renaming}
             className={buttonToggle(renaming)}
           >
-            <span aria-hidden>✏️</span> Rename
+            <span aria-hidden>✏️</span> Edit
           </button>
           {siteUrl && (
             <button
@@ -176,24 +179,18 @@ export function CollectionView({
       </div>
 
       {renaming && (
-        <Panel title="Rename collection">
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              void rename()
+        <Panel title="Edit collection">
+          <CollectionForm
+            initial={{ name, mark: shelf?.mark ?? '', rating: shelf?.rating ?? 'g' }}
+            submitLabel="Save"
+            onSubmit={async (input) => {
+              const result = await window.api.editCollection(collectionId, input)
+              if (!result.ok) return result.error
+              setEdited({ name: result.name, mark: result.mark, rating: result.rating })
+              setRenaming(false)
+              return null
             }}
-            className="flex items-center gap-2"
-          >
-            <input
-              autoFocus
-              value={draftName}
-              onChange={(event) => setDraftName(event.target.value)}
-              className={`${FIELD} flex-1`}
-            />
-            <button type="submit" className={BUTTON_SUBMIT_ON_SURFACE}>
-              <span aria-hidden>✅</span> Save
-            </button>
-          </form>
+          />
         </Panel>
       )}
 
@@ -236,9 +233,12 @@ export function CollectionView({
         </p>
       ) : (
         <>
-          <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+          {/* Browse's 📐 Ratio and nothing else: one height, each tile as wide as its own
+              shape. A shelf is looked at for the pictures, and there is no tag strip or
+              search result here that a square crop would make easier to scan. */}
+          <ul className="flex flex-wrap justify-center gap-2 [--row-h:9rem] sm:[--row-h:11rem] lg:[--row-h:13rem]">
             {posts.map((post) => (
-              <li key={post.id}>
+              <li key={post.id} className="shrink-0" style={itemStyle(post.width, post.height)}>
                 <ImageCard post={post} onOpen={() => setEditing(post.id)} />
               </li>
             ))}

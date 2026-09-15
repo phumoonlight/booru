@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { RATING_COLOR, RATING_LABEL } from '@common/search'
 import type { Collection } from '../../../shared/api'
-import { BUTTON, BUTTON_SUBMIT_ON_SURFACE, buttonToggle } from './buttons'
-import { FIELD, Panel } from './panel'
+import { BUTTON, buttonToggle } from './buttons'
+import { Panel } from './panel'
+import { CollectionForm, shelfTitle } from './collection-form'
 import { thumbnailFor, thumbnails } from './collection-thumbs'
 
 /** Every shelf, as cards. The cover is the newest image on it, decided by the query. */
@@ -19,24 +21,6 @@ export function ShelfList({
   onCreated: (id: number) => void
 }) {
   const [naming, setNaming] = useState(false)
-  const [name, setName] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-
-  async function create() {
-    if (busy) return
-    setBusy(true)
-    setError(null)
-    const result = await window.api.createCollection(name)
-    setBusy(false)
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    setName('')
-    setNaming(false)
-    onCreated(result.id)
-  }
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 pt-4 pb-25">
@@ -50,10 +34,7 @@ export function ShelfList({
         <div className="ml-auto flex items-center">
           <button
             type="button"
-            onClick={() => {
-              setNaming((was) => !was)
-              setError(null)
-            }}
+            onClick={() => setNaming((was) => !was)}
             aria-pressed={naming}
             className={buttonToggle(naming)}
           >
@@ -70,27 +51,19 @@ export function ShelfList({
 
       {naming && (
         <Panel title="New collection">
-          {/* A name and nothing else. There is no cover to choose — it is the newest image
-              on the shelf — and nothing to file the shelf under. */}
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              void create()
+          {/* A name, a mark and a rating. There is no cover to choose — it is the newest
+              image on the shelf — and nothing to file the shelf under. */}
+          <CollectionForm
+            initial={{ name: '', mark: '', rating: 'g' }}
+            submitLabel="Create"
+            onSubmit={async (input) => {
+              const result = await window.api.createCollection(input)
+              if (!result.ok) return result.error
+              setNaming(false)
+              onCreated(result.id)
+              return null
             }}
-            className="flex items-center gap-2"
-          >
-            <input
-              autoFocus
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Ukiyo-e studies"
-              className={`${FIELD} flex-1`}
-            />
-            <button type="submit" disabled={busy} className={BUTTON_SUBMIT_ON_SURFACE}>
-              <span aria-hidden>✅</span> Create
-            </button>
-          </form>
-          {error && <p className="text-xs text-[#ff5d5f]">{error}</p>}
+          />
         </Panel>
       )}
 
@@ -113,6 +86,7 @@ export function ShelfList({
 
 function ShelfCard({ collection, onOpen }: { collection: Collection; onOpen: () => void }) {
   const cover = collection.cover_file_name
+  const images = `${collection.post_count} image${collection.post_count === 1 ? '' : 's'}`
   const [src, setSrc] = useState(cover ? (thumbnails.get(cover) ?? '') : '')
 
   useEffect(() => {
@@ -130,7 +104,7 @@ function ShelfCard({ collection, onOpen }: { collection: Collection; onOpen: () 
     <button
       type="button"
       onClick={onOpen}
-      title={`Open ${collection.name}`}
+      title={`Open ${shelfTitle(collection)}`}
       className="group flex w-full flex-col overflow-hidden rounded-lg border border-border bg-surface text-left transition-colors hover:border-accent"
     >
       {/* Square, and the one place in this app a thumbnail is cropped. The picture here is
@@ -146,9 +120,14 @@ function ShelfCard({ collection, onOpen }: { collection: Collection; onOpen: () 
         )}
       </div>
       <span className="flex flex-col gap-0.5 px-1.5 py-1">
-        <span className="line-clamp-2 text-xs font-semibold">{collection.name}</span>
-        <span className="text-[11px] text-muted">
-          {collection.post_count} image{collection.post_count === 1 ? '' : 's'}
+        <span className="line-clamp-2 text-xs font-semibold">{shelfTitle(collection)}</span>
+        <span className="flex items-center justify-between gap-1 text-[11px]">
+          <span className="text-muted">
+            #{collection.id} · {images}
+          </span>
+          <span className={RATING_COLOR[collection.rating]}>
+            {RATING_LABEL[collection.rating]}
+          </span>
         </span>
       </span>
     </button>

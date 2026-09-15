@@ -67,7 +67,8 @@ export function Collections({ siteUrl }: { siteUrl: string }) {
         // last one's images up until the read lands.
         key={open}
         collectionId={open}
-        name={collection?.name ?? 'Collection'}
+        // Undefined for the moment between coming back to an open shelf and the list landing.
+        collection={collection}
         // The whole list, because an image's panel offers moving it to any other shelf.
         // Read once by this component and handed down rather than read again down there:
         // a menu per tile would be a read per tile.

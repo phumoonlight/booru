@@ -12,8 +12,9 @@ import {
   deleteCollection,
   deleteCollectionPostRow,
   moveCollectionPost,
-  renameCollection,
+  updateCollection,
   updateCollectionPost,
+  type CollectionInput,
 } from '@common/data/collections-write'
 import { collectionImagePath, collectionThumbnailPath } from '@common/storage'
 import { createCollectionPostFromImage, type UploadResult } from '@common/upload/pipeline'
@@ -27,7 +28,7 @@ import { cachedThumbnail, forgetThumbnail } from './manage'
  * Collections, from the side that writes them.
  *
  * This is the whole of what the app can do to a shelf, and it is short because a shelf is
- * short: name one, rename one, delete an empty one, add an image, correct one, move one to
+ * short: name one, edit one, delete an empty one, add an image, correct one, move one to
  * another shelf, remove one. There is no tag vocabulary to keep in step, so nothing here touches the tag cache —
  * which is most of what `main/manage.ts` does around each of its writes.
  *
@@ -66,21 +67,30 @@ export async function readCollectionPosts(options: {
   })
 }
 
-export async function makeCollection(
-  name: string
-): Promise<{ ok: true; id: number; name: string } | { ok: false; error: string }> {
-  const db = boardDb()
-  if (!db) return { ok: false, error: 'Not set up yet' }
-  return createCollection(db, name)
+type Shelf = { name: string; mark: string | null; rating: Rating }
+
+/** The rating off the form's `<select>`, refused rather than defaulted — as `savePost` does. */
+function ratingError(input: CollectionInput): { ok: false; error: string } | null {
+  return (RATINGS as readonly string[]).includes(input.rating)
+    ? null
+    : { ok: false, error: `${input.rating} is not a rating on this board.` }
 }
 
-export async function renameCollectionRow(
-  id: number,
-  name: string
-): Promise<{ ok: true; name: string } | { ok: false; error: string }> {
+export async function makeCollection(
+  input: CollectionInput
+): Promise<({ ok: true; id: number } & Shelf) | { ok: false; error: string }> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
-  return renameCollection(db, id, name)
+  return ratingError(input) ?? createCollection(db, input)
+}
+
+export async function editCollection(
+  id: number,
+  input: CollectionInput
+): Promise<({ ok: true } & Shelf) | { ok: false; error: string }> {
+  const db = boardDb()
+  if (!db) return { ok: false, error: 'Not set up yet' }
+  return ratingError(input) ?? updateCollection(db, id, input)
 }
 
 /**

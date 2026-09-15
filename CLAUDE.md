@@ -291,6 +291,12 @@ own images, newest first, with no search box anywhere in the section.
   because this schema has no triggers. Correcting one image's rating does *not* touch it:
   that ordering answers "what has happened to this shelf", and a rating is a fact about one
   image.
+- **A shelf has its own rating and a mark.** Rated R-18, the whole shelf is behind the NSFW
+  setting — off the list, its page and every image page in it `<RestrictedNotice />`, out of
+  the sitemap — and it narrows, never lifts: an R-18 image on a General shelf is still hidden.
+  The listing reads enforce it in SQL (`shelfVisible`), since `loadMoreCollectionPosts` takes
+  any id. The mark is free prefix text in front of the name (`readCollectionMark`, 12
+  graphemes) — not a tag's mark, so no colour dots and no emoji-only rule.
 - **A shelf cannot be deleted while it holds anything** — invariant 15.
 - **The website hides an empty shelf and the desktop app does not** (`hideEmpty`). A card
   with a name, no picture and a count of zero is an invitation to click on nothing; a shelf
@@ -307,7 +313,8 @@ own images, newest first, with no search box anywhere in the section.
   fields are what images arriving together usually share — they are the four in one post —
   and the source box survives the upload rather than being cleared with the staged files,
   since the next drop is very often the next post by the same artist. Correcting either on
-  one image afterwards is a click on its own panel.
+  one image afterwards is a click on its own panel. A shelf's images are drawn as Browse's
+  📐 Ratio and nothing else, and every shelf shows its `#id`.
 - **An image can be moved to another shelf, and no bytes move.** The flat
   `collections/posts/<md5>` prefix is what buys that: where an image is shelved was never
   part of where its bytes live, so a move is one column of one row. It touches **both**
@@ -800,7 +807,7 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   file is the part that can be reviewed before that happens.
 - **One baseline**, `db/migrations/0001_baseline.sql`: every table in foreign-key order
   and its indexes, plus `0002_site_settings.sql`, `0003_sections_off_categories.sql`,
-  `0004_section_sides.sql`, `0005_generative_posts.sql`, `0006_collections.sql`, `0007_artists.sql`, `0008_artist_ai.sql`, `0009_artist_archive.sql` and `0010_artist_favorites.sql`. Schema changes from here are **always** a new numbered file, never a
+  `0004_section_sides.sql`, `0005_generative_posts.sql`, `0006_collections.sql`, `0007_artists.sql`, `0008_artist_ai.sql`, `0009_artist_archive.sql`, `0010_artist_favorites.sql` and `0011_collection_rating_mark.sql`. Schema changes from here are **always** a new numbered file, never a
   dashboard edit and never an edit to the baseline once pushed anywhere real.
   `scripts/migrate.mjs` applies each inside a transaction and records it in `_migrations`.
 - **`db/grants.sql` is not a migration** and re-runs on every `db:push`. Who may do what

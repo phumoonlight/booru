@@ -1,4 +1,4 @@
-import { COLLECTION_TABLES, readCollectionName } from '@common/collections'
+import { COLLECTION_TABLES, readCollectionMark, readCollectionName } from '@common/collections'
 import { isUniqueViolation, type Db, type DbPool } from '@common/db'
 import type { Rating } from '@common/search'
 
@@ -19,9 +19,24 @@ const { collections, posts } = COLLECTION_TABLES
 
 export type CollectionOutcome<T = unknown> = ({ ok: true } & T) | { ok: false; error: string }
 
+/** What a shelf is, as typed into the desktop app's form — settled by `readCollectionFields`. */
+export type CollectionInput = { name: string; mark: string; rating: Rating }
+
+type CollectionFields = { name: string; mark: string | null; rating: Rating }
+
+/** The name and the mark settled together, so a form with both wrong says the first. The
+ *  rating is the caller's to check, arriving as it does from a `<select>`. */
+function readCollectionFields(input: CollectionInput): CollectionFields | { error: string } {
+  const name = readCollectionName(input.name)
+  if ('error' in name) return name
+  const mark = readCollectionMark(input.mark)
+  if ('error' in mark) return mark
+  return { name: name.name, mark: mark.mark, rating: input.rating }
+}
+
 /**
- * Names a new shelf. The name is the whole of it — there is no cover to pick and nothing
- * to file it under.
+ * Names a new shelf, with its mark and its rating. There is no cover to pick and nothing to
+ * file it under.
  *
  * A duplicate is the one failure worth wording, and it is caught rather than asked about
  * first: the unique index on `lower(name)` is what actually decides, so a check-then-insert
@@ -29,15 +44,15 @@ export type CollectionOutcome<T = unknown> = ({ ok: true } & T) | { ok: false; e
  */
 export async function createCollection(
   db: Db,
-  rawName: string
-): Promise<CollectionOutcome<{ id: number; name: string }>> {
-  const read = readCollectionName(rawName)
+  input: CollectionInput
+): Promise<CollectionOutcome<{ id: number } & CollectionFields>> {
+  const read = readCollectionFields(input)
   if ('error' in read) return { ok: false, error: read.error }
 
   try {
     const [row] = await db<{ id: number }[]>`
-      insert into ${db(collections)} ${db({ name: read.name })} returning id`
-    return { ok: true, id: row.id, name: read.name }
+      insert into ${db(collections)} ${db(read)} returning id`
+    return { ok: true, id: row.id, ...read }
   } catch (error) {
     if (isUniqueViolation(error)) {
       return { ok: false, error: `There is already a collection called ${read.name}.` }
@@ -46,24 +61,28 @@ export async function createCollection(
   }
 }
 
-/** Renames a shelf, and touches it — a rename is a change to the shelf, so it belongs at
- *  the top of the list the same way an image added does. */
-export async function renameCollection(
+/**
+ * Rewrites a shelf's name, mark and rating in one statement, and touches it — each is a
+ * change to the shelf itself, so it belongs at the top of the list the way an image added
+ * does. Correcting one *image's* rating is not, which is `updateCollectionPost`.
+ */
+export async function updateCollection(
   db: Db,
   id: number,
-  rawName: string
-): Promise<CollectionOutcome<{ name: string }>> {
-  const read = readCollectionName(rawName)
+  input: CollectionInput
+): Promise<CollectionOutcome<CollectionFields>> {
+  const read = readCollectionFields(input)
   if ('error' in read) return { ok: false, error: read.error }
 
   try {
     const updated = await db<{ id: number }[]>`
       update ${db(collections)}
-         set name = ${read.name}, updated_at = now()
+         set name = ${read.name}, mark = ${read.mark}, rating = ${read.rating},
+             updated_at = now()
        where id = ${id}
       returning id`
     if (updated.length === 0) return { ok: false, error: 'No such collection.' }
-    return { ok: true, name: read.name }
+    return { ok: true, ...read }
   } catch (error) {
     if (isUniqueViolation(error)) {
       return { ok: false, error: `There is already a collection called ${read.name}.` }

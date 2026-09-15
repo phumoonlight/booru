@@ -15,7 +15,7 @@ import {
 } from '@/lib/data/collections'
 import { collectionHref, collectionPostHref } from '@common/collections'
 import { collectionImageUrl, collectionThumbUrl } from '@/lib/images'
-import { isRestricted, RATING_COLOR, RATING_LABEL } from '@common/search'
+import { isRestricted, RATING_COLOR, RATING_LABEL, type Rating } from '@common/search'
 import { SITE_NAME } from '@/config'
 
 /**
@@ -38,6 +38,12 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
+/** Behind the setting on its own rating or its shelf's — a shelf's rating narrows what is on
+ *  it and never lifts it. */
+function isHidden(post: { rating: Rating }, collection: { rating: Rating } | null): boolean {
+  return isRestricted(post.rating) || (collection !== null && isRestricted(collection.rating))
+}
+
 export async function collectionPostMetadata(id: string): Promise<Metadata> {
   const postId = Number(id)
   if (!Number.isInteger(postId) || postId < 1) return { title: 'Not found' }
@@ -47,17 +53,17 @@ export async function collectionPostMetadata(id: string): Promise<Metadata> {
   if (!post) return { title: 'Not found', robots: { index: false, follow: false } }
 
   const canonical = collectionPostHref(post.collection_id, post.id)
+  const collection = await getCollection(post.collection_id)
 
-  if (isRestricted(post.rating) && !(await isNsfwEnabled())) {
+  if (isHidden(post, collection) && !(await isNsfwEnabled())) {
     return {
       title: 'Collection image',
-      description: `Rated ${RATING_LABEL[post.rating]}. Turn on NSFW in Settings to see it.`,
+      description: 'Turn on NSFW in Settings to see it.',
       alternates: { canonical },
       robots: { index: false, follow: true },
     }
   }
 
-  const collection = await getCollection(post.collection_id)
   const title = collection ? `${collection.name} — #${post.id}` : `Collection image #${post.id}`
   const description = `${post.width}×${post.height} · rated ${RATING_LABEL[post.rating]}`
 
@@ -96,16 +102,18 @@ export async function CollectionDetail({ id }: { id: string }) {
   const post = await getCollectionPost(postId)
   if (!post) notFound()
 
-  // Nothing below this line runs for a blocked image: no shelf is read, no neighbours, and
-  // the counter never mounts — so a view is not counted for a page that showed nothing.
-  if (isRestricted(post.rating) && !(await isNsfwEnabled())) {
+  // The shelf is read first, since its rating gates the image as well as its own. Nothing
+  // below the gate runs for a blocked image: no neighbours, and the counter never mounts —
+  // so a view is not counted for a page that showed nothing.
+  const collection = await getCollection(post.collection_id)
+  if (isHidden(post, collection) && !(await isNsfwEnabled())) {
     return <RestrictedNotice />
   }
 
-  const [collection, { prevId, nextId }] = await Promise.all([
-    getCollection(post.collection_id),
-    collectionNeighbours({ id: post.id, collectionId: post.collection_id }),
-  ])
+  const { prevId, nextId } = await collectionNeighbours({
+    id: post.id,
+    collectionId: post.collection_id,
+  })
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">
@@ -119,6 +127,7 @@ export async function CollectionDetail({ id }: { id: string }) {
           href={collectionHref(post.collection_id)}
           className="min-w-0 truncate pr-1 text-lg font-bold tracking-tight hover:underline"
         >
+          {collection?.mark && <span className="mr-1.5">{collection.mark}</span>}
           {collection?.name ?? 'Collection'}
         </Link>
         <CollectionNav
