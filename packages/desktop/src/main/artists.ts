@@ -10,6 +10,7 @@ import {
   renameArtist,
   setArtistAi,
   setArtistArchived,
+  setArtistFavorite,
 } from '@common/data/artists-write'
 import { artistImagePath, artistThumbnailPath } from '@common/storage'
 import { createArtistImageFromImage, type ArtistImageResult } from '@common/upload/artist'
@@ -36,9 +37,9 @@ export async function readArtists(): Promise<Artist[]> {
   return db ? listArtists(db) : []
 }
 
-export async function makeArtist(name: string, isAi: boolean) {
+export async function makeArtist(name: string, isAi: boolean, isFavorite: boolean) {
   const db = boardDb()
-  return db ? createArtist(db, name, isAi) : NOT_SET_UP
+  return db ? createArtist(db, name, isAi, isFavorite) : NOT_SET_UP
 }
 
 export async function setAi(id: number, isAi: boolean) {
@@ -54,6 +55,11 @@ export async function renameArtistRow(id: number, name: string) {
 export async function setArchived(id: number, archived: boolean) {
   const db = boardDb()
   return db ? setArtistArchived(db, id, archived) : NOT_SET_UP
+}
+
+export async function setFavorite(id: number, isFavorite: boolean) {
+  const db = boardDb()
+  return db ? setArtistFavorite(db, id, isFavorite) : NOT_SET_UP
 }
 
 export async function markRead(id: number) {

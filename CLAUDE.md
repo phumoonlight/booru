@@ -323,8 +323,8 @@ collection. `@common/artists` spells its tables, prefixes and what a name and an
 are; `@common/data/artists` and `artists-write` are its queries; `@common/upload/artist` is
 the shared encode onto `artists/images/` and `artists/thumbs/`.
 
-- **An artist is a name, many links and many example images**, plus `read_at`, `is_ai` and
-  `archived_at`.
+- **An artist is a name, many links and many example images**, plus `read_at`, `is_ai`,
+  `archived_at` and `is_favorite`.
   No other field, on purpose.
 - **Non-AI and AI are two lists on one screen**, a segment switch in the title row that
   opens on non-AI. A column, not a second table: the boards split into tables because every
@@ -337,6 +337,12 @@ the shared encode onto `artists/images/` and `artists/thumbs/`.
   — refused in the statement, not only by the button being absent. Archive is in the editor
   (one press); Unarchive is on the archived card and leaves `read_at` alone, so the artist
   goes back where their last read puts them.
+- **⭐ Favorites is a second reading list on a tab of its own** (`is_favorite`), between the
+  reading list and the archive: read, ordered and marked exactly the same, kept apart so the
+  few never to fall behind on are not buried. A boolean, not a date — nothing orders by when
+  one was made a favourite. The archive wins while set and the flag stays underneath, so an
+  archived favourite unarchives back onto the favourites. Toggled in the editor beside
+  Archive; an artist named on the Favorites tab is made one.
 - **The order is the feature: `read_at asc nulls first`.** Never-read at the top, then the
   longest since caught up on. There is no read/unread flag — how far behind you are is a
   date, and a boolean beside it is a second answer that could disagree.
@@ -793,7 +799,7 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   file is the part that can be reviewed before that happens.
 - **One baseline**, `db/migrations/0001_baseline.sql`: every table in foreign-key order
   and its indexes, plus `0002_site_settings.sql`, `0003_sections_off_categories.sql`,
-  `0004_section_sides.sql`, `0005_generative_posts.sql`, `0006_collections.sql`, `0007_artists.sql`, `0008_artist_ai.sql` and `0009_artist_archive.sql`. Schema changes from here are **always** a new numbered file, never a
+  `0004_section_sides.sql`, `0005_generative_posts.sql`, `0006_collections.sql`, `0007_artists.sql`, `0008_artist_ai.sql`, `0009_artist_archive.sql` and `0010_artist_favorites.sql`. Schema changes from here are **always** a new numbered file, never a
   dashboard edit and never an edit to the baseline once pushed anywhere real.
   `scripts/migrate.mjs` applies each inside a transaction and records it in `_migrations`.
 - **`db/grants.sql` is not a migration** and re-runs on every `db:push`. Who may do what

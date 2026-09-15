@@ -28,6 +28,9 @@ export type Artist = {
   read_at: string | null
   /** ISO-8601 when the artist was moved to the archive, or null while on the reading list. */
   archived_at: string | null
+  /** On the favourites rather than the reading list. The archive wins while `archived_at` is
+   *  set, and this is kept underneath so unarchiving returns the artist to the right tab. */
+  is_favorite: boolean
   urls: ArtistUrl[]
   images: ArtistImage[]
 }
@@ -53,9 +56,10 @@ export async function listArtists(db: Db): Promise<Artist[]> {
         is_ai: boolean
         read_at: string | null
         archived_at: string | null
+        is_favorite: boolean
       }[]
     >`
-      select a.id, a.name, a.is_ai,
+      select a.id, a.name, a.is_ai, a.is_favorite,
              to_char(a.read_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as read_at,
              to_char(a.archived_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as archived_at
         from ${db(artists)} a

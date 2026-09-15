@@ -13,21 +13,23 @@ const { artists, urls, images } = ARTIST_TABLES
 export type ArtistOutcome<T = unknown> = ({ ok: true } & T) | { ok: false; error: string }
 
 /**
- * Adds an artist, never read, as AI or not. The unique index on `lower(name)` decides a duplicate, and
- * is caught rather than asked about first — a check-then-insert is a second round trip and
- * a race.
+ * Adds an artist, never read, as AI or not and a favourite or not. The unique index on
+ * `lower(name)` decides a duplicate, and is caught rather than asked about first — a
+ * check-then-insert is a second round trip and a race.
  */
 export async function createArtist(
   db: Db,
   rawName: string,
-  isAi: boolean
+  isAi: boolean,
+  isFavorite: boolean
 ): Promise<ArtistOutcome<{ id: number; name: string }>> {
   const read = readArtistName(rawName)
   if ('error' in read) return { ok: false, error: read.error }
 
   try {
     const [row] = await db<{ id: number }[]>`
-      insert into ${db(artists)} ${db({ name: read.name, is_ai: isAi })} returning id`
+      insert into ${db(artists)} ${db({ name: read.name, is_ai: isAi, is_favorite: isFavorite })}
+      returning id`
     return { ok: true, id: row.id, name: read.name }
   } catch (error) {
     if (isUniqueViolation(error)) {
@@ -63,6 +65,19 @@ export async function renameArtist(
 export async function setArtistAi(db: Db, id: number, isAi: boolean): Promise<ArtistOutcome> {
   const updated = await db<{ id: number }[]>`
     update ${db(artists)} set is_ai = ${isAi} where id = ${id} returning id`
+  return updated.length > 0 ? { ok: true } : { ok: false, error: 'No such artist.' }
+}
+
+/** Moves an artist between the reading list and the favourites. `read_at` stays, so they keep
+ *  their place, and so does `archived_at` — for an archived artist this decides which tab
+ *  Unarchive returns them to. */
+export async function setArtistFavorite(
+  db: Db,
+  id: number,
+  isFavorite: boolean
+): Promise<ArtistOutcome> {
+  const updated = await db<{ id: number }[]>`
+    update ${db(artists)} set is_favorite = ${isFavorite} where id = ${id} returning id`
   return updated.length > 0 ? { ok: true } : { ok: false, error: 'No such artist.' }
 }
 

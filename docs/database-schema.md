@@ -53,8 +53,9 @@ is in is a fact about the row rather than the parity of its position.
 `generative_post_tags` and `tags.generative_post_count`.
 `db/migrations/0006_collections.sql` adds `collections` and `collection_posts`.
 `db/migrations/0007_artists.sql` adds `artists`, `artist_urls` and `artist_images`, and
-`db/migrations/0008_artist_ai.sql` adds `artists.is_ai`, and
-`db/migrations/0009_artist_archive.sql` adds `artists.archived_at`.
+`db/migrations/0008_artist_ai.sql` adds `artists.is_ai`,
+`db/migrations/0009_artist_archive.sql` adds `artists.archived_at`, and
+`db/migrations/0010_artist_favorites.sql` adds `artists.is_favorite`.
 
 `db/migrations/0001_baseline.sql` is the whole schema in foreign-key order — `posts` →
 `tag_form_sections` → `tags` → `tag_form_section_deps` → `post_tags` → `tag_rules` — ending
@@ -658,6 +659,7 @@ page remembering not to make one.
 | `artists` | `name text not null` | prose; `readArtistName` (`@common/artists`). `artists_name_key` is `unique (lower(name))` |
 | `artists` | `is_ai boolean not null default false` | AI-generated work; the desktop screen shows one kind at a time, split in TypeScript |
 | `artists` | `archived_at timestamptz` | null on the reading list; set, the artist is in the archive, ordered newest first. `markArtistRead` refuses an archived artist. Unarchiving leaves `read_at` alone |
+| `artists` | `is_favorite boolean not null default false` | on the favourites tab rather than the reading list — read and ordered the same way. `archived_at` wins while set; unarchiving returns a favourite to the favourites |
 | `artists` | `read_at timestamptz` | the whole of the list's order: `read_at asc nulls first, id asc` (`artists_read_idx`). Null is never read. No read/unread flag — how far behind you are is a date |
 | `artist_urls` | `artist_id … on delete cascade` | |
 | `artist_urls` | `url text unique not null` | normalized by `readArtistUrl`. Unique across **every** artist, so a pasted address already saved names who has it |

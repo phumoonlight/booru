@@ -32,6 +32,7 @@ export function ArtistCard({
   onChanged,
   onKindChanged,
   onArchived,
+  onFavorited,
   onDeleted,
   onView,
 }: {
@@ -43,6 +44,8 @@ export function ArtistCard({
   onKindChanged: (isAi: boolean) => void
   /** Into the archive or out of it, with the stamp as stored — null is back on the list. */
   onArchived: (archivedAt: string | null) => void
+  /** Onto the favourites or back onto the reading list. */
+  onFavorited: (isFavorite: boolean) => void
   onDeleted: () => void
   onView: (image: ArtistImage) => void
 }) {
@@ -58,6 +61,16 @@ export function ArtistCard({
     }
     setError(null)
     onArchived(result.archived_at)
+  }
+
+  async function setFavorite(next: boolean) {
+    const result = await window.api.setArtistFavorite(artist.id, next)
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    setError(null)
+    onFavorited(next)
   }
 
   async function markRead() {
@@ -160,6 +173,7 @@ export function ArtistCard({
           onChanged={onChanged}
           onKindChanged={onKindChanged}
           onArchive={archived ? undefined : () => void setArchived(true)}
+          onFavorite={archived ? undefined : () => void setFavorite(!artist.is_favorite)}
           onDeleted={onDeleted}
           onView={onView}
         />

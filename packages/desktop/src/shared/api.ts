@@ -372,12 +372,14 @@ export type PostAppApi = {
 
   /** Every artist, never-read first, then oldest read to newest. */
   listArtists: () => Promise<Artist[]>
-  createArtist: (name: string, isAi: boolean) => Promise<CollectionNamed>
+  createArtist: (name: string, isAi: boolean, isFavorite: boolean) => Promise<CollectionNamed>
   /** Into the archive or back out, answering with the stamp as stored. `read_at` stays. */
   setArtistArchived: (
     id: number,
     archived: boolean
   ) => Promise<{ ok: true; archived_at: string | null } | { ok: false; error: string }>
+  /** Moves an artist between the reading list and the favourites; their read date stays. */
+  setArtistFavorite: (id: number, isFavorite: boolean) => Promise<Outcome>
   /** Moves an artist between the non-AI and AI lists; their read date stays. */
   setArtistAi: (id: number, isAi: boolean) => Promise<Outcome>
   renameArtist: (id: number, name: string) => Promise<NamedOutcome>

@@ -35,27 +35,37 @@ export function ArtistKindSwitch({
   )
 }
 
-/** The reading list or the archive — the same pair of segments, one level up from the kind:
- *  each of the two lists still splits into non-AI and AI. */
+/** The three tabs an artist can be on. The favourites are a second reading list — read and
+ *  ordered the same way — and the archive wins over either while it is set. */
+export type ArtistList = 'reading' | 'favorites' | 'archive'
+
+const LISTS: { list: ArtistList; emoji: string; label: string }[] = [
+  { list: 'reading', emoji: '📋', label: 'Reading list' },
+  { list: 'favorites', emoji: '⭐', label: 'Favorites' },
+  { list: 'archive', emoji: '🗄️', label: 'Archive' },
+]
+
+/** Which tab is on screen — the same segments, one level up from the kind: each of the three
+ *  still splits into non-AI and AI. */
 export function ArtistListSwitch({
-  archive,
+  list,
   onChange,
 }: {
-  archive: boolean
-  onChange: (archive: boolean) => void
+  list: ArtistList
+  onChange: (list: ArtistList) => void
 }) {
   return (
-    <div role="group" aria-label="Reading list or archive" className={SEGMENTS}>
-      {[false, true].map((on) => (
+    <div role="group" aria-label="Which list" className={SEGMENTS}>
+      {LISTS.map((tab) => (
         <button
-          key={String(on)}
+          key={tab.list}
           type="button"
-          onClick={() => onChange(on)}
-          aria-pressed={on === archive}
-          className={segment(on === archive)}
+          onClick={() => onChange(tab.list)}
+          aria-pressed={tab.list === list}
+          className={segment(tab.list === list)}
         >
-          <span aria-hidden>{on ? '🗄️' : '📋'}</span>
-          {on ? 'Archive' : 'Reading list'}
+          <span aria-hidden>{tab.emoji}</span>
+          {tab.label}
         </button>
       ))}
     </div>

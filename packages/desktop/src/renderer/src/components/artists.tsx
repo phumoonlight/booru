@@ -3,7 +3,7 @@ import type { Artist, ArtistImage } from '../../../shared/api'
 import { BUTTON, BUTTON_SUBMIT_ON_SURFACE, buttonToggle } from './buttons'
 import { ArtistCard } from './artist-card'
 import { ArtistImageViewer } from './artist-images'
-import { ArtistKindSwitch, ArtistListSwitch } from './artist-kind'
+import { ArtistKindSwitch, ArtistListSwitch, type ArtistList } from './artist-kind'
 import { FIELD, Panel } from './panel'
 
 /**
@@ -24,6 +24,9 @@ import { FIELD, Panel } from './panel'
  * **And an archive beside the reading list**, split the same two ways: artists no longer
  * posting, kept for the record. Newest archived first; they cannot be marked read, and
  * Unarchive puts them back where their last read says.
+ *
+ * **And the favourites**, a second reading list on a tab of its own: read, ordered and marked
+ * exactly as the first, kept apart so the few never to fall behind on are not buried.
  */
 
 /** The last list read. The view unmounts whenever another is in front of it, and coming
@@ -44,12 +47,19 @@ function rememberKind(isAi: boolean): boolean {
   return isAi
 }
 
-/** Whether the archive is on screen rather than the reading list — kept like the kind. */
-let showingArchive = false
+/** Which tab is on screen — kept like the kind. */
+let showingList: ArtistList = 'reading'
 
-function rememberArchive(archive: boolean): boolean {
-  showingArchive = archive
-  return archive
+function rememberList(list: ArtistList): ArtistList {
+  showingList = list
+  return list
+}
+
+/** The tab an artist is drawn on. The archive wins, so a favourite archived is in the archive
+ *  and comes back to the favourites. */
+function listOf(artist: Artist): ArtistList {
+  if (artist.archived_at !== null) return 'archive'
+  return artist.is_favorite ? 'favorites' : 'reading'
 }
 
 /** The archive's order: most recently archived first, which is the one you are most likely
@@ -95,10 +105,11 @@ export function Artists() {
   // What a new artist is saved as. Follows the list on screen until the form says otherwise,
   // since the list you are looking at is almost always the one you are adding to.
   const [newIsAi, setNewIsAi] = useState(showingAi)
-  const [archive, setArchive] = useState(showingArchive)
+  const [list, setList] = useState(showingList)
+  const archive = list === 'archive'
 
   const typed = search.trim().toLowerCase()
-  const onList = artists.filter((artist) => (artist.archived_at !== null) === archive)
+  const onList = artists.filter((artist) => listOf(artist) === list)
   const ofKind = (archive ? [...onList].sort(byArchivedDate) : onList).filter(
     (artist) => artist.is_ai === isAi
   )
@@ -128,7 +139,9 @@ export function Artists() {
   }, [])
 
   async function create() {
-    const result = await window.api.createArtist(name, newIsAi)
+    // A favourite if made on the favourites tab, for the reason the kind follows the screen.
+    const favorite = list === 'favorites'
+    const result = await window.api.createArtist(name, newIsAi, favorite)
     if (!result.ok) {
       setError(result.error)
       return
@@ -139,7 +152,7 @@ export function Artists() {
     // Onto the list it was saved to, or the editor opened below would be on a list that is
     // not on screen — which also means off the archive, since a new artist is never on it.
     showKind(newIsAi)
-    setArchive(rememberArchive(false))
+    setList(rememberList(favorite ? 'favorites' : 'reading'))
     // Straight into its editor: an artist is named because there are links and examples
     // to put on it. Never read, so it lands at the top, where the editor is on screen.
     setEditing(result.id)
@@ -158,9 +171,9 @@ export function Artists() {
               : `${ofKind.length} artist${ofKind.length === 1 ? '' : 's'}`}
         </span>
         <ArtistListSwitch
-          archive={archive}
+          list={list}
           onChange={(next) => {
-            setArchive(rememberArchive(next))
+            setList(rememberList(next))
             setEditing(null)
           }}
         />
@@ -233,7 +246,9 @@ export function Artists() {
               ? `No artist matches ${search.trim()}.`
               : archive
                 ? `No archived ${isAi ? 'AI ' : ''}artists.`
-                : `No ${isAi ? 'AI ' : ''}artists yet. ➕ New artist adds one.`}
+                : list === 'favorites'
+                  ? `No favorite ${isAi ? 'AI ' : ''}artists. ⭐ Favorite in an editor adds one.`
+                  : `No ${isAi ? 'AI ' : ''}artists yet. ➕ New artist adds one.`}
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
@@ -270,6 +285,18 @@ export function Artists() {
                     remember(
                       rows.map((row) =>
                         row.id === artist.id ? { ...row, archived_at: archivedAt } : row
+                      )
+                    )
+                  )
+                }}
+                // The same shape as archiving: off this tab and onto the other, patched in
+                // place, since both tabs keep the read-date order the rows already have.
+                onFavorited={(next) => {
+                  setEditing(null)
+                  setArtists((rows) =>
+                    remember(
+                      rows.map((row) =>
+                        row.id === artist.id ? { ...row, is_favorite: next } : row
                       )
                     )
                   )

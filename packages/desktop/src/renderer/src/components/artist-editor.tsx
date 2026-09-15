@@ -20,6 +20,7 @@ export function ArtistEditor({
   onChanged,
   onKindChanged,
   onArchive,
+  onFavorite,
   onDeleted,
   onView,
 }: {
@@ -28,6 +29,9 @@ export function ArtistEditor({
   onKindChanged: (isAi: boolean) => void
   /** Absent for an artist already archived — the card's Unarchive is the way back. */
   onArchive?: () => void
+  /** Toggles the favourites. Absent for an archived artist, as Archive is: which tab it
+   *  would return to is not a question to answer from the archive. */
+  onFavorite?: () => void
   onDeleted: () => void
   onView: (image: ArtistImage) => void
 }) {
@@ -230,6 +234,14 @@ export function ArtistEditor({
       {error && <p className="whitespace-pre-line text-xs text-[#ff5d5f]">{error}</p>}
 
       <div className="flex justify-end gap-1">
+        {/* Beside Archive, for the same reason: which tab an artist belongs on is decided
+            every so often, and one press either way loses nothing. */}
+        {onFavorite && (
+          <button type="button" onClick={onFavorite} className={BUTTON_ON_SURFACE}>
+            <span aria-hidden>{artist.is_favorite ? '📋' : '⭐'}</span>{' '}
+            {artist.is_favorite ? 'Back to reading list' : 'Favorite'}
+          </button>
+        )}
         {/* Here rather than on the card: archiving is decided about an artist every so
             often, not a thing to have within reach on every pass down the list. One press,
             since Unarchive puts it straight back. */}

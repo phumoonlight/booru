@@ -61,9 +61,11 @@ const api: PostAppApi = {
   deleteCollectionPost: (id) => ipcRenderer.invoke('collections:delete-post', id),
   collectionThumbnail: (fileName) => ipcRenderer.invoke('collections:thumbnail', fileName),
   listArtists: () => ipcRenderer.invoke('artists:list'),
-  createArtist: (name, isAi) => ipcRenderer.invoke('artists:create', name, isAi),
+  createArtist: (name, isAi, isFavorite) =>
+    ipcRenderer.invoke('artists:create', name, isAi, isFavorite),
   setArtistAi: (id, isAi) => ipcRenderer.invoke('artists:set-ai', id, isAi),
   setArtistArchived: (id, archived) => ipcRenderer.invoke('artists:set-archived', id, archived),
+  setArtistFavorite: (id, isFavorite) => ipcRenderer.invoke('artists:set-favorite', id, isFavorite),
   renameArtist: (id, name) => ipcRenderer.invoke('artists:rename', id, name),
   markArtistRead: (id) => ipcRenderer.invoke('artists:mark-read', id),
   deleteArtist: (id) => ipcRenderer.invoke('artists:delete', id),

@@ -13,6 +13,7 @@ import {
   renameArtistRow,
   setAi,
   setArchived,
+  setFavorite,
   uploadArtistImage,
 } from './artists'
 import { postIdSchema } from './ipc-parse'
@@ -27,13 +28,17 @@ const NO_ARTIST = { ok: false as const, error: 'No such artist' }
 export function registerArtistIpc(): void {
   ipcMain.handle('artists:list', async (): Promise<Artist[]> => readArtists())
 
-  ipcMain.handle('artists:create', async (_event, name: unknown, isAi: unknown) => {
-    const parsed = textSchema.safeParse(name)
-    if (!parsed.success) return { ok: false as const, error: 'Type a name.' }
-    // Absent is a person, which is what the screen opens on; anything present and not a
-    // boolean is a bug in the window rather than a choice.
-    return makeArtist(parsed.data, z.boolean().optional().default(false).parse(isAi))
-  })
+  ipcMain.handle(
+    'artists:create',
+    async (_event, name: unknown, isAi: unknown, isFavorite: unknown) => {
+      const parsed = textSchema.safeParse(name)
+      if (!parsed.success) return { ok: false as const, error: 'Type a name.' }
+      // Absent is a person on the reading list, which is what the screen opens on; anything
+      // present and not a boolean is a bug in the window rather than a choice.
+      const flag = z.boolean().optional().default(false)
+      return makeArtist(parsed.data, flag.parse(isAi), flag.parse(isFavorite))
+    }
+  )
 
   ipcMain.handle('artists:set-ai', async (_event, id: unknown, isAi: unknown) => {
     const parsedId = postIdSchema.safeParse(id)
@@ -57,6 +62,14 @@ export function registerArtistIpc(): void {
     if (!parsedId.success) return NO_ARTIST
     if (!parsedArchived.success) return { ok: false as const, error: 'Archive or not?' }
     return setArchived(parsedId.data, parsedArchived.data)
+  })
+
+  ipcMain.handle('artists:set-favorite', async (_event, id: unknown, isFavorite: unknown) => {
+    const parsedId = postIdSchema.safeParse(id)
+    const parsedFavorite = z.boolean().safeParse(isFavorite)
+    if (!parsedId.success) return NO_ARTIST
+    if (!parsedFavorite.success) return { ok: false as const, error: 'Favorite or not?' }
+    return setFavorite(parsedId.data, parsedFavorite.data)
   })
 
   ipcMain.handle('artists:mark-read', async (_event, id: unknown) => {
