@@ -1,16 +1,25 @@
 import { useEffect, useState } from 'react'
 import { collectionPostHref } from '@common/collections'
-import type { Collection, CollectionPost } from '../../../shared/api'
-import { BUTTON_ON_SURFACE } from './buttons'
+import type { CollectionPost } from '../../../shared/api'
+import { BUTTON_ON_SURFACE, DANGER_ON_SURFACE } from './buttons'
+import { HoldButton } from './hold-button'
 import { FIELD, Panel } from './panel'
 import { thumbnailFor, thumbnails } from './collection-thumbs'
 import { ratioOf } from './ratio-layout'
-import { shelfTitle } from './collection-form'
 
 /** One tile. It asks for its own image: a shelf can be a few hundred rows after enough
  *  scrolling, and fetching them all up front would stall the first screenful behind the
  *  last. */
-export function ImageCard({ post, onOpen }: { post: CollectionPost; onOpen: () => void }) {
+export function ImageCard({
+  post,
+  selected,
+  onOpen,
+}: {
+  post: CollectionPost
+  /** Set only in manage, where a click selects rather than opens. */
+  selected?: boolean
+  onOpen: () => void
+}) {
   const [src, setSrc] = useState(thumbnails.get(post.file_name) ?? '')
 
   useEffect(() => {
@@ -29,8 +38,23 @@ export function ImageCard({ post, onOpen }: { post: CollectionPost; onOpen: () =
       type="button"
       onClick={onOpen}
       title={`Image ${post.id}`}
-      className="group flex w-full flex-col overflow-hidden rounded-lg border border-border bg-surface text-left transition-colors hover:border-accent"
+      aria-pressed={selected}
+      className={`group relative flex w-full flex-col overflow-hidden rounded-lg border bg-surface text-left transition-colors ${
+        selected ? 'border-accent ring-2 ring-accent' : 'border-border hover:border-accent'
+      }`}
     >
+      {selected !== undefined && (
+        <span
+          aria-hidden
+          className={`absolute left-1.5 top-1.5 z-10 grid size-5 place-items-center rounded-full border text-xs ${
+            selected
+              ? 'border-accent bg-accent text-background'
+              : 'border-foreground/60 bg-background/60 text-transparent'
+          }`}
+        >
+          ✓
+        </span>
+      )}
       <div
         className="grid place-items-center overflow-hidden bg-background"
         style={{ aspectRatio: ratioOf(post.width, post.height) }}
@@ -47,8 +71,8 @@ export function ImageCard({ post, onOpen }: { post: CollectionPost; onOpen: () =
 }
 
 /**
- * One image's panel: its shelf, its source, and the way to remove it. Not its rating,
- * which is its shelf's.
+ * One image's panel: its source, and the way to remove it. Not its rating, which is its
+ * shelf's, and not its shelf, which is changed for a selection in 🗂️ Manage.
  *
  * It writes on use and puts the old value back if the write fails — a Save button over one
  * field is a thing to forget to press. Pinned to the top of the scroller, since the grid it
@@ -56,24 +80,19 @@ export function ImageCard({ post, onOpen }: { post: CollectionPost; onOpen: () =
  */
 export function ImagePanel({
   post,
-  collections,
   siteUrl,
   onClose,
   onChanged,
   onDeleted,
-  onMoved,
 }: {
   post: CollectionPost
-  collections: Collection[]
   siteUrl: string
   onClose: () => void
   onChanged: () => void
   onDeleted: () => void
-  onMoved: () => void
 }) {
   const [source, setSource] = useState(post.source_url ?? '')
   const [error, setError] = useState<string | null>(null)
-  const [confirming, setConfirming] = useState(false)
 
   async function write(sourceUrl: string) {
     // Leaving the box without changing it is not an edit.
@@ -108,24 +127,23 @@ export function ImagePanel({
               <span aria-hidden>🌐</span> Open
             </button>
           )}
-          {/* Two presses, because this is the one control here that cannot be taken back —
-              the row goes and both stored objects go with it. */}
-          <button
-            type="button"
-            onClick={() => {
-              if (!confirming) {
-                setConfirming(true)
-                return
-              }
+          {/* Held for two seconds, because this is the one control here that cannot be taken
+              back — the row goes and both stored objects go with it. It was two presses,
+              and a second press lands as easily as the first. */}
+          <HoldButton
+            ms={2000}
+            fill="bg-[#ff5d5f]/30"
+            title="Hold for two seconds to delete"
+            onHold={() => {
               void window.api.deleteCollectionPost(post.id).then((result) => {
                 if (result.ok) onDeleted()
                 else setError(result.error)
               })
             }}
-            className={BUTTON_ON_SURFACE}
+            className={DANGER_ON_SURFACE}
           >
-            <span aria-hidden>🗑️</span> {confirming ? 'Really delete' : 'Delete'}
-          </button>
+            <span aria-hidden>🗑️</span> Hold to delete
+          </HoldButton>
           <button type="button" onClick={onClose} className={BUTTON_ON_SURFACE}>
             <span aria-hidden>✕</span> Close
           </button>
@@ -133,32 +151,6 @@ export function ImagePanel({
       }
     >
       <div className="flex flex-wrap items-center gap-3">
-        {/* Which shelf it is on, as a menu of every shelf. A menu rather than a drag onto a
-            card: the destination is very often a collection that is not on screen, and this
-            panel is already the one place an image is answered questions about. Moving
-            costs no bytes — a collection's images are under one flat prefix, so the shelf is
-            one column of one row (`moveCollectionPost`). */}
-        <label className="flex items-center gap-2 text-xs text-muted">
-          Collection
-          <select
-            value={post.collection_id}
-            onChange={(event) => {
-              const next = Number(event.target.value)
-              if (next === post.collection_id) return
-              void window.api.moveCollectionPost(post.id, next).then((result) => {
-                if (result.ok) onMoved()
-                else setError(result.error)
-              })
-            }}
-            className={FIELD}
-          >
-            {collections.map((collection) => (
-              <option key={collection.id} value={collection.id}>
-                {shelfTitle(collection)}
-              </option>
-            ))}
-          </select>
-        </label>
         <label className="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted">
           Source
           <input

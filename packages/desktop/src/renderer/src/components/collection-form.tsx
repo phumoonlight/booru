@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { RATING_LABEL, RATINGS } from '@common/search'
+import { RATING_LABEL } from '@common/search'
 import type { CollectionInput } from '../../../shared/api'
-import { BUTTON_SUBMIT_ON_SURFACE } from './buttons'
+import { BUTTON_SUBMIT_ON_SURFACE, pillToggle } from './buttons'
 import { FIELD } from './panel'
 
 /**
@@ -57,32 +57,25 @@ export function CollectionForm({
           placeholder="Ukiyo-e studies"
           className={`${FIELD} min-w-40 flex-1`}
         />
-        <select
-          value={input.rating}
-          onChange={(event) =>
-            setInput({ ...input, rating: event.target.value as CollectionInput['rating'] })
-          }
-          aria-label="Rating"
-          className={FIELD}
+        {/* Two flags about the shelf, each a pill that lights up (`pillToggle`). The rating
+            was a menu of two, which is a toggle that has to be opened to be read — and a
+            third tier would bring the menu back, since the column is free text. */}
+        <button
+          type="button"
+          onClick={() => setInput({ ...input, rating: input.rating === 'r' ? 'g' : 'r' })}
+          aria-pressed={input.rating === 'r'}
+          className={pillToggle(input.rating === 'r', 'red')}
         >
-          {RATINGS.map((value) => (
-            <option key={value} value={value}>
-              {RATING_LABEL[value]}
-            </option>
-          ))}
-        </select>
-        {/* A checkbox rather than a pair of segments: it is one fact about the shelf, off
-            for most of them, and the website is what does something with it — the AI board
-            this replaced is a filter there now. */}
-        <label className="flex min-h-9 items-center gap-1.5 text-sm text-muted">
-          <input
-            type="checkbox"
-            checked={input.is_ai}
-            onChange={(event) => setInput({ ...input, is_ai: event.target.checked })}
-            className="accent-accent"
-          />
+          <span aria-hidden>🔞</span> {RATING_LABEL.r}
+        </button>
+        <button
+          type="button"
+          onClick={() => setInput({ ...input, is_ai: !input.is_ai })}
+          aria-pressed={input.is_ai}
+          className={pillToggle(input.is_ai, 'blue')}
+        >
           <span aria-hidden>🤖</span> AI
-        </label>
+        </button>
         <button type="submit" disabled={busy} className={BUTTON_SUBMIT_ON_SURFACE}>
           <span aria-hidden>✅</span> {submitLabel}
         </button>

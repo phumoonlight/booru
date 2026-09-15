@@ -6,6 +6,7 @@ import {
   listCollectionPosts,
   listLatestCollectionPosts,
   type CollectionPost,
+  type LatestCollectionPost,
 } from '@/lib/data/collections'
 import { LATEST_POSTS_LIMIT } from '@/lib/latest-posts'
 
@@ -41,7 +42,7 @@ export async function loadMoreLatestPosts({
 }: {
   after: number
   loaded: number
-}): Promise<{ posts: CollectionPost[]; hasMore: boolean }> {
+}): Promise<{ posts: LatestCollectionPost[]; hasMore: boolean }> {
   if (!Number.isInteger(after) || after <= 0) return { posts: [], hasMore: false }
   if (!Number.isInteger(loaded) || loaded < 0) return { posts: [], hasMore: false }
 

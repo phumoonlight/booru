@@ -158,7 +158,7 @@ export async function createCollectionPost(
 
 /**
  * Rewrites what there is to change about a collection post, which is its source. Not its
- * rating — that is its shelf's — and not its collection, which is `moveCollectionPost`
+ * rating — that is its shelf's — and not its collection, which is `moveCollectionPosts`
  * below, because it is a change to two shelves rather than to one image.
  *
  * The shelf is **not** touched. The list is ordered by what has happened to the shelf, and
@@ -197,44 +197,49 @@ export async function deleteCollectionPostRow(
 }
 
 /**
- * Moves an image to another shelf.
+ * Moves a set of images onto one shelf, answering with how many actually moved.
  *
  * **Nothing is copied and no object moves.** A collection's images are filed under one flat
  * prefix — `collections/posts/<md5>`, not `collections/<id>/posts/<md5>` — precisely so
- * that this is one column of one row: the name is the md5 and the md5 is the image, so
- * where it is shelved was never part of where its bytes live. That is the payoff of the
- * decision in `@common/collections`, and it is the whole of this function.
+ * that this is one column per row: the name is the md5 and the md5 is the image, so where
+ * it is shelved was never part of where its bytes live.
  *
- * **Both shelves are touched**, in the same transaction as the move: one lost an image and
- * one gained one, and the list is ordered by exactly that. Touching only the destination
- * would leave the shelf you emptied claiming nothing had happened to it.
+ * A set rather than one image, because it is driven by the desktop's manage selection, and
+ * forty images as forty transactions would touch the same two shelves forty times each.
+ * One statement moves them all, `returning` the shelf each one left; an image already on
+ * the destination is skipped rather than written, which would bump a shelf to the top of
+ * the list for no change.
+ *
+ * **Every shelf involved is touched**, in the same transaction: each one an image left and
+ * the one they arrived on. Touching only the destination would leave the shelves you took
+ * them from claiming nothing had happened to them.
  */
-export async function moveCollectionPost(
+export async function moveCollectionPosts(
   db: DbPool,
-  id: number,
+  ids: number[],
   collectionId: number
-): Promise<CollectionOutcome> {
+): Promise<CollectionOutcome<{ moved: number }>> {
+  if (ids.length === 0) return { ok: true, moved: 0 }
+
   return db.begin(async (tx) => {
-    // The shelf it is leaving has to be read before the update, because afterwards nothing
-    // remembers it — the same reason `deletePostRow` reads its links first. A row that is
-    // already on the destination is left alone rather than written and reported as moved,
-    // which would bump a collection to the top of the list for no change at all.
-    const [was] = await tx<{ collection_id: number }[]>`
-      select collection_id from ${tx(posts)} where id = ${id}`
-    if (!was) return { ok: false as const, error: `Image ${id} not found.` }
-    if (was.collection_id === collectionId) {
-      return { ok: false as const, error: 'That image is already in that collection.' }
+    // The shelf each row is leaving comes back from the update itself, through a self-join
+    // on the row as it was — afterwards nothing else remembers it. A destination that is not
+    // a collection is refused by the foreign key; the id arrives from a menu the window drew
+    // out of the shelf list.
+    const rows = await tx<{ was: number }[]>`
+      update ${tx(posts)} p
+         set collection_id = ${collectionId}
+        from ${tx(posts)} old
+       where old.id = p.id
+         and p.id = any(${ids}::int[])
+         and p.collection_id <> ${collectionId}
+      returning old.collection_id as was`
+    if (rows.length === 0) return { ok: true as const, moved: 0 }
+
+    for (const shelf of new Set([...rows.map((row) => row.was), collectionId])) {
+      await touchCollection(tx, shelf)
     }
-
-    const moved = await tx<{ id: number }[]>`
-      update ${tx(posts)} set collection_id = ${collectionId} where id = ${id} returning id`
-    // A destination that is not a collection is refused by the foreign key, which is the
-    // right place for it: the id arrives from a menu the window drew out of the shelf list.
-    if (moved.length === 0) return { ok: false as const, error: `Image ${id} not found.` }
-
-    await touchCollection(tx, was.collection_id)
-    await touchCollection(tx, collectionId)
-    return { ok: true as const }
+    return { ok: true as const, moved: rows.length }
   })
 }
 

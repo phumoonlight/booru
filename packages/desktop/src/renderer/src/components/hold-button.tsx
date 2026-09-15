@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 
-/** How long a press has to last. Long enough that a click on the way past cannot reach it,
- *  short enough that meaning it does not feel like waiting. */
+/** How long a press has to last by default. Long enough that a click on the way past cannot
+ *  reach it, short enough that meaning it does not feel like waiting. */
 const HOLD_MS = 700
 
 /**
  * A button that acts only when held.
  *
  * For a control with no undo that sits where a pointer passes often — Mark as read, which
- * moves an artist from wherever you are looking to the bottom of the list. A confirmation
+ * moves an artist from wherever you are looking to the bottom of the list, and deleting a
+ * collection image, which takes two stored objects with it (held for two seconds). A confirmation
  * dialog would be a second click on every single use; a hold costs a moment on every use
  * and a stray click nothing. The fill sweeping across the button is the progress, so
  * letting go early visibly takes it back.
@@ -21,12 +22,18 @@ export function HoldButton({
   disabled = false,
   className,
   title,
+  ms = HOLD_MS,
+  fill = 'bg-accent/25',
   children,
 }: {
   onHold: () => void
   disabled?: boolean
   className: string
   title?: string
+  /** How long the hold is. Longer for a control that destroys something. */
+  ms?: number
+  /** The sweep's colour class, so a destructive hold can fill in the colour it is drawn in. */
+  fill?: string
   children: React.ReactNode
 }) {
   const [progress, setProgress] = useState(0)
@@ -43,7 +50,7 @@ export function HoldButton({
     if (disabled || frame.current !== null) return
     started.current = performance.now()
     const tick = (now: number) => {
-      const done = Math.min(1, (now - started.current) / HOLD_MS)
+      const done = Math.min(1, (now - started.current) / ms)
       setProgress(done)
       if (done < 1) {
         frame.current = requestAnimationFrame(tick)
@@ -89,7 +96,7 @@ export function HoldButton({
     >
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 bg-accent/25"
+        className={`pointer-events-none absolute inset-y-0 left-0 ${fill}`}
         style={{ width: `${progress * 100}%` }}
       />
       <span className="relative flex items-center gap-1.5">{children}</span>

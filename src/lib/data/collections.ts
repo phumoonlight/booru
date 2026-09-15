@@ -23,7 +23,12 @@ import * as read from '@common/data/collections'
  * manages the whole shelf and passes none.
  */
 
-export type { Collection, CollectionPost, CollectionPostPage } from '@common/data/collections'
+export type {
+  Collection,
+  CollectionPost,
+  CollectionPostPage,
+  LatestCollectionPost,
+} from '@common/data/collections'
 export type { CollectionListFilter } from '@common/collections'
 export { COLLECTION_PAGE_SIZE } from '@common/data/collections'
 

@@ -132,7 +132,7 @@ the primary key backwards.
   per-image column as it stood, raising no shelf first.
 - **Storage paths are derived, never stored**: `collections/posts/{file_name}.{file_ext}`
   and `collections/thumbs/{file_name}.avif` (`@common/storage`). Flat rather than per shelf,
-  so moving an image (`moveCollectionPost`) is one column of one row and no object moves.
+  so moving images (`moveCollectionPosts`) is one column per row and no object moves.
 - The cover on a shelf card is **derived** — the newest image on it — not a column. A
   `cover_post_id` would be a circular foreign key, a null to handle on every delete, and a
   picker nobody asked for, to answer a question the newest image already answers.

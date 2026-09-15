@@ -9,6 +9,7 @@ import { itemStyle } from './ratio-layout'
 import { CollectionForm, shelfTitle } from './collection-form'
 import { ImageCard, ImagePanel } from './collection-image'
 import { StagingBox, useStaging } from './collection-staging'
+import { ManageBar } from './collection-manage'
 
 /** A screenful, and what Load more adds. The window is wider than a phone and these are
  *  small tiles, so it is larger than the website's. */
@@ -48,6 +49,14 @@ export function CollectionView({
   const [nonce, setNonce] = useState(0)
 
   const [renaming, setRenaming] = useState(false)
+  // The upload box is shut until asked for: most visits to a shelf are to look at it, and a
+  // drop zone the width of the screen is the first thing on it otherwise.
+  const [uploading, setUploading] = useState(false)
+  // Manage is a mode of the grid: a click on a tile selects it rather than opening its
+  // panel. The selection is emptied on the way in, on the way out and after a move, so it
+  // never holds an id the reload took off this shelf.
+  const [managing, setManaging] = useState(false)
+  const [selected, setSelected] = useState<number[]>([])
   const [notice, setNotice] = useState<string | null>(null)
 
   const [dragging, setDragging] = useState(false)
@@ -117,6 +126,7 @@ export function CollectionView({
       onDrop={(event) => {
         event.preventDefault()
         setDragging(false)
+        setUploading(true)
         // Everything is read out of dataTransfer *now*: it is emptied the moment this
         // handler returns, so nothing here may be deferred behind an await.
         const paths = Array.from(event.dataTransfer.files)
@@ -152,6 +162,26 @@ export function CollectionView({
           {loading ? 'reading…' : `${posts.length} image${posts.length === 1 ? '' : 's'}`}
         </span>
         <div className="ml-auto flex items-center">
+          <button
+            type="button"
+            onClick={() => {
+              setManaging((was) => !was)
+              setSelected([])
+              setEditing(null)
+            }}
+            aria-pressed={managing}
+            className={buttonToggle(managing)}
+          >
+            <span aria-hidden>🗂️</span> Manage
+          </button>
+          <button
+            type="button"
+            onClick={() => setUploading((was) => !was)}
+            aria-pressed={uploading}
+            className={buttonToggle(uploading)}
+          >
+            <span aria-hidden>📤</span> Upload
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -216,7 +246,12 @@ export function CollectionView({
         </p>
       )}
 
-      <StagingBox staging={staging} name={name} dragging={dragging} />
+      {/* Open while asked for, and forced open by anything the box is holding or doing — a
+          drag over the screen still lands here, and closing it must not hide a staged batch
+          or an upload in progress. */}
+      {(uploading || dragging || staging.staged.length > 0 || staging.working !== null) && (
+        <StagingBox staging={staging} name={name} dragging={dragging} />
+      )}
 
       {editingPost && (
         <ImagePanel
@@ -226,7 +261,6 @@ export function CollectionView({
           // heading naming the second, and the next write would have saved them onto it.
           key={editingPost.id}
           post={editingPost}
-          collections={collections}
           siteUrl={siteUrl}
           onClose={() => setEditing(null)}
           onChanged={reload}
@@ -234,10 +268,20 @@ export function CollectionView({
             setEditing(null)
             reload()
           }}
-          // A move is a delete as far as this shelf is concerned — the image is on another
-          // one now, so there is nothing here left to have open.
-          onMoved={() => {
-            setEditing(null)
+        />
+      )}
+
+      {managing && (
+        <ManageBar
+          collectionId={collectionId}
+          collections={collections}
+          selected={selected}
+          loaded={posts.length}
+          onSelectAll={() => setSelected(posts.map((post) => post.id))}
+          onClear={() => setSelected([])}
+          onMoved={(moved) => {
+            setSelected([])
+            setNotice(moved === 0 ? 'Those images were already there.' : null)
             reload()
           }}
         />
@@ -254,7 +298,19 @@ export function CollectionView({
           <ul className="flex flex-wrap justify-center gap-2 [--row-h:9rem] sm:[--row-h:11rem] lg:[--row-h:13rem]">
             {posts.map((post) => (
               <li key={post.id} className="shrink-0" style={itemStyle(post.width, post.height)}>
-                <ImageCard post={post} onOpen={() => setEditing(post.id)} />
+                <ImageCard
+                  post={post}
+                  selected={managing ? selected.includes(post.id) : undefined}
+                  onOpen={() =>
+                    managing
+                      ? setSelected((was) =>
+                          was.includes(post.id)
+                            ? was.filter((id) => id !== post.id)
+                            : [...was, post.id]
+                        )
+                      : setEditing(post.id)
+                  }
+                />
               </li>
             ))}
           </ul>
@@ -281,7 +337,3 @@ export function CollectionView({
     </div>
   )
 }
-
-/** One tile. It asks for its own image, for the reason Browse's card does: a shelf can be
- *  a few hundred rows after enough scrolling, and fetching them all up front would stall
- *  the first screenful behind the last. */

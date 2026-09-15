@@ -74,7 +74,7 @@ takes its number with it rather than shifting the rest.
 4. **Nothing in `packages/common` imports `next/*`, `server-only` or React**, reads the
    environment, or hardcodes a limit. Electron's main process compiles these files.
 5. **A write that opens a transaction takes the pool, not a `Db`** — `createCollectionPost`,
-   `deleteCollectionPostRow`, `moveCollectionPost` and `deleteArtistRows`. Everything else
+   `deleteCollectionPostRow`, `moveCollectionPosts` and `deleteArtistRows`. Everything else
    takes `Db` (postgres.js's `ISql`) so it can also be called *inside* one, which is how
    `touchCollection` lands in the same transaction as the change it records.
 6. **No write path coins a tag.** `resolveTagIds` (`@common/data/shared`) reads the names
@@ -278,15 +278,16 @@ of image on the board.
   of files and one source**: there is nothing else per image to type, and the source is
   what images arriving together usually share — they are the four in one post. The source
   box survives the upload rather than being cleared with the staged files, since the next
-  drop is very often the next post by the same artist. An image's own panel is its source,
-  its shelf and Delete.
-- **An image can be moved to another shelf, and no bytes move.** The flat
-  `collections/posts/<md5>` prefix is what buys that: where an image is shelved was never
-  part of where its bytes live, so a move is one column of one row. It touches **both**
-  shelves' `updated_at` — one lost an image and one gained one — and it is its own channel
-  rather than a field on the save, because it is a change to two collections rather than to
-  one image. The control is a menu of every shelf on the image's own panel, not a drag: the
-  destination is usually a collection that is not on screen.
+  drop is very often the next post by the same artist. An image's own panel is its source
+  and a held Delete.
+- **Images are moved to another shelf as a selection, and no bytes move.** 🗂️ Manage turns
+  the grid into a picker — a click ticks a tile instead of opening its panel — and a bar
+  offers Select all, Select none and a menu of every *other* shelf with ➡️ Change
+  collection (`collection-manage.tsx`). It was a menu on each image's panel, which made
+  sorting forty images forty trips. The flat `collections/posts/<md5>` prefix is what makes
+  a move one column per row (`moveCollectionPosts`, one statement for the whole selection);
+  every shelf an image left and the one they arrived on have `updated_at` touched in the same
+  transaction, and an image already on the destination is skipped rather than written.
 
 ## Artists
 

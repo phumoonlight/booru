@@ -1,6 +1,6 @@
 {
   "name": "desktop",
-  "version": "7.0.0",
+  "version": "7.1.0",
   "private": true,
   "description": "Pubooru desktop app — the shelves, artists and tag vocabulary, run locally so image compression uses a real CPU",
   "main": "./out/main/index.js",

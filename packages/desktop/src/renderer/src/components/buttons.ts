@@ -53,6 +53,13 @@ export const BUTTON_SM = `${SHAPE} ${QUIET} min-h-8 px-2 text-xs hover:bg-surfac
 export const BUTTON_ON_SURFACE = `${SHAPE} ${QUIET} min-h-8 px-2 text-xs hover:bg-background`
 
 /**
+ * A delete inside a panel, in red. It used to be `BUTTON_ON_SURFACE`, muted like Close
+ * beside it, so the one control that cannot be taken back read as quietly as the one that
+ * closes the panel. Drawn on a `HoldButton`, whose sweep fills it in the same red.
+ */
+export const DANGER_ON_SURFACE = `${SHAPE} min-h-8 px-2 text-xs text-[#ff5d5f] hover:bg-background hover:text-[#ff8a8b]`
+
+/**
  * A button that opens something which stays open — New tag, Edit. Accent while it is
  * showing, which is the whole of what an outline used to say.
  *
@@ -91,4 +98,23 @@ export const SEGMENTS = 'flex items-center gap-0.5 rounded-lg border border-bord
 export const segment = (active: boolean): string =>
   `flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs transition-colors ${
     active ? 'bg-accent font-semibold text-background' : 'text-muted hover:text-foreground'
+  }`
+
+/**
+ * A fact about a shelf that is on or off — 🔞 R-18, 🤖 AI — as a pill that lights up.
+ *
+ * Not `buttonToggle`, whose "on" is one word turning accent: fine for a panel that is open,
+ * too quiet for a flag that changes who sees a whole collection. Not `segment` either, since
+ * there is no second position worth naming. Off is an outlined pill in muted text; on fills
+ * it with the flag's own colour, the same red and blue the website's badges use, so a shelf
+ * reads the same in both windows. No weight change when lit: bold text is wider, and the
+ * pill grew under the pointer on every press. Carries `aria-pressed`.
+ */
+export const pillToggle = (active: boolean, lit: 'red' | 'blue'): string =>
+  `flex min-h-8 shrink-0 items-center gap-1 rounded-full border px-3 text-sm transition-colors ${
+    active
+      ? lit === 'red'
+        ? 'border-[#ff5d5f] bg-[#ff5d5f] text-white'
+        : 'border-[#3b82f6] bg-[#3b82f6] text-white'
+      : 'border-border text-muted hover:border-muted hover:text-foreground'
   }`

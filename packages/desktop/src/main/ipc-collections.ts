@@ -7,7 +7,7 @@ import {
   readCollections,
   editCollection,
   removeCollection,
-  moveCollectionImage,
+  moveCollectionImages,
   removeCollectionPost,
   saveCollectionPost,
   uploadToCollection,
@@ -98,12 +98,14 @@ export function registerCollectionIpc(): void {
     return saveCollectionPost(parsed.data.id, parsed.data.sourceUrl)
   })
 
-  ipcMain.handle('collections:move-post', async (_event, id: unknown, collection: unknown) => {
-    const parsedId = postIdSchema.safeParse(id)
+  // A selection, bounded here because it arrives from the renderer: every image loaded on a
+  // shelf is a few chunks, and a thousand is well past any screen of them.
+  ipcMain.handle('collections:move-posts', async (_event, ids: unknown, collection: unknown) => {
+    const parsedIds = z.array(postIdSchema).min(1).max(1000).safeParse(ids)
     const parsedCollection = postIdSchema.safeParse(collection)
-    if (!parsedId.success) return { ok: false as const, error: 'No such image' }
+    if (!parsedIds.success) return { ok: false as const, error: 'Nothing selected' }
     if (!parsedCollection.success) return { ok: false as const, error: 'No such collection' }
-    return moveCollectionImage(parsedId.data, parsedCollection.data)
+    return moveCollectionImages([...new Set(parsedIds.data)], parsedCollection.data)
   })
 
   ipcMain.handle('collections:delete-post', async (_event, id: unknown) => {

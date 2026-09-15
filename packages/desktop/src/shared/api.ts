@@ -243,9 +243,12 @@ export type PostAppApi = {
   }) => Promise<UploadResult>
   /** A collection image's source — the whole of what there is to edit on one image. */
   saveCollectionPost: (request: { id: number; sourceUrl: string }) => Promise<Outcome>
-  /** Onto another shelf. Its own channel rather than a field on `saveCollectionPost`,
-   *  because it is a change to two collections rather than to one image. */
-  moveCollectionPost: (id: number, collectionId: number) => Promise<Outcome>
+  /** The manage selection onto another shelf, answering with how many moved — an image
+   *  already there is skipped. */
+  moveCollectionPosts: (
+    ids: number[],
+    collectionId: number
+  ) => Promise<{ ok: true; moved: number } | { ok: false; error: string }>
   /** Removes the row and both of its stored images. */
   deleteCollectionPost: (id: number) => Promise<Outcome>
   collectionThumbnail: (fileName: string) => Promise<string>

@@ -11,7 +11,7 @@ import {
   createCollection,
   deleteCollection,
   deleteCollectionPostRow,
-  moveCollectionPost,
+  moveCollectionPosts,
   updateCollection,
   updateCollectionPost,
   type CollectionInput,
@@ -146,15 +146,17 @@ export async function saveCollectionPost(id: number, sourceUrl: string): Promise
 }
 
 /**
- * Moves an image to another shelf.
- *
- * No bytes move: a collection's images sit under one flat prefix, so which shelf an image
- * is on is one column of one row — see `moveCollectionPost`, which is the whole of it.
+ * Moves the manage selection onto another shelf. No bytes move: a collection's images sit
+ * under one flat prefix, so which shelf an image is on is one column — see
+ * `moveCollectionPosts`, which is the whole of it.
  */
-export async function moveCollectionImage(id: number, collectionId: number): Promise<Outcome> {
+export async function moveCollectionImages(
+  ids: number[],
+  collectionId: number
+): Promise<{ ok: true; moved: number } | { ok: false; error: string }> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
-  return moveCollectionPost(db, id, collectionId)
+  return moveCollectionPosts(db, ids, collectionId)
 }
 
 /**

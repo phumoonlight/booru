@@ -61,6 +61,13 @@ export type CollectionPostPage = {
   hasMore: boolean
 }
 
+/** An image read outside its shelf, carrying the two facts about that shelf a card in a
+ *  mixed feed has to show: its tier and whether it is AI. Inside a shelf the page already
+ *  says both once. */
+export type LatestCollectionPost = CollectionPost & { rating: Rating; is_ai: boolean }
+
+export type LatestCollectionPostPage = { posts: LatestCollectionPost[]; hasMore: boolean }
+
 const { collections, posts } = COLLECTION_TABLES
 
 /** The website's opening screenful of a shelf, and the default for anything that does not
@@ -211,14 +218,17 @@ export async function listLatestCollectionPosts(
     perPage = COLLECTION_PAGE_SIZE,
     visibleRatings,
   }: { after?: number; perPage?: number; visibleRatings?: readonly Rating[] } = {}
-): Promise<CollectionPostPage> {
+): Promise<LatestCollectionPostPage> {
   const allowed = [...(visibleRatings ?? RATINGS)]
 
   try {
-    const rows = await db<CollectionPost[]>`
-      select ${postColumns(db)}
+    // A join rather than `shelfVisible`, since the shelf's columns are wanted as well as its
+    // permission — the same condition, said once.
+    const rows = await db<LatestCollectionPost[]>`
+      select ${postColumns(db)}, c.rating, c.is_ai
         from ${db(posts)} p
-       where ${shelfVisible(db, allowed)}
+        join ${db(collections)} c on c.id = p.collection_id
+       where c.rating = any(${allowed}::text[])
          and (${after ?? null}::int is null or p.id < ${after ?? null}::int)
        order by p.id desc
        limit ${perPage + 1}`
