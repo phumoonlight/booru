@@ -42,6 +42,7 @@ essay either — answer it, then offer the detail rather than supplying it.
 | `npm run typecheck -w desktop` | the only check the Electron app has; the root `tsc` covers `src/` and `packages/common`, not the desktop |
 | `npm run db:push` / `db:list` | apply pending migrations, after naming them and the board and asking / say what is applied. `scripts/migrate.mjs`, as `booru_owner` |
 | `npm run desktop:dev` / `desktop:package` | window, or installer. Both need the seven env values |
+| `npm run posts:to-collection -- --collection <id> [--board generative] <start> [end]` | turns posts into collection posts: tags dropped for good, objects moved to `collections/`. `scripts/to-collection.mjs`, as `booru_app`; lists what it will do and asks. Never run it for the author |
 | `npm run bench:avif` | sweeps AVIF `effort` through both encoders over `tests/bench/example.jpg` |
 
 `tests/` is not a suite and there is no runner — it is the AVIF bench and its sample
