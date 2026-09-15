@@ -1,7 +1,7 @@
 /**
  * Where an image lives, and what may be done to it.
  *
- * Paths are derived from `posts.file_name` and never stored — that column holds the md5
+ * Paths are derived from `file_name` and never stored — that column holds the md5
  * of the uploaded bytes, but nothing here needs to know it: a path is a name, a prefix
  * and an extension.
  *
@@ -19,38 +19,18 @@
  */
 
 import { ARTIST_IMAGE_PREFIX, ARTIST_THUMB_PREFIX } from '@common/artists'
-import { BOARD, type Board } from '@common/board'
 import { COLLECTION_POST_PREFIX, COLLECTION_THUMB_PREFIX } from '@common/collections'
 
 /**
- * **Two prefixes per board, and the board picks them** (`@common/board`). The gallery
- * keeps the two it has always had — `posts/` and `thumbs/`, so not one stored object
- * moves — and the generated board gets its own folder beside them rather than its own
- * bucket, which is the same trade this file already made once: a bucket is a public
- * hostname, a prefix is free.
- *
- * `posts/<name>.<ext>` is the AVIF when it beat the uploaded bytes and the original
- * byte-for-byte otherwise; `file_ext` says which (see `@common/upload/pipeline`).
- * `thumbs/<name>.avif` is always AVIF and always 384px tall.
- */
-export function postImagePath(fileName: string, fileExt: string, board: Board = 'post'): string {
-  return `${BOARD[board].postPrefix}/${fileName}.${fileExt}`
-}
-
-export function thumbnailPath(fileName: string, board: Board = 'post'): string {
-  return `${BOARD[board].thumbPrefix}/${fileName}.avif`
-}
-
-/**
- * The same two paths for a collection's images — `collections/posts/<name>.<ext>` and
+ * A collection image and its thumbnail — `collections/posts/<name>.<ext>` and
  * `collections/thumbs/<name>.avif`.
  *
- * Their own pair of functions rather than a third `Board`, for the reason
- * `@common/collections` sets out: a collection post has no tags and no listing, so the
- * lookup a board is would have had two null columns in it. What it does share is
- * everything below this line — the name is still the md5 of the uploaded bytes, the
- * thumbnail is still the same 384px AVIF, and the bucket is the same bucket under one more
- * prefix.
+ * `…/posts/<name>.<ext>` is the AVIF when it beat the uploaded bytes and the original
+ * byte-for-byte otherwise; `file_ext` says which (see `@common/upload/pipeline`). The
+ * thumbnail is always AVIF and always 384px tall.
+ *
+ * The boards' pairs — `posts/`, `thumbs/`, `generative/…` — went with their tables (0012);
+ * the objects under them are orphans nothing names.
  */
 export function collectionImagePath(fileName: string, fileExt: string): string {
   return `${COLLECTION_POST_PREFIX}/${fileName}.${fileExt}`

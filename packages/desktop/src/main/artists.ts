@@ -19,7 +19,7 @@ import { DESKTOP_UPLOAD_LIMITS } from './limits'
 import { boardDb } from './db'
 import { boardStore } from './r2'
 import { boardImageUrl } from './config'
-import { cachedThumbnail, forgetThumbnail } from './manage'
+import { cachedThumbnail, forgetThumbnail } from './thumb-cache'
 
 /**
  * The artist list, from the side that holds the keys.

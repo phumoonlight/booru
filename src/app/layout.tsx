@@ -56,7 +56,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       className={`${lexendSans.variable} ${geistMono.variable} dark h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        {/* Navigation lives in the sticky SearchHeader each page renders */}
+        {/* Navigation lives in the sticky SiteHeader each page renders */}
         <main className="flex-1 pb-8">{children}</main>
         {/* Both no-op off Vercel, so a local run and a self-host stay silent */}
         <Analytics />

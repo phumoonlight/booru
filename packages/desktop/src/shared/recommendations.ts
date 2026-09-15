@@ -8,9 +8,9 @@ import { TAG_PATTERN } from '@common/tags'
  * An implication is a fact — `white_bra` *is* a bra, so the tag goes on whether or not
  * anyone looks. A recommendation is a reminder: the broad tag is on the image and the
  * question is which of the narrower ones apply, which only the person looking at the
- * picture can answer. So these are **offered, never applied**: they appear under the tag
- * box as chips to press, nothing is added until one is, and a post uploaded with none of
- * them pressed carries none of them.
+ * picture can answer. So these were **offered, never applied**: chips under the tag box,
+ * nothing added until one was pressed. Nothing offers them any more — the form that did went
+ * with the posts (0012) — and the rules are kept for a later use.
  *
  * That is also why a rating cannot be recommended. A rating is not a chip you press, and
  * an implied rating already exists for the case where it should move on its own — here a
@@ -51,34 +51,4 @@ export function normalizeRecommendations(input: unknown): RecommendationRules {
     if (suggests.length > 0) out[tag] = suggests
   }
   return out
-}
-
-/**
- * What to offer for the tags currently on a post, minus everything already on it.
- *
- * One level deep, unlike implications: `panties → black_panties` and
- * `black_panties → lace_trim` do not combine, because a chain of *maybes* is how a
- * three-tag post ends up under thirty chips nobody reads. What a chip adds is a tag like
- * any other, so pressing it brings its own recommendations with it on the next render —
- * the chain is walked by choosing, one step at a time.
- *
- * `already` is the whole set the post is going to carry, implied tags included: a chip
- * offering something the rules are adding anyway is a press that does nothing.
- */
-export function recommendedTags(
-  names: string[],
-  rules: RecommendationRules,
-  already: string[] = names
-): string[] {
-  const have = new Set(already)
-  const found: string[] = []
-
-  for (const name of names) {
-    for (const suggestion of rules[name] ?? []) {
-      if (have.has(suggestion)) continue
-      have.add(suggestion)
-      found.push(suggestion)
-    }
-  }
-  return found
 }

@@ -20,13 +20,13 @@ export default function NotFound() {
           href="/posts"
           className="flex min-h-11 items-center rounded-lg bg-accent px-4 text-sm text-background"
         >
-          Browse posts
+          Latest images
         </Link>
         <Link
-          href="/tags"
+          href="/collections"
           className="flex min-h-11 items-center rounded-lg border border-border px-4 text-sm"
         >
-          Browse tags
+          Browse collections
         </Link>
       </div>
     </div>

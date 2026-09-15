@@ -36,7 +36,7 @@ const PRIORITIES: { value: EncodePriority; label: string }[] = [
  * **Compression** is the real settings, and they are about this machine rather than the
  * board: how many cores an upload may take and how hard it argues for them.
  *
- * **Links** is where a post opens when you click through to the board. Left alone that is
+ * **Links** is where a shelf opens when you click through to the site. Left alone that is
  * whatever the OS would pick, which is the browser you live in — and a board is not always
  * something you want in that history. The list is what the Start menu would offer.
  *
@@ -141,7 +141,7 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
                 hostname, so there is nothing here to redact. */}
             <Readout label="Database" value={status.databaseHost} />
             <Readout label="Images" value={status.cdnUrl} />
-            <Readout label="Board" value={status.siteUrl} />
+            <Readout label="Site" value={status.siteUrl} />
             <p className="text-xs text-muted">
               The database login and the bucket keys are compiled in with these. They are not shown,
               and nothing writes them to disk.
@@ -207,7 +207,7 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
 
       <SiteSwitch />
 
-      {/* How hard this machine works while the queue runs — the only thing on this screen
+      {/* How hard this machine works while an upload runs — the only thing on this screen
           anyone can change, and the only thing about the computer rather than the board. */}
       <div className="flex flex-col gap-4">
         <div>
@@ -244,7 +244,7 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
           hint={
             'How hard the app argues for those cores. Below normal gives them up the moment ' +
             'something else asks and takes them back when nothing does; normal makes the ' +
-            'queue compete like anything else you are running.'
+            'uploads compete like anything else you are running.'
           }
         />
       </div>
@@ -258,7 +258,7 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
             Links
           </h2>
           <p className="mt-1 text-sm text-muted">
-            Opening a post, a tag or the board itself hands the address to a browser. Pick which
+            Opening a shelf, an image or the site itself hands the address to a browser. Pick which
             one, or leave it to the system.
           </p>
         </div>
@@ -278,9 +278,9 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
             Tag cache
           </h2>
           <p className="mt-1 text-sm text-muted">
-            The board&rsquo;s tag list, kept for a day so typing a tag doesn&rsquo;t ask the server
-            on every keystroke. It refreshes itself when it expires, and it is dropped the moment an
-            upload finishes — a new post is what makes it wrong.
+            The board&rsquo;s tag list, kept for a day so the Tags screen doesn&rsquo;t ask the
+            server every time it opens. It refreshes itself when it expires, and it is dropped
+            whenever a tag is created, renamed or deleted.
           </p>
         </div>
 
@@ -303,7 +303,7 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
             Clear cache
           </button>
           <span className="text-xs text-muted">
-            Nothing is lost — the next tag you type reads the board again.
+            Nothing is lost — the Tags screen reads the board again next time.
           </span>
         </div>
       </div>

@@ -1,161 +1,12 @@
-import { BOARD, type Board } from '@common/board'
-import type { Db, DbPool } from '@common/db'
-import { syncTagPostCounts } from '@common/data/counters'
-import type { Rating } from '@common/search'
+import type { Db } from '@common/db'
 import type { Tag } from '@common/tags'
 
-// The query logic two front ends run: the website's reads and the desktop app's writes.
-// Everything here takes its handle rather than building one, which is the whole point —
-// `packages/desktop` creates posts through this exact code rather than a second copy of
-// it (invariant 3).
+// The tag reads every tag screen and write runs. Everything here takes its handle rather
+// than building one (invariant 3).
 //
-// The post write path. These were `create_post_with_tags` / `update_post_with_tags` in
-// plpgsql, then a sequence of PostgREST requests with a hand-written unwind, and are
-// back inside one transaction now — which is what a database was always going to be
-// better at than a `catch` block. Every step is still a statement you can read; what is
-// no longer needed is the paragraph explaining what happens when step three fails.
-//
-// The counter is the exception and stays outside the transaction on purpose. It is
-// derived data, it recomputes rather than increments (./counters.ts), and it must not be
-// able to fail an upload that has already landed.
-//
-// **The post writes take a board** (`@common/board`), defaulting to the gallery, so every
-// caller written before the second board existed still writes where it always did. What
-// the board decides is three names — the post table, the link table and the tag count
-// column — and nothing else: a generated post is created, retagged and deleted by exactly
-// this code. `tags` itself is never board-dependent, which is the point of the vocabulary
-// being shared: `resolveTagIds` refuses a name the board has no row for whichever half of
-// the site is asking.
-
-export type PostFields = {
-  file_name: string
-  file_ext: string
-  file_size: number
-  width: number
-  height: number
-  rating: Rating
-  /** Empty string means "no source" — it is stored as null. */
-  source_url: string
-  tags: string[]
-}
-
-/**
- * The id of the post holding these bytes, or null. Only the id, because dedup is the
- * only question asked of it — the uploader says "already exists" and links to that post.
- *
- * `fileName` is the md5 of the bytes: it is the name both stored files take, and being
- * derived from the content is what lets it answer this question at all.
- */
-export async function findPostIdByFileName(
-  db: Db,
-  fileName: string,
-  board: Board = 'post'
-): Promise<number | null> {
-  const [row] = await db<{ id: number }[]>`
-    select id from ${db(BOARD[board].posts)} where file_name = ${fileName}`
-  return row?.id ?? null
-}
-
-/**
- * Which of these file names are already posts, as a name → id map. The batch form of
- * `findPostIdByFileName`, for the desktop app's staging step: a folder dropped on the
- * window is checked against the board before anything is uploaded, and asking forty
- * times one at a time is the same answer four hundred milliseconds later.
- *
- * A name that is not a post is simply absent from the map — the caller asked about files
- * it has, not about rows.
- */
-export async function findPostIdsByFileNames(
-  db: Db,
-  fileNames: string[],
-  board: Board = 'post'
-): Promise<Map<string, number>> {
-  if (fileNames.length === 0) return new Map()
-
-  const rows = await db<{ id: number; file_name: string }[]>`
-    select id, file_name from ${db(BOARD[board].posts)} where file_name = any(${fileNames})`
-  return new Map(rows.map((row) => [row.file_name, row.id]))
-}
-
-/**
- * Inserts a post and its tag links, returning the new id.
- *
- * **The unwind is gone.** There was no transaction when these were PostgREST requests,
- * so this function deleted the post it had just inserted if tagging failed, and that
- * delete had to go through `deletePostRow` so the counters came back down with it. A
- * `begin` says the same thing in one word and says it correctly — an unwind is itself a
- * write that can fail, which is the case the old code could not do anything about.
- *
- * A name the board has no tag for is still one of the ways this fails; the difference is
- * that nothing is left behind when it does.
- *
- * It takes the pool rather than a `Db`, because only the pool can open a transaction —
- * the one function in this directory that does.
- */
-export async function createPostWithTags(
-  db: DbPool,
-  fields: PostFields,
-  board: Board = 'post'
-): Promise<number> {
-  const { id, moved } = await db.begin(async (tx) => {
-    const [post] = await tx<{ id: number }[]>`
-      insert into ${tx(BOARD[board].posts)} ${tx({
-        file_name: fields.file_name,
-        file_ext: fields.file_ext,
-        file_size: fields.file_size,
-        width: fields.width,
-        height: fields.height,
-        rating: fields.rating,
-        source_url: fields.source_url || null,
-      })} returning id`
-
-    return { id: post.id, moved: await setPostTags(tx, post.id, fields.tags, board) }
-  })
-
-  await syncTagPostCounts(db, moved, board)
-  return id
-}
-
-/** Rewrites an existing post's rating, source and whole tag set. */
-export async function updatePostWithTags(
-  db: DbPool,
-  postId: number,
-  fields: Pick<PostFields, 'rating' | 'source_url' | 'tags'>,
-  board: Board = 'post'
-): Promise<void> {
-  const moved = await db.begin(async (tx) => {
-    // `returning` is how "no such post" is detected — an update that matches nothing is
-    // not an error, it just changes no row.
-    const updated = await tx<{ id: number }[]>`
-      update ${tx(BOARD[board].posts)}
-         set rating = ${fields.rating}, source_url = ${fields.source_url || null}
-       where id = ${postId}
-      returning id`
-    if (updated.length === 0) throw new Error(`Post ${postId} not found`)
-
-    return setPostTags(tx, postId, fields.tags, board)
-  })
-
-  await syncTagPostCounts(db, moved, board)
-}
-
-/**
- * Deletes a post and recounts what that emptied. The row cascades `post_tags`, so the
- * links have to be read before it goes — afterwards nothing is left to say which tags
- * lost a post. Both in one statement, which is what a `with` is for.
- *
- * Shared by the delete path and nothing else now that the create path unwinds itself.
- */
-export async function deletePostRow(db: Db, postId: number, board: Board = 'post'): Promise<void> {
-  const { posts, postTags } = BOARD[board]
-
-  const rows = await db<{ tag_id: number }[]>`
-    with links as (select tag_id from ${db(postTags)} where post_id = ${postId}),
-         gone as (delete from ${db(posts)} where id = ${postId})
-    select tag_id from links`
-
-  await syncTagPostCounts(db, rows.map((row) => row.tag_id), board)
-}
+// This file was the post write path until the boards were dropped (0012) — create, retag,
+// delete and the counter behind them. What is left is the vocabulary: `tags` outlived the
+// posts it was written for, and these two are how anything reaches it.
 
 /**
  * Ids for `names`, every one of which must already be a tag on the board. A name that
@@ -189,96 +40,8 @@ export async function resolveTagIds(db: Db, names: string[]): Promise<number[]> 
 }
 
 /**
- * Makes `names` the post's exact tag set: drops the links that are no longer wanted,
- * adds the ones that are. Every name has to be a tag already — see `resolveTagIds`.
- *
- * Returns the tags whose link count actually moved — the ones dropped plus the ones
- * added — which is what the caller hands `syncTagPostCounts`. That is why the wanted set
- * is diffed against the links already stored rather than written blind: a retag that
- * only reorders the box moves no counter, and recounting every tag on the post would be
- * work with no answer to show for it.
- */
-async function setPostTags(
-  db: Db,
-  postId: number,
-  names: string[],
-  board: Board = 'post'
-): Promise<number[]> {
-  const wanted = await resolveTagIds(db, names)
-  const { postTags } = BOARD[board]
-
-  // Each half `returning` what it actually touched, so the moved set comes back from the
-  // writes themselves rather than from a read taken beforehand and trusted to still be
-  // true. The diff that used to be computed in TypeScript — two sets, two array filters
-  // — is what `<> all` and `on conflict do nothing` say here.
-  //
-  // The casts are not decoration: `wanted` is empty whenever a post is being stripped of
-  // every tag, and postgres.js cannot tell the server what an empty array holds without
-  // being told. Untyped, `all('{}')` is an error rather than the "matches nothing" it
-  // reads as.
-  const removed = await db<{ tag_id: number }[]>`
-    delete from ${db(postTags)}
-     where post_id = ${postId} and tag_id <> all(${wanted}::int[])
-    returning tag_id`
-
-  const added = await db<{ tag_id: number }[]>`
-    insert into ${db(postTags)} (post_id, tag_id)
-    select ${postId}, unnest(${wanted}::int[])
-        on conflict do nothing
-    returning tag_id`
-
-  return [...removed.map((row) => row.tag_id), ...added.map((row) => row.tag_id)]
-}
-
-/**
- * Tags whose name starts with `query`, most used first — backs the tag field's
- * autocomplete. A prefix match, the same shape the search bar's suggestions have: a
- * substring match put whatever was popular ahead of the tag being typed — `hair` offered
- * `black_hair` before `hair` itself — and a tag is reached by its own opening far more
- * often than by a word buried in it.
- *
- * `_` is a LIKE wildcard and nearly every multi-word tag carries one, so it's escaped:
- * otherwise `black_h` would also match `blackXh`.
- *
- * `like`, not `ilike`, and that is the whole point of `tags_name_prefix_idx`. No btree
- * index can serve `ILIKE` — not under `text_pattern_ops`, not under any opclass — so
- * with `ilike` here the index would be maintained on every tag write and used by
- * nothing, and every keystroke that reached the board would be a sequential scan of
- * `tags`. The two return the same rows regardless: `tags.name` is checked against
- * `^[a-z0-9_().-]+$`, so it can only be lowercase, and the needle is lowercased below.
- */
-export async function searchTags(
-  db: Db,
-  query: string,
-  limit = 8,
-  board: Board = 'post'
-): Promise<Tag[]> {
-  const needle = query.trim().toLowerCase().replace(/[\\%_]/g, '\\$&')
-  if (!needle) return []
-
-  // The board's own count, aliased back to `post_count`, so a `Tag` is one shape wherever
-  // it is drawn — and `order by` names the column rather than the alias, because ordering
-  // a suggestion list by the other board's popularity is the bug this parameter exists to
-  // stop. `tags_post_count_idx` serves the gallery's ordering only; the other board's is a
-  // sort over the rows the prefix matched, which is a handful.
-  const count = BOARD[board].tagCount
-
-  return await db<Tag[]>`
-    select id, name, category, mark, ${db(count)} as post_count
-      from tags
-     where name like ${`${needle}%`}
-     order by ${db(count)} desc, name
-     limit ${limit}`
-}
-
-/**
- * Every tag, most used first — the index behind the web's /tags page and the desktop
- * app's Tags screen. It lives here rather than in `tags.ts` for the same reason the
- * write path does: the Electron app has no request-scoped handle to build.
- *
- * The cap is the read's, not the page's. Ordering by `post_count` is what decides which
- * tags a capped read lets through; the screens then sort the ones they got by name,
- * because you arrive at an index holding a name, not a size.
+ * Every tag, A–Z — the index behind the desktop app's Tags screen. The cap is the read's,
+ * not the page's.
  *
  * The section comes back as the **id** alone. Its name travelled beside it for as long as
  * anything above this file worked in section names — a left join, and PostgREST's one
@@ -287,20 +50,15 @@ export async function searchTags(
  * the name off a tag any more: the form and the sections screen both hold the whole list of
  * rows in a store and match on the id, which is what the id was for.
  */
-export async function listTags(db: Db, limit = 200, board: Board = 'post'): Promise<Tag[]> {
+export async function listTags(db: Db, limit = 200): Promise<Tag[]> {
   // Thrown rather than answered with an empty list — the caller does not catch this, and
   // that is deliberate. A read that fails and a board with no tags are not the same
   // thing, and the screens cannot tell them apart: "no tags yet" is what a broken query
   // looked like for as long as it took to notice. Every other read in this file is a page
   // that degrades; this one is the vocabulary.
-  // The count is the board's, aliased to `post_count` as in `searchTags` — the names,
-  // categories, marks and sections are one list on either board, and the number beside
-  // them is the one thing that is not.
-  const count = BOARD[board].tagCount
-
   return await db<Tag[]>`
-    select id, name, category, mark, ${db(count)} as post_count, form_section_id
+    select id, name, category, mark, form_section_id
       from tags
-     order by ${db(count)} desc, name
+     order by name
      limit ${limit}`
 }

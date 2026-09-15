@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react'
-import { RATING_LABEL, RATINGS, type Rating } from '@common/search'
 import type { StageOutcome } from '../../../shared/api'
 import { BUTTON_ON_SURFACE, BUTTON_SUBMIT_ON_SURFACE } from './buttons'
 import { FIELD } from './panel'
@@ -12,7 +11,7 @@ type Landed = { name: string; ok: boolean; message: string }
 
 /**
  * Everything about putting images on a shelf: what has been dropped, what was refused,
- * what the batch's rating and source are, and the upload itself.
+ * what the batch's source is, and the upload itself.
  *
  * A hook and a box rather than one component, because the drop target is the whole screen
  * — the files arrive at the view's own `onDrop` and have to reach the batch that is being
@@ -23,10 +22,8 @@ export function useStaging(collectionId: number, onUploaded: () => void) {
   const [staged, setStaged] = useState<Staged[]>([])
   const [rejected, setRejected] = useState<string[]>([])
   const [landed, setLanded] = useState<Landed[]>([])
-  const [rating, setRating] = useState<Rating>('g')
-  // One source for the batch, like the rating and for the same reason: the images that
-  // arrive together are usually the four in one post, so the address is the same for all of
-  // them and typing it four times is typing it three times too often. It survives the
+  // One source for the batch: the images that arrive together are usually the four in one
+  // post, so the address is the same for all of them and typing it four times is typing it three times too often. It survives the
   // upload rather than being cleared with the staged files — the next drop is very often
   // the next post by the same artist, and a box you have to re-empty is cheaper than one
   // you have to re-fill. Correcting one image's source afterwards is its own panel.
@@ -100,7 +97,6 @@ export function useStaging(collectionId: number, onUploaded: () => void) {
       const result = await window.api.uploadToCollection({
         collectionId,
         path: file.path,
-        rating,
         sourceUrl: source.trim(),
       })
       results.push(
@@ -121,8 +117,6 @@ export function useStaging(collectionId: number, onUploaded: () => void) {
     setStaged,
     rejected,
     landed,
-    rating,
-    setRating,
     source,
     setSource,
     working,
@@ -136,9 +130,8 @@ export function useStaging(collectionId: number, onUploaded: () => void) {
 type Staging = ReturnType<typeof useStaging>
 
 /**
- * The drop zone and the batch under it. One rating for the batch, because a rating is the
- * only field a collection image has and correcting one afterwards is a click on its own
- * panel — which is what keeps this from being the upload queue again.
+ * The drop zone and the batch under it: files and one source. An image's rating is its
+ * shelf's, so there is nothing else to say about a batch.
  */
 export function StagingBox({
   staging,
@@ -151,8 +144,7 @@ export function StagingBox({
   name: string
   dragging: boolean
 }) {
-  const { staged, setStaged, rejected, landed, rating, setRating, source, setSource, working } =
-    staging
+  const { staged, setStaged, rejected, landed, source, setSource, working } = staging
 
   return (
     <div
@@ -170,26 +162,12 @@ export function StagingBox({
           <span aria-hidden>📥</span> Add images
         </button>
         <span className="text-xs text-muted">or drop them here</span>
-        <label className="ml-auto flex items-center gap-2 text-xs text-muted">
-          Rating
-          <select
-            value={rating}
-            onChange={(event) => setRating(event.target.value as Rating)}
-            className={`${FIELD} bg-background`}
-          >
-            {RATINGS.map((value) => (
-              <option key={value} value={value}>
-                {RATING_LABEL[value]}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
 
-      {/* The batch's source, on its own line rather than beside the rating: a rating is
-          two words and this is a URL, so sharing a row would leave it a stub you cannot
-          read what you pasted into. The label says every, because that is the one thing
-          somebody adding a second set of images from a different post has to notice. */}
+      {/* The batch's source, on its own line: this is a URL, and sharing a row would leave
+          it a stub you cannot read what you pasted into. The placeholder says every, because
+          that is the one thing somebody adding a second set of images from a different post
+          has to notice. */}
       <label className="flex items-center gap-2 text-xs text-muted">
         Source
         <input

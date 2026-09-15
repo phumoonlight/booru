@@ -15,10 +15,10 @@ that.
 
 Both read `DATABASE_URL_OWNER` from `.env.local`.
 
-There is no `db:reset`. It dropped `public` and re-applied everything, which is every post
-row and the whole tag vocabulary behind one word on the command line — and the images in
+There is no `db:reset`. It dropped `public` and re-applied everything, which is every shelf
+and image row and the whole tag vocabulary behind one word on the command line — and the images in
 the bucket would outlive it as orphans nothing could name. It earned its place while the
-schema was still moving under an empty board; it does not against a board with posts on it.
+schema was still moving under an empty board; it does not against a board with images on it.
 Rebuilding from nothing means typing the drop out in a console, where the statement is on
 screen and the connection says which database you are about to do it to.
 
@@ -51,7 +51,7 @@ branch for testing: roles made after the branch point exist on one side of it.
 |---|---|---|
 | `neondb_owner` | the environment file, the migration runner only | everything, DDL included |
 | `booru_app` | compiled into the desktop bundle | read and write every row; **no** create, alter or drop |
-| `booru_web` | Vercel | read every row; `update (view_count) on posts`, and nothing else |
+| `booru_web` | Vercel | read the shelves, the tag tables and `site_settings`; `update (view_count) on collection_posts`, and nothing else — no grant at all on the artist tables |
 
 The reasoning is in `migrations/0001_baseline.sql`. The short version: a Postgres login
 extracted from a desktop bundle is an account rather than a revocable key, so the thing
@@ -63,7 +63,9 @@ A new numbered file — `0002_whatever.sql` — never an edit to one already app
 anywhere real. Each runs inside a transaction and is recorded in `_migrations`;
 a file that fails rolls back whole and nothing after it runs.
 
-There are no SQL functions and no triggers, deliberately. Search, the post writes, the
-view counter and the counters are all TypeScript in `@common/data/*`: a plpgsql body
+There are no SQL functions and no triggers, deliberately. The view counter and the writes
+that keep a shelf's `updated_at` are TypeScript — `src/lib/data/collections.ts` and
+`@common/data/*` — as the search, the post writes and the tag counters were until they went
+with the boards (`0012_collections_only.sql`): a plpgsql body
 needs a migration to edit and reports one opaque error from inside a statement that was
 about something else.

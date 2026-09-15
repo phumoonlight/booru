@@ -17,7 +17,7 @@ import { siteState } from '@/lib/data/site'
  * itself, which is why Next's own auth guidance says to put the check in the data layer
  * rather than here (`02-guides/authentication.md`). This file was the whole gate for a
  * while, and a closed board was drawing the notice while running the full listing behind
- * it: one search and one facet read per request, plus every post page's
+ * it: one search and one facet read per request, plus every image page's
  * `generateMetadata`, which is produced from the route and so never sees this decision at
  * all. The reads are guarded at their own end now; this stays for the visitor.
  *

@@ -9,8 +9,8 @@ import { FIELD, Panel } from './panel'
 /**
  * 🎨 Artists: a reading list of the people whose work is worth going back to.
  *
- * **Kept apart from every other feature.** The board switch does nothing here, no tag is
- * involved, and nothing about an artist reaches the website — `booru_web` holds no grant on
+ * **Kept apart from every other feature.** No tag is involved, and nothing about an
+ * artist reaches the website — `booru_web` holds no grant on
  * the tables. It is the desktop app's alone.
  *
  * **The order is the feature.** Never-read first, then oldest read to newest: the artist at
@@ -39,7 +39,7 @@ function remember(rows: Artist[]): Artist[] {
 }
 
 /** Which list is on screen. Survives a trip to another view, not a restart — it is a fact
- *  about a session, like the board switch, and the window opens on non-AI. */
+ *  about a session, and the window opens on non-AI. */
 let showingAi = false
 
 function rememberKind(isAi: boolean): boolean {

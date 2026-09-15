@@ -1,11 +1,4 @@
-import type { Board } from '@common/board'
-import {
-  collectionImagePath,
-  collectionThumbnailPath,
-  imageUrl,
-  postImagePath,
-  thumbnailPath,
-} from '@common/storage'
+import { collectionImagePath, collectionThumbnailPath, imageUrl } from '@common/storage'
 import { cdnBase } from '@/config'
 
 /**
@@ -23,15 +16,7 @@ import { cdnBase } from '@/config'
  * origin images are served from — it is in the markup of every page.
  */
 
-export function postImageUrl(fileName: string, fileExt: string, board: Board = 'post'): string {
-  return imageUrl(cdnBase(), postImagePath(fileName, fileExt, board))
-}
-
-export function thumbnailUrl(fileName: string, board: Board = 'post'): string {
-  return imageUrl(cdnBase(), thumbnailPath(fileName, board))
-}
-
-/** The same two, for a collection's images — one more prefix in the same bucket. */
+/** A collection image and its thumbnail. */
 export function collectionImageUrl(fileName: string, fileExt: string): string {
   return imageUrl(cdnBase(), collectionImagePath(fileName, fileExt))
 }

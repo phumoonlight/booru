@@ -5,7 +5,7 @@ import type { Collection, CollectionPost } from '../../../shared/api'
 import { BUTTON, BUTTON_SM, buttonToggle } from './buttons'
 import { Panel } from './panel'
 import { imageUrlsFrom } from './image-urls'
-import { itemStyle } from './browse-layout'
+import { itemStyle } from './ratio-layout'
 import { CollectionForm, shelfTitle } from './collection-form'
 import { ImageCard, ImagePanel } from './collection-image'
 import { StagingBox, useStaging } from './collection-staging'
@@ -36,9 +36,10 @@ export function CollectionView({
 }) {
   // What an edit here stored, over the row the list was holding — which is not re-read
   // until the way out, and can still be on its way in when this screen mounts.
-  const [edited, setEdited] = useState<Pick<Collection, 'name' | 'mark' | 'rating'> | null>(
-    null
-  )
+  const [edited, setEdited] = useState<Pick<
+    Collection,
+    'name' | 'mark' | 'rating' | 'is_ai'
+  > | null>(null)
   const shelf = edited ?? collection
   const name = shelf?.name ?? 'Collection'
   const [posts, setPosts] = useState<CollectionPost[]>([])
@@ -137,6 +138,11 @@ export function CollectionView({
           {shelf ? shelfTitle(shelf) : name}
         </h1>
         <span className="text-xs text-muted">#{collectionId}</span>
+        {shelf?.is_ai && (
+          <span className="text-xs text-muted" aria-label="AI" title="Generated images">
+            🤖
+          </span>
+        )}
         {shelf && (
           <span className={`text-xs ${RATING_COLOR[shelf.rating]}`}>
             {RATING_LABEL[shelf.rating]}
@@ -181,12 +187,22 @@ export function CollectionView({
       {renaming && (
         <Panel title="Edit collection">
           <CollectionForm
-            initial={{ name, mark: shelf?.mark ?? '', rating: shelf?.rating ?? 'g' }}
+            initial={{
+              name,
+              mark: shelf?.mark ?? '',
+              rating: shelf?.rating ?? 'g',
+              is_ai: shelf?.is_ai ?? false,
+            }}
             submitLabel="Save"
             onSubmit={async (input) => {
               const result = await window.api.editCollection(collectionId, input)
               if (!result.ok) return result.error
-              setEdited({ name: result.name, mark: result.mark, rating: result.rating })
+              setEdited({
+                name: result.name,
+                mark: result.mark,
+                rating: result.rating,
+                is_ai: result.is_ai,
+              })
               setRenaming(false)
               return null
             }}
@@ -206,7 +222,7 @@ export function CollectionView({
         <ImagePanel
           // Keyed, so clicking another tile mounts a fresh panel. Its two boxes are seeded
           // from the row once, which is what lets them be typed in — without this, picking
-          // a second image left the first one's rating and source on screen, over a
+          // a second image left the first one's source on screen, over a
           // heading naming the second, and the next write would have saved them onto it.
           key={editingPost.id}
           post={editingPost}
@@ -233,9 +249,8 @@ export function CollectionView({
         </p>
       ) : (
         <>
-          {/* Browse's 📐 Ratio and nothing else: one height, each tile as wide as its own
-              shape. A shelf is looked at for the pictures, and there is no tag strip or
-              search result here that a square crop would make easier to scan. */}
+          {/* One height, each tile as wide as its own shape (`ratio-layout.ts`). A shelf is
+              looked at for the pictures, and a square crop would only cut them off. */}
           <ul className="flex flex-wrap justify-center gap-2 [--row-h:9rem] sm:[--row-h:11rem] lg:[--row-h:13rem]">
             {posts.map((post) => (
               <li key={post.id} className="shrink-0" style={itemStyle(post.width, post.height)}>

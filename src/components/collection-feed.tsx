@@ -5,24 +5,19 @@ import type { CollectionPost } from '@/lib/data/collections'
 import { CollectionGrid } from '@/components/collection-grid'
 import { loadMoreCollectionPosts } from '@/lib/actions/collections'
 
-/** The gallery feed's lookahead, and the same number for the same reason — less than a
- *  row, so a landing chunk does not chain-fire the next request before anyone scrolls. */
+/** Less than a row, so a landing chunk does not chain-fire the next request before anyone
+ *  scrolls. */
 const PREFETCH_MARGIN = '100px'
 
 /**
  * A collection as one continuous feed: the server renders the newest screenful and this
  * appends older ones on the way down.
  *
- * It is the gallery's `PostFeed` with three things taken out, which is why it is a
- * separate file rather than a prop on that one. There is **no query** — a shelf has no
- * search, so there is nothing for a cursor to ride in and nothing to put in the URL. There
- * is **no `start:`** and so no `replaceState`: the address of a collection is the
- * collection, and a scrolling position inside it is not somewhere anyone needs to link to.
- * And there is **no chunk divider** — the seam on the gallery is labelled with a post id
- * because that id is an address you can go back to, and here it addresses nothing.
- *
- * What is kept is the part that matters: each chunk keeps its own `<ul>`, so a landing
- * chunk cannot reflow rows already scrolled past.
+ * A shelf scrolls where `/posts` does not (`LatestFeed`): a shelf is a set somebody chose
+ * to open and is read to its end, where the site-wide feed is a front page with a horizon.
+ * No cursor in the URL — the address of a collection is the collection, and a scrolling
+ * position inside it is not somewhere anyone needs to link to. Each chunk keeps its own
+ * `<ul>`, so a landing chunk cannot reflow rows already scrolled past.
  */
 export function CollectionFeed({
   collectionId,
@@ -83,7 +78,7 @@ export function CollectionFeed({
     <>
       {chunks.map((posts, index) => (
         <Fragment key={posts[0]?.id ?? index}>
-          <CollectionGrid posts={posts} collectionId={collectionId} />
+          <CollectionGrid posts={posts} />
         </Fragment>
       ))}
 

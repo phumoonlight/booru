@@ -5,7 +5,6 @@ import { CPU_COUNT, DEFAULT_ENCODE_PRIORITY, DEFAULT_ENCODE_THREADS } from './cp
 import { loadConfig, revealSaveFile } from './config'
 import { loadPreferences, savePreferences } from './preferences'
 import { listBrowsers, openUrl } from './browser'
-import { setStagedState } from './close-guard'
 import { exportSave, importSave } from './transfer'
 import { loadSiteState, saveSiteState } from './site'
 import { tagCacheStatus } from './tag-cache'
@@ -29,12 +28,6 @@ const preferencesSchema = z.object({
 const siteStateSchema = z.object({
   maintenance: z.boolean(),
   message: z.string().max(2000).optional().default(''),
-})
-
-const stagedStateSchema = z.object({
-  staged: z.boolean(),
-  uploaded: z.boolean(),
-  busy: z.boolean(),
 })
 
 /** Only http(s) is ever handed to the OS — see the `shell:open-external` handler. */
@@ -101,17 +94,6 @@ export function registerAppIpc(): void {
   )
 
   /**
-   * What the upload screen holds, pushed on every change. `on`, not `handle`: nothing is
-   * returned and nothing waits for it. Parsed like everything else here, and a message
-   * that doesn't fit the shape is dropped rather than left to make the close dialog lie
-   * about what would be lost.
-   */
-  ipcMain.on('upload:state', (_event, state: unknown) => {
-    const parsed = stagedStateSchema.safeParse(state)
-    if (parsed.success) setStagedState(parsed.data)
-  })
-
-  /**
    * The website's maintenance switch — the one thing this app writes that is about the
    * site rather than about the board's contents. `null` from the read is "couldn't ask",
    * which the settings screen draws differently from "off": off means visitors are being
@@ -139,7 +121,7 @@ export function registerAppIpc(): void {
   ipcMain.handle('shell:open-data-folder', async (): Promise<void> => revealSaveFile())
 
   /**
-   * Only ever a post on the board. The URL ends up as an argument to a browser or as a
+   * Only ever a page on the site, or a source link. The URL ends up as an argument to a browser or as a
    * string handed to the OS, which would happily run a `file:` or a custom-scheme one, so
    * the scheme is checked rather than assumed.
    */

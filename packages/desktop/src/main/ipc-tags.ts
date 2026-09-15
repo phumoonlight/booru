@@ -1,15 +1,14 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
-import { listTags, searchTags } from '@common/data/shared'
+import { listTags } from '@common/data/shared'
 import * as manageTags from '@common/data/tags'
 import { TAG_CATEGORIES } from '@common/tags'
 import { loadRules, saveRule } from './rules'
 import { loadFormSections, saveFormSections } from './form-sections'
-import { cachedIndex, cachedSuggestions, clearTagCache, TAG_INDEX_LIMIT } from './tag-cache'
+import { cachedIndex, clearTagCache, TAG_INDEX_LIMIT } from './tag-cache'
 import { boardDb } from './db'
-import { postIdSchema, readBoard } from './ipc-parse'
+import { postIdSchema } from './ipc-parse'
 import type { FormSections } from '@common/data/form-sections'
-import type { TagSuggestion } from '../shared/api'
 import type { TagRules } from '@common/data/rules'
 import type { Tag } from '@common/tags'
 
@@ -57,47 +56,19 @@ const sectionEditSchema = z.discriminatedUnion('do', [
 
 const ruleKindSchema = z.enum(['implies', 'recommends'])
 
-/** The tag index, the rules written about a tag, the rows of the form, and the five
- *  operations that were the website's /tags/manage before the board lost its login. */
+/** The tag index, the rules written about a tag, the rows of the form, and the operations
+ *  that were the website's /tags/manage before the board lost its login. */
 export function registerTagIpc(): void {
-  ipcMain.handle('tags:list', async (_event, board: unknown): Promise<Tag[]> => {
-    // The board decides one column: the count. The names, categories, marks and sections
-    // are one vocabulary across both, which is why this screen is not two screens.
-    const on = readBoard(board)
-
+  ipcMain.handle('tags:list', async (): Promise<Tag[]> => {
     // The cache is the same read, kept for a day — `main/tag-cache.ts`. It falls through
     // to the board only when there is nothing cached and nothing it could fill from.
-    const cached = await cachedIndex(on)
+    const cached = await cachedIndex()
     if (cached) return cached
 
     const db = boardDb()
     if (!db) return []
-    return listTags(db, TAG_INDEX_LIMIT, on)
+    return listTags(db, TAG_INDEX_LIMIT)
   })
-
-  /**
-   * Autocomplete for the tag field. Answered from the day-old copy of the index whenever
-   * there is one, which is nearly always and costs nothing; the query behind the fallback
-   * is the same one the web's `suggestTags` action runs.
-   */
-  ipcMain.handle(
-    'tags:suggest',
-    async (_event, query: unknown, board: unknown): Promise<TagSuggestion[]> => {
-      const parsed = z.string().max(64).safeParse(query)
-      if (!parsed.success) return []
-      const on = readBoard(board)
-
-      const suggest = (tags: Tag[]): TagSuggestion[] =>
-        tags.map(({ name, category, post_count }) => ({ name, category, post_count }))
-
-      const cached = await cachedSuggestions(parsed.data, 8, on)
-      if (cached) return suggest(cached)
-
-      const db = boardDb()
-      if (!db) return []
-      return suggest(await searchTags(db, parsed.data, 8, on))
-    }
-  )
 
   /**
    * Throws the cached index away, for when it has somehow gone wrong — a tag renamed on
@@ -147,7 +118,7 @@ export function registerTagIpc(): void {
   })
 
   // ── The tag vocabulary ───────────────────────────────────────────────
-  // The five operations that were /tags/manage. Each one answers `{ ok }` or
+  // The operations that were /tags/manage. Each one answers `{ ok }` or
   // `{ error }`; the validation is `@common/data/tags`, which is also what the web's
   // forms used, so a name rejected here is rejected in the same words.
   //
@@ -245,34 +216,4 @@ export function registerTagIpc(): void {
     if (result.ok) clearTagCache()
     return result
   })
-
-  /**
-   * Apply one tag to every post already carrying another. The slowest thing this app
-   * does — it reads every link on both tags and can insert thousands of rows — so it
-   * answers with the counts rather than a bare ok: "added to 3, 41 already had it" is
-   * the difference between a rule that did something and one already satisfied.
-   */
-  ipcMain.handle(
-    'tags:apply',
-    async (_event, target: unknown, condition: unknown, board: unknown) => {
-      const db = boardDb()
-      if (!db) return { ok: false as const, error: 'Not set up yet' }
-      const parsedTarget = tagNameSchema.safeParse(target)
-      const parsedCondition = tagNameSchema.safeParse(condition)
-      if (!parsedTarget.success || !parsedCondition.success) {
-        return { ok: false as const, error: 'Type a tag name.' }
-      }
-
-      // One board's posts, the one the window is in. The two are different sets, so the
-      // counts this answers with would be a number about nothing if it did both.
-      const result = await manageTags.applyTagToTagged(
-        db,
-        parsedTarget.data,
-        parsedCondition.data,
-        readBoard(board)
-      )
-      if (result.ok) clearTagCache()
-      return result
-    }
-  )
 }

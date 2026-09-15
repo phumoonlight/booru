@@ -1,19 +1,20 @@
 # common
 
 The code the website and the desktop app both compile. Not a copy of either: there is one
-definition of what a post is, one of how an image is squeezed, one search grammar, and
-both front ends import them from here.
+definition of what a collection image is, one of how an image is squeezed, one rating scale,
+and both front ends import them from here.
 
 It exists because two programs read the same board and one of them writes to it. The
-website renders the gallery; the desktop app (`packages/desktop`) creates, edits and
-deletes posts from a machine with real CPU, because compression is work a free serverless
-tier is bad at. Everything they must agree on — what a post is, how a query is parsed,
-the write path, the encoders — is in this directory, and neither of them owns it.
+website renders the shelves; the desktop app (`packages/desktop`) uploads onto them, edits
+and deletes from a machine with real CPU, because compression is work a free serverless
+tier is bad at. Everything they must agree on — the shelf reads, the rating scale, the
+upload pipeline, the encoders — is in this directory, and neither of them owns it.
 
-The search is the clearest case. `data/search.ts` backs the website's listing *and* the
-desktop's browse screen, so `1girl -solo rating:r18` narrows to the same rows in
-both windows. Two implementations of that grammar is how `-tag` quietly comes to mean two
-things.
+The shelf reads are the clearest case. `data/collections.ts` backs every page of the
+website *and* the desktop's Collections screen, so a shelf's contents and its rating mean
+the same thing in both windows. It was the tag search that made this argument while there were
+boards to search; a second implementation of either is how two windows quietly come to
+disagree.
 
 Before this package the desktop app reached into the Next app's `src/` through an `@web`
 alias, plus an `@/` alias only because the files over there spell each other that way.
@@ -25,26 +26,29 @@ where the file is.
 
 | | |
 |---|---|
-| `board.ts` | the two boards — post table, link table, count column, object prefixes and website path, spelled nowhere else |
-| `collections.ts` | the shelves, which are deliberately **not** a third board: two table names, two object prefixes, three hrefs, and what counts as a name |
+| `collections.ts` | the shelves: two table names, two object prefixes, the hrefs, the shelf list's filter params (`collectionsHref`, `readCollectionFilter`), and what counts as a name and a mark |
 | `artists.ts` | the desktop app's artist list: three table names, two object prefixes, what counts as a name and an address |
-| `search.ts` | the `?query=` grammar — `splitQuery`, `searchHref`, the rating metatags, `RESTRICTED_RATINGS` |
-| `tags.ts` | tag parsing and the charset, `categoryColor`, `markColor` |
-| `storage.ts` | the md5-derived image paths — per board, plus the collections' pair — and the `ObjectStore` the upload writes through |
-| `db.ts` | `Db`, the handle every function here takes, and `DbPool` for the two that open a transaction |
-| `data/posts.ts` | the `Post` row shape, `postColumns`, and the single-post reads |
-| `data/search.ts` | `searchPosts` — the whole query, tag resolution and cursor |
-| `data/shared.ts` | the post write path, `resolveTagIds`, tag-name search, `listTags` |
-| `data/tags.ts` | managing the vocabulary: create, rename, recategorize, delete, apply-by-tag |
+| `search.ts` | what is left of the `?query=` grammar: the rating scale (`RATINGS`, `asRating`, `ratingToken`, `RESTRICTED_RATINGS`) and `tagLabel` |
+| `tags.ts` | tag parsing and the charset, `TAG_CATEGORIES`, `categoryColor`, `markColor`, the form-section spacer spelling |
+| `storage.ts` | the md5-derived image paths — the collections' pair and the artists' — and the `ObjectStore` the upload writes through |
+| `db.ts` | `Db`, the handle every function here takes, and `DbPool` for the ones that open a transaction |
+| `data/collections.ts` | the shelf list (name, rating and AI filters), one shelf's feed, the newest images across every shelf, the count, prev/next — every image read narrowed on its shelf's rating |
+| `data/collections-write.ts` | creating, editing and deleting shelves; adding, editing, moving and removing images; `touchCollection` |
+| `data/shared.ts` | `resolveTagIds`, `listTags` (A–Z) — how anything reaches the vocabulary |
+| `data/tags.ts` | managing the vocabulary: create, rename, recategorize, file onto a form row, mark, delete |
 | `data/rules.ts` | the tag rules — implications and recommendations, ids on the table and names above it |
 | `data/form-sections.ts` | the rows the desktop tag form draws, their order, and their dependencies |
-| `data/counters.ts` | `syncTagPostCounts` — recompute, never increment |
-| `data/collections.ts` | the shelves and what is on them: no tags, no search, a collection id and a cursor |
+| `data/site.ts` | `site_settings` — the maintenance switch and its notice |
 | `data/artists.ts`, `data/artists-write.ts` | the artist list, never-read first; no web caller and no web grant |
-| `imgcmp/for-post.ts` | lossy AVIF (q50) for the stored image, bounded to `POST_MAX_DIMENSION` |
+| `imgcmp/for-post.ts` | lossy AVIF for the stored image, quality on a ramp by size, bounded to `POST_MAX_DIMENSION` |
 | `imgcmp/for-thumbnail.ts` | lossy AVIF thumbnail, 384px tall |
-| `upload/pipeline.ts` | `createPostFromImage` and `createCollectionPostFromImage` — one image in, one row out, over one shared encode |
+| `upload/image.ts` | `inspectImage`, `encodeImage`, `storeImage` — the half of an upload that is only about pixels |
+| `upload/pipeline.ts` | `createCollectionPostFromImage` — one image in, one shelved row out |
 | `upload/artist.ts` | `createArtistImageFromImage` — the same encode, onto an artist |
+
+`board.ts`, `data/posts.ts`, `data/search.ts` and `data/counters.ts` went with the boards
+(`db/migrations/0012_collections_only.sql`). The tag files stay because the vocabulary did,
+with nothing joining it to an image.
 
 ## The rules that keep it shareable
 
@@ -58,7 +62,7 @@ where the file is.
 - **No `next/*`, no `server-only`, no React.** Electron's main process compiles these
   files and has none of it.
 - **No environment reads and no limits.** Ceilings are a property of where the code runs.
-  The desktop's are in `packages/desktop/src/main/limits.ts`, and `createPostFromImage`
+  The desktop's are in `packages/desktop/src/main/limits.ts`, and `createCollectionPostFromImage`
   takes them as an argument. (The web had its own, for Vercel; they went with its upload
   page.)
 - **`search.ts`, `tags.ts` and `storage.ts` stay pure**, so client components can import

@@ -18,13 +18,13 @@ import { TAG_PATTERN } from '@common/tags'
  * rule fired last.
  *
  * The rules are the board's — `tag_rules`, read and written through
- * `@common/data/rules.ts` — but *applying* one is still only this app's business, and
- * only ever while a queue is being tagged. A post carries the tags and the rating it
- * would have carried if you had set every one of them yourself; nothing on the board
- * records that a rule was involved.
+ * `@common/data/rules.ts`. Nothing applies one any more: the upload form that did went with
+ * the posts (0012), and the rules are kept, edited and drawn for a later use. What applying
+ * one meant — transitive, cycle-safe, a rating only ever raised — is in git history beside
+ * the form that did it.
  *
  * What is here is pure, and in `shared/` because both sides need it: main normalises what
- * it stores, the window applies it as you type.
+ * it stores, and the window reads the type.
  */
 export type ImplicationRules = Record<string, string[]>
 
@@ -79,77 +79,4 @@ function higherRating(a: Rating | null, b: Rating | null): Rating | null {
   if (!a) return b
   if (!b) return a
   return RATINGS.indexOf(b) > RATINGS.indexOf(a) ? b : a
-}
-
-/**
- * An implied rating and the tag that asked for it. The tag is carried because the queue
- * says so out loud — a rating that moves on its own with nothing naming the reason is
- * the kind of thing you go looking through rules for.
- */
-export type ImpliedRating = { rating: Rating; from: string }
-
-/**
- * Everything `names` drags in with it: the tags, in the order they were discovered and
- * never one that was already in `names`, and the highest rating any rule along the way
- * asked for.
- *
- * Rules chain — `school_swimsuit → one-piece_swimsuit → swimsuit` adds both, and a
- * rating on either of them counts — because the alternative is spelling every
- * consequence into every rule and keeping them in step by hand. `seen` makes a cycle
- * terminate instead of hanging the window, so a pair of rules that imply each other is
- * merely useless rather than fatal.
- */
-function resolve(
-  names: string[],
-  rules: ImplicationRules
-): { tags: string[]; rating: ImpliedRating | null } {
-  const seen = new Set(names)
-  const tags: string[] = []
-  let rating: ImpliedRating | null = null
-  const queue = [...names]
-
-  while (queue.length > 0) {
-    const name = queue.shift() as string
-    for (const entry of rules[name] ?? []) {
-      // A rating is a consequence, not a tag: it is never queued, so nothing implies
-      // anything by way of one
-      const implied = asRating(entry)
-      if (implied) {
-        // Strictly higher, so a tie keeps the tag found first and the reason shown
-        // doesn't shuffle between two tags asking for the same thing
-        if (!rating || RATINGS.indexOf(implied) > RATINGS.indexOf(rating.rating)) {
-          rating = { rating: implied, from: name }
-        }
-        continue
-      }
-      if (seen.has(entry)) continue
-      seen.add(entry)
-      tags.push(entry)
-      queue.push(entry)
-    }
-  }
-  return { tags, rating }
-}
-
-/** The implied tags alone — what the field lists and what the upload appends. */
-export function impliedTags(names: string[], rules: ImplicationRules): string[] {
-  return resolve(names, rules).tags
-}
-
-/**
- * The highest rating these tags ask for and the tag that asks for it, or null if no rule
- * along the way named one.
- */
-export function impliedRating(names: string[], rules: ImplicationRules): ImpliedRating | null {
-  return resolve(names, rules).rating
-}
-
-/**
- * The rating a row should be left on. Raise only: an implied rating is the *least* a set
- * of tags is worth, so it lifts a row that is too tame and never pulls one down. Tagging
- * an E5 post `panties` must not talk it back to E2 — and the rating you set by hand
- * outranks every rule, which is only true while the rules can't lower it.
- */
-export function raisedRating(current: Rating, implied: ImpliedRating | null): Rating {
-  return higherRating(current, implied?.rating ?? null) ?? current
 }

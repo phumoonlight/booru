@@ -21,11 +21,18 @@ import { BLUR_DATA_URL } from '@/lib/blur'
  * card says nothing about that: a date on every tile is a column of numbers nobody reads,
  * and the ordering already says it.
  */
-export function CollectionShelf({ collections }: { collections: Collection[] }) {
+export function CollectionShelf({
+  collections,
+  filtered = false,
+}: {
+  collections: Collection[]
+  /** Whether a search narrowed the list, which is what an empty one then means. */
+  filtered?: boolean
+}) {
   if (collections.length === 0) {
     return (
       <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
-        No collections yet.
+        {filtered ? 'No collections match.' : 'No collections yet.'}
       </p>
     )
   }
@@ -78,6 +85,7 @@ function CollectionCard({ collection }: { collection: Collection }) {
         </span>
         <span className="text-xs text-muted">
           {collection.post_count} image{collection.post_count === 1 ? '' : 's'}
+          {collection.is_ai && <span aria-label="AI-generated"> · 🤖 AI</span>}
         </span>
       </div>
       <NavProgress />

@@ -4,7 +4,8 @@ import { notFound } from 'next/navigation'
 import { CollectionFeed } from '@/components/collection-feed'
 import { CollectionShelf } from '@/components/collection-shelf'
 import { NavProgress } from '@/components/nav-progress'
-import { SearchHeader } from '@/components/search-header'
+import { CollectionSearch } from '@/components/collection-search'
+import { SiteHeader } from '@/components/site-header'
 import { RestrictedNotice } from '@/components/restricted-notice'
 import { SetupNotice } from '@/components/setup-notice'
 import { isDatabaseConfigured } from '@/lib/db'
@@ -15,26 +16,26 @@ import {
   listCollectionPosts,
   listCollections,
 } from '@/lib/data/collections'
-import { collectionsHref } from '@common/collections'
-import { isRestricted } from '@common/search'
+import { collectionsHref, type CollectionListFilter } from '@common/collections'
+import { isRestricted, RATING_LABEL } from '@common/search'
 import { SITE_NAME } from '@/config'
 
 /**
- * The two pages a collection has, and the shape they share: the site header with the
- * search box taken off, a heading, and a grid.
+ * The two pages a collection has, and the shape they share: the site header, a heading,
+ * and a grid.
  *
- * **No search box on either.** That is the feature, not an omission. A collection is a set
- * somebody assembled by hand out of work that does not belong under a tag; narrowing it
- * would mean the images carry tags, which is precisely what they do not. The header still
- * carries the nav, because every page needs the way out.
+ * **The shelf list is searchable, and a shelf is not.** The list takes a name, a tier and
+ * AI-or-not (`CollectionSearch`) — with every post on a shelf, it is how anything on the
+ * site is found. Inside a shelf there is nothing to narrow: its images carry no tags, and
+ * the set somebody assembled by hand is the answer.
  */
 
-/** The whole shelf — `/collections`. */
-export async function CollectionListing() {
+/** The shelf list — `/collections`, narrowed by its search. */
+export async function CollectionListing({ filter }: { filter: CollectionListFilter }) {
   if (!isDatabaseConfigured()) {
     return (
       <div className="mx-auto w-full max-w-7xl px-3 py-4">
-        <SearchHeader showSearch={false} collections />
+        <SiteHeader current="collections" />
         <div className="pt-4">
           <SetupNotice />
         </div>
@@ -42,25 +43,34 @@ export async function CollectionListing() {
     )
   }
 
-  const collections = await listCollections()
+  const [collections, nsfw] = await Promise.all([listCollections(filter), isNsfwEnabled()])
+  const filtered = Object.keys(filter).length > 0
+  // The one empty answer that has a reason worth giving: the setting is the ceiling, and
+  // asking for the tier above it finds nothing rather than reaching past it.
+  const gated = filter.rating !== undefined && isRestricted(filter.rating) && !nsfw
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">
-      <SearchHeader showSearch={false} collections />
+      <SiteHeader current="collections" />
       <div className="flex items-baseline gap-2">
         <h1 className="text-lg font-bold tracking-tight">🗂️ Collections</h1>
         <span className="text-xs text-muted">
           {collections.length} collection{collections.length === 1 ? '' : 's'}
         </span>
       </div>
-      {/* One line saying what this section is, because it is the only part of the site
-          whose contents are not reachable from the gallery — somebody arriving here from
-          the nav should not have to work out why these images are not in it. */}
-      <p className="text-sm text-muted">
-        Sets of images kept off the board — one-offs and niche work that no tag would
-        describe well.
-      </p>
-      <CollectionShelf collections={collections} />
+      <CollectionSearch filter={filter} />
+      {gated ? (
+        <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
+          {RATING_LABEL.r} collections are hidden.{' '}
+          <Link href="/settings" className="text-accent hover:underline">
+            Turn on NSFW in Settings
+            <NavProgress />
+          </Link>{' '}
+          to see them.
+        </p>
+      ) : (
+        <CollectionShelf collections={collections} filtered={filtered} />
+      )}
     </div>
   )
 }
@@ -70,7 +80,7 @@ export async function CollectionPage({ id }: { id: string }) {
   if (!isDatabaseConfigured()) {
     return (
       <div className="mx-auto w-full max-w-7xl px-3 py-4">
-        <SearchHeader showSearch={false} collections />
+        <SiteHeader current="collections" />
         <div className="pt-4">
           <SetupNotice />
         </div>
@@ -96,7 +106,7 @@ export async function CollectionPage({ id }: { id: string }) {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">
-      <SearchHeader showSearch={false} collections />
+      <SiteHeader current="collections" />
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         {/* The way back is the heading's sibling rather than an arrow in the corner:
             there is exactly one place up from here, and it is named. */}
@@ -111,6 +121,11 @@ export async function CollectionPage({ id }: { id: string }) {
           {collection.mark && <span className="mr-1.5">{collection.mark}</span>}
           {collection.name}
         </h1>
+        {collection.is_ai && (
+          <span className="text-xs text-muted" aria-label="AI-generated">
+            🤖 AI
+          </span>
+        )}
         <span className="text-xs text-muted">
           {collection.post_count} image{collection.post_count === 1 ? '' : 's'}
         </span>

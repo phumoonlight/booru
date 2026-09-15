@@ -271,11 +271,10 @@ export function NsfwPot({ enabled }: { enabled: boolean }) {
 
       {on && info && (
         <p className="rounded-lg border border-[#7a2530] bg-surface p-3 text-xs leading-relaxed text-muted">
-          <span className={`font-semibold ${RATING_COLOR.r}`}>R-18</span> posts now appear
-          everywhere the site lists posts — the gallery, a search, a tag. The choice is a cookie in
-          this browser and nothing else: there is no account to attach it to, so it is a preference
-          rather than a check on who you are, and a post has always been reachable by its own URL
-          either way.
+          <span className={`font-semibold ${RATING_COLOR.r}`}>R-18</span> collections now
+          appear everywhere the site lists images. The choice is a cookie in this browser and
+          nothing else: there is no account to attach it to, so it is a preference rather than a
+          check on who you are.
         </p>
       )}
     </div>

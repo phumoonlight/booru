@@ -11,9 +11,8 @@
  *
  * It replaced an underline on hover, which said "link" — and these are not links. They
  * run searches, unfold panels, delete tags. The one thing still underlined is text that
- * genuinely *is* a link: a URL or a post number sitting in a line of prose, in About, in
- * Settings and on a finished upload. Those go somewhere, and an underline is how a person
- * knows that before clicking.
+ * genuinely *is* a link: a URL sitting in a line of prose, in About and in Settings. Those
+ * go somewhere, and an underline is how a person knows that before clicking.
  *
  * The hover ground has to be a step from whatever the button sits on, so there are two:
  * `hover:bg-surface` for a button on the page, `hover:bg-background` for one inside a
@@ -54,8 +53,8 @@ export const BUTTON_SM = `${SHAPE} ${QUIET} min-h-8 px-2 text-xs hover:bg-surfac
 export const BUTTON_ON_SURFACE = `${SHAPE} ${QUIET} min-h-8 px-2 text-xs hover:bg-background`
 
 /**
- * A button that opens something which stays open — New tag, Apply by tag, a layout. Accent
- * while it is showing, which is the whole of what an outline used to say.
+ * A button that opens something which stays open — New tag, Edit. Accent while it is
+ * showing, which is the whole of what an outline used to say.
  *
  * The colour is swapped into the shape rather than appended to `BUTTON`, for the same
  * reason the two grounds are separate: `text-muted` and `text-accent` in one class list is
@@ -64,7 +63,7 @@ export const BUTTON_ON_SURFACE = `${SHAPE} ${QUIET} min-h-8 px-2 text-xs hover:b
 export const buttonToggle = (active: boolean): string =>
   `${SHAPE} min-h-9 px-2 text-sm hover:bg-surface ${active ? 'text-accent' : QUIET}`
 
-/** The one that finishes a form — Search, Save, Create, Apply. Accent, and never a box. */
+/** The one that finishes a form — Save, Create. Accent, and never a box. */
 export const BUTTON_SUBMIT = `${SHAPE} min-h-9 px-3 text-sm text-accent hover:bg-surface`
 
 /** The same, inside a panel. */
@@ -76,14 +75,13 @@ export const BUTTON_SUBMIT_ON_SURFACE = `${SHAPE} min-h-9 px-3 text-sm text-acce
  * The other shape on this screen is a *button*: no box at rest, a ground under the pointer,
  * accent while what it opened is open. That reads well for a thing that happens when pressed
  * and badly for a thing that is currently one way or the other, which is what these are.
- * Browse's layout pair and the Sections screen's detail pair were drawn as two of those, and
- * the only difference between "Compact is on" and "Compact would turn on" was one word in
- * accent — a state you had to already know to read.
+ * The Sections screen's detail pair was drawn as two of those, and the only difference
+ * between "Compact is on" and "Compact would turn on" was one word in accent — a state you
+ * had to already know to read.
  *
  * The track is what fixes it. Two segments inside one border read as one control before
  * either label is, the filled one is where you are, and the empty one is the other place you
- * could be. The board switch in the header has been this shape all along and is the reason
- * it is in here rather than written a third time.
+ * could be.
  *
  * Used as a `role="group"` with an `aria-label`, its segments carrying `aria-pressed`.
  */

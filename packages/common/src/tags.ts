@@ -203,10 +203,9 @@ export type Tag = {
    *
    * Optional, because most reads do not ask: only `listTags` selects it, the desktop form
    * and the desktop Tags screen being the only things that use it, and a type promising it
-   * everywhere would be a lie about the post page's own tag list.
+   * everywhere would be a lie about `getTagById`.
    */
   form_section_id?: number | null
-  post_count: number
 }
 
 export const TAG_PATTERN = /^[a-z0-9_().-]+$/

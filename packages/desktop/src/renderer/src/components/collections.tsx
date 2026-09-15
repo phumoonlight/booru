@@ -4,31 +4,28 @@ import { ShelfList } from './collection-shelves'
 import { CollectionView } from './collection-view'
 
 /**
- * Collections: shelves of images that are not posts.
+ * Collections: the shelves the website shows.
  *
- * The one screen in this window that the board switch in the header does nothing to. A
- * collection is not a board (`@common/collections`) — its images have no tags, are never
- * searched and appear in neither gallery — so there is no mode here to be in, and none of
- * the channels behind this screen takes a `Board`.
+ * Every post and AI post was moved onto one (0012), so this is the whole of what this window
+ * puts on the site. A shelf's images have no tags and no rating of their own — the shelf's
+ * rating is theirs — and a shelf of generated images is marked 🤖 rather than being a board
+ * of its own.
  *
  * It is two views in one file, because they are two halves of one gesture: the shelf list,
  * and one shelf open. Which one is showing is which shelf is open, and that is kept in a
- * module-level `let` for the reason Browse keeps its query in one — this view unmounts
+ * module-level `let` — this view unmounts
  * whenever another is in front of it, and coming back to the list every time you glance at
  * Settings would make the screen unusable for the one job it has.
  *
- * **Uploading here is a batch, and that is not the queue coming back.** The queue was
- * removed because tagging is per image however the images are stacked, so twenty cards of
- * unsaved state bought nothing; here there is nothing per image to type. A batch carries
- * one rating and one source, which are the only two fields there are, and both are what the
- * images that arrive together usually share — they are the four in one post. So the state a
- * drop creates is "these files, this rating, this address", which is small enough to hold in
- * your head and on the screen at once, and correcting either on one image afterwards is a
- * click on its own panel.
+ * **Uploading here is a batch.** There is nothing per image to type: a batch carries one
+ * source, which is the only field an image has, and it is what the images that arrive
+ * together usually share — they are the four in one post. So the state a drop creates is
+ * "these files, this address", which is small enough to hold in your head and on the screen
+ * at once, and correcting it on one image afterwards is a click on its own panel.
  */
 
 /** Which shelf was open. Survives a trip to Settings and back; not written to disk, since
- *  it is a fact about a session in exactly the way the board mode is. */
+ *  it is a fact about a session. */
 let opened: number | null = null
 
 export function Collections({ siteUrl }: { siteUrl: string }) {
@@ -77,8 +74,7 @@ export function Collections({ siteUrl }: { siteUrl: string }) {
         onBack={() => {
           show(null)
           // The list is holding a count and a cover that this shelf may have just changed,
-          // and the way out is the one moment it is worth re-reading — the same debt
-          // Browse pays on the way back from the post editor.
+          // and the way out is the one moment it is worth re-reading.
           void refresh()
         }}
       />

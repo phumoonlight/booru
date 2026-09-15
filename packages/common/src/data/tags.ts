@@ -1,10 +1,8 @@
-import { BOARD, type Board } from '@common/board'
 import { first, isUniqueViolation, type Db } from '@common/db'
-import { syncTagPostCounts } from '@common/data/counters'
 import { markColor, parseTagInput, type Tag, type TagCategory } from '@common/tags'
 
 /**
- * Tag management: create, apply-by-tag, rename, recategorize, delete.
+ * Tag management: create, rename, recategorize, delete.
  *
  * These were server actions on the website's /tags/manage. They moved here whole when
  * the board lost its login: the website reads and never writes, so managing the
@@ -86,22 +84,21 @@ export function readTagMark(raw: string): { mark: string | null } | { error: str
 
 export async function getTagByName(db: Db, name: string): Promise<Tag | null> {
   return first(
-    await db<Tag[]>`select id, name, category, mark, post_count from tags where name = ${name}`
+    await db<Tag[]>`select id, name, category, mark from tags where name = ${name}`
   )
 }
 
-/** One tag by id — the tag page's own address, so a rename never breaks a link. */
+/** One tag by id. */
 export async function getTagById(db: Db, id: number): Promise<Tag | null> {
   return first(
-    await db<Tag[]>`select id, name, category, mark, post_count from tags where id = ${id}`
+    await db<Tag[]>`select id, name, category, mark from tags where id = ${id}`
   )
 }
 
 /**
  * Add a tag nobody has used yet, which is the only way a tag comes into being: no write
  * path coins one, so this and the Tags screen behind it are where the vocabulary is
- * decided. It starts on no posts, so `post_count` keeps its default of 0 and no counter
- * needs syncing.
+ * decided.
  */
 export async function createTag(
   db: Db,
@@ -125,14 +122,11 @@ export async function createTag(
 }
 
 /**
- * Rename a tag in place. The row keeps its id, so every `post_tags` link, every rule that
- * names it and every `/tags/[id]` link survives untouched — only the text moves, and with
- * it the searches that spell the old name. Nothing is recounted: the same posts carry the
- * same tag.
+ * Rename a tag in place. The row keeps its id, so every rule and form-section dependency
+ * that names it survives untouched — only the text moves.
  *
- * A name already taken is refused rather than merged. Folding two tags into one means
- * moving links and recounting both, and doing that silently behind a rename would be a
- * destructive edit wearing a cosmetic one's clothes.
+ * A name already taken is refused rather than merged: folding two tags into one silently
+ * behind a rename would be a destructive edit wearing a cosmetic one's clothes.
  */
 export async function renameTag(
   db: Db,
@@ -155,8 +149,7 @@ export async function renameTag(
 
 /**
  * Recategorize one tag. Category is cosmetic — it only drives the colour and the
- * grouping — so the tag's name, id and post links are untouched and nothing has to be
- * recounted.
+ * grouping — so the tag's name and id are untouched.
  *
  * **The form section stays.** A section is not a division of a category any more — it is a
  * row of the form, and `clothes` is the right row for a dress whichever category the dress
@@ -222,8 +215,7 @@ export async function setTagFormSection(
  * Set what is drawn in front of a tag's name — a glyph or a colour — or clear it with an
  * empty string. `tags.mark`.
  *
- * The most cosmetic write there is: it moves no post, no link and no count, and a wrong
- * value costs one mark at the front of a label. Its own channel rather than a field on
+ * The most cosmetic write there is: a wrong value costs one mark at the front of a label. Its own channel rather than a field on
  * the category or the rename — what a tag *is* and what it is drawn with are two separate
  * decisions about the row.
  */
@@ -244,127 +236,19 @@ export async function setTagMark(
 }
 
 /**
- * Remove a tag from the board entirely — it comes off every post that carries it.
+ * Remove a tag from the board entirely. `tag_rules` and `tag_form_section_deps` both
+ * cascade from `tags`, so a deleted tag takes every rule and every dependency naming it,
+ * which is the whole reason those are rows and not names in a file.
  *
- * **Every board's links, not the gallery's.** The vocabulary is shared and neither link
- * table cascades from `tags`, so a single row in `generative_post_tags` is enough for the
- * foreign key to refuse the whole delete. Both go first, in the same statement, so a
- * half-done delete is not a state this can leave behind. `tag_rules` and
- * `tag_form_section_deps` need no such step — both of their keys cascade, so a deleted tag
- * takes every rule and every dependency naming it, which is the whole reason those are
- * rows and not names in a file.
- *
- * The two boards are **written out** rather than folded over `BOARDS`: a fold says it in
- * nested query fragments, which is the one construction in this file that cannot be read
- * as SQL on the page, and a delete is the wrong statement to be clever in. A third board
- * adds a line here — which is the shape of adding a third board generally (see
- * `@common/board`), not a debt this function is carrying alone.
- *
- * No counter to recount: the only counts these links fed belong to the tag being deleted.
- * Other tags on those posts keep every link they had.
+ * It had to clear two link tables first while there were posts to carry a tag; both went
+ * with the boards (0012).
  */
 export async function deleteTag(db: Db, id: number): Promise<TagOutcome> {
   try {
-    await db`
-      with links_post as (
-             delete from ${db(BOARD.post.postTags)} where tag_id = ${id}),
-           links_generative as (
-             delete from ${db(BOARD.generative.postTags)} where tag_id = ${id})
-      delete from tags where id = ${id}`
+    await db`delete from tags where id = ${id}`
     return { ok: true }
   } catch (error) {
     return { ok: false, error: `Delete failed: ${message(error)}` }
-  }
-}
-
-export type ApplyTagResult = {
-  target: string
-  condition: string
-  /** Posts that gained the tag. */
-  added: number
-  /** Posts that matched the condition and already carried it. */
-  already: number
-}
-
-/**
- * Adds `targetName` to every post already tagged `conditionName` — the bulk edit that
- * would otherwise be opening each post in turn. An implication, in practice: `swimsuit`
- * for everything tagged `bikini`.
- *
- * Both tags have to exist. For the condition that was always true — a name nobody has
- * used matches no posts, and "applied to 0 posts" is a worse answer than "no such tag"
- * for what is nearly always a typo. The target used to be coined here if it was new,
- * which made these two boxes the last place in the app where typing a name created a
- * tag: a slip in the target box would have put a `general` tag nobody meant onto every
- * matching post at once. Naming a tag is the Tags screen's job, and the grid is right
- * underneath this panel.
- *
- * **The apply is one statement.** It read every matching post id and every post that
- * already carried the target, in thousand-row pages, subtracted the two lists in
- * TypeScript and inserted the remainder five hundred rows at a time — all of it working
- * around a request that answers with one page. `insert … select … on conflict do nothing`
- * is the same thing said once, and `returning` is what makes the counts exact: the point
- * of this panel is the difference between "added to 3 posts, 41 already had it" and a
- * rule that was already satisfied, which an upsert that ignored duplicates could not tell
- * you.
- */
-export async function applyTagToTagged(
-  db: Db,
-  rawTarget: string,
-  rawCondition: string,
-  board: Board = 'post'
-): Promise<TagOutcome<ApplyTagResult>> {
-  const target = readTagName(rawTarget)
-  if ('error' in target) return { ok: false, error: target.error }
-  const condition = readTagName(rawCondition)
-  if ('error' in condition) return { ok: false, error: condition.error }
-  if (target.name === condition.name) {
-    return { ok: false, error: 'Those are the same tag — every matching post already has it.' }
-  }
-
-  try {
-    const rows = await db<{ id: number; name: string }[]>`
-      select id, name from tags where name = any(${[target.name, condition.name]})`
-    const found = new Map(rows.map((row) => [row.name, row.id]))
-
-    const conditionId = found.get(condition.name)
-    if (conditionId === undefined) {
-      return { ok: false, error: `${condition.name} is not a tag on this board.` }
-    }
-    const targetId = found.get(target.name)
-    if (targetId === undefined) {
-      return { ok: false, error: `${target.name} is not a tag on this board — create it first.` }
-    }
-
-    // One board at a time: the two are separate sets of posts, so "add `swimsuit` to
-    // everything tagged `bikini`" has a different answer on each, and one number reported
-    // for both would be a count of nothing in particular.
-    const postTags = BOARD[board].postTags
-
-    // `matched` counts in the same snapshot as the insert, and is unaffected by it: the
-    // rows going in carry the *target's* id, and this counts the condition's.
-    const [counts] = await db<{ added: number; matched: number }[]>`
-      with added as (
-        insert into ${db(postTags)} (post_id, tag_id)
-        select pt.post_id, ${targetId} from ${db(postTags)} pt where pt.tag_id = ${conditionId}
-            on conflict do nothing
-        returning post_id
-      )
-      select (select count(*)::int from added) as added,
-             (select count(*)::int from ${db(postTags)} where tag_id = ${conditionId}) as matched`
-
-    // Only the target moved: the condition tag is on exactly the posts it was on before.
-    await syncTagPostCounts(db, [targetId], board)
-
-    return {
-      ok: true,
-      target: target.name,
-      condition: condition.name,
-      added: counts.added,
-      already: counts.matched - counts.added,
-    }
-  } catch (error) {
-    return { ok: false, error: `Could not apply the tag: ${message(error)}` }
   }
 }
 

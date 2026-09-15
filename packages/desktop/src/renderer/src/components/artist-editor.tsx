@@ -12,7 +12,7 @@ import type { StageOutcome } from '../../../shared/api'
  * Everything that changes one artist: the name, the addresses, the examples, and the way to
  * remove the artist altogether.
  *
- * Every control writes on use, as the post editor's do, and asks the list to re-read after —
+ * Every control writes on use, and asks the list to re-read after —
  * the list is what is drawn, so that is the one copy worth keeping true.
  */
 export function ArtistEditor({

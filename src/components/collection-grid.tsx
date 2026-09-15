@@ -1,47 +1,27 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import type { CollectionPost } from '@/lib/data/collections'
-import { ROW, itemStyle } from '@/components/post-grid'
+import { ROW, itemStyle } from '@/components/image-rows'
 import { collectionThumbUrl } from '@/lib/images'
 import { collectionPostHref } from '@common/collections'
-import { isRestricted, RATING_LABEL } from '@common/search'
 import { BLUR_DATA_URL } from '@/lib/blur'
 
 /**
- * A collection's images, in the gallery's justified rows.
+ * Collection images in justified rows (`image-rows.tsx`) — one shelf's, or the newest
+ * across every shelf on `/posts`. Each card is addressed inside its own collection, read
+ * off the row, so the grid does not care which of the two it is drawing.
  *
- * The layout is imported from `post-grid.tsx` rather than copied: the band, the cap and
- * the 2:1 ratio ceiling are one decision tied to `THUMB_MAX_HEIGHT`, and the thumbnails
- * here are the same 384px AVIFs the pipeline makes for a post. A second copy of those
- * numbers is how the two would drift apart the first time either is re-measured.
- *
- * What is not shared is the card, and only because of the href: a collection image is
- * addressed inside its collection, and it has no tags and no search to carry. That is two
- * differences too many for a `board` prop on `PostCard` and not nearly enough for a second
- * grid.
+ * No rating badge: an image has no rating of its own any more, and a grid showing a
+ * restricted shelf's images is one where the setting is on.
  */
-export function CollectionGrid({
-  posts,
-  collectionId,
-}: {
-  posts: CollectionPost[]
-  collectionId: number
-}) {
+export function CollectionGrid({ posts }: { posts: CollectionPost[] }) {
   return (
     <ul className={ROW}>
       {posts.map((post) => (
         <li key={post.id} className="min-w-0" style={itemStyle(post.width, post.height)}>
           <div className="group relative h-full">
-            {/* The adult tier says so on the thumbnail, as it does on a post card: a
-                listing showing one is a listing where the setting is on, so this is a
-                label and not a gate. */}
-            {isRestricted(post.rating) && (
-              <span className="pointer-events-none absolute left-1 top-1 z-10 rounded-lg bg-[#ff5d5f] px-1.5 py-0.5 text-xs font-bold text-white">
-                {RATING_LABEL[post.rating]}
-              </span>
-            )}
             <Link
-              href={collectionPostHref(collectionId, post.id)}
+              href={collectionPostHref(post.collection_id, post.id)}
               // A new tab, for the gallery's reason: this is a feed, and following an
               // image in place throws away every chunk loaded below the fold.
               target="_blank"

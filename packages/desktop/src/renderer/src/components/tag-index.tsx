@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import type { Board } from '@common/board'
 import {
   categoryColor,
   categoryLabel,
@@ -13,44 +12,26 @@ import { FIELD } from './panel'
 import { FormSectionsView } from './form-sections'
 import { RuleDiagram } from './rule-diagram'
 import { TagGrid } from './tag-grid'
-import { ApplyTag, CreateTag } from './tag-create'
+import { CreateTag } from './tag-create'
 import { EditTag } from './tag-edit'
 import { useTagIndex } from './tag-index-store'
 import { useFormSections } from '../form-sections'
 
 /**
- * The board's tags, as the website's /tags page draws them: grouped by category in
- * the `TAG_CATEGORIES` order, A–Z inside each group, with the
- * post count in a fixed slot on the right. Same read, same cap — `listTags` in
- * `@common/data/shared` backs both.
+ * The board's tags: grouped by category in the `TAG_CATEGORIES` order, A–Z inside each
+ * group. Read by `listTags` in `@common/data/shared`.
  *
- * It is here because the uploader's real question is "does this tag already exist, and
- * under what spelling" — the autocomplete answers that one tag at a time, and there was
- * nowhere to simply look. Sorted by label rather than by count for the same reason the
- * web page is: you arrive holding a name.
+ * Nothing carries a tag since the posts were shelved (0012). The vocabulary, its rules and
+ * the form's rows are kept for a later use, and this is where they are kept — the question
+ * it answers is "does this tag already exist, and under what spelling".
  *
- * Clicking a tag opens its editor: rename it, recategorize it, delete it, write its rules,
- * or open it on the board. That is the only thing a click here means. Two other jobs
- * borrowed the grid as a picker — a tag's rules, which is a search now because the answer is
- * one name (`tag-rule-editor.tsx`), and a catalog, which is gone.
- *
- * Managing a tag was the website's /tags/manage screen until the board lost its login —
- * the site holds an anon key and the schema has no write policy for it, so the vocabulary
- * is managed here or nowhere. The two operations that are not about one existing tag —
- * creating a name up front, and applying a tag to everything already carrying another —
- * sit in the header row, where they are not attached to whichever row happens to be under
- * the pointer.
+ * Clicking a tag opens its editor: rename it, recategorize it, delete it, write its rules.
+ * That is the only thing a click here means. Creating a name up front sits in the header
+ * row, where it is not attached to whichever row happens to be under the pointer.
  */
-export function TagIndex({
-  board,
-  onBrowse,
-}: {
-  /** Which board's counts this grid shows, and which board Apply by tag applies on. */
-  board: Board
-  onBrowse: (query: string) => void
-}) {
+export function TagIndex() {
   const [editing, setEditing] = useState<Tag | null>(null)
-  const [panel, setPanel] = useState<'none' | 'create' | 'apply'>('none')
+  const [creating, setCreating] = useState(false)
   const [diagram, setDiagram] = useState(false)
   // The form sections, which are a screen rather than a panel — like the rule map, and for
   // the same reason: laying out every row with its tags inside it wants the whole window.
@@ -65,18 +46,13 @@ export function TagIndex({
   // tag list is about what the board holds.
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const formSections = useFormSections()
-  const { tags, fetchedAt, loading, loadError, refresh } = useTagIndex(board)
+  const { tags, fetchedAt, loading, loadError, refresh } = useTagIndex()
 
   /** A re-read, and the one thing that has to happen with it: the open panel is about a row
    *  that may not survive the answer — a delete takes it away and a rename moves it. */
   const reload = () => {
     setEditing(null)
     void refresh()
-  }
-
-  /** Which panel sits above the list. Pressing the one already open closes it. */
-  function showPanel(next: typeof panel) {
-    setPanel((current) => (current === next ? 'none' : next))
   }
 
   // Matched against the stored spelling with spaces read as underscores, so the box takes
@@ -95,8 +71,7 @@ export function TagIndex({
    * back what you had open.
    *
    * Nothing here is a request: the whole index is already in memory, and unfolding is
-   * `display` and not a read. What made the board expensive was re-reading that index after
-   * every upload, which is `bumpTagCounts` in main and not this.
+   * `display` and not a read.
    */
   const showAll = typed !== ''
   const isOpen = (category: TagCategory): boolean => showAll || expanded.has(category)
@@ -108,8 +83,6 @@ export function TagIndex({
       return next
     })
 
-  // `rows`, not `groups`: a group on this screen is a form group now, and the two would be
-  // one word for a category of tags and for one tag's rule about the form.
   const rows = categoryOrder(shown.map((tag) => tag.category))
     .map(
       (category) =>
@@ -125,10 +98,8 @@ export function TagIndex({
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 pt-4 pb-25">
       {/* One row for everything that is not a tag: what this screen is, how old its list
-          is, the box that narrows it, the two operations that are not about a row you are
-          pointing at, and the two views of it. They were on two rows, one of bare links
-          and one of outlined buttons, which drew a line between things that are all just
-          "the controls" — and put the filter box a row away from the list it filters. */}
+          is, the operation that is not about a row you are pointing at, and the two views
+          of it. */}
       <div className="flex flex-wrap items-center gap-1">
         <h1 className="mr-1 text-lg font-bold tracking-tight">Tags</h1>
         {/* What a cache owes you: how old it is. Time only — a list from an hour ago and
@@ -141,28 +112,19 @@ export function TagIndex({
         )}
         <button
           type="button"
-          onClick={() => showPanel('create')}
-          title="Name a tag before anything carries it"
-          className={`${buttonToggle(panel === 'create')} ml-auto`}
+          onClick={() => setCreating((was) => !was)}
+          title="Name a new tag"
+          className={`${buttonToggle(creating)} ml-auto`}
         >
           <span aria-hidden>➕</span>
           New tag
-        </button>
-        <button
-          type="button"
-          onClick={() => showPanel('apply')}
-          title="Add one tag to every post that already has another"
-          className={buttonToggle(panel === 'apply')}
-        >
-          <span aria-hidden>🧩</span>
-          Apply by tag
         </button>
         {/* Beside the rule map below it, being the other thing here that is a view rather
             than a panel: both are about all of the tags at once and none in particular. */}
         <button
           type="button"
           onClick={() => setSectionsView(true)}
-          title="The rows the upload form draws, their order, and what is on each"
+          title="The rows of the tag form, their order, and what is on each"
           className={BUTTON}
         >
           <span aria-hidden>🧱</span>
@@ -196,10 +158,8 @@ export function TagIndex({
         />
       )}
 
-      {/* A browser's toolbar, and Browse has the same one: reload at the head of the row,
-          then the box, filling everything left. Refresh sat in the far corner of the title
-          row, a screen's width from the timestamp it answers, with the filter box on a row
-          of its own stopping short of the edge for no reason. */}
+      {/* A browser's toolbar: reload at the head of the row, then the box, filling
+          everything left. */}
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -218,8 +178,8 @@ export function TagIndex({
         </button>
         {/* Narrows the grid below, and nothing else — no request, no submit. The list is
             already in memory, which is the only reason a box that filters on every
-            keystroke is cheaper than the autocomplete it replaces. It keeps its border,
-            being the one thing here you type into rather than press. */}
+            keystroke is cheap. It keeps its border, being the one thing here you type into
+            rather than press. */}
         <input
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
@@ -229,8 +189,7 @@ export function TagIndex({
         />
       </div>
 
-      {panel === 'create' && <CreateTag onDone={reload} />}
-      {panel === 'apply' && <ApplyTag board={board} onDone={reload} />}
+      {creating && <CreateTag onDone={reload} />}
 
       {editing && (
         // Keyed by the tag, so selecting another row remounts the panel with that
@@ -238,7 +197,6 @@ export function TagIndex({
         <EditTag
           key={editing.id}
           tag={editing}
-          onBrowse={onBrowse}
           sections={formSections}
           onClose={() => setEditing(null)}
           onDone={reload}
@@ -257,7 +215,7 @@ export function TagIndex({
         </p>
       ) : rows.length === 0 ? (
         <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
-          {typed ? `No tag matches “${typed}”.` : 'No tags yet — they are created by uploads.'}
+          {typed ? `No tag matches “${typed}”.` : 'No tags yet — ➕ New tag names one.'}
         </p>
       ) : (
         // One grid per category, and no division inside it. It was split by form section
@@ -275,8 +233,7 @@ export function TagIndex({
             <section key={category} className="flex flex-col gap-2">
               {/* The heading is the control. A chevron beside a label that was already the
                   obvious thing to press would be a second, smaller target for the same
-                  gesture — the whole line is the row, the way the drop zone on the upload
-                  form is the whole button. The count is what makes a folded category worth
+                  gesture — the whole line is the row. The count is what makes a folded category worth
                   looking at rather than opening. */}
               <button
                 type="button"

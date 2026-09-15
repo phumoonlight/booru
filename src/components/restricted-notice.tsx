@@ -3,16 +3,16 @@ import Link from 'next/link'
 import { NavProgress } from '@/components/nav-progress'
 
 /**
- * What a post page shows when the visitor has not turned the adult tiers on.
+ * What a restricted collection, or an image on one, shows when the visitor has not turned
+ * the adult tiers on.
  *
- * The listing has left those posts out since the setting arrived, but a post's own URL
- * never checked — and a link is exactly how someone arrives at one without having gone
- * past the gallery. So the check belongs on the page too, not only on the query that
+ * The lists leave those shelves out, but a page's own URL is reachable without them — and a
+ * link is exactly how someone arrives at one without having gone past the list. So the check belongs on the page too, not only on the query that
  * would have offered it.
  *
  * It says nothing about the post — not the tier, not even the number. A gate that
  * describes what is behind it is not much of a gate, and the cat is doing the work
- * anyway. There is no link to Settings either: the gallery has one in its header, and a
+ * anyway. There is no link to Settings either: the header has one on every page, and a
  * gate that offers its own key in the same breath is a formality.
  */
 export function RestrictedNotice() {
@@ -36,7 +36,7 @@ export function RestrictedNotice() {
       </div>
 
       <Link href="/posts" className="text-sm text-muted hover:text-foreground hover:underline">
-        Back to the gallery
+        Back to the latest
         <NavProgress />
       </Link>
     </div>

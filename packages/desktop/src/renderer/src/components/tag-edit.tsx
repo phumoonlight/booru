@@ -11,21 +11,19 @@ import { useRecommendations } from '../recommendations'
 import type { FormSection } from '@common/data/form-sections'
 
 /**
- * One tag: rename it, recategorize it, delete it, or go and look at it on the board.
+ * One tag: rename it, recategorize it, file it onto a row, mark it, delete it.
  *
- * Rename keeps the row's id, so every link and every post keeps the tag — only the text
- * moves. Delete does not: it takes the tag off every post carrying it, which is why it
- * takes a second press that says so.
+ * Rename keeps the row's id, so every rule and every section keeps the tag — only the text
+ * moves. Delete does not: it takes the tag's rules with it, which is why it takes a second
+ * press that says so.
  */
 export function EditTag({
   tag,
-  onBrowse,
   sections,
   onClose,
   onDone,
 }: {
   tag: Tag
-  onBrowse: (query: string) => void
   sections: FormSection[]
   onClose: () => void
   onDone: () => void
@@ -113,7 +111,7 @@ export function EditTag({
   return (
     <Panel
       pinned
-      title={`${tagLabel(tag.name)} · ${tag.post_count} post${tag.post_count === 1 ? '' : 's'}`}
+      title={tagLabel(tag.name)}
       actions={
         <>
           {/* Leads the row because it is the one action here that is about this machine
@@ -136,19 +134,6 @@ export function EditTag({
             className={`${BUTTON_ON_SURFACE} hover:text-[#ff5d5f]`}
           >
             🗑️ Delete
-          </button>
-          {/* Its posts, in this window rather than in the browser. It used to open
-              /tags/<id> on the site, which answered the question in a place that can only
-              read: the reason you look at what a tag is on is usually to fix one of them,
-              and every control for that is in Browse. Same question, and now the answer
-              is somewhere you can act on it. */}
-          <button
-            type="button"
-            onClick={() => onBrowse(tag.name)}
-            title={`Browse the posts tagged ${tagLabel(tag.name)}`}
-            className={BUTTON_ON_SURFACE}
-          >
-            🔍 Browse
           </button>
           <button type="button" onClick={onClose} className={BUTTON_ON_SURFACE}>
             ❌ Close
@@ -213,10 +198,10 @@ export function EditTag({
           would throw away a half-typed rule per character. */}
       {showRules && <TagRuleEditor tag={tag.name} />}
 
-      {/* Drawn as what it is, like the post editor's. A tag is not only a row: deleting it
-          takes it off every post carrying it, and that is the number worth reading before
-          the button rather than after. Filled rather than outlined, and the way out sits
-          where the hand was already going. */}
+      {/* Drawn as what it is. A tag is not only a row: deleting it takes every rule naming
+          it and its place on the form, which is worth reading before the button rather than
+          after. Filled rather than outlined, and the way out sits where the hand was already
+          going. */}
       {confirming && (
         <div className="flex flex-col gap-3 rounded-lg border-2 border-[#ff5d5f] bg-[#ff5d5f]/5 p-3">
           <div>
@@ -224,12 +209,8 @@ export function EditTag({
               ⚠ Delete {tagLabel(tag.name)} for good
             </h3>
             <p className="mt-1 text-sm text-muted">
-              It comes off{' '}
-              <strong className="text-foreground">
-                {tag.post_count} post{tag.post_count === 1 ? '' : 's'}
-              </strong>{' '}
-              and the tag itself is removed from the board. Any search or saved query naming it
-              stops matching. <strong className="text-foreground">There is no undo.</strong>
+              The tag is removed from the board, with every rule and section condition naming it.{' '}
+              <strong className="text-foreground">There is no undo.</strong>
             </p>
           </div>
           <div className="flex items-center gap-2">

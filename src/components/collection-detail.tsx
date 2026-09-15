@@ -15,7 +15,7 @@ import {
 } from '@/lib/data/collections'
 import { collectionHref, collectionPostHref } from '@common/collections'
 import { collectionImageUrl, collectionThumbUrl } from '@/lib/images'
-import { isRestricted, RATING_COLOR, RATING_LABEL, type Rating } from '@common/search'
+import { isRestricted, RATING_COLOR, RATING_LABEL } from '@common/search'
 import { SITE_NAME } from '@/config'
 
 /**
@@ -38,12 +38,6 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-/** Behind the setting on its own rating or its shelf's — a shelf's rating narrows what is on
- *  it and never lifts it. */
-function isHidden(post: { rating: Rating }, collection: { rating: Rating } | null): boolean {
-  return isRestricted(post.rating) || (collection !== null && isRestricted(collection.rating))
-}
-
 export async function collectionPostMetadata(id: string): Promise<Metadata> {
   const postId = Number(id)
   if (!Number.isInteger(postId) || postId < 1) return { title: 'Not found' }
@@ -55,7 +49,7 @@ export async function collectionPostMetadata(id: string): Promise<Metadata> {
   const canonical = collectionPostHref(post.collection_id, post.id)
   const collection = await getCollection(post.collection_id)
 
-  if (isHidden(post, collection) && !(await isNsfwEnabled())) {
+  if (collection && isRestricted(collection.rating) && !(await isNsfwEnabled())) {
     return {
       title: 'Collection image',
       description: 'Turn on NSFW in Settings to see it.',
@@ -65,7 +59,9 @@ export async function collectionPostMetadata(id: string): Promise<Metadata> {
   }
 
   const title = collection ? `${collection.name} — #${post.id}` : `Collection image #${post.id}`
-  const description = `${post.width}×${post.height} · rated ${RATING_LABEL[post.rating]}`
+  const description = collection
+    ? `${post.width}×${post.height} · rated ${RATING_LABEL[collection.rating]}`
+    : `${post.width}×${post.height}`
 
   return {
     title,
@@ -102,11 +98,12 @@ export async function CollectionDetail({ id }: { id: string }) {
   const post = await getCollectionPost(postId)
   if (!post) notFound()
 
-  // The shelf is read first, since its rating gates the image as well as its own. Nothing
-  // below the gate runs for a blocked image: no neighbours, and the counter never mounts —
-  // so a view is not counted for a page that showed nothing.
+  // The shelf is read first: its rating is the image's. Nothing below the gate runs for a
+  // blocked image — no neighbours, and the counter never mounts, so a view is not counted
+  // for a page that showed nothing.
   const collection = await getCollection(post.collection_id)
-  if (isHidden(post, collection) && !(await isNsfwEnabled())) {
+  if (!collection) notFound()
+  if (isRestricted(collection.rating) && !(await isNsfwEnabled())) {
     return <RestrictedNotice />
   }
 
@@ -119,16 +116,16 @@ export async function CollectionDetail({ id }: { id: string }) {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">
       <CollectionViewCounter postId={post.id} />
 
-      {/* Sticky, like the post page's: the picture is most of a screen and the walk to the
-          next image is what you came back up for. The way back is the collection, not the
-          gallery — this image has no existence outside its shelf. */}
+      {/* Sticky: the picture is most of a screen and the walk to the next image is what you
+          came back up for. The way back is the collection — this image has no existence
+          outside its shelf. */}
       <header className="sticky top-0 z-10 -mx-3 flex items-center gap-2 border-b border-border bg-background/90 px-3 py-2 backdrop-blur">
         <Link
           href={collectionHref(post.collection_id)}
           className="min-w-0 truncate pr-1 text-lg font-bold tracking-tight hover:underline"
         >
-          {collection?.mark && <span className="mr-1.5">{collection.mark}</span>}
-          {collection?.name ?? 'Collection'}
+          {collection.mark && <span className="mr-1.5">{collection.mark}</span>}
+          {collection.name}
         </Link>
         <CollectionNav
           collectionId={post.collection_id}
@@ -145,7 +142,7 @@ export async function CollectionDetail({ id }: { id: string }) {
       />
 
       {/* Details only. There is no tag column to sit beside, so this is a narrow block
-          under the picture rather than the post page's two columns. */}
+          under the picture rather than two columns. */}
       <section className="w-full max-w-sm">
         <h2 className="mb-2 text-sm font-semibold">Details</h2>
         <dl className="flex flex-col gap-1 text-sm">
@@ -157,7 +154,9 @@ export async function CollectionDetail({ id }: { id: string }) {
             <dt className="text-muted">Rating</dt>
             {/* Not a link. On a post the rating is a search you can run; here there is no
                 search to run it in, so it is a fact about the file like the two below. */}
-            <dd className={RATING_COLOR[post.rating]}>{RATING_LABEL[post.rating]}</dd>
+            <dd className={RATING_COLOR[collection.rating]}>
+              {RATING_LABEL[collection.rating]}
+            </dd>
           </div>
           <div className="flex justify-between gap-3">
             <dt className="text-muted">Size</dt>

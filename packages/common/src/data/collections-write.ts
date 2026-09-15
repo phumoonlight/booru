@@ -20,9 +20,9 @@ const { collections, posts } = COLLECTION_TABLES
 export type CollectionOutcome<T = unknown> = ({ ok: true } & T) | { ok: false; error: string }
 
 /** What a shelf is, as typed into the desktop app's form — settled by `readCollectionFields`. */
-export type CollectionInput = { name: string; mark: string; rating: Rating }
+export type CollectionInput = { name: string; mark: string; rating: Rating; is_ai: boolean }
 
-type CollectionFields = { name: string; mark: string | null; rating: Rating }
+type CollectionFields = { name: string; mark: string | null; rating: Rating; is_ai: boolean }
 
 /** The name and the mark settled together, so a form with both wrong says the first. The
  *  rating is the caller's to check, arriving as it does from a `<select>`. */
@@ -31,11 +31,11 @@ function readCollectionFields(input: CollectionInput): CollectionFields | { erro
   if ('error' in name) return name
   const mark = readCollectionMark(input.mark)
   if ('error' in mark) return mark
-  return { name: name.name, mark: mark.mark, rating: input.rating }
+  return { name: name.name, mark: mark.mark, rating: input.rating, is_ai: input.is_ai }
 }
 
 /**
- * Names a new shelf, with its mark and its rating. There is no cover to pick and nothing to
+ * Names a new shelf, with its mark, its rating and whether it is an AI one. There is no cover to pick and nothing to
  * file it under.
  *
  * A duplicate is the one failure worth wording, and it is caught rather than asked about
@@ -62,9 +62,9 @@ export async function createCollection(
 }
 
 /**
- * Rewrites a shelf's name, mark and rating in one statement, and touches it — each is a
- * change to the shelf itself, so it belongs at the top of the list the way an image added
- * does. Correcting one *image's* rating is not, which is `updateCollectionPost`.
+ * Rewrites a shelf's name, mark, rating and AI flag in one statement, and touches it —
+ * each is a change to the shelf itself, so it belongs at the top of the list the way an
+ * image added does. The rating is every image's on it, since an image has none of its own.
  */
 export async function updateCollection(
   db: Db,
@@ -78,7 +78,7 @@ export async function updateCollection(
     const updated = await db<{ id: number }[]>`
       update ${db(collections)}
          set name = ${read.name}, mark = ${read.mark}, rating = ${read.rating},
-             updated_at = now()
+             is_ai = ${read.is_ai}, updated_at = now()
        where id = ${id}
       returning id`
     if (updated.length === 0) return { ok: false, error: 'No such collection.' }
@@ -123,8 +123,7 @@ export type CollectionPostFields = {
   file_size: number
   width: number
   height: number
-  rating: Rating
-  /** Empty string means "no source" — stored as null, as on a post. */
+  /** Empty string means "no source" — stored as null. */
   source_url: string
 }
 
@@ -149,7 +148,6 @@ export async function createCollectionPost(
         file_size: fields.file_size,
         width: fields.width,
         height: fields.height,
-        rating: fields.rating,
         source_url: fields.source_url || null,
       })} returning id`
 
@@ -159,22 +157,21 @@ export async function createCollectionPost(
 }
 
 /**
- * Rewrites what there is to change about a collection post: its tier and its source. Not
- * its collection — that is `moveCollectionPost` below, because it is a change to two
- * shelves rather than to one image.
+ * Rewrites what there is to change about a collection post, which is its source. Not its
+ * rating — that is its shelf's — and not its collection, which is `moveCollectionPost`
+ * below, because it is a change to two shelves rather than to one image.
  *
  * The shelf is **not** touched. The list is ordered by what has happened to the shelf, and
- * correcting a rating is a fact about one image; bumping a whole collection to the top for
- * it would make that ordering mean nothing.
+ * correcting a source is a fact about one image.
  */
 export async function updateCollectionPost(
   db: Db,
   id: number,
-  fields: { rating: Rating; source_url: string }
+  fields: { source_url: string }
 ): Promise<CollectionOutcome> {
   const updated = await db<{ id: number }[]>`
     update ${db(posts)}
-       set rating = ${fields.rating}, source_url = ${fields.source_url || null}
+       set source_url = ${fields.source_url || null}
      where id = ${id}
     returning id`
   return updated.length > 0 ? { ok: true } : { ok: false, error: `Image ${id} not found.` }
@@ -244,7 +241,7 @@ export async function moveCollectionPost(
 /**
  * Moves a shelf to the top of the list. Called by every write above that changes what the
  * shelf holds or what it is called, and by nothing else — a view is not a change to a
- * collection, and neither is correcting one image's rating.
+ * collection, and neither is correcting one image's source.
  */
 export async function touchCollection(db: Db, id: number): Promise<void> {
   await db`update ${db(collections)} set updated_at = now() where id = ${id}`

@@ -5,9 +5,8 @@ import { TagMark } from './tag-mark'
 /**
  * One block of tags: the whole of one category.
  *
- * Ruled like a table, the same way the web page is: a count sitting in open space reads as
- * close to the next column's name as to its own. Each cell carries its own right/bottom
- * rule and is pulled a pixel over its neighbour so shared edges stay hairlines.
+ * Ruled like a table: each cell carries its own right/bottom rule and is pulled a pixel
+ * over its neighbour so shared edges stay hairlines.
  */
 export function TagGrid({
   tags,
@@ -36,9 +35,6 @@ export function TagGrid({
                 tail rather than the mark that identifies it fastest. */}
             <TagMark mark={tag.mark} />
             <span className="min-w-0 flex-1 truncate">{tagLabel(tag.name)}</span>
-            <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted">
-              {tag.post_count}
-            </span>
           </button>
         </li>
       ))}

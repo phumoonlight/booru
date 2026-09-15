@@ -30,7 +30,7 @@ import type { FormSection } from '@common/data/form-sections'
  * not offer them and the grid draws them among their category's.
  *
  * **A tag is filed by dragging it onto a card.** The drop is the whole edit; there is no
- * Save, like the post editor and the rule panel. The strip at the top is deliberately *not*
+ * Save, like the rule panel. The strip at the top is deliberately *not*
  * a drop target: filing is the decision this screen is for, and unfiling is a different one
  * — a tag pulled off its row stops being offered anywhere, which is a thing to do on that
  * tag's own panel, having gone looking for it, rather than by letting go a few pixels short
@@ -41,7 +41,7 @@ import type { FormSection } from '@common/data/form-sections'
  */
 
 /**
- * How much of a card is drawn. Module-level for the reason Browse's layout is: this view is
+ * How much of a card is drawn. Module-level because this view is
  * unmounted whenever something is in front of it, and a way of looking you chose a minute ago
  * is not a thing to choose again. Not written out — a preference, and not one worth being
  * `save.json`'s.
@@ -186,8 +186,8 @@ export function FormSectionsView({
           >
             <span aria-hidden>➕</span> Space
           </button>
-          {/* Two ways of looking at the same rows, drawn as the switch it is — see `SEGMENTS`.
-              The same control Browse's layout pair and the header's board switch are. */}
+          {/* Two ways of looking at the same rows, drawn as the switch it is — see
+              `SEGMENTS`. */}
           <div role="group" aria-label="Detail" className={`ml-auto ${SEGMENTS}`}>
             <button
               type="button"
@@ -220,7 +220,7 @@ export function FormSectionsView({
         </div>
 
         <p className="max-w-3xl text-sm text-muted">
-          The upload form&apos;s rows. Drag a tag onto a card to file it; drag a card by its grip to
+          The tag form&apos;s rows. Drag a tag onto a card to file it; drag a card by its grip to
           move the row. A tag on no row is offered nowhere.
         </p>
 
@@ -299,8 +299,8 @@ export function FormSectionsView({
 
             {sections.length === 0 ? (
               <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
-                No rows yet — the upload form has nothing to offer, since a tag is offered on a row
-                or not at all.
+                No rows yet — the tag form has nothing to offer, since a tag is offered on a row or
+                not at all.
               </p>
             ) : (
               <SectionColumns

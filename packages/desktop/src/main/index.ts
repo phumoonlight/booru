@@ -4,19 +4,19 @@ import { registerIpc } from './ipc'
 import { cleanupDownloads } from './download'
 import { dropStoredConfig, dropStoredLogin, dropStoredRules } from './config'
 import { configureDns } from './dns'
+import { dropCache } from './app-cache'
 import { openUrl } from './browser'
-import { confirmClose, stagedWorkIsWorthKeeping } from './close-guard'
 import { applyPreferences, loadPreferences } from './preferences'
 
 /**
- * Pubooru's uploader, as a desktop window.
+ * Pubooru's desktop app: the shelves, the artist list, the tag vocabulary and the site's
+ * switches, as a window.
  *
- * It exists for one reason: the upload path spends most of its time in AVIF encoding and
- * a lossy AVIF thumbnail, and that is CPU work a free serverless tier is billed for by
- * the second and killed at ten of them. Running it here, the 4MB/20MP ceilings the web
- * carries for Vercel's sake go away (`main/limits.ts`), and the images and rows still
- * land on exactly the board the website reads — the pipeline is the shared file,
- * imported, not copied.
+ * It began as the uploader, for one reason that still holds: an upload spends most of its
+ * time in AVIF encoding, and that is CPU work a free serverless tier is billed for by the
+ * second and killed at ten of them. Running it here, the ceilings the web would carry for
+ * Vercel's sake go away (`main/limits.ts`), and the images and rows still land on exactly
+ * the board the website reads — the pipeline is the shared file, imported, not copied.
  */
 
 // Where the save file lives. Left alone this is the app's display name, which moves
@@ -31,7 +31,7 @@ app.setPath(
 )
 
 // One window. A second launch raises the one already open rather than starting a second
-// uploader against the same board, which would happily create the same post twice.
+// copy against the same board, which would happily upload the same image twice.
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 }
@@ -61,30 +61,6 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
-
-  /**
-   * Closing with an image still staged asks first (`main/close-guard.ts`). The veto has to
-   * be synchronous — a `close` handler that awaits has already let the window go — so the
-   * close is cancelled outright and re-issued, as a `destroy`, only if the answer is yes.
-   * `asking` is what stops a second × while the dialog is up from stacking another.
-   */
-  let asking = false
-  mainWindow.on('close', (event) => {
-    const window = mainWindow
-    if (!window || !stagedWorkIsWorthKeeping()) return
-    event.preventDefault()
-    if (asking) return
-    asking = true
-    void confirmClose(window)
-      .then((confirmed) => {
-        // Destroy, not close: this is past the question, and going through `close` again
-        // would only ask it a second time.
-        if (confirmed) window.destroy()
-      })
-      .finally(() => {
-        asking = false
-      })
-  })
 
   mainWindow.on('closed', () => {
     mainWindow = null
@@ -132,6 +108,11 @@ void app.whenReady().then(() => {
   dropStoredLogin()
   // And the tag rules, which are rows on the board now — see `dropStoredRules`.
   dropStoredRules()
+  // The browse grid and the AI board's tag index went with the boards (0012). Everything in
+  // `app-cache` is droppable at any moment, so this is tidiness rather than a migration.
+  for (const file of ['browse.json', 'browse.generative.json', 'tags.generative.json']) {
+    dropCache(file)
+  }
   // Before the first drag can be fetched: images come in as addresses from a browser
   // that may well resolve them over a DNS this machine does not use (`main/dns.ts`).
   configureDns()

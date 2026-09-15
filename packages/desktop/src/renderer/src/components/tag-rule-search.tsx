@@ -32,7 +32,7 @@ const MATCH_LIMIT = 8
  * grid's filter both offer.
  *
  * The list is derived as it is drawn rather than held in state, which is what keeps it
- * from being briefly wrong about what was typed — `Browse`'s box takes the same line.
+ * from being briefly wrong about what was typed.
  * What is already in the rule is left out, and so is the tag the rule is about: a tag
  * implying itself is the one rule that can never fire.
  */
@@ -63,8 +63,8 @@ export function RuleSearch({
       (all ?? [])
         .filter((option) => !taken.has(option.name) && option.name.includes(typed))
         // A tag whose name *starts* with what was typed is nearly always the one meant, and
-        // the index arrives in count order, which on a board of several hundred puts a
-        // popular tag that merely contains the word ahead of the one being spelled out.
+        // A–Z alone, on a board of several hundred, puts a tag that merely contains the word
+        // ahead of the one being spelled out.
         .sort((a, b) => Number(b.name.startsWith(typed)) - Number(a.name.startsWith(typed)))
         .slice(0, MATCH_LIMIT)
     )

@@ -51,10 +51,10 @@ export function ShelfList({
 
       {naming && (
         <Panel title="New collection">
-          {/* A name, a mark and a rating. There is no cover to choose — it is the newest
-              image on the shelf — and nothing to file the shelf under. */}
+          {/* A name, a mark, a rating and the AI flag. There is no cover to choose — it is
+              the newest image on the shelf — and nothing to file the shelf under. */}
           <CollectionForm
-            initial={{ name: '', mark: '', rating: 'g' }}
+            initial={{ name: '', mark: '', rating: 'g', is_ai: false }}
             submitLabel="Create"
             onSubmit={async (input) => {
               const result = await window.api.createCollection(input)
@@ -124,6 +124,12 @@ function ShelfCard({ collection, onOpen }: { collection: Collection; onOpen: () 
         <span className="flex items-center justify-between gap-1 text-[11px]">
           <span className="text-muted">
             #{collection.id} · {images}
+            {collection.is_ai && (
+              <span aria-label="AI" title="Generated images">
+                {' '}
+                🤖
+              </span>
+            )}
           </span>
           <span className={RATING_COLOR[collection.rating]}>
             {RATING_LABEL[collection.rating]}

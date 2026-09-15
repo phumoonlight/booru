@@ -49,7 +49,7 @@ export function toggleRuleName(current: string[], name: string): string[] {
  * **The right side is still not typed — it is searched.** Each column has a box, and a
  * name is added by picking it out of what the box finds. A rule can only name tags the
  * board actually has, which was already the rule everywhere a post is tagged
- * (`CategoryTagField` offers existing tags only) and is true here too, on the one screen
+ * (no write path coins one) and is true here too, on the one screen
  * where coining the missing one is a button away. What it costs is a rule written ahead of
  * the tag it names; that was never worth much, since such a rule sits silent until the tag
  * exists.
@@ -103,7 +103,7 @@ export function TagRuleEditor({ tag }: { tag: string }) {
             along as well. A rating here can only push a post <em>up</em> — it never lowers one.
           </Tip>
           {/* Every control in this column writes on use, so this word is the whole
-              feedback it gives — the same line the post editor draws, for the same reason.
+              feedback it gives.
               A rule is a round trip to the board now rather than a line in a local file,
               and a panel that looks identical while one is in flight is a panel you press
               twice. */}
@@ -125,10 +125,10 @@ export function TagRuleEditor({ tag }: { tag: string }) {
         />
 
         {/* A floor, not a setting: it lifts an image rated lower and leaves a higher one
-            alone, which is `raisedRating` and is said here rather than left to be
-            discovered. The one thing on this panel still chosen from a menu, because a
-            rating is not among the tags in the grid and never could be. It writes on
-            change — there is no rule to compose, only a value to set.
+            alone, which is said here rather than left to be discovered. The one thing on
+            this panel still chosen from a menu, because a rating is not among the tags in
+            the grid and never could be. It writes on change — there is no rule to compose,
+            only a value to set.
 
             Disabled while that write is out, unlike the chips beside it. A chip is a
             list you add to, so pressing a second one mid-write is a second thing to do;

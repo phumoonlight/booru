@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { PostAppApi, PreferencesInput, StagedState, UploadRequest } from '../shared/api'
+import type { PostAppApi, PreferencesInput } from '../shared/api'
 
 /**
  * The bridge. Nothing but these functions crosses into the page — no `ipcRenderer`, no
@@ -16,24 +16,13 @@ const api: PostAppApi = {
   chooseFiles: () => ipcRenderer.invoke('files:choose'),
   stageFiles: (paths, target) => ipcRenderer.invoke('files:stage', paths, target),
   fetchImages: (urls, target) => ipcRenderer.invoke('files:fetch', urls, target),
-  previewFile: (path) => ipcRenderer.invoke('files:preview', path),
   pathForFile: (file: File) => webUtils.getPathForFile(file),
-  listTags: (board) => ipcRenderer.invoke('tags:list', board),
-  suggestTags: (query, board) => ipcRenderer.invoke('tags:suggest', query, board),
+  listTags: () => ipcRenderer.invoke('tags:list'),
   clearTagCache: () => ipcRenderer.invoke('tags:clear-cache'),
-  readBrowseCache: (board) => ipcRenderer.invoke('browse:read-cache', board),
-  writeBrowseCache: (cache) => ipcRenderer.invoke('browse:write-cache', cache),
-  clearBrowseCache: (board) => ipcRenderer.invoke('browse:clear-cache', board),
   listRules: (kind) => ipcRenderer.invoke('rules:list', kind),
   saveRule: (kind, tag, names) => ipcRenderer.invoke('rules:save', kind, tag, names),
   listFormSections: () => ipcRenderer.invoke('sections:list'),
   saveFormSections: (edit) => ipcRenderer.invoke('sections:save', edit),
-  uploadPost: (request: UploadRequest) => ipcRenderer.invoke('post:upload', request),
-  searchPosts: (options) => ipcRenderer.invoke('posts:search', options),
-  getPost: (id, board) => ipcRenderer.invoke('posts:get', id, board),
-  savePost: (request) => ipcRenderer.invoke('posts:save', request),
-  deletePost: (id, board) => ipcRenderer.invoke('posts:delete', id, board),
-  postThumbnail: (fileName, board) => ipcRenderer.invoke('posts:thumbnail', fileName, board),
   createTag: (name, category, sectionId) =>
     ipcRenderer.invoke('tags:create', name, category, sectionId),
   renameTag: (id, name) => ipcRenderer.invoke('tags:rename', id, name),
@@ -41,11 +30,6 @@ const api: PostAppApi = {
   setTagFormSection: (id, sectionId) => ipcRenderer.invoke('tags:set-section', id, sectionId),
   setTagMark: (id, mark) => ipcRenderer.invoke('tags:set-mark', id, mark),
   deleteTag: (id) => ipcRenderer.invoke('tags:delete', id),
-  applyTagToTagged: (target, condition, board) =>
-    ipcRenderer.invoke('tags:apply', target, condition, board),
-  // The one channel with nothing to answer: main only reads it when the window closes,
-  // and the renderer pushes on every change, so a reply would be noise.
-  reportStaged: (state: StagedState) => ipcRenderer.send('upload:state', state),
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   getSiteState: () => ipcRenderer.invoke('site:state'),
   saveSiteState: (input) => ipcRenderer.invoke('site:save', input),

@@ -1,4 +1,4 @@
--- Who may do what. Re-applied by `db:push` after every migration, and by `db:reset`.
+-- Who may do what. Re-applied by `db:push` after every migration.
 --
 -- Separate from the schema because it is **desired state, not history**. It lived at the
 -- bottom of the baseline for one afternoon, which was long enough to find the hole: a
@@ -33,9 +33,8 @@
 -- make it again from SQL.
 do $$
 declare
-  app_tables constant text[] := array['posts', 'tags', 'post_tags', 'tag_rules',
+  app_tables constant text[] := array['tags', 'tag_rules',
                                       'tag_form_sections', 'tag_form_section_deps',
-                                      'generative_posts', 'generative_post_tags',
                                       'collections', 'collection_posts'];
   entry text;
 begin
@@ -44,18 +43,10 @@ begin
     foreach entry in array app_tables loop
       execute format('grant select on public.%I to booru_web', entry);
     end loop;
-    -- The website's only write. A column grant rather than a policy, so the database
-    -- refuses a stray update to `rating` instead of the code remembering not to make one.
-    execute 'grant update (view_count) on public.posts to booru_web';
-    -- The same one column on the second board. A view counted there is still a view, and
-    -- the grant is written out a second time rather than looped because it is the one
-    -- thing in this file that is not "everything on these tables" — a loop over the list
-    -- would hide that `posts` and `generative_posts` are the only two rows the website
-    -- may touch at all.
-    execute 'grant update (view_count) on public.generative_posts to booru_web';
-    -- And the third gallery. A collection post is not a post — no tags, no search, its own
-    -- pair of tables — but it is an image on a page that somebody looked at, and a view is
-    -- a view wherever it happens. Same single column, same reasoning.
+    -- The website's only write: one column, the view counter on a collection image. A
+    -- column grant rather than a policy, so the database refuses a stray update to anything
+    -- else instead of the code remembering not to make one. It was three — `posts` and
+    -- `generative_posts` had the same grant until both tables were dropped (0012).
     execute 'grant update (view_count) on public.collection_posts to booru_web';
     -- What the site is doing — the maintenance switch, and whatever setting comes after
     -- it. Read on every visit that isn't answered from the ten-minute hold, and read only:

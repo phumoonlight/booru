@@ -38,15 +38,15 @@ export function About({ status }: { status: AppStatus }) {
       </div>
 
       <p className="text-sm text-muted">
-        The board’s upload page, run locally. Compression is CPU work — a full-size AVIF
-        for the post and a lossy one for the thumbnail — which is what a serverless tier
-        is billed for by the second and killed at ten of them. Here it costs nothing, so
-        this app takes files the website could never have. The images go to the board’s
-        bucket and the rows to its database, which is what the website reads.
+        The site&rsquo;s shelves, artists and tags, managed locally. Compression is CPU work — a
+        full-size AVIF for each image and a lossy one for its thumbnail — which is what a serverless
+        tier is billed for by the second and killed at ten of them. Here it costs nothing, so this
+        app takes files the website could never have. The images go to the board’s bucket and the
+        rows to its database, which is what the website reads.
       </p>
 
       <dl className="flex flex-col gap-2 text-sm">
-        <Row label="Board">
+        <Row label="Site">
           {status.siteUrl ? (
             <button
               type="button"

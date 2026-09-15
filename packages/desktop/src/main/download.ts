@@ -276,7 +276,7 @@ async function downloadOne(address: string, target: StageTarget): Promise<StageO
 /** Downloads each address and stages what came back. Sequential, like `stageFiles`. */
 export async function downloadImages(
   addresses: string[],
-  target: StageTarget = 'post'
+  target: StageTarget
 ): Promise<StageOutcome[]> {
   const outcomes: StageOutcome[] = []
   for (const address of addresses) {

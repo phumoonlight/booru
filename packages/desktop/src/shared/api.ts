@@ -1,7 +1,5 @@
-import type { Board } from '@common/board'
 import type { Rating } from '@common/search'
 import type { Tag, TagCategory } from '@common/tags'
-import type { Post, PostPage } from '@common/data/posts'
 import type { UploadResult } from '@common/upload/pipeline'
 import type { FormSectionEdit, FormSections } from '@common/data/form-sections'
 import type { RuleKind, TagRules } from '@common/data/rules'
@@ -18,13 +16,6 @@ import type { SiteState } from '@common/data/site'
  *
  * Types only — imported by the preload bridge, by the renderer, and by the handlers, so
  * a channel that changes shape breaks all three at once instead of at runtime.
- *
- * **Every channel about a post or a count takes a `Board`.** Which of the two boards the
- * window is in is the renderer's state (`renderer/src/board-store.ts`) and travels with
- * the call, so an upload or an edit lands where it was begun even if the switch is flipped
- * while it is in flight. It is optional on every signature and defaults to the gallery,
- * which is what makes the channels that do not care — the vocabulary, the rules, the
- * sections, the settings — unchanged: a tag means the same thing on both boards.
  */
 
 /**
@@ -70,7 +61,8 @@ export type AppStatus = {
    * a connection attempt.
    */
   configured: boolean
-  /** Where a finished post can be opened. Compiled in, and shown on the settings screen. */
+  /** The website, where a shelf or an image can be opened. Compiled in, and shown on the
+   *  settings screen. */
   siteUrl: string
   /**
    * The database's **host**, not its URL. The settings screen answers "which board is
@@ -105,28 +97,16 @@ export type AppStatus = {
 }
 
 /**
- * The browse grid as it is kept on disk for a day (`main/browse-cache.ts`). The query
- * travels with the rows because it is what they answer: a grid drawn under a query that
- * did not produce it is the one way this cache could lie.
- */
-export type BrowseCacheFile = { at: number; query: string; posts: Post[]; hasMore: boolean }
-
-/**
  * What a batch of files is being staged *for*, which is the only thing the duplicate check
- * needs to know. The two boards ask "is this already a post here"; a collection asks "is
- * this already on any shelf", because `collection_posts.file_name` is unique across the
- * whole table.
- *
- * A union with `Board` rather than a third member of `Board` itself: a collection is not a
- * board (`@common/collections`), and the only place the difference vanishes is here, where
- * the question happens to be the same shape. An artist's example images are the same shape
- * again: unique across every artist, so the answer names whose they are.
+ * needs to know. A collection asks "is this already on any shelf", because
+ * `collection_posts.file_name` is unique across the whole table; an artist's example images
+ * are the same shape again — unique across every artist, so the answer names whose they are.
  */
-export type StageTarget = Board | 'collection' | 'artist'
+export type StageTarget = 'collection' | 'artist'
 
 /**
  * A file the main process has looked at: within the limits, decodable, and already
- * carrying the small preview the queue paints. `main/staging.ts` produces these.
+ * carrying the small preview the staging batch paints. `main/staging.ts` produces these.
  */
 export type StagedFile = {
   path: string
@@ -137,7 +117,7 @@ export type StagedFile = {
   /** A `data:` URL small enough to hand straight to an `<img>`, or '' if the preview failed. */
   preview: string
   /**
-   * The md5 of the bytes, which is what the post would be named — so it is also the
+   * The md5 of the bytes, which is what the image would be named — so it is also the
    * question "is this already up?", asked at staging rather than at upload.
    */
   md5: string
@@ -145,55 +125,16 @@ export type StagedFile = {
 
 export type StageOutcome =
   | ({ ok: true } & StagedFile & {
-        /** The post already holding these bytes, or null — including when the board could
+        /** The row already holding these bytes, or null — including when the board could
          *  not be reached, since that is not the same as knowing it is new. */
         duplicateOf: number | null
-        /** For a collection target, the shelf that post is on; for an artist target, the
-         *  artist. Null everywhere else — a post is identified by its number, and a shelved
-         *  image by where it is shelved. */
+        /** For a collection target, the shelf that image is on; for an artist target, the
+         *  artist. Null when there is no duplicate. */
         duplicateIn: string | null
       })
   | { ok: false; path: string; name: string; error: string }
 
-export type TagSuggestion = { name: string; category: TagCategory; post_count: number }
-
-export type UploadRequest = {
-  path: string
-  /** Which board the post lands on. Omitted is the gallery. */
-  board?: Board
-  /** Space-separated, exactly as the tag field renders it — the pipeline parses it. */
-  tags: string
-  rating: Rating
-  sourceUrl: string
-}
-
-/**
- * What the upload screen is holding, pushed to main whenever it changes. Closing the
- * window is the only thing that reads it — `main/close-guard.ts` has why it is pushed
- * rather than asked for.
- *
- * Booleans rather than counts, since the screen stages one image at a time: what main has
- * to decide is whether there is anything to lose, and "an image with tags typed into it"
- * and "the number of the post just made" are the two things that are.
- */
-export type StagedState = {
-  /** An image staged and not uploaded — tags typed by hand and held nowhere else. */
-  staged: boolean
-  /** A finished upload still on screen, with the post number it made. */
-  uploaded: boolean
-  /** Whether an upload is in flight right now. */
-  busy: boolean
-}
-
 export type Outcome = { ok: true } | { ok: false; error: string }
-
-/** A post the editor has open: the row, and its tags as the field wants them. */
-export type LoadedPost = { post: Post; tags: Tag[] }
-
-/** What `tags:apply` answers with — the counts are the point, not the ok. */
-export type ApplyTagOutcome =
-  | { ok: true; target: string; condition: string; added: number; already: number }
-  | { ok: false; error: string }
 
 /** A rename and a create both answer with the name as it was actually stored. */
 export type NamedOutcome = { ok: true; name: string } | { ok: false; error: string }
@@ -204,48 +145,26 @@ export type CollectionNamed = { ok: true; id: number; name: string } | { ok: fal
 
 /** A shelf's edit, answering with what was stored — the mark is trimmed or cleared there. */
 export type CollectionEdited =
-  | { ok: true; name: string; mark: string | null; rating: Rating }
+  | { ok: true; name: string; mark: string | null; rating: Rating; is_ai: boolean }
   | { ok: false; error: string }
 
 export type PostAppApi = {
   getStatus: () => Promise<AppStatus>
   /** Writes and applies the compression preferences, answering with what was stored. */
   savePreferences: (preferences: PreferencesInput) => Promise<PreferencesInput>
-  /** `remember` writes the credentials to the save file; false wipes what was there. */
   /** Opens the OS picker. Returns the paths chosen, empty if cancelled. */
   chooseFiles: () => Promise<string[]>
   /** `target` because staging asks "is this already up?", and where that is asked decides
    *  the answer — see `StageTarget`. */
-  stageFiles: (paths: string[], target?: StageTarget) => Promise<StageOutcome[]>
+  stageFiles: (paths: string[], target: StageTarget) => Promise<StageOutcome[]>
   /** Downloads images dragged in from a browser, then stages them like picked files. */
-  fetchImages: (urls: string[], target?: StageTarget) => Promise<StageOutcome[]>
-  /**
-   * A screen-sized version of one staged file, for the viewer a clicked row opens. Made
-   * on request rather than kept in `StagedFile`, and '' if it couldn't be drawn.
-   */
-  previewFile: (path: string) => Promise<string>
+  fetchImages: (urls: string[], target: StageTarget) => Promise<StageOutcome[]>
   /** Drag-and-drop hands the renderer a `File` with no path on it; this asks Electron for one. */
   pathForFile: (file: File) => string
-  /**
-   * The board's tag index, most used first — what the Tags screen paints. The *vocabulary*
-   * is the same list on either board; `board` decides only the count beside each name,
-   * which is also what orders it.
-   */
-  listTags: (board?: Board) => Promise<Tag[]>
-  suggestTags: (query: string, board?: Board) => Promise<TagSuggestion[]>
+  /** The board's tag index, A–Z — what the Tags screen paints. */
+  listTags: () => Promise<Tag[]>
   /** Throws away the cached tag index; the next lookup reads the board again. */
   clearTagCache: () => Promise<void>
-  /** The browse grid from the last session, if it is less than a day old — `main/browse-cache.ts`. */
-  readBrowseCache: (board?: Board) => Promise<BrowseCacheFile | null>
-  /** Hands the rows on screen to disk, stamped with the moment they are written. */
-  writeBrowseCache: (cache: {
-    query: string
-    posts: Post[]
-    hasMore: boolean
-    board?: Board
-  }) => Promise<void>
-  /** Drops the stored grid, so the next launch reads the board instead of drawing this. */
-  clearBrowseCache: (board?: Board) => Promise<void>
   /**
    * The board's tag rules of one kind — `'implies'` is applied by itself
    * (`shared/implications.ts`), `'recommends'` is only offered
@@ -267,37 +186,6 @@ export type PostAppApi = {
    */
   listFormSections: () => Promise<FormSections>
   saveFormSections: (edit: FormSectionEdit) => Promise<{ sections: FormSections; error?: string }>
-  uploadPost: (request: UploadRequest) => Promise<UploadResult>
-  /**
-   * Browse the board. The same query grammar the website's search bar uses — one
-   * implementation, in `@common/data/search` — so a query means the same thing in both
-   * windows. `after` is the feed's cursor: strictly older than that post, and `perPage`
-   * is the grid's own screenful — omitted, the read falls back to the website's page
-   * size, which is a page's decision and not this window's.
-   */
-  searchPosts: (options: {
-    query?: string
-    after?: number
-    perPage?: number
-    board?: Board
-  }) => Promise<PostPage>
-  /** One post and its tags, for the editor. */
-  getPost: (id: number, board?: Board) => Promise<LoadedPost | null>
-  /** Rewrites a post's rating, source and whole tag set. */
-  savePost: (request: {
-    id: number
-    tags: string
-    rating: Rating
-    sourceUrl: string
-    board?: Board
-  }) => Promise<Outcome>
-  /** Removes the post row and both of its stored images. */
-  deletePost: (id: number, board?: Board) => Promise<Outcome>
-  /**
-   * A post's thumbnail as a `data:` URL. Fetched by main because the window's CSP allows
-   * `self` and `data:` and nothing else, which is a rule worth an IPC hop to keep.
-   */
-  postThumbnail: (fileName: string, board?: Board) => Promise<string>
   /** `sectionId` is a row of `tag_form_sections`, or null for none. */
   createTag: (
     name: string,
@@ -312,11 +200,6 @@ export type PostAppApi = {
   /** Sets the glyphs drawn in front of the tag's name, or clears them with ''. */
   setTagMark: (id: number, mark: string) => Promise<Outcome>
   deleteTag: (id: number) => Promise<Outcome>
-  /** Adds one tag to every post already carrying another — on one board, since the two
-   *  are different sets of posts and the counts it answers with are the point. */
-  applyTagToTagged: (target: string, condition: string, board?: Board) => Promise<ApplyTagOutcome>
-  /** Tells main what the upload screen holds, so closing can ask before dropping it. */
-  reportStaged: (state: StagedState) => void
   openExternal: (url: string) => Promise<void>
   /**
    * `save.json` out to a file, and back in from one. Each opens its own picker on the
@@ -326,7 +209,7 @@ export type PostAppApi = {
   /**
    * The website's maintenance switch — `site_settings` on the board. `null` is a board
    * that could not be asked, which the settings screen must draw as its own state: `false`
-   * means visitors are being served the gallery, and a copy of the app that cannot reach
+   * means visitors are being served the site, and a copy of the app that cannot reach
    * the database has no business claiming either.
    */
   getSiteState: () => Promise<SiteState | null>
@@ -336,15 +219,13 @@ export type PostAppApi = {
     message: string
   }) => Promise<{ ok: true; state: SiteState } | { ok: false; error: string }>
   // ── Collections ──────────────────────────────────────────────────────────────
-  // A separate shelf of images with no tags on them, so none of these takes a `Board`:
-  // a collection is not one (`@common/collections`), and the switch in the header does
-  // nothing to this screen.
+  // The shelves, which are the whole of what the website shows. No tags on them.
 
   /** Every shelf, most recently touched first — including empty ones, unlike the website. */
   listCollections: () => Promise<Collection[]>
   /** Names a new shelf. A duplicate name is the one failure worth wording. */
   createCollection: (input: CollectionInput) => Promise<CollectionNamed>
-  /** Its name, mark and rating, answering with each as stored. */
+  /** Its name, mark, rating and AI flag, answering with each as stored. */
   editCollection: (id: number, input: CollectionInput) => Promise<CollectionEdited>
   /** Refused while the shelf still holds anything — the whole rule of the feature. */
   deleteCollection: (id: number) => Promise<Outcome>
@@ -354,19 +235,14 @@ export type PostAppApi = {
     after?: number
     perPage?: number
   }) => Promise<CollectionPostPage>
-  /** One image onto one shelf. No tags, which is why this is not `uploadPost`. */
+  /** One image onto one shelf. No rating: an image's tier is its shelf's. */
   uploadToCollection: (request: {
     collectionId: number
     path: string
-    rating: Rating
     sourceUrl: string
   }) => Promise<UploadResult>
-  /** A collection image's rating and source — the whole of what there is to edit in place. */
-  saveCollectionPost: (request: {
-    id: number
-    rating: Rating
-    sourceUrl: string
-  }) => Promise<Outcome>
+  /** A collection image's source — the whole of what there is to edit on one image. */
+  saveCollectionPost: (request: { id: number; sourceUrl: string }) => Promise<Outcome>
   /** Onto another shelf. Its own channel rather than a field on `saveCollectionPost`,
    *  because it is a change to two collections rather than to one image. */
   moveCollectionPost: (id: number, collectionId: number) => Promise<Outcome>
@@ -374,8 +250,8 @@ export type PostAppApi = {
   deleteCollectionPost: (id: number) => Promise<Outcome>
   collectionThumbnail: (fileName: string) => Promise<string>
   // ── Artists ──────────────────────────────────────────────────────────────────
-  // A reading list kept apart from everything else — not a tag, not a board, nowhere on
-  // the website — so none of these takes a `Board` either.
+  // A reading list kept apart from everything else — not a tag, not a shelf, nowhere on
+  // the website.
 
   /** Every artist, never-read first, then oldest read to newest. */
   listArtists: () => Promise<Artist[]>
@@ -410,7 +286,7 @@ export type PostAppApi = {
 
   exportSettings: () => Promise<TransferResult>
   importSettings: () => Promise<TransferResult>
-  /** Reveals `save.json` — preferences and tag rules — in the OS file manager. */
+  /** Reveals `save.json` — the preferences — in the OS file manager. */
   openDataFolder: () => Promise<void>
 }
 

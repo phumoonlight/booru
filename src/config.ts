@@ -30,7 +30,7 @@
 export const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || 'Booru'
 
 export const SITE_DESCRIPTION =
-  'A tag-centric image board — browse by tag, search with multiple tags, exclude with -tag.'
+  'An image board of hand-kept collections — the newest images, and every collection by name.'
 
 /**
  * Absolute site origin, used for `metadataBase`, canonicals, the sitemap and robots.
@@ -54,19 +54,6 @@ export function siteUrl(): string {
  */
 export function cdnBase(): string {
   return (process.env.NEXT_PUBLIC_CDN_URL ?? '').replace(/\/+$/, '')
-}
-
-/**
- * Whether `lib/request-log.ts` writes a line per read. On unless `LOG_READS=off`, so the
- * board can be watched without a redeploy to start and one to stop — the traffic being
- * chased is other people's, which means it is happening in production or not at all.
- *
- * Here rather than beside the logger because this file is the only one in `src/` that
- * reads `process.env`, and a diagnostic switch is exactly the kind of variable that ends
- * up spelled two ways in two files.
- */
-export function logReads(): boolean {
-  return process.env.LOG_READS !== 'off'
 }
 
 /** The board, as `booru_web`. Read only by `lib/db.ts`, which is `server-only`. */

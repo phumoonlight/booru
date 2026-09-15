@@ -5,9 +5,10 @@ import { BUTTON_SUBMIT_ON_SURFACE } from './buttons'
 import { FIELD } from './panel'
 
 /**
- * What a shelf is — its mark, its name and its rating — as one form, for naming a new one
- * and for editing one. The same three boxes in both places, because a shelf made without a
- * rating is the R-18 shelf that turns up on the website with the setting off.
+ * What a shelf is — its mark, its name, its rating and whether it is generated work — as
+ * one form, for naming a new one and for editing one. The same four controls in both
+ * places, because a shelf made without a rating is the R-18 shelf that turns up on the
+ * website with the setting off, and every image on it takes that rating.
  *
  * `onSubmit` answers with the refusal to show, or null once it has landed.
  */
@@ -70,6 +71,18 @@ export function CollectionForm({
             </option>
           ))}
         </select>
+        {/* A checkbox rather than a pair of segments: it is one fact about the shelf, off
+            for most of them, and the website is what does something with it — the AI board
+            this replaced is a filter there now. */}
+        <label className="flex min-h-9 items-center gap-1.5 text-sm text-muted">
+          <input
+            type="checkbox"
+            checked={input.is_ai}
+            onChange={(event) => setInput({ ...input, is_ai: event.target.checked })}
+            className="accent-accent"
+          />
+          <span aria-hidden>🤖</span> AI
+        </label>
         <button type="submit" disabled={busy} className={BUTTON_SUBMIT_ON_SURFACE}>
           <span aria-hidden>✅</span> {submitLabel}
         </button>

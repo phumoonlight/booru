@@ -6,19 +6,18 @@ import { app } from 'electron'
  * One folder — `app-cache` inside the app's data folder — for everything the app holds
  * only because reading it again is slow, and nothing else.
  *
- * The tag index started out as a file beside `save.json`, and the browse grid was not on
- * disk at all. Two kinds of file in one folder is one question too many: `save.json` is
- * settings, meant to be opened, hand-edited and carried to another machine, and losing it
- * loses something. Everything in here is a copy of what the board already holds, so the
- * whole folder can be deleted at any moment and the only cost is the next read. Keeping
- * them apart means that sentence stays true without anyone having to check which file is
- * which.
+ * The tag index started out as a file beside `save.json`. Two kinds of file in one folder
+ * is one question too many: `save.json` is settings, meant to be opened, hand-edited and
+ * carried to another machine, and losing it loses something. Everything in here is a copy
+ * of what the board already holds, so the whole folder can be deleted at any moment and
+ * the only cost is the next read. Keeping them apart means that sentence stays true
+ * without anyone having to check which file is which.
  *
  * The JSON files in here are `{ at, … }` — when it was read, then whatever it holds — and
  * a day old is the point at which one stops being trusted. What "stops being trusted"
  * means is the caller's, not this file's: the tag index serves a stale copy rather than
- * nothing when the board cannot be reached, and the browse grid simply goes. `thumbs/`
- * is the exception with no clock on it at all, and `main/thumb-cache.ts` says why.
+ * nothing when the board cannot be reached. `thumbs/` is the exception with no clock on it
+ * at all, and `main/thumb-cache.ts` says why.
  *
  * This file knows the folder, the day and the JSON; what any one cache holds is its own.
  */

@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import type { ArtistImage } from '../../../shared/api'
 import { thumbnailFor, thumbnails } from './artist-thumbs'
 
-/** How tall an example is drawn. One height and a width from the ratio, the way Browse's 📐
- *  Ratio lays out — an example is looked at for its composition, and a square crop is the
+/** How tall an example is drawn. One height and a width from the ratio, the way a shelf's
+ *  grid lays out — an example is looked at for its composition, and a square crop is the
  *  one thing guaranteed to cut that off. Two thirds of the stored thumbnail's 384px, so it
  *  is big enough to judge a style by and still sharp. */
 const ROW_HEIGHT = 256

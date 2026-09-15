@@ -1,30 +1,21 @@
 /**
  * What a collection is, spelled once — the tables it lives in, the addresses it takes on
- * the website, and what counts as a name.
+ * the website, the list's search as a URL carries it, and what counts as a name and a mark.
  *
- * A collection is a named set of images that are **not posts**. They carry no tags, they
- * are never searched, each one belongs to exactly one collection, and none of them appear
- * in either gallery. That is the whole point: the board is a tag vocabulary, and an image
- * nobody would file under a tag — the one-off, the niche piece, the thing that only makes
- * sense beside the four others it came with — dilutes every tag it is given. A shelf is a
- * better answer than a bad tag.
+ * A collection is a named set of images, and since the boards were dropped (0012) it is
+ * what the site is made of. Its images carry no tags; each belongs to exactly one shelf and
+ * takes that shelf's rating.
  *
- * **So it is not a third `Board`.** `@common/board` is a lookup of three table names per
- * board, two of which are about tags, and a `BOARD.collection` entry would have carried a
- * `postTags` and a `tagCount` that every read, every counter and every facet would then
- * have to test for — and a `path` the search grammar could address, which is the one thing
- * this section must not be. The two boards are one page twice because a generated image
- * *is* a post; a collection is a different shape, so it gets its own small set of reads
- * (`@common/data/collections`) and its own three routes.
- *
- * Nothing here imports anything, the way `@common/board` doesn't, so it can sit under
- * `@common/storage` without a cycle.
+ * It imports only `@common/search`'s rating vocabulary, which imports nothing, so it can
+ * sit under `@common/storage` without a cycle.
  */
+
+import { asRating, RATING_NAME, type Rating } from '@common/search'
 
 /**
  * The two tables, spelled here and interpolated as identifiers by
- * `@common/data/collections` — the same rule invariant 10 makes of the boards, for the
- * same reason. A table name written into a query is a table name that can be typed wrong.
+ * `@common/data/collections` — invariant 10. A table name written into a query is a table
+ * name that can be typed wrong.
  */
 export const COLLECTION_TABLES = {
   collections: 'collections',
@@ -32,7 +23,7 @@ export const COLLECTION_TABLES = {
 } as const
 
 /**
- * Object prefixes, beside the boards' under one bucket. A collection's images are not
+ * Object prefixes, under the one bucket. A collection's images are not
  * filed per collection — `collections/posts/<md5>.<ext>` and not
  * `collections/<id>/posts/…` — because `collection_posts.file_name` is unique across the
  * whole table: an image is in exactly one collection, so its name already identifies it,
@@ -42,12 +33,50 @@ export const COLLECTION_TABLES = {
 export const COLLECTION_POST_PREFIX = 'collections/posts'
 export const COLLECTION_THUMB_PREFIX = 'collections/thumbs'
 
-/** Where the shelf lives on the website. The only place this path is spelled, the way
- *  `searchHref` is the only place `/posts` is. */
+/** Where the shelf list lives on the website. The only place this path is spelled. */
 export const COLLECTIONS_PATH = '/collections'
 
-export function collectionsHref(): string {
-  return COLLECTIONS_PATH
+/**
+ * The shelf list's search, as its URL carries it: `?q=` a piece of the name, `?rating=`
+ * a tier by its query name (`general`, `r18`), `?ai=1` or `?ai=0`. Spelled here and read
+ * back by `readCollectionFilter`, so the form that writes them and the page that reads them
+ * cannot disagree.
+ */
+export const COLLECTION_FILTER_PARAMS = { name: 'q', rating: 'rating', ai: 'ai' } as const
+
+export type CollectionListFilter = { name?: string; rating?: Rating; isAi?: boolean }
+
+/** The shelf list, narrowed by `filter` — every field optional, an empty one left out. */
+export function collectionsHref(filter: CollectionListFilter = {}): string {
+  const params = new URLSearchParams()
+  const name = filter.name?.trim()
+  if (name) params.set(COLLECTION_FILTER_PARAMS.name, name)
+  if (filter.rating) params.set(COLLECTION_FILTER_PARAMS.rating, RATING_NAME[filter.rating])
+  if (filter.isAi !== undefined) params.set(COLLECTION_FILTER_PARAMS.ai, filter.isAi ? '1' : '0')
+  const query = params.toString()
+  return query ? `${COLLECTIONS_PATH}?${query}` : COLLECTIONS_PATH
+}
+
+/**
+ * The filter a page's `searchParams` carry. Loose on the way in, as `asRating` is: a
+ * value it does not recognise is dropped rather than refused, so a hand-edited URL costs
+ * that one filter and never the page.
+ */
+export function readCollectionFilter(
+  params: Record<string, string | string[] | undefined>
+): CollectionListFilter {
+  const one = (key: string) => {
+    const raw = params[key]
+    return typeof raw === 'string' ? raw.trim() : ''
+  }
+  const name = one(COLLECTION_FILTER_PARAMS.name).slice(0, COLLECTION_NAME_MAX)
+  const rating = asRating(`rating:${one(COLLECTION_FILTER_PARAMS.rating)}`) ?? undefined
+  const ai = one(COLLECTION_FILTER_PARAMS.ai)
+  return {
+    ...(name ? { name } : {}),
+    ...(rating ? { rating } : {}),
+    ...(ai === '1' || ai === '0' ? { isAi: ai === '1' } : {}),
+  }
 }
 
 /** One collection's contents. */

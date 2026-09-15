@@ -1,8 +1,4 @@
-import type { CSSProperties, Ref } from 'react'
-import type { Post } from '@/lib/data/posts'
-import { PostCard } from '@/components/post-card'
-import type { Board } from '@common/board'
-import { startOf } from '@common/search'
+import type { CSSProperties } from 'react'
 
 /**
  * Justified rows, the way Google Photos lays a gallery out: every row spans the full
@@ -33,9 +29,8 @@ const MAX_ROW = 1.2
     would reserve width the image can't fill. */
 const MAX_RATIO = 2
 
-/** Exported because the collections grid lays out the same thumbnails the same way. The
- *  band, the cap and `MAX_RATIO` are one decision tied to `THUMB_MAX_HEIGHT`, and a second
- *  copy of it is how the two galleries would drift apart by a re-encode nobody noticed. */
+/** One tile's share of its row. The band, the cap and `MAX_RATIO` are one decision tied to
+ *  `THUMB_MAX_HEIGHT`, which is why `CollectionGrid` imports this rather than a copy. */
 export function itemStyle(width: number, height: number): CSSProperties {
   const ratio = Math.min(width / Math.max(height, 1), MAX_RATIO)
   return {
@@ -46,41 +41,11 @@ export function itemStyle(width: number, height: number): CSSProperties {
   }
 }
 
-/** `query` rides along for the cards' 🔖 badge, which adds its cursor to whatever
-    search is on screen. Parsed once here rather than per card.
-
-    `ref` reaches the `<ul>` itself, which is how the feed watches a chunk cross the top
-    of the viewport. A wrapper around this would have been a second flex child in a
-    `gap-4` column, and so a gap of empty page above every chunk. */
-export function PostGrid({
-  posts,
-  query = '',
-  board = 'post',
-  ref,
-}: {
-  posts: Post[]
-  query?: string
-  board?: Board
-  ref?: Ref<HTMLUListElement>
-}) {
-  const start = startOf(query)
-
-  return (
-    <ul ref={ref} className={ROW}>
-      {posts.map((post) => (
-        <li key={post.id} className="min-w-0" style={itemStyle(post.width, post.height)}>
-          <PostCard post={post} query={query} active={post.id === start} board={board} />
-        </li>
-      ))}
-    </ul>
-  )
-}
-
 // Cycled so the placeholder row has the ragged ratios of real thumbs — and, because the
 // ratios drive the layout now, so that it wraps into rows the same way one will.
 const SKELETON_RATIOS = [0.7, 1.5, 0.8, 1, 1.3]
 
-export function PostGridSkeleton({ count = 12 }: { count?: number }) {
+export function ImageRowsSkeleton({ count = 12 }: { count?: number }) {
   return (
     <ul className={ROW}>
       {Array.from({ length: count }, (_, i) => (
