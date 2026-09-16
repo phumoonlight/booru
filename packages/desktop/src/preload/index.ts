@@ -33,7 +33,7 @@ const api: PostAppApi = {
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   getSiteState: () => ipcRenderer.invoke('site:state'),
   saveSiteState: (input) => ipcRenderer.invoke('site:save', input),
-  listCollections: () => ipcRenderer.invoke('collections:list'),
+  listCollections: (force) => ipcRenderer.invoke('collections:list', force === true),
   createCollection: (input) => ipcRenderer.invoke('collections:create', input),
   editCollection: (id, input) => ipcRenderer.invoke('collections:edit', id, input),
   deleteCollection: (id) => ipcRenderer.invoke('collections:delete', id),
@@ -44,6 +44,7 @@ const api: PostAppApi = {
     ipcRenderer.invoke('collections:move-posts', ids, collectionId),
   deleteCollectionPost: (id) => ipcRenderer.invoke('collections:delete-post', id),
   collectionThumbnail: (fileName) => ipcRenderer.invoke('collections:thumbnail', fileName),
+  collectionImage: (id) => ipcRenderer.invoke('collections:image', id),
   listArtists: () => ipcRenderer.invoke('artists:list'),
   createArtist: (name, isAi, isFavorite) =>
     ipcRenderer.invoke('artists:create', name, isAi, isFavorite),

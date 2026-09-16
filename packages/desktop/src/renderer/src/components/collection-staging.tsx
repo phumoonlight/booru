@@ -23,10 +23,10 @@ export function useStaging(collectionId: number, onUploaded: () => void) {
   const [rejected, setRejected] = useState<string[]>([])
   const [landed, setLanded] = useState<Landed[]>([])
   // One source for the batch: the images that arrive together are usually the four in one
-  // post, so the address is the same for all of them and typing it four times is typing it three times too often. It survives the
-  // upload rather than being cleared with the staged files — the next drop is very often
-  // the next post by the same artist, and a box you have to re-empty is cheaper than one
-  // you have to re-fill. Correcting one image's source afterwards is its own panel.
+  // post, so the address is the same for all of them and typing it four times is typing it
+  // three times too often. It is cleared with the staged files once the batch has landed —
+  // it belonged to those images, and a box still holding the last post's address is how the
+  // next batch quietly gets the wrong source. Correcting one afterwards is its own panel.
   const [source, setSource] = useState('')
   const [working, setWorking] = useState<string | null>(null)
 
@@ -107,6 +107,7 @@ export function useStaging(collectionId: number, onUploaded: () => void) {
     }
     setWorking(null)
     setStaged([])
+    setSource('')
     setLanded(results)
     // The grid is now missing whatever landed, and the shelf's cover has moved.
     onUploaded()

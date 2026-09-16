@@ -33,9 +33,13 @@ export function Collections({ siteUrl }: { siteUrl: string }) {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState<number | null>(opened)
 
-  const refresh = useCallback(async () => {
+  /** `force` is 🔄 Refresh: the list is cached for a day in main
+   *  (`main/collection-cache.ts`), and that press is the one that means "ask the board
+   *  again". Coming back from a shelf does not force it — every write in there drops the
+   *  cache on its way out, so the next read is already the board's answer. */
+  const refresh = useCallback(async (force = false) => {
     setLoading(true)
-    setCollections(await window.api.listCollections())
+    setCollections(await window.api.listCollections(force))
     setLoading(false)
   }, [])
 
@@ -85,7 +89,7 @@ export function Collections({ siteUrl }: { siteUrl: string }) {
     <ShelfList
       collections={collections}
       loading={loading}
-      onRefresh={() => void refresh()}
+      onRefresh={() => void refresh(true)}
       onOpen={show}
       onCreated={(id) => {
         // Straight into the shelf just named: naming one is something you do because you

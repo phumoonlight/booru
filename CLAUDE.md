@@ -276,10 +276,19 @@ of image on the board.
   and edited with one form — mark, name, rating, 🤖 AI — because a shelf made without a
   rating is the R-18 shelf that turns up with the setting off. Adding images is **a batch
   of files and one source**: there is nothing else per image to type, and the source is
-  what images arriving together usually share — they are the four in one post. The source
-  box survives the upload rather than being cleared with the staged files, since the next
-  drop is very often the next post by the same artist. An image's own panel is its source
-  and a held Delete.
+  what images arriving together usually share — they are the four in one post. The source is
+  cleared with the staged files once the batch has landed — it belonged to those images, and
+  a box still holding the last post's address is how the next batch quietly gets the wrong
+  source. **A drag anywhere over the shelf opens the upload box and leaves it open**, its
+  handlers sitting on a wrapper that fills the scroller rather than on the `max-w-6xl`
+  column, which left most of a wide window looking like a drop target without being one. An
+  image's own panel is its **source, read until ✏️ Edit asks for the box** — it was written
+  on blur, so the one field there could be changed by clicking into it and tabbing away —
+  **🔍 Full size**, and a held Delete.
+- **The desktop screen has a search of its own**, and it is not the website's: a box
+  narrowing the list the window is already holding in full (it has to hold it — an image's
+  panel offers moving it to any other shelf), over the mark, the name and `#id`. No read, no
+  URL, and an answer between keystrokes.
 - **Images are moved to another shelf as a selection, and no bytes move.** 🗂️ Manage turns
   the grid into a picker — a click ticks a tile instead of opening its panel — and a bar
   offers Select all, Select none and a menu of every *other* shelf with ➡️ Change
@@ -471,17 +480,30 @@ than nothing. It was one file per board while a tag carried a count per board; s
 deletes the old per-board and browse files on the way past.
 
 **The cache folder** (`main/app-cache.ts`) — `app-cache/` in `userData`, holding
-`tags.json` and `thumbs/`. Everything in it is a copy of what the board already has, so the
+`tags.json`, `collections.json`, `thumbs/` and `images/`. Everything in it is a copy of what the board already has, so the
 folder can be deleted at any moment and the only cost is the next read — which is the line
 between it and `save.json`, where losing a file loses something.
 
-**Thumbnails** (`main/thumb-cache.ts`) — `app-cache/thumbs/<file_name>.avif`, the stored
-file byte-for-byte, in memory in front of that; the shelves and the artist list both draw
-from it (`cachedThumbnail`). **Nothing expires and nothing is invalidated**: the name is the
-md5 of the bytes, so a file found under it *is* that image. That is also why it is a folder
-of bytes rather than base64 in JSON, which would be a third bigger and rewritten whole every
-time one arrived. Deleting an image sweeps up its file (`forgetThumbnail`), the only name
-that can ever stop meaning an image.
+**Images** (`main/image-cache.ts`) — `app-cache/thumbs/<file_name>.avif` and
+`app-cache/images/<file_name>.<ext>`, the stored files byte-for-byte; the shelves and the
+artist list draw their thumbnails from it (`cachedThumbnail`), and both full-size viewers
+their pictures (`cachedImage`). **Nothing expires and nothing is invalidated**: the name is
+the md5 of the bytes, so a file found under it *is* that image. That is also why it is a
+folder of bytes rather than base64 in JSON, which would be a third bigger and rewritten
+whole every time one arrived. **Only the thumbnails are also held in memory** — one is a few
+kilobytes and a grid asks for the same ones over and over, where a full size is whole
+megabytes as base64 asked for by one click at a time. Deleting an image sweeps up both of
+its files (`forgetImage`), the only name that can ever stop meaning an image.
+
+**The shelves** (`main/collection-cache.ts`) — the shelf list in `app-cache/collections.json`
+for a day, and each screenful of one shelf's images in memory for the session. What is being
+cached is the round trip, not the rows: every glance at Settings unmounts the Collections
+screen and paid for the list again on the way back. Two lifetimes because the two go stale
+differently — the list is small and complete, so it survives a restart and 🔄 Refresh forces
+past it; a shelf's images are pages cut at a cursor, right only until something lands on
+that shelf. **Every write drops all of it** (`dropping` in `main/collections.ts`, so it is
+not a line to forget), since a shelf's `updated_at` moves whenever an image is added,
+removed or moved and no write's effect is confined to one cached answer.
 
 **DNS** (`main/dns.ts`) — it resolves like a browser, not like the host. Every open-web
 fetch it makes is an address dragged out of a browser, and a browser on DoH will happily
@@ -723,7 +745,7 @@ current.
 | **The tag search** — the `?query=` grammar, `searchHref` / `postHref`, `/posts/[id]`, `/ai-posts` and `/ai-posts/[id]`, `/tags` and `/tags/[id]`, the search bar, the tag drawer, facets, saved queries (`lib/saved-queries.ts`) | Nothing carries a tag to search for. Images are found by shelf now, and the shelf list has a search of its own |
 | The **🤖 AI posts cookie** (`lib/generative.ts`, `generative-server.ts`, the settings checkbox) | There is no second gallery to volunteer. A generated shelf is `collections.is_ai`, one filter on the shelf list |
 | `lib/request-log.ts` and `LOG_READS` | A diagnostic line per read, naming which kind of request ran it; meant to come out once the traffic had a name, and the reads it watched went with the boards |
-| **Desktop Upload, Browse, the post editor and the board switch** — `upload-form.tsx`, `browse*.tsx`, `post-editor.tsx`, `board-store.ts`, `ipc-posts.ts`, `manage.ts`, `browse-cache.ts`, the image viewer and the rating guide | Everything about a post. Shelves take images as a batch from 🗂️ Collections, and the thumbnail cache moved to `thumb-cache.ts` |
+| **Desktop Upload, Browse, the post editor and the board switch** — `upload-form.tsx`, `browse*.tsx`, `post-editor.tsx`, `board-store.ts`, `ipc-posts.ts`, `manage.ts`, `browse-cache.ts`, the image viewer and the rating guide | Everything about a post. Shelves take images as a batch from 🗂️ Collections, and the thumbnail cache moved to what is now `image-cache.ts` |
 | `CategoryTagField`, the tag picker, `tag-seed.ts`, tag import and **Apply by tag**, `bumpTagCounts`, `tags:suggest` | The one tag editor, and the machinery around it, with no post left to tag. The vocabulary and its sections are kept; the field that filled them in is not |
 | `main/close-guard.ts` | It asked before closing a window whose upload screen held hand-typed tags or a just-made post number, and went with that screen |
 | `collection_posts.rating` (0012) | An image's tier is its shelf's (`collections.rating`, 0011): a shelf of adult work was still a card with a name on it, and the name alone can say plenty |

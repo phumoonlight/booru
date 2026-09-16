@@ -18,8 +18,7 @@ import type { ObjectStore } from '@common/storage'
 import { DESKTOP_UPLOAD_LIMITS } from './limits'
 import { boardDb } from './db'
 import { boardStore } from './r2'
-import { boardImageUrl } from './config'
-import { cachedThumbnail, forgetThumbnail } from './thumb-cache'
+import { cachedImage, cachedThumbnail, forgetImage } from './image-cache'
 
 /**
  * The artist list, from the side that holds the keys.
@@ -142,7 +141,7 @@ async function removeObjects(
       ])
     )
   }
-  for (const image of gone) forgetThumbnail(image.file_name)
+  for (const image of gone) forgetImage(image.file_name, image.file_ext)
 }
 
 export async function artistThumbnailDataUrl(fileName: string): Promise<string> {
@@ -150,9 +149,10 @@ export async function artistThumbnailDataUrl(fileName: string): Promise<string> 
 }
 
 /**
- * The stored example at full size, as a `data:` URL, for the viewer a click opens. Not
- * cached: it is one image somebody asked to look at, and holding every one ever opened
- * would be megabytes of base64 for pictures already on the bucket.
+ * The stored example at full size, as a `data:` URL, for the viewer a click opens. Cached
+ * on disk beside the thumbnails (`main/image-cache.ts`) — the same picture opened twice is
+ * two downloads of a few megabytes otherwise, and the name is the md5 of the bytes, so a
+ * file found under it is that image.
  */
 export async function artistImageDataUrl(id: number): Promise<string> {
   const db = boardDb()
@@ -160,15 +160,9 @@ export async function artistImageDataUrl(id: number): Promise<string> {
   const image = await getArtistImage(db, id)
   if (!image) return ''
 
-  const url = boardImageUrl(artistImagePath(image.file_name, image.file_ext))
-  if (!url) return ''
-  try {
-    const response = await fetch(url)
-    if (!response.ok) return ''
-    const type = response.headers.get('content-type') ?? 'image/avif'
-    const bytes = Buffer.from(await response.arrayBuffer())
-    return `data:${type};base64,${bytes.toString('base64')}`
-  } catch {
-    return ''
-  }
+  return cachedImage(
+    image.file_name,
+    image.file_ext,
+    artistImagePath(image.file_name, image.file_ext)
+  )
 }

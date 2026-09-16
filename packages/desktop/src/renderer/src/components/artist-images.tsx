@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ArtistImage } from '../../../shared/api'
+import { ImageViewer } from './image-viewer'
 import { thumbnailFor, thumbnails } from './artist-thumbs'
 
 /** How tall an example is drawn. One height and a width from the ratio, the way a shelf's
@@ -67,50 +68,21 @@ export function ArtistThumb({
   )
 }
 
-/**
- * One example, full size. Escape or a click anywhere closes it — the picture included, since
- * clicking a thumbnail is what opened it and clicking again is the natural way back. Until
- * the stored image arrives the thumbnail is stretched into the box, so the right picture is
- * there at once and sharpens without the frame moving.
- */
+/** Module-level, so the viewer's effect has a dependency that does not change between
+ *  renders — `window.api` is a bridge proxy and need not hand back the same function twice. */
+const loadArtistImage = (id: number): Promise<string> => window.api.artistImage(id)
+
+/** One example, full size — the shared viewer, pointed at the artist channel. */
 export function ArtistImageViewer({ image, onClose }: { image: ArtistImage; onClose: () => void }) {
-  const [full, setFull] = useState('')
-
-  useEffect(() => {
-    let alive = true
-    void window.api.artistImage(image.id).then((url) => {
-      if (alive) setFull(url)
-    })
-    return () => {
-      alive = false
-    }
-  }, [image.id])
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Example image"
-      onClick={onClose}
-      className="fixed inset-0 z-50 flex flex-col bg-background/95 p-4"
-    >
-      <p className="shrink-0 pb-3 text-xs text-muted">
-        {image.width}×{image.height}
-        {!full && ' · loading the full size…'}
-      </p>
-      <img
-        src={full || thumbnails.get(image.file_name) || ''}
-        alt=""
-        className="min-h-0 flex-1 cursor-zoom-out object-contain"
-      />
-    </div>
+    <ImageViewer
+      id={image.id}
+      width={image.width}
+      height={image.height}
+      fallback={thumbnails.get(image.file_name) ?? ''}
+      label="Example image"
+      load={loadArtistImage}
+      onClose={onClose}
+    />
   )
 }

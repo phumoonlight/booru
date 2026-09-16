@@ -22,7 +22,8 @@ import { RATINGS, type Rating } from '@common/search'
 import { DESKTOP_UPLOAD_LIMITS } from './limits'
 import { boardDb } from './db'
 import { boardStore } from './r2'
-import { cachedThumbnail, forgetThumbnail } from './thumb-cache'
+import { cachedImage, cachedThumbnail, forgetImage } from './image-cache'
+import { cachedCollectionPosts, cachedCollections, dropCollectionCache } from './collection-cache'
 
 /**
  * Collections, from the side that writes them.
@@ -32,24 +33,40 @@ import { cachedThumbnail, forgetThumbnail } from './thumb-cache'
  * another shelf, remove one. There is no tag vocabulary to keep in step, so nothing here
  * touches the tag cache.
  *
- * **No cache of its own either.** The tag index is cached because the screens that draw it
- * ask the same question over and over. A shelf list is a handful of rows read when you open
- * the screen and again when you press 🔄, and a cache would be a second thing that can be
- * wrong about a name you have just changed.
+ * **Every write here drops the cache** (`main/collection-cache.ts`), which is the whole of
+ * what this file has to remember about it. A shelf's `updated_at` moves when an image is
+ * added, removed or moved, so no write's effect is confined to one cached answer and there
+ * is nothing finer-grained worth attempting.
  *
- * The thumbnails **are** cached, in the one place every thumbnail is (`cachedThumbnail`):
- * the name is the md5 of the uploaded bytes, so the same image is the same thumbnail
- * wherever it is stored. Only the fetch path differs, and that is an argument.
+ * The images themselves are cached in the one place every stored image is
+ * (`main/image-cache.ts`): the name is the md5 of the uploaded bytes, so the same image is
+ * the same file wherever it is stored. Only the path under the bucket differs, and that is
+ * an argument.
  */
 
 export type Outcome = { ok: true } | { ok: false; error: string }
 
-export async function readCollections(): Promise<Collection[]> {
+/**
+ * Every statement that reaches the board goes out through here, so that forgetting the
+ * cache is not a line somebody can forget to add. It drops on the board's refusals too — a
+ * write that failed may still have moved a row on the way, and a cache thrown away costs
+ * one read. The rating check in front of two of these is not one of them: it never gets as
+ * far as a statement.
+ */
+async function dropping<T>(result: T | Promise<T>): Promise<T> {
+  try {
+    return await result
+  } finally {
+    dropCollectionCache()
+  }
+}
+
+export async function readCollections(force = false): Promise<Collection[]> {
   const db = boardDb()
   if (!db) return []
   // Every shelf, including the ones with nothing on them — unlike the website, which hides
   // those. A shelf you have just named is exactly the row you are looking for here.
-  return listCollections(db)
+  return cachedCollections(() => listCollections(db), force)
 }
 
 export async function readCollectionPosts(options: {
@@ -60,10 +77,10 @@ export async function readCollectionPosts(options: {
   const db = boardDb()
   if (!db) return { posts: [], hasMore: false }
 
-  return listCollectionPosts(db, options.collectionId, {
-    after: options.after,
-    perPage: options.perPage ?? COLLECTION_PAGE_SIZE,
-  })
+  const perPage = options.perPage ?? COLLECTION_PAGE_SIZE
+  return cachedCollectionPosts({ ...options, perPage }, () =>
+    listCollectionPosts(db, options.collectionId, { after: options.after, perPage })
+  )
 }
 
 type Shelf = { name: string; mark: string | null; rating: Rating; is_ai: boolean }
@@ -81,7 +98,7 @@ export async function makeCollection(
 ): Promise<({ ok: true; id: number } & Shelf) | { ok: false; error: string }> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
-  return ratingError(input) ?? createCollection(db, input)
+  return ratingError(input) ?? dropping(createCollection(db, input))
 }
 
 export async function editCollection(
@@ -90,7 +107,7 @@ export async function editCollection(
 ): Promise<({ ok: true } & Shelf) | { ok: false; error: string }> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
-  return ratingError(input) ?? updateCollection(db, id, input)
+  return ratingError(input) ?? dropping(updateCollection(db, id, input))
 }
 
 /**
@@ -102,7 +119,7 @@ export async function editCollection(
 export async function removeCollection(id: number): Promise<Outcome> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
-  return deleteCollection(db, id)
+  return dropping(deleteCollection(db, id))
 }
 
 /**
@@ -129,12 +146,14 @@ export async function uploadToCollection(request: {
     return { ok: false, error: 'Could not read the file — has it moved?' }
   }
 
-  return createCollectionPostFromImage(
-    db,
-    store,
-    bytes,
-    { collectionId: request.collectionId, sourceUrl: request.sourceUrl },
-    DESKTOP_UPLOAD_LIMITS
+  return dropping(
+    createCollectionPostFromImage(
+      db,
+      store,
+      bytes,
+      { collectionId: request.collectionId, sourceUrl: request.sourceUrl },
+      DESKTOP_UPLOAD_LIMITS
+    )
   )
 }
 
@@ -142,7 +161,7 @@ export async function uploadToCollection(request: {
 export async function saveCollectionPost(id: number, sourceUrl: string): Promise<Outcome> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
-  return updateCollectionPost(db, id, { source_url: sourceUrl })
+  return dropping(updateCollectionPost(db, id, { source_url: sourceUrl }))
 }
 
 /**
@@ -156,7 +175,7 @@ export async function moveCollectionImages(
 ): Promise<{ ok: true; moved: number } | { ok: false; error: string }> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
-  return moveCollectionPosts(db, ids, collectionId)
+  return dropping(moveCollectionPosts(db, ids, collectionId))
 }
 
 /**
@@ -173,7 +192,7 @@ export async function removeCollectionPost(id: number): Promise<Outcome> {
   if (!post) return { ok: false, error: `Image ${id} not found.` }
 
   try {
-    const gone = await deleteCollectionPostRow(db, id)
+    const gone = await dropping(deleteCollectionPostRow(db, id))
     if (!gone) return { ok: false, error: `Image ${id} not found.` }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Delete failed.' }
@@ -194,7 +213,7 @@ export async function removeCollectionPost(id: number): Promise<Outcome> {
     ])
   }
 
-  forgetThumbnail(post.file_name)
+  forgetImage(post.file_name, post.file_ext)
   return { ok: true }
 }
 
@@ -202,4 +221,19 @@ export async function removeCollectionPost(id: number): Promise<Outcome> {
  *  CSP is `img-src 'self' data:` and stays that way. */
 export async function collectionThumbnailDataUrl(fileName: string): Promise<string> {
   return cachedThumbnail(fileName, collectionThumbnailPath(fileName))
+}
+
+/** The stored image at full size, for the viewer 🔍 Full size opens. The row is read for
+ *  its `file_ext`: the stored object is the AVIF only when it beat the uploaded bytes. */
+export async function collectionImageDataUrl(id: number): Promise<string> {
+  const db = boardDb()
+  if (!db) return ''
+  const post = await getCollectionPost(db, id)
+  if (!post) return ''
+
+  return cachedImage(
+    post.file_name,
+    post.file_ext,
+    collectionImagePath(post.file_name, post.file_ext)
+  )
 }

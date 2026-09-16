@@ -110,16 +110,16 @@ resolves its two table names and two object prefixes out of.
 screen has no counts and no Apply by tag, but naming, filing, rules and the rule map all
 still work against the board.
 
-Thumbnails come across the bridge as `data:` URLs rather than being fetched by the page.
-The window's CSP is `img-src 'self' data:` and a grid is not worth being the reason that
-stops being true; `src/main/thumb-cache.ts` caches them by md5, in memory and on disk,
-which can never go stale.
+Images come across the bridge as `data:` URLs rather than being fetched by the page. The
+window's CSP is `img-src 'self' data:` and a grid is not worth being the reason that stops
+being true; `src/main/image-cache.ts` caches thumbnails and full sizes by md5 — both on
+disk, thumbnails also in memory — which can never go stale.
 
 ## Notes
 
-- Nothing about collections is cached but their thumbnails. A shelf list is a handful of
-  rows read when the screen opens, and a cache would be a second thing that can be wrong
-  about a name you just changed.
+- `src/main/collection-cache.ts` keeps the shelf list in `app-cache/collections.json` for a
+  day and each screenful of a shelf in memory for the session. Every write drops all of it;
+  🔄 Refresh reads the board again past the day.
 - `src/main/tag-cache.ts` keeps the board's tag list in `app-cache/tags.json` for a day. It
   is dropped by every write to a tag, by 🔄 on the Tags screen, and by Clear cache in
   settings.

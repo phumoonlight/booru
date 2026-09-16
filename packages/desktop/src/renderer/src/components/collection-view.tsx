@@ -20,7 +20,15 @@ const CHUNK = 40
  *
  * The whole screen is the drop target rather than the box at the top of it, which is why
  * the staging batch is a hook here (`useStaging`) and a box below — the files land on this
- * element and have to reach the batch being assembled further down the page.
+ * element and have to reach the batch being assembled further down the page. The handlers
+ * are on a wrapper that fills the scroller rather than on the column of content: the column
+ * is `max-w-6xl` and stops at its last row, so on a wide window most of what looks like this
+ * shelf was not a drop target at all, and a drag let go there did nothing.
+ *
+ * **A drag opens the upload box and leaves it open.** Dragging an image onto a shelf is the
+ * whole of the gesture that puts one there, so the box the files are going into should be
+ * on screen from the moment they are over the window — and still there afterwards, holding
+ * the batch and the source it is waiting for.
  */
 export function CollectionView({
   collectionId,
@@ -121,12 +129,14 @@ export function CollectionView({
         // Without an explicit copy effect some sources treat the drop as refused
         event.dataTransfer.dropEffect = 'copy'
         setDragging(true)
+        // Opened here rather than on the drop, so the box the files are heading for is
+        // already on screen while they are still over it.
+        setUploading(true)
       }}
       onDragLeave={() => setDragging(false)}
       onDrop={(event) => {
         event.preventDefault()
         setDragging(false)
-        setUploading(true)
         // Everything is read out of dataTransfer *now*: it is emptied the moment this
         // handler returns, so nothing here may be deferred behind an await.
         const paths = Array.from(event.dataTransfer.files)
@@ -138,202 +148,204 @@ export function CollectionView({
         }
         void staging.stageUrls(imageUrlsFrom(event.dataTransfer))
       }}
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 pt-4 pb-25"
+      className="min-h-full w-full"
     >
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <button type="button" onClick={onBack} className={BUTTON_SM}>
-          <span aria-hidden>⬅️</span> Collections
-        </button>
-        <h1 className="text-lg font-bold tracking-tight">
-          {shelf ? shelfTitle(shelf) : name}
-        </h1>
-        <span className="text-xs text-muted">#{collectionId}</span>
-        {shelf?.is_ai && (
-          <span className="text-xs text-muted" aria-label="AI" title="Generated images">
-            🤖
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 pt-4 pb-25">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <button type="button" onClick={onBack} className={BUTTON_SM}>
+            <span aria-hidden>⬅️</span> Collections
+          </button>
+          <h1 className="text-lg font-bold tracking-tight">
+            {shelf ? shelfTitle(shelf) : name}
+          </h1>
+          <span className="text-xs text-muted">#{collectionId}</span>
+          {shelf?.is_ai && (
+            <span className="text-xs text-muted" aria-label="AI" title="Generated images">
+              🤖
+            </span>
+          )}
+          {shelf && (
+            <span className={`text-xs ${RATING_COLOR[shelf.rating]}`}>
+              {RATING_LABEL[shelf.rating]}
+            </span>
+          )}
+          <span className="text-xs text-muted">
+            {loading ? 'reading…' : `${posts.length} image${posts.length === 1 ? '' : 's'}`}
           </span>
-        )}
-        {shelf && (
-          <span className={`text-xs ${RATING_COLOR[shelf.rating]}`}>
-            {RATING_LABEL[shelf.rating]}
-          </span>
-        )}
-        <span className="text-xs text-muted">
-          {loading ? 'reading…' : `${posts.length} image${posts.length === 1 ? '' : 's'}`}
-        </span>
-        <div className="ml-auto flex items-center">
-          <button
-            type="button"
-            onClick={() => {
-              setManaging((was) => !was)
-              setSelected([])
-              setEditing(null)
-            }}
-            aria-pressed={managing}
-            className={buttonToggle(managing)}
-          >
-            <span aria-hidden>🗂️</span> Manage
-          </button>
-          <button
-            type="button"
-            onClick={() => setUploading((was) => !was)}
-            aria-pressed={uploading}
-            className={buttonToggle(uploading)}
-          >
-            <span aria-hidden>📤</span> Upload
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setRenaming((was) => !was)
-              setNotice(null)
-            }}
-            aria-pressed={renaming}
-            className={buttonToggle(renaming)}
-          >
-            <span aria-hidden>✏️</span> Edit
-          </button>
-          {siteUrl && (
+          <div className="ml-auto flex items-center">
             <button
               type="button"
-              onClick={() =>
-                void window.api.openExternal(`${siteUrl}${collectionHref(collectionId)}`)
-              }
-              title="Open this collection in your browser"
-              className={BUTTON}
+              onClick={() => {
+                setManaging((was) => !was)
+                setSelected([])
+                setEditing(null)
+              }}
+              aria-pressed={managing}
+              className={buttonToggle(managing)}
             >
-              <span aria-hidden>🌐</span> Open
+              <span aria-hidden>🗂️</span> Manage
             </button>
-          )}
-          {/* Drawn whatever the shelf holds, and refused with a count while it holds
-              anything. A button that disappears when it cannot be used leaves somebody
-              wondering where deleting a collection went; one that says why is the answer. */}
-          <button type="button" onClick={() => void destroy()} className={BUTTON}>
-            <span aria-hidden>🗑️</span> Delete
-          </button>
+            <button
+              type="button"
+              onClick={() => setUploading((was) => !was)}
+              aria-pressed={uploading}
+              className={buttonToggle(uploading)}
+            >
+              <span aria-hidden>📤</span> Upload
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRenaming((was) => !was)
+                setNotice(null)
+              }}
+              aria-pressed={renaming}
+              className={buttonToggle(renaming)}
+            >
+              <span aria-hidden>✏️</span> Edit
+            </button>
+            {siteUrl && (
+              <button
+                type="button"
+                onClick={() =>
+                  void window.api.openExternal(`${siteUrl}${collectionHref(collectionId)}`)
+                }
+                title="Open this collection in your browser"
+                className={BUTTON}
+              >
+                <span aria-hidden>🌐</span> Open
+              </button>
+            )}
+            {/* Drawn whatever the shelf holds, and refused with a count while it holds
+                anything. A button that disappears when it cannot be used leaves somebody
+                wondering where deleting a collection went; one that says why is the answer. */}
+            <button type="button" onClick={() => void destroy()} className={BUTTON}>
+              <span aria-hidden>🗑️</span> Delete
+            </button>
+          </div>
         </div>
-      </div>
 
-      {renaming && (
-        <Panel title="Edit collection">
-          <CollectionForm
-            initial={{
-              name,
-              mark: shelf?.mark ?? '',
-              rating: shelf?.rating ?? 'g',
-              is_ai: shelf?.is_ai ?? false,
-            }}
-            submitLabel="Save"
-            onSubmit={async (input) => {
-              const result = await window.api.editCollection(collectionId, input)
-              if (!result.ok) return result.error
-              setEdited({
-                name: result.name,
-                mark: result.mark,
-                rating: result.rating,
-                is_ai: result.is_ai,
-              })
-              setRenaming(false)
-              return null
+        {renaming && (
+          <Panel title="Edit collection">
+            <CollectionForm
+              initial={{
+                name,
+                mark: shelf?.mark ?? '',
+                rating: shelf?.rating ?? 'g',
+                is_ai: shelf?.is_ai ?? false,
+              }}
+              submitLabel="Save"
+              onSubmit={async (input) => {
+                const result = await window.api.editCollection(collectionId, input)
+                if (!result.ok) return result.error
+                setEdited({
+                  name: result.name,
+                  mark: result.mark,
+                  rating: result.rating,
+                  is_ai: result.is_ai,
+                })
+                setRenaming(false)
+                return null
+              }}
+            />
+          </Panel>
+        )}
+
+        {notice && (
+          <p className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-[#ff5d5f]">
+            {notice}
+          </p>
+        )}
+
+        {/* Open while asked for, and forced open by anything the box is holding or doing — a
+            drag over the screen still lands here, and closing it must not hide a staged batch
+            or an upload in progress. */}
+        {(uploading || dragging || staging.staged.length > 0 || staging.working !== null) && (
+          <StagingBox staging={staging} name={name} dragging={dragging} />
+        )}
+
+        {editingPost && (
+          <ImagePanel
+            // Keyed, so clicking another tile mounts a fresh panel. Its two boxes are seeded
+            // from the row once, which is what lets them be typed in — without this, picking
+            // a second image left the first one's source on screen, over a
+            // heading naming the second, and the next write would have saved them onto it.
+            key={editingPost.id}
+            post={editingPost}
+            siteUrl={siteUrl}
+            onClose={() => setEditing(null)}
+            onChanged={reload}
+            onDeleted={() => {
+              setEditing(null)
+              reload()
             }}
           />
-        </Panel>
-      )}
+        )}
 
-      {notice && (
-        <p className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-[#ff5d5f]">
-          {notice}
-        </p>
-      )}
+        {managing && (
+          <ManageBar
+            collectionId={collectionId}
+            collections={collections}
+            selected={selected}
+            loaded={posts.length}
+            onSelectAll={() => setSelected(posts.map((post) => post.id))}
+            onClear={() => setSelected([])}
+            onMoved={(moved) => {
+              setSelected([])
+              setNotice(moved === 0 ? 'Those images were already there.' : null)
+              reload()
+            }}
+          />
+        )}
 
-      {/* Open while asked for, and forced open by anything the box is holding or doing — a
-          drag over the screen still lands here, and closing it must not hide a staged batch
-          or an upload in progress. */}
-      {(uploading || dragging || staging.staged.length > 0 || staging.working !== null) && (
-        <StagingBox staging={staging} name={name} dragging={dragging} />
-      )}
-
-      {editingPost && (
-        <ImagePanel
-          // Keyed, so clicking another tile mounts a fresh panel. Its two boxes are seeded
-          // from the row once, which is what lets them be typed in — without this, picking
-          // a second image left the first one's source on screen, over a
-          // heading naming the second, and the next write would have saved them onto it.
-          key={editingPost.id}
-          post={editingPost}
-          siteUrl={siteUrl}
-          onClose={() => setEditing(null)}
-          onChanged={reload}
-          onDeleted={() => {
-            setEditing(null)
-            reload()
-          }}
-        />
-      )}
-
-      {managing && (
-        <ManageBar
-          collectionId={collectionId}
-          collections={collections}
-          selected={selected}
-          loaded={posts.length}
-          onSelectAll={() => setSelected(posts.map((post) => post.id))}
-          onClear={() => setSelected([])}
-          onMoved={(moved) => {
-            setSelected([])
-            setNotice(moved === 0 ? 'Those images were already there.' : null)
-            reload()
-          }}
-        />
-      )}
-
-      {posts.length === 0 ? (
-        <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
-          {loading ? 'Loading…' : 'Nothing in this collection yet.'}
-        </p>
-      ) : (
-        <>
-          {/* One height, each tile as wide as its own shape (`ratio-layout.ts`). A shelf is
-              looked at for the pictures, and a square crop would only cut them off. */}
-          <ul className="flex flex-wrap justify-center gap-2 [--row-h:9rem] sm:[--row-h:11rem] lg:[--row-h:13rem]">
-            {posts.map((post) => (
-              <li key={post.id} className="shrink-0" style={itemStyle(post.width, post.height)}>
-                <ImageCard
-                  post={post}
-                  selected={managing ? selected.includes(post.id) : undefined}
-                  onOpen={() =>
-                    managing
-                      ? setSelected((was) =>
-                          was.includes(post.id)
-                            ? was.filter((id) => id !== post.id)
-                            : [...was, post.id]
-                        )
-                      : setEditing(post.id)
-                  }
-                />
-              </li>
-            ))}
-          </ul>
-          {hasMore && (
-            <button
-              type="button"
-              onClick={() => void loadMore()}
-              disabled={loading}
-              className={`${BUTTON} mx-auto`}
-            >
-              {loading ? (
-                <>
-                  <span aria-hidden>⏳</span> Loading…
-                </>
-              ) : (
-                <>
-                  <span aria-hidden>⬇️</span> Load {CHUNK} more
-                </>
-              )}
-            </button>
-          )}
-        </>
-      )}
+        {posts.length === 0 ? (
+          <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
+            {loading ? 'Loading…' : 'Nothing in this collection yet.'}
+          </p>
+        ) : (
+          <>
+            {/* One height, each tile as wide as its own shape (`ratio-layout.ts`). A shelf is
+                looked at for the pictures, and a square crop would only cut them off. */}
+            <ul className="flex flex-wrap justify-center gap-2 [--row-h:9rem] sm:[--row-h:11rem] lg:[--row-h:13rem]">
+              {posts.map((post) => (
+                <li key={post.id} className="shrink-0" style={itemStyle(post.width, post.height)}>
+                  <ImageCard
+                    post={post}
+                    selected={managing ? selected.includes(post.id) : undefined}
+                    onOpen={() =>
+                      managing
+                        ? setSelected((was) =>
+                            was.includes(post.id)
+                              ? was.filter((id) => id !== post.id)
+                              : [...was, post.id]
+                          )
+                        : setEditing(post.id)
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+            {hasMore && (
+              <button
+                type="button"
+                onClick={() => void loadMore()}
+                disabled={loading}
+                className={`${BUTTON} mx-auto`}
+              >
+                {loading ? (
+                  <>
+                    <span aria-hidden>⏳</span> Loading…
+                  </>
+                ) : (
+                  <>
+                    <span aria-hidden>⬇️</span> Load {CHUNK} more
+                  </>
+                )}
+              </button>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

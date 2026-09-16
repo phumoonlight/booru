@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
 import {
+  collectionImageDataUrl,
   collectionThumbnailDataUrl,
   makeCollection,
   readCollectionPosts,
@@ -48,7 +49,11 @@ const collectionSavePostSchema = z.object({
 
 /** The shelves: what the website draws, and the only images this app puts there. */
 export function registerCollectionIpc(): void {
-  ipcMain.handle('collections:list', async (): Promise<Collection[]> => readCollections())
+  /** `force` is 🔄 Refresh: the list is cached for a day (`main/collection-cache.ts`), and
+   *  that press is the one whose whole meaning is "ask the board again". */
+  ipcMain.handle('collections:list', async (_event, force: unknown): Promise<Collection[]> =>
+    readCollections(force === true)
+  )
 
   ipcMain.handle('collections:create', async (_event, raw: unknown) => {
     const parsed = collectionSchema.safeParse(raw)
@@ -122,5 +127,12 @@ export function registerCollectionIpc(): void {
       .regex(/^[0-9a-f]{32}$/)
       .safeParse(fileName)
     return parsed.success ? collectionThumbnailDataUrl(parsed.data) : ''
+  })
+
+  /** By id rather than by name, unlike the thumbnail: the stored object's extension is on
+   *  the row, and only the row knows whether the AVIF or the original was kept. */
+  ipcMain.handle('collections:image', async (_event, id: unknown): Promise<string> => {
+    const parsed = postIdSchema.safeParse(id)
+    return parsed.success ? collectionImageDataUrl(parsed.data) : ''
   })
 }

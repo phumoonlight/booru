@@ -221,8 +221,12 @@ export type PostAppApi = {
   // ── Collections ──────────────────────────────────────────────────────────────
   // The shelves, which are the whole of what the website shows. No tags on them.
 
-  /** Every shelf, most recently touched first — including empty ones, unlike the website. */
-  listCollections: () => Promise<Collection[]>
+  /**
+   * Every shelf, most recently touched first — including empty ones, unlike the website.
+   * Served from a cache kept for a day (`main/collection-cache.ts`); `force` is 🔄 Refresh,
+   * the one press that means "ask the board again".
+   */
+  listCollections: (force?: boolean) => Promise<Collection[]>
   /** Names a new shelf. A duplicate name is the one failure worth wording. */
   createCollection: (input: CollectionInput) => Promise<CollectionNamed>
   /** Its name, mark, rating and AI flag, answering with each as stored. */
@@ -252,6 +256,9 @@ export type PostAppApi = {
   /** Removes the row and both of its stored images. */
   deleteCollectionPost: (id: number) => Promise<Outcome>
   collectionThumbnail: (fileName: string) => Promise<string>
+  /** The stored image at full size, or '' — for the viewer 🔍 Full size opens. By id,
+   *  because only the row knows which extension was actually stored. */
+  collectionImage: (id: number) => Promise<string>
   // ── Artists ──────────────────────────────────────────────────────────────────
   // A reading list kept apart from everything else — not a tag, not a shelf, nowhere on
   // the website.

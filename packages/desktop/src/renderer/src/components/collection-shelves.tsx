@@ -1,12 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { RATING_COLOR, RATING_LABEL } from '@common/search'
 import type { Collection } from '../../../shared/api'
-import { BUTTON, buttonToggle } from './buttons'
-import { Panel } from './panel'
+import { BUTTON, BUTTON_SM, buttonToggle } from './buttons'
+import { FIELD, Panel } from './panel'
 import { CollectionForm, shelfTitle } from './collection-form'
 import { thumbnailFor, thumbnails } from './collection-thumbs'
 
-/** Every shelf, as cards. The cover is the newest image on it, decided by the query. */
+/**
+ * Every shelf, as cards. The cover is the newest image on it, decided by the query.
+ *
+ * **The search is over the list already here, not a read.** The website's is a GET form
+ * because a search there is a URL somebody shares; this one is a box narrowing a list the
+ * window is holding in full — it has to be, since an image's panel offers moving it to any
+ * other shelf. Typed against the whole list, it answers between keystrokes and never leaves
+ * the board wondering what happened to the read it was halfway through.
+ */
 export function ShelfList({
   collections,
   loading,
@@ -21,6 +29,23 @@ export function ShelfList({
   onCreated: (id: number) => void
 }) {
   const [naming, setNaming] = useState(false)
+  const [query, setQuery] = useState('')
+
+  // The mark and the id are searched with the name, because both are how a shelf gets
+  // referred to — `#5` is what the heading above it says, and 🎴 is part of what it is
+  // called. Case-insensitive, and anywhere in the name, as the website's is.
+  const needle = query.trim().toLowerCase()
+  const shown = useMemo(
+    () =>
+      needle === ''
+        ? collections
+        : collections.filter(
+            (collection) =>
+              shelfTitle(collection).toLowerCase().includes(needle) ||
+              `#${collection.id}` === needle
+          ),
+    [collections, needle]
+  )
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 pt-4 pb-25">
@@ -29,9 +54,32 @@ export function ShelfList({
         <span className="text-xs text-muted">
           {loading
             ? 'reading…'
-            : `${collections.length} collection${collections.length === 1 ? '' : 's'}`}
+            : needle === ''
+              ? `${collections.length} collection${collections.length === 1 ? '' : 's'}`
+              : `${shown.length} of ${collections.length}`}
         </span>
-        <div className="ml-auto flex items-center">
+        <div className="ml-auto flex items-center gap-1">
+          {/* A placeholder that is an example rather than a description: it shows the
+              spelling and that a piece of the name is enough. */}
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="Search collections"
+            placeholder="Ukiyo-e"
+            spellCheck={false}
+            className={`${FIELD} w-40`}
+          />
+          {query !== '' && (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              title="Clear the search"
+              aria-label="Clear the search"
+              className={BUTTON_SM}
+            >
+              <span aria-hidden>✕</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setNaming((was) => !was)}
@@ -67,13 +115,17 @@ export function ShelfList({
         </Panel>
       )}
 
-      {collections.length === 0 ? (
+      {shown.length === 0 ? (
         <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
-          {loading ? 'Loading…' : 'No collections yet. ➕ New collection names one.'}
+          {loading
+            ? 'Loading…'
+            : needle !== ''
+              ? `Nothing here is called “${query.trim()}”.`
+              : 'No collections yet. ➕ New collection names one.'}
         </p>
       ) : (
         <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5">
-          {collections.map((collection) => (
+          {shown.map((collection) => (
             <li key={collection.id}>
               <ShelfCard collection={collection} onOpen={() => onOpen(collection.id)} />
             </li>
