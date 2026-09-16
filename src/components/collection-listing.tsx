@@ -5,6 +5,7 @@ import { CollectionFeed } from '@/components/collection-feed'
 import { CollectionShelf } from '@/components/collection-shelf'
 import { NavProgress } from '@/components/nav-progress'
 import { CollectionSearch } from '@/components/collection-search'
+import { CollectionTagBar } from '@/components/collection-tag-bar'
 import { SiteHeader } from '@/components/site-header'
 import { RestrictedNotice } from '@/components/restricted-notice'
 import { SetupNotice } from '@/components/setup-notice'
@@ -16,18 +17,23 @@ import {
   listCollectionPosts,
   listCollections,
 } from '@/lib/data/collections'
-import { collectionsHref, type CollectionListFilter } from '@common/collections'
-import { isRestricted, RATING_LABEL } from '@common/search'
+import { listCollectionTags } from '@/lib/data/collection-tags'
+import {
+  collectionHref,
+  collectionsHref,
+  type CollectionListFilter,
+} from '@common/collections'
+import { isRestricted, RATING_LABEL, tagLabel } from '@common/search'
 import { SITE_NAME } from '@/config'
 
 /**
  * The two pages a collection has, and the shape they share: the site header, a heading,
  * and a grid.
  *
- * **The shelf list is searchable, and a shelf is not.** The list takes a name, a tier and
+ * **The shelf list is searched, and a shelf is filtered.** The list takes a name, a tier and
  * AI-or-not (`CollectionSearch`) — with every post on a shelf, it is how anything on the
- * site is found. Inside a shelf there is nothing to narrow: its images carry no tags, and
- * the set somebody assembled by hand is the answer.
+ * site is found. Inside a shelf the narrowing is that shelf's own tags, drawn as pills
+ * above its images (`CollectionTagBar`); a shelf with none has no bar.
  */
 
 /** The shelf list — `/collections`, narrowed by its search. */
@@ -75,8 +81,9 @@ export async function CollectionListing({ filter }: { filter: CollectionListFilt
   )
 }
 
-/** One collection — `/collections/[id]`. */
-export async function CollectionPage({ id }: { id: string }) {
+/** One collection — `/collections/[id]`, narrowed to the images carrying every one of
+ *  `tags`. */
+export async function CollectionPage({ id, tags }: { id: string; tags: string[] }) {
   if (!isDatabaseConfigured()) {
     return (
       <div className="mx-auto w-full max-w-7xl px-3 py-4">
@@ -100,9 +107,10 @@ export async function CollectionPage({ id }: { id: string }) {
     return <RestrictedNotice />
   }
 
-  const { posts, hasMore } = await listCollectionPosts(collectionId, {
-    perPage: COLLECTION_PAGE_SIZE,
-  })
+  const [{ posts, hasMore }, shelfTags] = await Promise.all([
+    listCollectionPosts(collectionId, { perPage: COLLECTION_PAGE_SIZE, tags }),
+    listCollectionTags(collectionId),
+  ])
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">
@@ -131,12 +139,33 @@ export async function CollectionPage({ id }: { id: string }) {
         </span>
       </div>
 
+      <CollectionTagBar collectionId={collectionId} tags={shelfTags} active={tags} />
+
       {posts.length === 0 ? (
         <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
-          Nothing in this collection.
+          {tags.length === 0 ? (
+            'Nothing in this collection.'
+          ) : (
+            <>
+              No image here carries {tags.length === 1 ? 'that tag' : 'all of those tags'}.{' '}
+              <Link href={collectionHref(collectionId)} className="text-accent hover:underline">
+                Show everything
+                <NavProgress />
+              </Link>
+            </>
+          )}
         </p>
       ) : (
-        <CollectionFeed collectionId={collectionId} initialPosts={posts} hasMore={hasMore} />
+        // Keyed on the filter: the feed holds its chunks in state, and a navigation to the
+        // same route with other pills lit keeps a client component mounted — so without a
+        // new key the old filter's images would stay on screen above the new ones.
+        <CollectionFeed
+          key={tags.join(' ')}
+          collectionId={collectionId}
+          tags={tags}
+          initialPosts={posts}
+          hasMore={hasMore}
+        />
       )}
     </div>
   )
@@ -144,9 +173,10 @@ export async function CollectionPage({ id }: { id: string }) {
 
 /**
  * A collection's own metadata. The shelf is a page worth indexing — a fixed listing with
- * a name — where a search result is not, so there is no `noindex` here.
+ * a name — where a search result is not, so a shelf narrowed by its tag pills is `noindex`
+ * and canonical to the whole shelf, the way a search of the shelf list is.
  */
-export async function collectionMetadata(id: string): Promise<Metadata> {
+export async function collectionMetadata(id: string, tags: string[] = []): Promise<Metadata> {
   const collectionId = Number(id)
   if (!Number.isInteger(collectionId) || collectionId < 1) return { title: 'Collection not found' }
   if (!isDatabaseConfigured()) return { title: 'Collection' }
@@ -172,9 +202,10 @@ export async function collectionMetadata(id: string): Promise<Metadata> {
   } in ${collection.name}.`
 
   return {
-    title: collection.name,
+    title: tags.length > 0 ? `${collection.name}: ${tags.map(tagLabel).join(', ')}` : collection.name,
     description,
     alternates: { canonical: `${collectionsHref()}/${collection.id}` },
+    robots: tags.length > 0 ? { index: false, follow: true } : undefined,
     openGraph: {
       type: 'website',
       siteName: SITE_NAME,

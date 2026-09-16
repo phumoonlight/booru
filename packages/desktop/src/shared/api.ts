@@ -4,6 +4,7 @@ import type { UploadResult } from '@common/upload/pipeline'
 import type { FormSectionEdit, FormSections } from '@common/data/form-sections'
 import type { RuleKind, TagRules } from '@common/data/rules'
 import type { Collection, CollectionPostPage } from '@common/data/collections'
+import type { CollectionTag } from '@common/data/collection-tags'
 import type { CollectionInput } from '@common/data/collections-write'
 import type { Artist, ArtistUrl } from '@common/data/artists'
 import type { ArtistImageResult } from '@common/upload/artist'
@@ -219,7 +220,7 @@ export type PostAppApi = {
     message: string
   }) => Promise<{ ok: true; state: SiteState } | { ok: false; error: string }>
   // ── Collections ──────────────────────────────────────────────────────────────
-  // The shelves, which are the whole of what the website shows. No tags on them.
+  // The shelves, which are the whole of what the website shows, and each shelf's own tags.
 
   /**
    * Every shelf, most recently touched first — including empty ones, unlike the website.
@@ -233,12 +234,37 @@ export type PostAppApi = {
   editCollection: (id: number, input: CollectionInput) => Promise<CollectionEdited>
   /** Refused while the shelf still holds anything — the whole rule of the feature. */
   deleteCollection: (id: number) => Promise<Outcome>
-  /** One shelf's images, newest first. `after` is the cursor; there is no query. */
+  /** One shelf's images, newest first. `after` is the cursor; `tags` the lit pills, every
+   *  one of which an image must carry. */
   listCollectionPosts: (options: {
     collectionId: number
     after?: number
     perPage?: number
+    tags?: string[]
   }) => Promise<CollectionPostPage>
+  /** A shelf's own tags, A–Z, each with how many of its images carry it. */
+  listCollectionTags: (collectionId: number) => Promise<CollectionTag[]>
+  /** The tags on one image. */
+  listCollectionPostTags: (postId: number) => Promise<Omit<CollectionTag, 'post_count'>[]>
+  /** A new tag on one shelf — the only way one comes into being. The mark may be ''. */
+  createCollectionTag: (
+    collectionId: number,
+    input: { name: string; mark: string }
+  ) => Promise<CollectionNamed>
+  /** Its name and mark, answering with each as stored. */
+  editCollectionTag: (
+    id: number,
+    input: { name: string; mark: string }
+  ) => Promise<{ ok: true; name: string; mark: string | null } | { ok: false; error: string }>
+  /** The tag, and every image's copy of it. The images stay. */
+  deleteCollectionTag: (id: number) => Promise<Outcome>
+  /** One tag on or off a set of images, answering with how many changed. Only images on
+   *  the tag's own shelf are touched. */
+  tagCollectionPosts: (request: {
+    tagId: number
+    postIds: number[]
+    on: boolean
+  }) => Promise<{ ok: true; changed: number } | { ok: false; error: string }>
   /** One image onto one shelf. No rating: an image's tier is its shelf's. */
   uploadToCollection: (request: {
     collectionId: number
@@ -302,5 +328,6 @@ export type PostAppApi = {
 
 export type { UploadResult } from '@common/upload/pipeline'
 export type { Collection, CollectionPost } from '@common/data/collections'
+export type { CollectionTag } from '@common/data/collection-tags'
 export type { CollectionInput } from '@common/data/collections-write'
 export type { Artist, ArtistImage, ArtistUrl } from '@common/data/artists'

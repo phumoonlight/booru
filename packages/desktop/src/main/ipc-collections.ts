@@ -3,7 +3,13 @@ import { z } from 'zod'
 import {
   collectionImageDataUrl,
   collectionThumbnailDataUrl,
+  editCollectionTag,
   makeCollection,
+  makeCollectionTag,
+  readCollectionTags,
+  readPostTags,
+  removeCollectionTag,
+  tagCollectionPosts,
   readCollectionPosts,
   readCollections,
   editCollection,
@@ -14,7 +20,9 @@ import {
   uploadToCollection,
 } from './collections'
 import { postIdSchema } from './ipc-parse'
+import { COLLECTION_TAG_FILTER_MAX, COLLECTION_TAG_MAX } from '@common/collections'
 import type { Collection, CollectionPostPage } from '@common/data/collections'
+import type { CollectionTag } from '@common/data/collection-tags'
 import type { CollectionInput } from '@common/data/collections-write'
 import type { UploadResult } from '@common/upload/pipeline'
 
@@ -34,6 +42,19 @@ const collectionPostsSchema = z.object({
   // A screenful belongs to the window drawing it, bounded here because it arrives from
   // the renderer.
   perPage: z.number().int().min(1).max(200).optional(),
+  // The lit pills, by name — bounded like the website's URL is, and settled against the
+  // table by the query rather than here: a name the shelf does not have matches nothing.
+  tags: z.array(z.string().max(COLLECTION_TAG_MAX)).max(COLLECTION_TAG_FILTER_MAX).optional(),
+})
+
+/** A tag's name and mark arrive from text boxes: bounded here, settled by
+ *  `readCollectionTagName` and `readCollectionTagMark`. */
+const tagInputSchema = z.object({ name: z.string().max(200), mark: z.string().max(200) })
+
+const tagPostsSchema = z.object({
+  tagId: postIdSchema,
+  postIds: z.array(postIdSchema).min(1).max(1000),
+  on: z.boolean(),
 })
 
 const collectionUploadSchema = z.object({
@@ -117,6 +138,49 @@ export function registerCollectionIpc(): void {
     const parsed = postIdSchema.safeParse(id)
     if (!parsed.success) return { ok: false as const, error: 'No such image' }
     return removeCollectionPost(parsed.data)
+  })
+
+  // A shelf's own tags. Made on the shelf, then put on its images — never coined by the
+  // write that puts one on an image, which takes an id.
+
+  ipcMain.handle('collections:tags', async (_event, id: unknown): Promise<CollectionTag[]> => {
+    const parsed = postIdSchema.safeParse(id)
+    return parsed.success ? readCollectionTags(parsed.data) : []
+  })
+
+  ipcMain.handle('collections:post-tags', async (_event, id: unknown) => {
+    const parsed = postIdSchema.safeParse(id)
+    return parsed.success ? readPostTags(parsed.data) : []
+  })
+
+  ipcMain.handle('collections:create-tag', async (_event, id: unknown, raw: unknown) => {
+    const parsedId = postIdSchema.safeParse(id)
+    const parsed = tagInputSchema.safeParse(raw)
+    if (!parsedId.success) return { ok: false as const, error: 'No such collection' }
+    if (!parsed.success) return { ok: false as const, error: 'Type a tag.' }
+    return makeCollectionTag(parsedId.data, parsed.data)
+  })
+
+  ipcMain.handle('collections:edit-tag', async (_event, id: unknown, raw: unknown) => {
+    const parsedId = postIdSchema.safeParse(id)
+    const parsed = tagInputSchema.safeParse(raw)
+    if (!parsedId.success) return { ok: false as const, error: 'No such tag' }
+    if (!parsed.success) return { ok: false as const, error: 'Type a tag.' }
+    return editCollectionTag(parsedId.data, parsed.data)
+  })
+
+  ipcMain.handle('collections:delete-tag', async (_event, id: unknown) => {
+    const parsed = postIdSchema.safeParse(id)
+    if (!parsed.success) return { ok: false as const, error: 'No such tag' }
+    return removeCollectionTag(parsed.data)
+  })
+
+  /** One tag on or off a set of images — the image panel's set of one, or the manage
+   *  selection. Bounded like a move is. */
+  ipcMain.handle('collections:tag-posts', async (_event, raw: unknown) => {
+    const parsed = tagPostsSchema.safeParse(raw)
+    if (!parsed.success) return { ok: false as const, error: 'Nothing selected' }
+    return tagCollectionPosts({ ...parsed.data, postIds: [...new Set(parsed.data.postIds)] })
   })
 
   ipcMain.handle('collections:thumbnail', async (_event, fileName: unknown): Promise<string> => {

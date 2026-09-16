@@ -2,10 +2,10 @@
 
 # Pubooru
 
-An image board of hand-kept collections: named shelves of images, a feed of the newest,
-and a page per image. It began as a booru-style tag gallery (Danbooru was the reference);
-every post has since been moved onto a shelf, and the tag vocabulary is kept for a later
-use. Next.js 16 App Router, Neon Postgres, Cloudflare R2, Tailwind v4, mobile-first.
+An image board of hand-kept collections: named shelves of images, each with tags of its
+own, a feed of the newest, and a page per image. It began as a booru-style tag gallery
+(Danbooru was the reference); every post has since been moved onto a shelf, and the
+board-wide tag vocabulary is kept for a later use — a shelf's tags are separate tables. Next.js 16 App Router, Neon Postgres, Cloudflare R2, Tailwind v4, mobile-first.
 
 **The website is read-only and has no accounts.** Everything that changes the board —
 naming and filling shelves, moving and deleting images, the artist list, the tag
@@ -77,8 +77,10 @@ takes its number with it rather than shifting the rest.
    `deleteCollectionPostRow`, `moveCollectionPosts` and `deleteArtistRows`. Everything else
    takes `Db` (postgres.js's `ISql`) so it can also be called *inside* one, which is how
    `touchCollection` lands in the same transaction as the change it records.
-6. **No write path coins a tag.** `resolveTagIds` (`@common/data/shared`) reads the names
-   it is given and throws naming the ones the board has no row for, so a tag rule or a
+6. **No write path coins a tag.** A shelf's tag is made by ➕ New tag on that shelf, and
+   `setCollectionPostsTag` takes its *id*. For the board-wide vocabulary, `resolveTagIds`
+   (`@common/data/shared`) reads the names it is given and throws naming the ones the board
+   has no row for, so a tag rule or a
    section's condition naming something that isn't a tag yet fails. Creating one is
    ➕ New tag on the desktop Tags screen and nothing else. The old `on conflict do nothing`
    upsert also made Postgres draw the identity default before testing the conflict, so
@@ -216,9 +218,25 @@ is a card per shelf with its name and a cover, and each one opens onto its own i
 newest first. Every post and AI post was moved onto one (0012), so there is no other kind
 of image on the board.
 
-- **An image is its bytes and its source.** An md5 name, two stored objects, a view
-  counter, a `source_url` and a `collection_id` — no tags, and no rating of its own
+- **An image is its bytes, its source and its shelf's tags.** An md5 name, two stored
+  objects, a view counter, a `source_url` and a `collection_id`, and no rating of its own
   (invariant 9).
+- **Tags belong to a shelf** (0013: `collection_tags`, `collection_post_tags`), not to the
+  board: `landscape` on two shelves is two rows, and neither is a `tags` row. That table's
+  name is globally unique and carries categories, marks, a rating floor and form rows, none
+  of which a shelf's word has, so it was not reused. A tag is **made on its shelf, then put
+  on images** by id — nothing coins one. Names take the vocabulary's grammar
+  (`readCollectionTagName`). A tag's **mark** is a colour (a dot, `markColor` deciding) or
+  any short text — an emoji, `[WIP]` — settled by `readCollectionTagMark`. **A moved image leaves its tags behind**, deleted in the move's
+  transaction. **No tag write touches the shelf**: a tag is a word about images, like a
+  source. Counts are counted in the read.
+- **A shelf's page has a pill per tag above its images** (`collection-tag-bar.tsx`), each a
+  link: pressed, it narrows the shelf to images carrying it, and lit pills combine as
+  **AND** (`postHasTags`). The filter is `?tags=a+b`, spelled by `collectionHref(id, tags)`,
+  read by `readCollectionTags`, toggled by `toggleCollectionTag`; the feed's later chunks
+  carry it through `loadMoreCollectionPosts`, and a filtered shelf is `noindex` with
+  `robots.txt` disallowing `/collections/*?`. An image page links its tags back the same
+  way.
 - **A shelf is a name, a mark, a rating and an AI flag.** The **rating** is every image's
   on it (0011, and 0012 dropping `collection_posts.rating`): restricted, the shelf is off
   the list and out of the sitemap, its page and every image page inside it are
@@ -248,7 +266,8 @@ of image on the board.
 - **The website hides an empty shelf and the desktop app does not** (`hideEmpty`). A card
   with a name, no picture and a count of zero is an invitation to click on nothing; a shelf
   you have just named is exactly the row you are looking for in the app.
-- **`/collections` has the site's only search** (`collection-search.tsx`): a piece of the
+- **`/collections` has the site's only search** (`collection-search.tsx`) — a shelf's tag
+  pills are a filter, not a search: a piece of the
   name, a tier, AI or not. **A plain GET form**, so a search is a URL — shareable,
   back-buttonable, working without JavaScript — read back loosely by `readCollectionFilter`,
   which drops a value it does not recognise rather than refusing the page. The rating
@@ -282,9 +301,14 @@ of image on the board.
   source. **A drag anywhere over the shelf opens the upload box and leaves it open**, its
   handlers sitting on a wrapper that fills the scroller rather than on the `max-w-6xl`
   column, which left most of a wide window looking like a drop target without being one. An
-  image's own panel is its **source, read until ✏️ Edit asks for the box** — it was written
+  image's own panel is its **tags** (every shelf tag as a pill, lit if carried, written on
+  the press) and its **source, read until ✏️ Edit asks for the box** — it was written
   on blur, so the one field there could be changed by clicking into it and tabbing away —
   **🔍 Full size**, and a held Delete.
+- **The desktop shelf has the tag bar too** (`collection-tags.tsx`): pills that narrow the
+  grid, ➕ New tag, and ✏️ Edit tags, in which a click picks a pill to rename or hold-delete
+  instead of filtering. 🗂️ Manage's bar puts a picked tag on the selection or takes it off
+  (🏷️ Tag / 🧽 Untag). The shelf's page cache is keyed by the lit pills as well as the cursor.
 - **The desktop screen has a search of its own**, and it is not the website's: a box
   narrowing the list the window is already holding in full (it has to hold it — an image's
   panel offers moving it to any other shelf), over the mark, the name and `#id`. No read, no
@@ -419,7 +443,8 @@ Nothing sits behind a session, because there is none.
 - **Open site** is the header item that is not a view: it opens `/posts` in the browser
   and is never drawn active, because it goes somewhere else.
 - **🗂️ Collections** and **🎨 Artists** are their own sections above.
-- **Tags** keeps the vocabulary for a later use: nothing carries a tag, so the grid has no
+- **Tags** keeps the board-wide vocabulary for a later use — not a shelf's tags, which are
+  on the shelf: nothing carries one of these, so the grid has no
   counts, and there is no Apply by tag and no way to a tag's posts. Click a row for rename /
   recategorize / delete, **which row of the form it sits on** (a menu of every row, since a
   section is not a division of a category — recategorizing leaves the row alone), **and
@@ -535,9 +560,10 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   and its indexes, plus `0002_site_settings.sql`, `0003_sections_off_categories.sql`,
   `0004_section_sides.sql`, `0005_generative_posts.sql`, `0006_collections.sql`,
   `0007_artists.sql`, `0008_artist_ai.sql`, `0009_artist_archive.sql`,
-  `0010_artist_favorites.sql`, `0011_collection_rating_mark.sql` and
-  `0012_collections_only.sql` — the last dropping both boards' tables, their link tables
-  and the tag count columns, and leaving the tag vocabulary in place. Schema changes from
+  `0010_artist_favorites.sql`, `0011_collection_rating_mark.sql`,
+  `0012_collections_only.sql` — dropping both boards' tables, their link tables and the tag
+  count columns, and leaving the tag vocabulary in place — and `0013_collection_tags.sql`,
+  a shelf's own tags. Schema changes from
   here are **always** a new numbered file, never a dashboard edit and never an edit to the
   baseline once pushed anywhere real. `scripts/migrate.mjs` applies each inside a
   transaction and records it in `_migrations`.

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { collectionPostHref } from '@common/collections'
-import type { CollectionPost } from '../../../shared/api'
+import type { CollectionPost, CollectionTag } from '../../../shared/api'
 import { BUTTON_ON_SURFACE, BUTTON_SUBMIT_ON_SURFACE, DANGER_ON_SURFACE } from './buttons'
 import { HoldButton } from './hold-button'
 import { ImageViewer } from './image-viewer'
 import { FIELD, Panel } from './panel'
 import { thumbnailFor, thumbnails } from './collection-thumbs'
 import { ratioOf } from './ratio-layout'
+import { ImageTags } from './collection-image-tags'
 
 /** Module-level, so the viewer's effect has a dependency that does not change between
  *  renders — `window.api` is a bridge proxy and need not hand back the same function twice. */
@@ -76,9 +77,9 @@ export function ImageCard({
 }
 
 /**
- * One image's panel: its source, the way to look at it properly, and the way to remove it.
- * Not its rating, which is its shelf's, and not its shelf, which is changed for a selection
- * in 🗂️ Manage.
+ * One image's panel: its source, its tags, the way to look at it properly, and the way to
+ * remove it. Not its rating, which is its shelf's, and not its shelf, which is changed for a
+ * selection in 🗂️ Manage.
  *
  * **The source is read until it is asked to be edited.** It used to be a live box written on
  * blur, which made the one field here something you could change by clicking into it and
@@ -92,15 +93,21 @@ export function ImageCard({
  */
 export function ImagePanel({
   post,
+  tags,
   siteUrl,
   onClose,
   onChanged,
+  onTagged,
   onDeleted,
 }: {
   post: CollectionPost
+  /** The shelf's tags, every one of which the panel offers. */
+  tags: CollectionTag[]
   siteUrl: string
   onClose: () => void
   onChanged: () => void
+  /** A tag went on or came off — the counts on the bar above are now wrong. */
+  onTagged: () => void
   onDeleted: () => void
 }) {
   const stored = post.source_url ?? ''
@@ -108,6 +115,19 @@ export function ImagePanel({
   const [editing, setEditing] = useState(false)
   const [viewing, setViewing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Null until read, so the pills are not drawn unlit for a moment and then light up — which
+  // would look like the image losing its tags and getting them back.
+  const [carried, setCarried] = useState<number[] | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    void window.api.listCollectionPostTags(post.id).then((rows) => {
+      if (alive) setCarried(rows.map((row) => row.id))
+    })
+    return () => {
+      alive = false
+    }
+  }, [post.id])
 
   async function save() {
     // Opening the box and closing it again without changing anything is not an edit.
@@ -239,6 +259,17 @@ export function ImagePanel({
               <span className="flex-1">No source</span>
             )}
           </div>
+        )}
+        {carried && (
+          <ImageTags
+            postId={post.id}
+            tags={tags}
+            carried={carried}
+            onChanged={(next) => {
+              setCarried(next)
+              onTagged()
+            }}
+          />
         )}
         {error && <p className="text-xs text-[#ff5d5f]">{error}</p>}
       </Panel>

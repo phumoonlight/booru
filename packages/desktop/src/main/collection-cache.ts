@@ -83,13 +83,15 @@ export async function cachedCollections(
   return fill
 }
 
-/** One shelf's screenful, by shelf, cursor and size — the three things that decide which
- *  rows come back. Held for the session only; see the note at the top. */
+/** One shelf's screenful, by shelf, cursor, size and the tag pills lit — the four things
+ *  that decide which rows come back. Held for the session only; see the note at the top. */
 export async function cachedCollectionPosts(
-  key: { collectionId: number; after?: number; perPage?: number },
+  key: { collectionId: number; after?: number; perPage?: number; tags?: string[] },
   read: () => Promise<CollectionPostPage>
 ): Promise<CollectionPostPage> {
-  const id = `${key.collectionId}:${key.after ?? 0}:${key.perPage ?? 0}`
+  // Sorted, so lighting two pills in either order is one page and not two.
+  const tags = [...(key.tags ?? [])].sort().join(' ')
+  const id = `${key.collectionId}:${key.after ?? 0}:${key.perPage ?? 0}:${tags}`
   const held = pages.get(id)
   if (held) return held
 

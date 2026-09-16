@@ -16,6 +16,18 @@ import {
   updateCollectionPost,
   type CollectionInput,
 } from '@common/data/collections-write'
+import {
+  listCollectionTags,
+  listPostTags,
+  type CollectionTag,
+} from '@common/data/collection-tags'
+import {
+  createCollectionTag,
+  deleteCollectionTag,
+  setCollectionPostsTag,
+  updateCollectionTag,
+  type CollectionTagInput,
+} from '@common/data/collection-tags-write'
 import { collectionImagePath, collectionThumbnailPath } from '@common/storage'
 import { createCollectionPostFromImage, type UploadResult } from '@common/upload/pipeline'
 import { RATINGS, type Rating } from '@common/search'
@@ -30,8 +42,8 @@ import { cachedCollectionPosts, cachedCollections, dropCollectionCache } from '.
  *
  * This is the whole of what the app can do to a shelf, and it is short because a shelf is
  * short: name one, edit one, delete an empty one, add an image, correct one, move one to
- * another shelf, remove one. There is no tag vocabulary to keep in step, so nothing here
- * touches the tag cache.
+ * another shelf, remove one — and a shelf's own tags, made here and put on its images. Those
+ * are not the board's vocabulary, so nothing here touches the tag cache.
  *
  * **Every write here drops the cache** (`main/collection-cache.ts`), which is the whole of
  * what this file has to remember about it. A shelf's `updated_at` moves when an image is
@@ -73,14 +85,78 @@ export async function readCollectionPosts(options: {
   collectionId: number
   after?: number
   perPage?: number
+  tags?: string[]
 }): Promise<CollectionPostPage> {
   const db = boardDb()
   if (!db) return { posts: [], hasMore: false }
 
   const perPage = options.perPage ?? COLLECTION_PAGE_SIZE
   return cachedCollectionPosts({ ...options, perPage }, () =>
-    listCollectionPosts(db, options.collectionId, { after: options.after, perPage })
+    listCollectionPosts(db, options.collectionId, {
+      after: options.after,
+      perPage,
+      tags: options.tags,
+    })
   )
+}
+
+/**
+ * A shelf's tags with their counts. Not cached: it is read when a shelf opens and again
+ * after a write that changes a count, and a copy would be one more thing every tag write had
+ * to throw away.
+ */
+export async function readCollectionTags(collectionId: number): Promise<CollectionTag[]> {
+  const db = boardDb()
+  return db ? listCollectionTags(db, collectionId) : []
+}
+
+/** The tags on one image — what its panel lights. */
+export async function readPostTags(
+  postId: number
+): Promise<Omit<CollectionTag, 'post_count'>[]> {
+  const db = boardDb()
+  return db ? listPostTags(db, postId) : []
+}
+
+/**
+ * The writes to a shelf's tags. Each drops the collection cache like every other write
+ * here: its pages are keyed by the pills that were lit, and a tag put on or taken off an
+ * image changes which filtered page that image belongs to.
+ */
+export async function makeCollectionTag(
+  collectionId: number,
+  input: CollectionTagInput
+): Promise<
+  { ok: true; id: number; name: string; mark: string | null } | { ok: false; error: string }
+> {
+  const db = boardDb()
+  if (!db) return { ok: false, error: 'Not set up yet' }
+  return dropping(createCollectionTag(db, collectionId, input))
+}
+
+export async function editCollectionTag(
+  id: number,
+  input: CollectionTagInput
+): Promise<{ ok: true; name: string; mark: string | null } | { ok: false; error: string }> {
+  const db = boardDb()
+  if (!db) return { ok: false, error: 'Not set up yet' }
+  return dropping(updateCollectionTag(db, id, input))
+}
+
+export async function removeCollectionTag(id: number): Promise<Outcome> {
+  const db = boardDb()
+  if (!db) return { ok: false, error: 'Not set up yet' }
+  return dropping(deleteCollectionTag(db, id))
+}
+
+export async function tagCollectionPosts(request: {
+  tagId: number
+  postIds: number[]
+  on: boolean
+}): Promise<{ ok: true; changed: number } | { ok: false; error: string }> {
+  const db = boardDb()
+  if (!db) return { ok: false, error: 'Not set up yet' }
+  return dropping(setCollectionPostsTag(db, request))
 }
 
 type Shelf = { name: string; mark: string | null; rating: Rating; is_ai: boolean }

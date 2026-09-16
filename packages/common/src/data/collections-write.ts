@@ -15,7 +15,7 @@ import type { Rating } from '@common/search'
  * gained one.
  */
 
-const { collections, posts } = COLLECTION_TABLES
+const { collections, posts, postTags } = COLLECTION_TABLES
 
 export type CollectionOutcome<T = unknown> = ({ ok: true } & T) | { ok: false; error: string }
 
@@ -213,6 +213,11 @@ export async function deleteCollectionPostRow(
  * **Every shelf involved is touched**, in the same transaction: each one an image left and
  * the one they arrived on. Touching only the destination would leave the shelves you took
  * them from claiming nothing had happened to them.
+ *
+ * **A moved image leaves its tags behind.** A tag is a word belonging to one shelf (0013),
+ * so the ones it carried mean nothing where it is going, and a link to them would be a word
+ * the destination's pill bar does not have and cannot take off. Cleared in the same
+ * transaction, so an image never sits on a shelf carrying another shelf's tags.
  */
 export async function moveCollectionPosts(
   db: DbPool,
@@ -226,15 +231,18 @@ export async function moveCollectionPosts(
     // on the row as it was — afterwards nothing else remembers it. A destination that is not
     // a collection is refused by the foreign key; the id arrives from a menu the window drew
     // out of the shelf list.
-    const rows = await tx<{ was: number }[]>`
+    const rows = await tx<{ id: number; was: number }[]>`
       update ${tx(posts)} p
          set collection_id = ${collectionId}
         from ${tx(posts)} old
        where old.id = p.id
          and p.id = any(${ids}::int[])
          and p.collection_id <> ${collectionId}
-      returning old.collection_id as was`
+      returning p.id, old.collection_id as was`
     if (rows.length === 0) return { ok: true as const, moved: 0 }
+
+    await tx`
+      delete from ${tx(postTags)} where post_id = any(${rows.map((row) => row.id)}::int[])`
 
     for (const shelf of new Set([...rows.map((row) => row.was), collectionId])) {
       await touchCollection(tx, shelf)

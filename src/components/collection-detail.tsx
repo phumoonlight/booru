@@ -13,18 +13,19 @@ import {
   getCollection,
   getCollectionPost,
 } from '@/lib/data/collections'
+import { listPostTags } from '@/lib/data/collection-tags'
+import { TagMark } from '@/components/tag-mark'
 import { collectionHref, collectionPostHref } from '@common/collections'
 import { collectionImageUrl, collectionThumbUrl } from '@/lib/images'
-import { isRestricted, RATING_COLOR, RATING_LABEL } from '@common/search'
+import { isRestricted, RATING_COLOR, RATING_LABEL, tagLabel } from '@common/search'
 import { SITE_NAME } from '@/config'
 
 /**
  * One image from a collection.
  *
- * `PostDetail` with the two things a collection post does not have taken out: there are no
- * tags, so there is no tag list and no tag-derived title, and there is no search, so
- * nothing rides in a query string. What is left is the picture, the walk through its own
- * shelf, and the handful of facts about the file.
+ * The picture, the walk through its own shelf, its tags, and the handful of facts about the
+ * file. The tags are its shelf's own words, each a link back to that shelf narrowed to the
+ * images carrying it — the pill bar, reached from the other end.
  *
  * The gates are the site's, unchanged. The adult tier renders `<RestrictedNotice />`
  * rather than the image — an image's own URL is reachable without going near a listing,
@@ -107,10 +108,10 @@ export async function CollectionDetail({ id }: { id: string }) {
     return <RestrictedNotice />
   }
 
-  const { prevId, nextId } = await collectionNeighbours({
-    id: post.id,
-    collectionId: post.collection_id,
-  })
+  const [{ prevId, nextId }, tags] = await Promise.all([
+    collectionNeighbours({ id: post.id, collectionId: post.collection_id }),
+    listPostTags(post.id),
+  ])
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4">
@@ -141,8 +142,23 @@ export async function CollectionDetail({ id }: { id: string }) {
         height={post.height}
       />
 
-      {/* Details only. There is no tag column to sit beside, so this is a narrow block
-          under the picture rather than two columns. */}
+      {tags.length > 0 && (
+        <nav aria-label="Tags" className="flex flex-wrap gap-1.5">
+          {tags.map((tag) => (
+            <Link
+              key={tag.id}
+              href={collectionHref(post.collection_id, [tag.name])}
+              className="flex min-h-11 items-center gap-1.5 rounded-full border border-border px-3 text-sm text-muted transition-colors hover:border-muted hover:text-foreground sm:min-h-9"
+            >
+              <TagMark mark={tag.mark} />
+              {tagLabel(tag.name)}
+            </Link>
+          ))}
+        </nav>
+      )}
+
+      {/* A narrow block under the picture rather than two columns: the tags above are a
+          wrapping row, not a column to sit beside. */}
       <section className="w-full max-w-sm">
         <h2 className="mb-2 text-sm font-semibold">Details</h2>
         <dl className="flex flex-col gap-1 text-sm">

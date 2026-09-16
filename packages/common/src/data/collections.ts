@@ -1,6 +1,7 @@
 import { COLLECTION_TABLES, type CollectionListFilter } from '@common/collections'
 import { first, type Db } from '@common/db'
 import { RATINGS, type Rating } from '@common/search'
+import { postHasTags } from '@common/data/collection-tags'
 
 /**
  * Everything a collection is, as reads — the shelf list, one shelf's contents, and the
@@ -20,7 +21,8 @@ import { RATINGS, type Rating } from '@common/search'
  * ceiling is one comparison against one row, wherever an image is read from.
  */
 
-/** One image on a shelf. No tags, and no rating of its own — its shelf's is the rating. */
+/** One image on a shelf. No rating of its own — its shelf's is the rating — and its tags are
+ *  read apart (`@common/data/collection-tags`), since the grid draws none of them. */
 export type CollectionPost = {
   id: number
   collection_id: number
@@ -171,11 +173,12 @@ export async function getCollection(db: Db, id: number): Promise<Collection | nu
 }
 
 /**
- * A shelf's contents, newest first.
+ * A shelf's contents, newest first, narrowed to the images carrying every one of `tags` —
+ * the shelf's own tags, by name (`postHasTags`). No tags is the whole shelf.
  *
- * No query and no facets — a collection is a set somebody assembled by hand. `after` is
- * the feed's cursor: strictly older than that id, never an offset, so an image added
- * mid-scroll does not slide the rows below it.
+ * `after` is the feed's cursor: strictly older than that id, never an offset, so an image
+ * added mid-scroll does not slide the rows below it. The tag filter and the cursor compose,
+ * so a filtered shelf scrolls the same way an unfiltered one does.
  */
 export async function listCollectionPosts(
   db: Db,
@@ -184,7 +187,13 @@ export async function listCollectionPosts(
     after,
     perPage = COLLECTION_PAGE_SIZE,
     visibleRatings,
-  }: { after?: number; perPage?: number; visibleRatings?: readonly Rating[] } = {}
+    tags = [],
+  }: {
+    after?: number
+    perPage?: number
+    visibleRatings?: readonly Rating[]
+    tags?: readonly string[]
+  } = {}
 ): Promise<CollectionPostPage> {
   const allowed = [...(visibleRatings ?? RATINGS)]
 
@@ -194,6 +203,7 @@ export async function listCollectionPosts(
         from ${db(posts)} p
        where p.collection_id = ${collectionId}
          and ${shelfVisible(db, allowed)}
+         and ${postHasTags(db, tags)}
          and (${after ?? null}::int is null or p.id < ${after ?? null}::int)
        order by p.id desc
        limit ${perPage + 1}`

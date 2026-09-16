@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { collectionHref } from '@common/collections'
-import { RATING_COLOR, RATING_LABEL } from '@common/search'
+import { collectionHref, toggleCollectionTag } from '@common/collections'
+import { RATING_COLOR, RATING_LABEL, tagLabel } from '@common/search'
 import type { Collection, CollectionPost } from '../../../shared/api'
 import { BUTTON, BUTTON_SM, buttonToggle } from './buttons'
 import { Panel } from './panel'
@@ -10,6 +10,7 @@ import { CollectionForm, shelfTitle } from './collection-form'
 import { ImageCard, ImagePanel } from './collection-image'
 import { StagingBox, useStaging } from './collection-staging'
 import { ManageBar } from './collection-manage'
+import { TagBar, useShelfTags } from './collection-tags'
 
 /** A screenful, and what Load more adds. The window is wider than a phone and these are
  *  small tiles, so it is larger than the website's. */
@@ -55,6 +56,7 @@ export function CollectionView({
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
   const [nonce, setNonce] = useState(0)
+  const { tags, active, setActive, reload: reloadTags } = useShelfTags(collectionId)
 
   const [renaming, setRenaming] = useState(false)
   // The upload box is shut until asked for: most visits to a shelf are to look at it, and a
@@ -75,16 +77,18 @@ export function CollectionView({
   // spinner on, since that is a thing a press does and not a thing an effect should.
   useEffect(() => {
     let alive = true
-    void window.api.listCollectionPosts({ collectionId, perPage: CHUNK }).then((page) => {
-      if (!alive) return
-      setPosts(page.posts)
-      setHasMore(page.hasMore)
-      setLoading(false)
-    })
+    void window.api
+      .listCollectionPosts({ collectionId, perPage: CHUNK, tags: active })
+      .then((page) => {
+        if (!alive) return
+        setPosts(page.posts)
+        setHasMore(page.hasMore)
+        setLoading(false)
+      })
     return () => {
       alive = false
     }
-  }, [collectionId, nonce])
+  }, [collectionId, nonce, active])
 
   /** Read this shelf again — what every write here owes the grid it just changed. */
   const reload = useCallback(() => {
@@ -100,6 +104,7 @@ export function CollectionView({
       collectionId,
       after: last.id,
       perPage: CHUNK,
+      tags: active,
     })
     // Appended, never replaced: a chunk landing must not reflow rows already scrolled past.
     setPosts((current) => [...current, ...page.posts])
@@ -251,6 +256,24 @@ export function CollectionView({
           </Panel>
         )}
 
+        <TagBar
+          collectionId={collectionId}
+          tags={tags}
+          active={active}
+          onToggle={(tag) => {
+            setLoading(true)
+            setSelected([])
+            setActive((was) => toggleCollectionTag(was, tag))
+          }}
+          onChanged={() => {
+            reloadTags()
+            reload()
+          }}
+          onRenamed={(from, to) =>
+            setActive((was) => was.map((name) => (name === from ? to : name)))
+          }
+        />
+
         {notice && (
           <p className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-[#ff5d5f]">
             {notice}
@@ -272,9 +295,16 @@ export function CollectionView({
             // heading naming the second, and the next write would have saved them onto it.
             key={editingPost.id}
             post={editingPost}
+            tags={tags}
             siteUrl={siteUrl}
             onClose={() => setEditing(null)}
             onChanged={reload}
+            onTagged={() => {
+              reloadTags()
+              // Only a filtered grid can have lost or gained this image; an unfiltered one
+              // is exactly as it was, and re-reading it would close nothing and flash.
+              if (active.length > 0) reload()
+            }}
             onDeleted={() => {
               setEditing(null)
               reload()
@@ -286,6 +316,7 @@ export function CollectionView({
           <ManageBar
             collectionId={collectionId}
             collections={collections}
+            tags={tags}
             selected={selected}
             loaded={posts.length}
             onSelectAll={() => setSelected(posts.map((post) => post.id))}
@@ -293,14 +324,33 @@ export function CollectionView({
             onMoved={(moved) => {
               setSelected([])
               setNotice(moved === 0 ? 'Those images were already there.' : null)
+              reloadTags()
               reload()
+            }}
+            onTagged={(changed, on, tag) => {
+              setNotice(
+                changed === 0
+                  ? on
+                    ? `Every one of those already carries ${tag}.`
+                    : `None of those carries ${tag}.`
+                  : null
+              )
+              reloadTags()
+              if (active.length > 0) {
+                setSelected([])
+                reload()
+              }
             }}
           />
         )}
 
         {posts.length === 0 ? (
           <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
-            {loading ? 'Loading…' : 'Nothing in this collection yet.'}
+            {loading
+              ? 'Loading…'
+              : active.length > 0
+                ? `No image here carries ${active.length === 1 ? tagLabel(active[0]) : `all of ${active.map(tagLabel).join(', ')}`}.`
+                : 'Nothing in this collection yet.'}
           </p>
         ) : (
           <>

@@ -118,3 +118,22 @@ export const pillToggle = (active: boolean, lit: 'red' | 'blue'): string =>
         : 'border-[#3b82f6] bg-[#3b82f6] text-white'
       : 'border-border text-muted hover:border-muted hover:text-foreground'
   }`
+
+/**
+ * One of a shelf's tags, as a pill — lit while it is narrowing the grid, or while it is on
+ * the image whose panel is open.
+ *
+ * Not `pillToggle`: that is a flag about a whole shelf, lit in the flag's own red or blue,
+ * and a tag is one word among several, lit in accent like everything else in this window
+ * that says "this is on". Rounded like it, so the two read as the same kind of control.
+ * `editing` outlines the one pill picked for a rename, which is a different question from
+ * whether it is lit. Carries `aria-pressed`.
+ */
+export const tagPill = (active: boolean, editing = false): string =>
+  `flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm transition-colors ${
+    active
+      ? 'border-accent bg-accent text-background'
+      : editing
+        ? 'border-accent text-foreground'
+        : 'border-border text-muted hover:border-muted hover:text-foreground'
+  }`

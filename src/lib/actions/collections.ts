@@ -9,6 +9,7 @@ import {
   type LatestCollectionPost,
 } from '@/lib/data/collections'
 import { LATEST_POSTS_LIMIT } from '@/lib/latest-posts'
+import { readCollectionTags } from '@common/collections'
 
 /**
  * What a page asks for after it has been rendered: the next chunk of a shelf or of
@@ -19,16 +20,25 @@ import { LATEST_POSTS_LIMIT } from '@/lib/latest-posts'
 export async function loadMoreCollectionPosts({
   collectionId,
   after,
+  tags,
 }: {
   collectionId: number
   after: number
+  tags: string[]
 }): Promise<{ posts: CollectionPost[]; hasMore: boolean }> {
   // Both arrive from the browser, and both name rows. A cursor is only ever an integer;
   // nonsense produces an empty chunk rather than a guess.
   if (!Number.isInteger(collectionId) || collectionId <= 0) return { posts: [], hasMore: false }
   if (!Number.isInteger(after) || after <= 0) return { posts: [], hasMore: false }
 
-  return listCollectionPosts(collectionId, { after, perPage: COLLECTION_PAGE_SIZE })
+  // The tags arrive from the browser too, so they go through the same reader the page's URL
+  // does — the same grammar and the same cap — rather than being trusted as an array.
+  const named = readCollectionTags({ tags: Array.isArray(tags) ? tags.join(' ') : '' })
+  return listCollectionPosts(collectionId, {
+    after,
+    perPage: COLLECTION_PAGE_SIZE,
+    tags: named,
+  })
 }
 
 /**

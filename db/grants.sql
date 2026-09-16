@@ -35,7 +35,8 @@ do $$
 declare
   app_tables constant text[] := array['tags', 'tag_rules',
                                       'tag_form_sections', 'tag_form_section_deps',
-                                      'collections', 'collection_posts'];
+                                      'collections', 'collection_posts',
+                                      'collection_tags', 'collection_post_tags'];
   entry text;
 begin
   if to_regrole('booru_web') is not null then

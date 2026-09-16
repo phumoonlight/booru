@@ -8,9 +8,11 @@ the two disagree, the migrations win and this file is the bug.
 **Shape:**
 
 ```
-collections ───< collection_posts        (the site: no tags, no link table)
+collections ───< collection_posts        (the site)
+collections ───< collection_tags         (each shelf's own words)
+collection_posts ───< collection_post_tags >─── collection_tags
 
-tags ───< tag_rules >─── tags            (the vocabulary, kept for later — no post reads it)
+tags ───< tag_rules >─── tags            (the board-wide vocabulary, kept for later — nothing reads it)
 tags >─── tag_form_sections ───< tag_form_section_deps >─── tags
 
 artists ───< artist_urls                 (the desktop app's alone — no web grant)
@@ -60,6 +62,7 @@ because the board was emptied in the same move. Everything since is a new number
 | `0008_artist_ai.sql`, `0009_artist_archive.sql`, `0010_artist_favorites.sql` | `artists.is_ai`, `archived_at`, `is_favorite` |
 | `0011_collection_rating_mark.sql` | `collections.rating` and `collections.mark` |
 | `0012_collections_only.sql` | drops both boards, both link tables and both count columns; adds `collections.is_ai`; drops `collection_posts.rating` |
+| `0013_collection_tags.sql` | adds `collection_tags` and `collection_post_tags` — tags that belong to one shelf |
 
 ---
 
@@ -140,6 +143,41 @@ the primary key backwards.
   search and `rating:r18` in a tag rule; `RATING_NAME` in `@common/search` is the only
   translation, `asRating` reads either form. Free-form, no check constraint, which is why
   collapsing the scale from four tiers needed no migration.
+
+---
+
+## `collection_tags`, `collection_post_tags`
+
+A shelf's own tags (`0013`). **Not the `tags` table**: that is one board-wide row per name
+with a category, a mark, a rating floor and a form row, where these are words that belong to
+one shelf and mean what that shelf means by them — `landscape` on two shelves is two rows.
+
+| table | column | type | notes |
+| --- | --- | --- | --- |
+| `collection_tags` | `id` | `integer identity` | primary key |
+| | `collection_id` | `integer not null references collections (id) on delete cascade` | a shelf can only be deleted empty, so this cascades only the words of a shelf with nothing on it |
+| | `name` | `text not null` | `check (name ~ '^[a-z0-9_().-]+$')` — the vocabulary's grammar, settled by `readCollectionTagName` |
+| | `mark` | `text` | a colour (drawn as a dot) or any short text — `readCollectionTagMark`, `markColor` deciding which; null for none |
+| | `created_at` | `timestamptz not null default now()` | |
+| `collection_post_tags` | `post_id` | `integer not null references collection_posts (id) on delete cascade` | |
+| | `tag_id` | `integer not null references collection_tags (id) on delete cascade` | primary key `(post_id, tag_id)` |
+
+`collection_tags_name_key` is unique on `(collection_id, lower(name))`;
+`collection_tags_collection_idx` is `(collection_id, name)`, the pill bar's read;
+`collection_post_tags_tag_idx` is `(tag_id, post_id desc)`, the filter's.
+
+**Invariants**
+
+- **A tag is made on its shelf before it is used.** `setCollectionPostsTag` takes a tag
+  *id*, so no write coins one, and its insert joins through `collection_posts` so a tag only
+  ever lands on an image of its own shelf.
+- **A moved image leaves its tags behind** — `moveCollectionPosts` deletes its links in the
+  same transaction, since the old shelf's words mean nothing on the new one.
+- **The filter is AND** (`postHasTags`): an image is drawn when as many of the named tags
+  are on it as were named, which the pair primary key makes the same as "all of them".
+- **No count column.** A pill's count is `count(*)` in `listCollectionTags`, for the reason
+  a shelf's image count is.
+- **No tag write touches the shelf.** A tag is a word about images, the way a source is.
 
 ---
 
@@ -348,11 +386,12 @@ key any more, so the boundary is drawn where Postgres draws boundaries:
 | role | held by | may |
 | --- | --- | --- |
 | `booru_owner` | the environment file, the migration runner only | everything, DDL included |
-| `booru_app` | compiled into the desktop bundle | `select, insert, update, delete` on the six content tables and the three artist tables, `select, insert, update` on `site_settings`; **no** create, alter or drop |
-| `booru_web` | Vercel | `select` on the six content tables and `site_settings`; `update (view_count)` on `collection_posts`; nothing on the artist tables, and nothing else |
+| `booru_app` | compiled into the desktop bundle | `select, insert, update, delete` on the eight content tables and the three artist tables, `select, insert, update` on `site_settings`; **no** create, alter or drop |
+| `booru_web` | Vercel | `select` on the eight content tables and `site_settings`; `update (view_count)` on `collection_posts`; nothing on the artist tables, and nothing else |
 
-The six content tables are `app_tables` in `db/grants.sql`: `tags`, `tag_rules`,
-`tag_form_sections`, `tag_form_section_deps`, `collections`, `collection_posts`. The grants
+The eight content tables are `app_tables` in `db/grants.sql`: `tags`, `tag_rules`,
+`tag_form_sections`, `tag_form_section_deps`, `collections`, `collection_posts`,
+`collection_tags`, `collection_post_tags`. The grants
 are re-applied on every `db:push` and applied to whichever roles exist, so a scratch
 database still migrates. `db/README.md` creates them.
 

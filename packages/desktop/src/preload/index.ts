@@ -38,6 +38,13 @@ const api: PostAppApi = {
   editCollection: (id, input) => ipcRenderer.invoke('collections:edit', id, input),
   deleteCollection: (id) => ipcRenderer.invoke('collections:delete', id),
   listCollectionPosts: (options) => ipcRenderer.invoke('collections:posts', options),
+  listCollectionTags: (collectionId) => ipcRenderer.invoke('collections:tags', collectionId),
+  listCollectionPostTags: (postId) => ipcRenderer.invoke('collections:post-tags', postId),
+  createCollectionTag: (collectionId, input) =>
+    ipcRenderer.invoke('collections:create-tag', collectionId, input),
+  editCollectionTag: (id, input) => ipcRenderer.invoke('collections:edit-tag', id, input),
+  deleteCollectionTag: (id) => ipcRenderer.invoke('collections:delete-tag', id),
+  tagCollectionPosts: (request) => ipcRenderer.invoke('collections:tag-posts', request),
   uploadToCollection: (request) => ipcRenderer.invoke('collections:upload', request),
   saveCollectionPost: (request) => ipcRenderer.invoke('collections:save-post', request),
   moveCollectionPosts: (ids, collectionId) =>

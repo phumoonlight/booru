@@ -21,10 +21,14 @@ const PREFETCH_MARGIN = '100px'
  */
 export function CollectionFeed({
   collectionId,
+  tags,
   initialPosts,
   hasMore: initialHasMore,
 }: {
   collectionId: number
+  /** The pills lit above the feed. Every later chunk is asked for with the same ones, so a
+   *  filtered shelf does not turn back into the whole shelf on the way down. */
+  tags: string[]
   initialPosts: CollectionPost[]
   hasMore: boolean
 }) {
@@ -46,7 +50,7 @@ export function CollectionFeed({
     setPending(true)
     setFailed(false)
     try {
-      const next = await loadMoreCollectionPosts({ collectionId, after: oldest.id })
+      const next = await loadMoreCollectionPosts({ collectionId, after: oldest.id, tags })
       setHasMore(next.hasMore)
       if (next.posts.length === 0) return
       setChunks((current) => [...current, next.posts])
@@ -58,7 +62,7 @@ export function CollectionFeed({
       busy.current = false
       setPending(false)
     }
-  }, [canLoad, collectionId, oldest])
+  }, [canLoad, collectionId, oldest, tags])
 
   useEffect(() => {
     const node = sentinel.current

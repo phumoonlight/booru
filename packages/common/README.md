@@ -26,7 +26,7 @@ where the file is.
 
 | | |
 |---|---|
-| `collections.ts` | the shelves: two table names, two object prefixes, the hrefs, the shelf list's filter params (`collectionsHref`, `readCollectionFilter`), and what counts as a name and a mark |
+| `collections.ts` | the shelves: four table names, two object prefixes, the hrefs, the shelf list's filter params (`collectionsHref`, `readCollectionFilter`), a shelf's tag filter (`readCollectionTags`, `toggleCollectionTag`), and what counts as a name, a mark and a tag |
 | `artists.ts` | the desktop app's artist list: three table names, two object prefixes, what counts as a name and an address |
 | `search.ts` | what is left of the `?query=` grammar: the rating scale (`RATINGS`, `asRating`, `ratingToken`, `RESTRICTED_RATINGS`) and `tagLabel` |
 | `tags.ts` | tag parsing and the charset, `TAG_CATEGORIES`, `categoryColor`, `markColor`, the form-section spacer spelling |
@@ -34,6 +34,7 @@ where the file is.
 | `db.ts` | `Db`, the handle every function here takes, and `DbPool` for the ones that open a transaction |
 | `data/collections.ts` | the shelf list (name, rating and AI filters), one shelf's feed, the newest images across every shelf, the count, prev/next — every image read narrowed on its shelf's rating |
 | `data/collections-write.ts` | creating, editing and deleting shelves; adding, editing, moving and removing images; `touchCollection` |
+| `data/collection-tags.ts`, `data/collection-tags-write.ts` | a shelf's own tags: the pill bar with counts, one image's tags, the AND filter (`postHasTags`); making, renaming and deleting one, and putting one on or off a set of images |
 | `data/shared.ts` | `resolveTagIds`, `listTags` (A–Z) — how anything reaches the vocabulary |
 | `data/tags.ts` | managing the vocabulary: create, rename, recategorize, file onto a form row, mark, delete |
 | `data/rules.ts` | the tag rules — implications and recommendations, ids on the table and names above it |
@@ -48,7 +49,8 @@ where the file is.
 
 `board.ts`, `data/posts.ts`, `data/search.ts` and `data/counters.ts` went with the boards
 (`db/migrations/0012_collections_only.sql`). The tag files stay because the vocabulary did,
-with nothing joining it to an image.
+with nothing joining it to an image — a shelf's tags (`0013`) are separate tables and
+separate files, and touch none of them.
 
 ## The rules that keep it shareable
 

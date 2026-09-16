@@ -57,9 +57,10 @@ export const getCollection = cache(async (id: number) =>
   (await serving()) ? read.getCollection(db(), id) : null
 )
 
+/** A shelf's images, narrowed to those carrying every one of `tags` when any are named. */
 export async function listCollectionPosts(
   collectionId: number,
-  options: { after?: number; perPage?: number } = {}
+  options: { after?: number; perPage?: number; tags?: readonly string[] } = {}
 ) {
   if (!(await serving())) return { posts: [], hasMore: false }
   return read.listCollectionPosts(db(), collectionId, {

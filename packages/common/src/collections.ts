@@ -1,16 +1,19 @@
 /**
  * What a collection is, spelled once — the tables it lives in, the addresses it takes on
- * the website, the list's search as a URL carries it, and what counts as a name and a mark.
+ * the website, the list's search and a shelf's tag filter as a URL carries them, and what
+ * counts as a name, a mark and a tag.
  *
  * A collection is a named set of images, and since the boards were dropped (0012) it is
- * what the site is made of. Its images carry no tags; each belongs to exactly one shelf and
- * takes that shelf's rating.
+ * what the site is made of. Each image belongs to exactly one shelf, takes that shelf's
+ * rating, and carries whichever of that shelf's own tags (0013) have been put on it.
  *
- * It imports only `@common/search`'s rating vocabulary, which imports nothing, so it can
- * sit under `@common/storage` without a cycle.
+ * It imports `@common/search`'s rating vocabulary and `@common/tags`'s `parseTagInput`,
+ * neither of which imports anything, so it can sit under `@common/storage` without a
+ * cycle.
  */
 
 import { asRating, RATING_NAME, type Rating } from '@common/search'
+import { markColor, parseTagInput } from '@common/tags'
 
 /**
  * The two tables, spelled here and interpolated as identifiers by
@@ -20,6 +23,10 @@ import { asRating, RATING_NAME, type Rating } from '@common/search'
 export const COLLECTION_TABLES = {
   collections: 'collections',
   posts: 'collection_posts',
+  /** A shelf's own words (0013), which are not the board-wide `tags` vocabulary — see the
+   *  migration for why those two are different tables and not one. */
+  tags: 'collection_tags',
+  postTags: 'collection_post_tags',
 } as const
 
 /**
@@ -79,9 +86,55 @@ export function readCollectionFilter(
   }
 }
 
-/** One collection's contents. */
-export function collectionHref(id: number): string {
-  return `${COLLECTIONS_PATH}/${id}`
+/**
+ * The parameter a shelf's own page takes, and the only one it takes: the tags an image
+ * must carry to be drawn. Space-separated, which `URLSearchParams` writes as `+` —
+ * `?tags=blue_hair+landscape`.
+ */
+export const COLLECTION_TAG_PARAM = 'tags'
+
+/**
+ * One collection's contents, narrowed to the images carrying **every** one of `tags`.
+ *
+ * AND rather than OR, which is what a pill bar is for: each pill you add is a further
+ * question about the same image, and a set that grows as you narrow it would be the one
+ * thing a filter must not do. Names are written as typed — they are already normalized by
+ * `readCollectionTagName` on the way into the table, so the URL and the row agree.
+ */
+export function collectionHref(id: number, tags: readonly string[] = []): string {
+  if (tags.length === 0) return `${COLLECTIONS_PATH}/${id}`
+  const params = new URLSearchParams({ [COLLECTION_TAG_PARAM]: tags.join(' ') })
+  return `${COLLECTIONS_PATH}/${id}?${params}`
+}
+
+/** As many tags as a shelf's URL may name. A bound rather than a belief: the parameter
+ *  arrives from the open web and becomes a condition per name in one query. */
+export const COLLECTION_TAG_FILTER_MAX = 16
+
+/**
+ * The tags a shelf page's `searchParams` carry, as names. Loose the way
+ * `readCollectionFilter` is: a token that could not be a tag name is dropped rather than
+ * refusing the page, since the only thing on the other side of a hand-edited URL is an
+ * image grid.
+ */
+export function readCollectionTags(
+  params: Record<string, string | string[] | undefined>
+): string[] {
+  const raw = params[COLLECTION_TAG_PARAM]
+  const value = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw.join(' ') : ''
+  return parseTagInput(value).tags.slice(0, COLLECTION_TAG_FILTER_MAX)
+}
+
+/**
+ * `tags` with `name` taken out if it is there and added if it is not — what one press on a
+ * pill means, for the href that press is.
+ *
+ * Here rather than in the component drawing the pills so that the website and the desktop
+ * app agree about what a pill does, and so the address a pill points at is still spelled in
+ * the one module that spells a collection's addresses (invariant 8).
+ */
+export function toggleCollectionTag(tags: readonly string[], name: string): string[] {
+  return tags.includes(name) ? tags.filter((tag) => tag !== name) : [...tags, name]
 }
 
 /**
@@ -151,4 +204,52 @@ export function readCollectionMark(raw: string): { mark: string | null } | { err
     return { error: `A mark is ${COLLECTION_MARK_MAX} characters at most.` }
   }
   return { mark: cleaned }
+}
+
+/** As long a tag as the pill bar can draw, and the same cap `readTagName` puts on the
+ *  board-wide vocabulary. */
+export const COLLECTION_TAG_MAX = 64
+
+/**
+ * A shelf's tag name, as it will be stored, or why it cannot be.
+ *
+ * A token and not prose, which is the one place a tag differs from the shelf it is on: a
+ * name is read as a title, where a tag is typed, filtered on and carried in a URL. So it
+ * goes through `parseTagInput` — the same lowercasing and the same character rule the
+ * board-wide vocabulary uses.
+ *
+ * **A space inside the name becomes `_`**, and a run of them one `_`; spaces at either end
+ * are trimmed. `after sex` is one tag somebody typed the natural way, and refusing it for
+ * the separator the grammar happens to spell differently was an error with an obvious fix
+ * the field could make itself.
+ *
+ * Shaped like `readCollectionName` and `readTagName`: a value, or a sentence for whoever
+ * typed it.
+ */
+export function readCollectionTagName(raw: string): { name: string } | { error: string } {
+  if (raw.length > COLLECTION_TAG_MAX) {
+    return { error: `That tag is too long — ${COLLECTION_TAG_MAX} characters at most.` }
+  }
+
+  const { tags, invalid } = parseTagInput(raw.trim().replace(/\s+/g, '_'))
+  if (invalid.length > 0) {
+    return { error: `“${invalid[0]}” can only use lowercase letters, digits and _ ( ) . -` }
+  }
+  if (tags.length === 0) return { error: 'Type a tag.' }
+  return { name: tags[0] }
+}
+
+/**
+ * What is drawn in front of a shelf tag's name, as it will be stored — null for none.
+ *
+ * Both of the marks this project already has, in one box. **A colour is taken first**,
+ * lowercased, and painted as a dot — `markColor` is the test the pill will apply, so what is
+ * accepted as a colour here is exactly what will paint as one. Anything else is text, held
+ * to the rules a shelf's own mark is (`readCollectionMark`): an emoji, `[WIP]`, `2024`.
+ * Not `readTagMark`'s emoji-only rule, since a prefix of words is half of what this is for.
+ */
+export function readCollectionTagMark(raw: string): { mark: string | null } | { error: string } {
+  const color = markColor(raw)
+  if (color) return { mark: color }
+  return readCollectionMark(raw)
 }
