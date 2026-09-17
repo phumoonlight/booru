@@ -1,7 +1,9 @@
 import { useCallback, useState } from 'react'
-import type { StageOutcome } from '../../../shared/api'
-import { BUTTON_ON_SURFACE, BUTTON_SUBMIT_ON_SURFACE } from './buttons'
+import type { CollectionTag, StageOutcome } from '../../../shared/api'
+import { BUTTON_ON_SURFACE, BUTTON_SUBMIT_ON_SURFACE, tagPill } from './buttons'
 import { FIELD } from './panel'
+import { TagMark } from './tag-mark'
+import { tagLabel } from '@common/search'
 
 /** One staged file, on its way onto a shelf. */
 type Staged = Extract<StageOutcome, { ok: true }>
@@ -28,7 +30,16 @@ export function useStaging(collectionId: number, onUploaded: () => void) {
   // it belonged to those images, and a box still holding the last post's address is how the
   // next batch quietly gets the wrong source. Correcting one afterwards is its own panel.
   const [source, setSource] = useState('')
+  // The shelf's tags the batch lands carrying, by id — one pass instead of a trip through
+  // every image's panel afterwards. Cleared with the source, for the source's reason.
+  const [tagIds, setTagIds] = useState<number[]>([])
   const [working, setWorking] = useState<string | null>(null)
+
+  const toggleTag = useCallback((id: number) => {
+    setTagIds((current) =>
+      current.includes(id) ? current.filter((held) => held !== id) : [...current, id]
+    )
+  }, [])
 
   /** Takes what a picker or a drop produced and sorts it into "can be uploaded" and "here
    *  is why not" — a duplicate names the shelf it is already on, which is the answer
@@ -98,6 +109,7 @@ export function useStaging(collectionId: number, onUploaded: () => void) {
         collectionId,
         path: file.path,
         sourceUrl: source.trim(),
+        tagIds,
       })
       results.push(
         result.ok
@@ -108,8 +120,10 @@ export function useStaging(collectionId: number, onUploaded: () => void) {
     setWorking(null)
     setStaged([])
     setSource('')
+    setTagIds([])
     setLanded(results)
-    // The grid is now missing whatever landed, and the shelf's cover has moved.
+    // The grid is now missing whatever landed, the shelf's cover has moved, and the tags
+    // the batch carried have new counts.
     onUploaded()
   }
 
@@ -120,6 +134,8 @@ export function useStaging(collectionId: number, onUploaded: () => void) {
     landed,
     source,
     setSource,
+    tagIds,
+    toggleTag,
     working,
     stage,
     stageUrls,
@@ -131,21 +147,24 @@ export function useStaging(collectionId: number, onUploaded: () => void) {
 type Staging = ReturnType<typeof useStaging>
 
 /**
- * The drop zone and the batch under it: files and one source. An image's rating is its
- * shelf's, so there is nothing else to say about a batch.
+ * The drop zone and the batch under it: files, one source and the shelf's tags to carry. An
+ * image's rating is its shelf's, so there is nothing else to say about a batch.
  */
 export function StagingBox({
   staging,
   name,
+  tags,
   dragging,
 }: {
   staging: Staging
   /** The shelf's name, which the Upload button says out loud: it is the one press here
    *  that cannot be taken back, and the screen it is on is not always the one you meant. */
   name: string
+  /** The shelf's own tags. A new one is made on the tag bar above, never here. */
+  tags: CollectionTag[]
   dragging: boolean
 }) {
-  const { staged, setStaged, rejected, landed, source, setSource, working } = staging
+  const { staged, setStaged, rejected, landed, source, setSource, tagIds, working } = staging
 
   return (
     <div
@@ -190,6 +209,27 @@ export function StagingBox({
           </button>
         )}
       </label>
+
+      {tags.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted">Tags</span>
+          {tags.map((tag) => (
+            <button
+              key={tag.id}
+              type="button"
+              onClick={() => staging.toggleTag(tag.id)}
+              // A running batch took its tags when Upload was pressed, and clears them when it
+              // lands — a pill pressed in between would be dropped without having been used.
+              disabled={working !== null}
+              aria-pressed={tagIds.includes(tag.id)}
+              className={tagPill(tagIds.includes(tag.id))}
+            >
+              <TagMark mark={tag.mark} />
+              {tagLabel(tag.name)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {working && <p className="text-xs text-muted">{working}</p>}
 

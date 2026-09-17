@@ -265,11 +265,13 @@ export type PostAppApi = {
     postIds: number[]
     on: boolean
   }) => Promise<{ ok: true; changed: number } | { ok: false; error: string }>
-  /** One image onto one shelf. No rating: an image's tier is its shelf's. */
+  /** One image onto one shelf, carrying these of the shelf's tags. No rating: an image's
+   *  tier is its shelf's. */
   uploadToCollection: (request: {
     collectionId: number
     path: string
     sourceUrl: string
+    tagIds: number[]
   }) => Promise<UploadResult>
   /** A collection image's source — the whole of what there is to edit on one image. */
   saveCollectionPost: (request: { id: number; sourceUrl: string }) => Promise<Outcome>

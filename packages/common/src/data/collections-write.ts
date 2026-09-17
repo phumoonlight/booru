@@ -15,7 +15,7 @@ import type { Rating } from '@common/search'
  * gained one.
  */
 
-const { collections, posts, postTags } = COLLECTION_TABLES
+const { collections, posts, tags, postTags } = COLLECTION_TABLES
 
 export type CollectionOutcome<T = unknown> = ({ ok: true } & T) | { ok: false; error: string }
 
@@ -128,16 +128,23 @@ export type CollectionPostFields = {
 }
 
 /**
- * Adds one image to a shelf, and moves that shelf to the top of the list.
+ * Adds one image to a shelf, with the tags it arrives carrying, and moves that shelf to the
+ * top of the list.
  *
  * A transaction, and it takes the pool for the reason `createPostWithTags` does: the row
  * and the shelf's `updated_at` are one change. A post that landed while the touch failed
  * would be an image at the bottom of a list that claims nothing has happened to it — which
  * is exactly the sort of quietly-wrong ordering the shelf list is entirely made of.
+ *
+ * **The tags are ids, joined through the shelf** the way `setCollectionPostsTag` joins them:
+ * one deleted or from another shelf while the batch was staged is skipped rather than
+ * refusing an image that has already been encoded and stored. Inside the transaction, so an
+ * image never lands half-tagged.
  */
 export async function createCollectionPost(
   db: DbPool,
-  fields: CollectionPostFields
+  fields: CollectionPostFields,
+  tagIds: readonly number[] = []
 ): Promise<number> {
   return db.begin(async (tx) => {
     const [row] = await tx<{ id: number }[]>`
@@ -150,6 +157,15 @@ export async function createCollectionPost(
         height: fields.height,
         source_url: fields.source_url || null,
       })} returning id`
+
+    if (tagIds.length > 0) {
+      await tx`
+        insert into ${tx(postTags)} (post_id, tag_id)
+        select ${row.id}, t.id
+          from ${tx(tags)} t
+         where t.collection_id = ${fields.collection_id} and t.id = any(${[...tagIds]}::int[])
+        on conflict do nothing`
+    }
 
     await touchCollection(tx, fields.collection_id)
     return row.id

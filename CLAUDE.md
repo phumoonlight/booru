@@ -294,11 +294,13 @@ of image on the board.
 - **The desktop screen is 🗂️ Collections**, the one the window opens on. A shelf is named
   and edited with one form — mark, name, rating, 🤖 AI — because a shelf made without a
   rating is the R-18 shelf that turns up with the setting off. Adding images is **a batch
-  of files and one source**: there is nothing else per image to type, and the source is
-  what images arriving together usually share — they are the four in one post. The source is
-  cleared with the staged files once the batch has landed — it belonged to those images, and
-  a box still holding the last post's address is how the next batch quietly gets the wrong
-  source. **A drag anywhere over the shelf opens the upload box and leaves it open**, its
+  of files, one source and the shelf's tags to carry**: there is nothing else per image to
+  type, and the source is what images arriving together usually share — they are the four in
+  one post. The tags are pills of the shelf's existing tags, linked by id inside the insert's
+  transaction (`createCollectionPost`), so a batch lands tagged rather than being tagged image
+  by image afterwards. Source and tags are cleared with the staged files once the batch has
+  landed — they belonged to those images, and a box still holding the last post's answers is
+  how the next batch quietly gets the wrong ones. **A drag anywhere over the shelf opens the upload box and leaves it open**, its
   handlers sitting on a wrapper that fills the scroller rather than on the `max-w-6xl`
   column, which left most of a wide window looking like a drop target without being one. An
   image's own panel is its **tags** (every shelf tag as a pill, lit if carried, written on

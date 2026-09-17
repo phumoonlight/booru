@@ -32,11 +32,12 @@ export type UploadLimits = {
   maxPixels: number
 }
 
-/** The two fields a collection post is made with. No tags and no rating — the shelf's
- *  rating is the image's. */
+/** What a collection post is made with. No rating — the shelf's rating is the image's. The
+ *  tags are the shelf's own, by id, since nothing coins one. */
 export type CollectionPostMetadata = {
   collectionId: number
   sourceUrl: string
+  tagIds?: readonly number[]
 }
 
 /**
@@ -77,15 +78,19 @@ export async function createCollectionPostFromImage(
 
   let postId: number
   try {
-    postId = await createCollectionPost(db, {
-      collection_id: metadata.collectionId,
-      file_name: md5,
-      file_ext: encoded.postExt,
-      file_size: encoded.postBuffer.length,
-      width: encoded.postWidth,
-      height: encoded.postHeight,
-      source_url: metadata.sourceUrl,
-    })
+    postId = await createCollectionPost(
+      db,
+      {
+        collection_id: metadata.collectionId,
+        file_name: md5,
+        file_ext: encoded.postExt,
+        file_size: encoded.postBuffer.length,
+        width: encoded.postWidth,
+        height: encoded.postHeight,
+        source_url: metadata.sourceUrl,
+      },
+      metadata.tagIds
+    )
   } catch (error) {
     await store.remove(imagePath)
     await store.remove(thumbPath)

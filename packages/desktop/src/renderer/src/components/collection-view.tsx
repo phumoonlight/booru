@@ -112,7 +112,10 @@ export function CollectionView({
     setLoading(false)
   }
 
-  const staging = useStaging(collectionId, reload)
+  const staging = useStaging(collectionId, () => {
+    reload()
+    reloadTags()
+  })
 
   async function destroy() {
     const result = await window.api.deleteCollection(collectionId)
@@ -284,7 +287,7 @@ export function CollectionView({
             drag over the screen still lands here, and closing it must not hide a staged batch
             or an upload in progress. */}
         {(uploading || dragging || staging.staged.length > 0 || staging.working !== null) && (
-          <StagingBox staging={staging} name={name} dragging={dragging} />
+          <StagingBox staging={staging} name={name} tags={tags} dragging={dragging} />
         )}
 
         {editingPost && (

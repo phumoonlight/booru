@@ -199,7 +199,8 @@ export async function removeCollection(id: number): Promise<Outcome> {
 }
 
 /**
- * One file onto one shelf. No rating: an image's tier is its shelf's.
+ * One file onto one shelf, carrying the batch's tags. No rating: an image's tier is its
+ * shelf's.
  *
  * The bytes are read here rather than sent across the bridge: a 50MB image would be copied
  * twice to make the trip and the renderer has no reason to hold it at all.
@@ -208,6 +209,7 @@ export async function uploadToCollection(request: {
   collectionId: number
   path: string
   sourceUrl: string
+  tagIds: number[]
 }): Promise<UploadResult> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
@@ -227,7 +229,11 @@ export async function uploadToCollection(request: {
       db,
       store,
       bytes,
-      { collectionId: request.collectionId, sourceUrl: request.sourceUrl },
+      {
+        collectionId: request.collectionId,
+        sourceUrl: request.sourceUrl,
+        tagIds: request.tagIds,
+      },
       DESKTOP_UPLOAD_LIMITS
     )
   )

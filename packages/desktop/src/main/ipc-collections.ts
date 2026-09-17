@@ -61,6 +61,8 @@ const collectionUploadSchema = z.object({
   collectionId: z.number().int().positive(),
   path: z.string().min(1),
   sourceUrl: z.string(),
+  // The shelf's tags by id; one that is not on this shelf is skipped by the insert.
+  tagIds: z.array(postIdSchema).max(1000).default([]),
 })
 
 const collectionSavePostSchema = z.object({
@@ -109,13 +111,13 @@ export function registerCollectionIpc(): void {
 
   /**
    * One file onto one shelf, the bytes read here: a 50MB image would be copied twice to
-   * cross the bridge. Nothing patches a cache afterwards — an upload to a shelf touches no
-   * tag, so the tag index is still exactly right.
+   * cross the bridge. Nothing patches the tag index afterwards — the tags an upload carries
+   * are the shelf's own, not the board's vocabulary.
    */
   ipcMain.handle('collections:upload', async (_event, raw: unknown): Promise<UploadResult> => {
     const parsed = collectionUploadSchema.safeParse(raw)
     if (!parsed.success) return { ok: false, error: 'Nothing to upload' }
-    return uploadToCollection(parsed.data)
+    return uploadToCollection({ ...parsed.data, tagIds: [...new Set(parsed.data.tagIds)] })
   })
 
   ipcMain.handle('collections:save-post', async (_event, raw: unknown) => {
