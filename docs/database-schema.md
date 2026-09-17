@@ -111,7 +111,7 @@ the one read that splits on it.
 | `collection_id` | `integer not null references collections (id)` | **no `on delete cascade`** — see below |
 | `file_name` | `text unique not null` | the md5 of the uploaded bytes, naming both stored objects. Unique across the whole table, not per shelf |
 | `file_ext` | `text not null` | `check in ('jpg','png','gif','webp','avif')` |
-| `file_size`, `width`, `height` | `integer not null` | of the **stored** image — an image that compressed or got bounded to 2048 records the smaller numbers |
+| `file_size`, `width`, `height` | `integer not null` | of the **stored** image — an image that compressed or got bounded to 2560 records the smaller numbers |
 | `source_url` | `text` | nullable |
 | `view_count` | `integer not null default 0` | see [View counting](#view-counting) |
 | `created_at` | `timestamptz not null default now()` | |

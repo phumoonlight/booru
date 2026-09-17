@@ -2,15 +2,15 @@ import sharp from 'sharp'
 import type { Metadata } from 'sharp'
 
 /**
- * The stored post image is bounded to 2048 on both sides. Nothing on the site shows a
+ * The stored post image is bounded to 2560 on both sides. Nothing on the site shows a
  * post larger than that — the detail view is an `unoptimized` <Image>, so every pixel
  * past the viewport's is bytes the visitor downloads and throws away — and a 3398x4800
  * upload was costing half a megabyte to display at a fraction of the size.
  *
  * `fit: 'inside'` means it is a bound, not a target: aspect ratio is kept, the longer
- * side lands on 2048, and `withoutEnlargement` leaves anything already smaller alone.
+ * side lands on 2560, and `withoutEnlargement` leaves anything already smaller alone.
  */
-export const POST_MAX_DIMENSION = 2048
+export const POST_MAX_DIMENSION = 2560
 
 /**
  * The floor of the ramp: what an image at or above `POST_QUALITY_FLOOR_AT` is encoded at.
@@ -33,7 +33,7 @@ export const POST_QUALITY_MAX_AT = 1280
  * How hard to squeeze this image, from its own dimensions: 50 at 1920px and up, rising in
  * a straight line to 75 at 1280px and down.
  *
- * Quality 50 is the right trade for something being downscaled towards 2048 — it is
+ * Quality 50 is the right trade for something being downscaled towards 2560 — it is
  * losing detail to the resize anyway, and the bytes saved are real. It is the wrong trade
  * for an image that arrives already at the size it will be looked at: nothing is thrown
  * away by the resize, so every artefact the encoder introduces is one the viewer sees at

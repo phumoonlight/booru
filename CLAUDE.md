@@ -668,7 +668,7 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   dimensions take the floor, not the ceiling. Nothing above the floor can bloat an image:
   the only path that keeps the AVIF without comparing it to the uploaded bytes is an image
   over `POST_MAX_DIMENSION`, which is over 1920 and so on the floor.
-- **The stored image is bounded to 2048 on both sides** (`POST_MAX_DIMENSION`).
+- **The stored image is bounded to 2560 on both sides** (`POST_MAX_DIMENSION`).
   Above it the AVIF is not competing on bytes — it is the only version inside the cap, so
   it is kept however it measures, and the row records the *stored* size, not the uploaded
   one. An animation is the one thing that can still exceed it: the encoder declines rather
