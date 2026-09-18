@@ -1,5 +1,5 @@
-import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { PostAppApi, PreferencesInput } from '../shared/api'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
+import type { LogEntry, PostAppApi, PreferencesInput } from '../shared/api'
 
 /**
  * The bridge. Nothing but these functions crosses into the page — no `ipcRenderer`, no
@@ -70,6 +70,15 @@ const api: PostAppApi = {
   exportSettings: () => ipcRenderer.invoke('settings:export'),
   importSettings: () => ipcRenderer.invoke('settings:import'),
   openDataFolder: () => ipcRenderer.invoke('shell:open-data-folder'),
+  listLogs: () => ipcRenderer.invoke('logs:list'),
+  clearLogs: () => ipcRenderer.invoke('logs:clear'),
+  // The one push from main. The event object stays on this side: it carries `sender`, which
+  // is a way back into `ipcRenderer`.
+  onLogEntry: (listener) => {
+    const handler = (_event: IpcRendererEvent, entry: LogEntry) => listener(entry)
+    ipcRenderer.on('activity:entry', handler)
+    return () => ipcRenderer.removeListener('activity:entry', handler)
+  },
 }
 
 contextBridge.exposeInMainWorld('api', api)

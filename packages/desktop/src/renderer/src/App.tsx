@@ -2,15 +2,18 @@ import { useCallback, useEffect, useState } from 'react'
 import { About } from './components/about'
 import { Artists } from './components/artists'
 import { Collections } from './components/collections'
+import { Logs } from './components/logs'
+import { Notices } from './components/notices'
 import { Settings } from './components/settings'
 import { TagIndex } from './components/tag-index'
 import type { AppStatus } from '../../shared/api'
 
 /**
- * Five screens. There is no login and no setup step: which board this build talks to was
- * decided when it was built and compiled in (`main/config.ts`), and the board itself has no
- * accounts — this app writes with the login in its own bundle, which is why it is the only
- * thing that can. The window opens on the shelves.
+ * Six screens, five of them in the header — Tags is kept but no longer offered. There is no
+ * login and no setup step: which board this build talks to was decided when it was built
+ * and compiled in (`main/config.ts`), and the board itself has no accounts — this app writes
+ * with the login in its own bundle, which is why it is the only thing that can. The window
+ * opens on the shelves.
  *
  * Settings is forced open in one case only: a bundle built without those values, which
  * the build itself refuses to produce. About is the other exception to the screen order —
@@ -23,9 +26,9 @@ import type { AppStatus } from '../../shared/api'
  */
 export function App() {
   const [status, setStatus] = useState<AppStatus | null>(null)
-  const [view, setView] = useState<'collections' | 'artists' | 'tags' | 'settings' | 'about'>(
-    'collections'
-  )
+  const [view, setView] = useState<
+    'collections' | 'artists' | 'tags' | 'logs' | 'settings' | 'about'
+  >('collections')
 
   const refresh = useCallback(async () => {
     setStatus(await window.api.getStatus())
@@ -76,6 +79,8 @@ export function App() {
       <Collections siteUrl={status.siteUrl} />
     ) : view === 'artists' ? (
       <Artists />
+    ) : view === 'logs' ? (
+      <Logs />
     ) : (
       <TagIndex />
     )
@@ -135,11 +140,13 @@ export function App() {
             <span aria-hidden>🎨</span>
             Artists
           </button>
-          {/* The vocabulary, its rules and the form's rows — kept for a later use now that
-              nothing carries a tag. */}
-          <button type="button" onClick={go('tags')} className={navClass(view === 'tags')}>
-            <span aria-hidden>🏷️</span>
-            Tags
+          {/* No Tags item: the vocabulary, its rules and the form's rows are kept for a later
+              use now that nothing carries a tag, and `TagIndex` still renders for `'tags'` —
+              only the way to it is hidden. A shelf's own tags are on the shelf. */}
+          {/* What this copy has done to the board, and what failed — `main/activity-log.ts`. */}
+          <button type="button" onClick={go('logs')} className={navClass(view === 'logs')}>
+            <span aria-hidden>📜</span>
+            Logs
           </button>
           <button type="button" onClick={go('about')} className={navClass(view === 'about')}>
             <span aria-hidden>ℹ️</span>
@@ -165,6 +172,7 @@ export function App() {
           `padding-bottom`: two properties setting the same value, decided by whichever
           lands later in the stylesheet, so the shorthand is split instead of overridden. */}
       <main className="min-h-0 flex-1 overflow-y-auto">{screen}</main>
+      <Notices />
     </div>
   )
 }

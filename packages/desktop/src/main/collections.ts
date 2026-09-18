@@ -36,6 +36,8 @@ import { boardDb } from './db'
 import { boardStore } from './r2'
 import { cachedImage, cachedThumbnail, forgetImage } from './image-cache'
 import { cachedCollectionPosts, cachedCollections, dropCollectionCache } from './collection-cache'
+import { logged } from './activity-log'
+import { removeStoredObjects } from './stored-objects'
 
 /**
  * Collections, from the side that writes them.
@@ -131,7 +133,12 @@ export async function makeCollectionTag(
 > {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
-  return dropping(createCollectionTag(db, collectionId, input))
+  return logged(
+    'collection-tag:create',
+    { collectionId, name: input.name },
+    dropping(createCollectionTag(db, collectionId, input)),
+    (result) => ({ id: result.id })
+  )
 }
 
 export async function editCollectionTag(
@@ -140,13 +147,17 @@ export async function editCollectionTag(
 ): Promise<{ ok: true; name: string; mark: string | null } | { ok: false; error: string }> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
-  return dropping(updateCollectionTag(db, id, input))
+  return logged(
+    'collection-tag:edit',
+    { id, ...input },
+    dropping(updateCollectionTag(db, id, input))
+  )
 }
 
 export async function removeCollectionTag(id: number): Promise<Outcome> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
-  return dropping(deleteCollectionTag(db, id))
+  return logged('collection-tag:delete', { id }, dropping(deleteCollectionTag(db, id)))
 }
 
 export async function tagCollectionPosts(request: {
@@ -156,7 +167,12 @@ export async function tagCollectionPosts(request: {
 }): Promise<{ ok: true; changed: number } | { ok: false; error: string }> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
-  return dropping(setCollectionPostsTag(db, request))
+  return logged(
+    request.on ? 'collection-tag:apply' : 'collection-tag:remove',
+    { tagId: request.tagId, postIds: request.postIds },
+    dropping(setCollectionPostsTag(db, request)),
+    (result) => ({ changed: result.changed })
+  )
 }
 
 type Shelf = { name: string; mark: string | null; rating: Rating; is_ai: boolean }
@@ -174,7 +190,12 @@ export async function makeCollection(
 ): Promise<({ ok: true; id: number } & Shelf) | { ok: false; error: string }> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
-  return ratingError(input) ?? dropping(createCollection(db, input))
+  return (
+    ratingError(input) ??
+    logged('collection:create', { ...input }, dropping(createCollection(db, input)), (result) => ({
+      id: result.id,
+    }))
+  )
 }
 
 export async function editCollection(
@@ -183,7 +204,10 @@ export async function editCollection(
 ): Promise<({ ok: true } & Shelf) | { ok: false; error: string }> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
-  return ratingError(input) ?? dropping(updateCollection(db, id, input))
+  return (
+    ratingError(input) ??
+    logged('collection:edit', { id, ...input }, dropping(updateCollection(db, id, input)))
+  )
 }
 
 /**
@@ -195,7 +219,7 @@ export async function editCollection(
 export async function removeCollection(id: number): Promise<Outcome> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
-  return dropping(deleteCollection(db, id))
+  return logged('collection:delete', { id }, dropping(deleteCollection(db, id)))
 }
 
 /**
@@ -217,33 +241,49 @@ export async function uploadToCollection(request: {
   const store = boardStore()
   if (!store) return { ok: false, error: 'Not set up yet' }
 
-  let bytes: Buffer
-  try {
-    bytes = await readFile(request.path)
-  } catch {
-    return { ok: false, error: 'Could not read the file — has it moved?' }
+  const detail = {
+    collectionId: request.collectionId,
+    path: request.path,
+    sourceUrl: request.sourceUrl,
+    tagIds: request.tagIds,
   }
-
-  return dropping(
-    createCollectionPostFromImage(
-      db,
-      store,
-      bytes,
-      {
-        collectionId: request.collectionId,
-        sourceUrl: request.sourceUrl,
-        tagIds: request.tagIds,
-      },
-      DESKTOP_UPLOAD_LIMITS
+  // An async arrow rather than a nested function, so `db` and `store` stay narrowed.
+  const upload = async (): Promise<UploadResult> => {
+    let bytes: Buffer
+    try {
+      bytes = await readFile(request.path)
+    } catch {
+      return { ok: false, error: 'Could not read the file — has it moved?' }
+    }
+    Object.assign(detail, { bytes: bytes.length })
+    return dropping(
+      createCollectionPostFromImage(
+        db,
+        store,
+        bytes,
+        {
+          collectionId: request.collectionId,
+          sourceUrl: request.sourceUrl,
+          tagIds: request.tagIds,
+        },
+        DESKTOP_UPLOAD_LIMITS
+      )
     )
-  )
+  }
+  return logged('collection:upload', detail, upload(), (result) => ({
+    postId: result.postId,
+  }))
 }
 
 /** A collection image's source — the whole of what there is to edit on one image. */
 export async function saveCollectionPost(id: number, sourceUrl: string): Promise<Outcome> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
-  return dropping(updateCollectionPost(db, id, { source_url: sourceUrl }))
+  return logged(
+    'collection:edit-image',
+    { id, sourceUrl },
+    dropping(updateCollectionPost(db, id, { source_url: sourceUrl }))
+  )
 }
 
 /**
@@ -257,44 +297,51 @@ export async function moveCollectionImages(
 ): Promise<{ ok: true; moved: number } | { ok: false; error: string }> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
-  return dropping(moveCollectionPosts(db, ids, collectionId))
+  return logged(
+    'collection:move-images',
+    { ids, collectionId },
+    dropping(moveCollectionPosts(db, ids, collectionId)),
+    (result) => ({ moved: result.moved })
+  )
 }
 
 /**
  * Removes an image from a shelf and deletes both stored objects.
  *
  * Row first, files second, and the row is read before either: a failed delete leaves the
- * image whole, and the paths derive from `file_name`, which nothing else stores.
+ * image whole, and the paths derive from `file_name`, which nothing else stores. Both halves
+ * are logged, and a failure of either is raised in the window as a notice — the storage one
+ * after the answer is already `ok`, since the image the window asked about is gone.
  */
 export async function removeCollectionPost(id: number): Promise<Outcome> {
   const db = boardDb()
   if (!db) return { ok: false, error: 'Not set up yet' }
 
   const post = await getCollectionPost(db, id)
-  if (!post) return { ok: false, error: `Image ${id} not found.` }
-
-  try {
-    const gone = await dropping(deleteCollectionPostRow(db, id))
-    if (!gone) return { ok: false, error: `Image ${id} not found.` }
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Delete failed.' }
+  const detail = {
+    id,
+    collectionId: post?.collection_id,
+    fileName: post?.file_name,
+    fileExt: post?.file_ext,
   }
-
-  // The row is gone, so a storage failure is logged rather than reported: it leaves two
-  // orphaned objects, which is untidy, and calling it a failed delete would be wrong about
-  // the thing that was actually asked for.
-  const store = boardStore()
-  if (store) {
-    await Promise.all([
-      store
-        .remove(collectionImagePath(post.file_name, post.file_ext))
-        .catch((error: unknown) => console.error('Could not remove the image:', error)),
-      store
-        .remove(collectionThumbnailPath(post.file_name))
-        .catch((error: unknown) => console.error('Could not remove the thumbnail:', error)),
-    ])
+  const deleteRow = async (): Promise<Outcome> => {
+    if (!post) return { ok: false, error: `Image ${id} not found.` }
+    try {
+      const gone = await dropping(deleteCollectionPostRow(db, id))
+      return gone ? { ok: true } : { ok: false, error: `Image ${id} not found.` }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Delete failed.' }
+    }
   }
+  const deleted = await logged('collection:delete-image', detail, deleteRow())
+  if (!deleted.ok || !post) return deleted
 
+  await removeStoredObjects(
+    boardStore(),
+    [collectionImagePath(post.file_name, post.file_ext), collectionThumbnailPath(post.file_name)],
+    'collection:delete-image',
+    detail
+  )
   forgetImage(post.file_name, post.file_ext)
   return { ok: true }
 }

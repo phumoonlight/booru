@@ -8,7 +8,8 @@ import { listBrowsers, openUrl } from './browser'
 import { exportSave, importSave } from './transfer'
 import { loadSiteState, saveSiteState } from './site'
 import { tagCacheStatus } from './tag-cache'
-import type { AppStatus, PreferencesInput } from '../shared/api'
+import { clearLog, readLog } from './activity-log'
+import type { AppStatus, LogEntry, PreferencesInput } from '../shared/api'
 import type { SiteState } from '@common/data/site'
 
 // Defaulted rather than required, so a half-filled message from the window still lands
@@ -119,6 +120,10 @@ export function registerAppIpc(): void {
 
   /** Shows `save.json` in Explorer/Finder — the settings screen's "where is this?". */
   ipcMain.handle('shell:open-data-folder', async (): Promise<void> => revealSaveFile())
+
+  /** The Logs screen: what this copy has done to the board (`main/activity-log.ts`). */
+  ipcMain.handle('logs:list', async (): Promise<LogEntry[]> => readLog())
+  ipcMain.handle('logs:clear', async (): Promise<void> => clearLog())
 
   /**
    * Only ever a page on the site, or a source link. The URL ends up as an argument to a browser or as a

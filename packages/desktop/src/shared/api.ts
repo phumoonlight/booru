@@ -149,6 +149,21 @@ export type CollectionEdited =
   | { ok: true; name: string; mark: string | null; rating: Rating; is_ai: boolean }
   | { ok: false; error: string }
 
+/**
+ * One line of the activity log (`main/activity-log.ts`) — something this copy did to the
+ * board, or tried to. `action` is `area:verb` (`collection:upload`); `detail` is whatever that
+ * write knew, ids and paths and how many milliseconds it took, for reading rather than
+ * parsing.
+ */
+export type LogEntry = {
+  id: number
+  at: string
+  level: 'info' | 'error'
+  action: string
+  message: string
+  detail?: Record<string, unknown>
+}
+
 export type PostAppApi = {
   getStatus: () => Promise<AppStatus>
   /** Writes and applies the compression preferences, answering with what was stored. */
@@ -326,6 +341,13 @@ export type PostAppApi = {
   importSettings: () => Promise<TransferResult>
   /** Reveals `save.json` — the preferences — in the OS file manager. */
   openDataFolder: () => Promise<void>
+
+  /** The activity log, newest first. */
+  listLogs: () => Promise<LogEntry[]>
+  clearLogs: () => Promise<void>
+  /** Every entry as it is written — the Logs screen's live rows, and the failure notices.
+   *  Answers with the unsubscribe. */
+  onLogEntry: (listener: (entry: LogEntry) => void) => () => void
 }
 
 export type { UploadResult } from '@common/upload/pipeline'

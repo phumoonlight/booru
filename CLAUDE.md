@@ -438,13 +438,19 @@ only wall time. Both are process-wide, applied before the first encode and re-ap
 save. A POSIX host won't let a niced-down process raise itself back, so low → normal
 takes a restart; Windows, which this is packaged for, will.
 
-**Views** — `App.tsx` holds `'collections' | 'artists' | 'tags' | 'settings' | 'about'`,
-opening on collections, with settings forced open only for a bundle built with no project.
+**Views** — `App.tsx` holds `'collections' | 'artists' | 'tags' | 'logs' | 'settings' | 'about'`,
+opening on collections — **Tags has no header item** and is reached by nothing for now, with settings forced open only for a bundle built with no project.
 Nothing sits behind a session, because there is none.
 
 - **Open site** is the header item that is not a view: it opens `/posts` in the browser
   and is never drawn active, because it goes somewhere else.
 - **🗂️ Collections** and **🎨 Artists** are their own sections above.
+- **📜 Logs** (`logs.tsx`) is this copy's writes to the board — every upload, edit and delete,
+  newest first, its detail as raw JSON. `main/activity-log.ts` keeps them in
+  `app-cache/logs.json` (the newest thousand) and pushes each one to the window as written
+  (`activity:entry`); **an error entry is also a notice** (`notices.tsx`), which is how a
+  stored object left in the bucket after its row was deleted is reported — the delete itself
+  still answers `ok` (`main/stored-objects.ts`).
 - **Tags** keeps the board-wide vocabulary for a later use — not a shelf's tags, which are
   on the shelf: nothing carries one of these, so the grid has no
   counts, and there is no Apply by tag and no way to a tag's posts. Click a row for rename /
@@ -507,7 +513,7 @@ than nothing. It was one file per board while a tag carried a count per board; s
 deletes the old per-board and browse files on the way past.
 
 **The cache folder** (`main/app-cache.ts`) — `app-cache/` in `userData`, holding
-`tags.json`, `collections.json`, `thumbs/` and `images/`. Everything in it is a copy of what the board already has, so the
+`tags.json`, `collections.json`, `logs.json`, `thumbs/` and `images/`. Everything in it but the log is a copy of what the board already has, and the log is a readout nothing depends on, so the
 folder can be deleted at any moment and the only cost is the next read — which is the line
 between it and `save.json`, where losing a file loses something.
 
