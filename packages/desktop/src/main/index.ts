@@ -6,6 +6,7 @@ import { dropStoredConfig, dropStoredLogin, dropStoredRules } from './config'
 import { configureDns } from './dns'
 import { dropCache } from './app-cache'
 import { openUrl } from './browser'
+import { watchForeground } from './foreground'
 import { applyPreferences, loadPreferences } from './preferences'
 
 /**
@@ -116,6 +117,9 @@ void app.whenReady().then(() => {
   // Before the first drag can be fetched: images come in as addresses from a browser
   // that may well resolve them over a DNS this machine does not use (`main/dns.ts`).
   configureDns()
+  // Before the window exists, so its first focus is the first read of which browser was
+  // in front — what "open in the last used browser" is answered from (`main/foreground.ts`).
+  watchForeground()
   registerIpc()
   createWindow()
 

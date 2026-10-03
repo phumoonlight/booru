@@ -33,6 +33,13 @@ export type EncodePriority = 'low' | 'below-normal' | 'normal'
 export type BrowserChoice = { path: string; name: string; isDefault: boolean }
 
 /**
+ * The `browser` preference's one value that is not a path: the installed browser whose
+ * window was in front most recently, read by `main/foreground.ts` each time the app is
+ * focused. Spelled so no executable could be mistaken for it.
+ */
+export const LAST_USED_BROWSER = 'last-used'
+
+/**
  * The only settings the window can change. Which board the app talks to is compiled into
  * the build (`main/config.ts`) — these are about the machine it happens to run on.
  */
@@ -42,8 +49,9 @@ export type PreferencesInput = {
   /** How hard the app argues for those cores against everything else running. */
   encodePriority: EncodePriority
   /**
-   * The executable a link opens in, or '' for whatever the OS would pick. Checked against
-   * the installed list when a link is opened, never run as given — `main/browser.ts`.
+   * The executable a link opens in, '' for whatever the OS would pick, or
+   * `LAST_USED_BROWSER`. Checked against the installed list when a link is opened, never
+   * run as given — `main/browser.ts`.
    */
   browser: string
 }

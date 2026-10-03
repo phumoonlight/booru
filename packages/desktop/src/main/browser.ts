@@ -2,7 +2,8 @@ import { execFile, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { promisify } from 'node:util'
 import { shell } from 'electron'
-import type { BrowserChoice } from '../shared/api'
+import { LAST_USED_BROWSER, type BrowserChoice } from '../shared/api'
+import { foregroundExecutables } from './foreground'
 
 /**
  * Which browser a link out of the app opens in.
@@ -148,13 +149,33 @@ function launch(path: string, url: string): boolean {
 }
 
 /**
+ * The browser whose window was in front most recently — the one the person was in before
+ * switching here, with three open. Matched against the installed list rather than launched
+ * as found: the program in front may be anything, and only a browser should be handed a
+ * URL as its argument.
+ */
+async function lastUsedBrowser(): Promise<BrowserChoice | undefined> {
+  const browsers = await listBrowsers()
+  for (const path of await foregroundExecutables()) {
+    const known = browsers.find((browser) => samePath(browser.path, path))
+    if (known) return known
+  }
+  return undefined
+}
+
+/**
  * The one way a URL leaves the app. `chosen` is a stored preference and is checked
  * against what is actually installed rather than run as given — the renderer picks from
  * this list, so anything else is a hand-edited `save.json` or a browser that has since
- * been uninstalled, and both mean the OS default.
+ * been uninstalled, and both mean the OS default. `LAST_USED_BROWSER` is the one value
+ * that is not a path: whichever installed browser was in front last (`main/foreground.ts`),
+ * and the OS default when none was.
  */
 export async function openUrl(url: string, chosen: string): Promise<void> {
-  if (chosen) {
+  if (chosen === LAST_USED_BROWSER) {
+    const recent = await lastUsedBrowser()
+    if (recent && launch(recent.path, url)) return
+  } else if (chosen) {
     const known = (await listBrowsers()).find((browser) => samePath(browser.path, chosen))
     if (known && launch(known.path, url)) return
   }

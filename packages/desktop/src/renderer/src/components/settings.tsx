@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import type {
-  AppStatus,
-  BrowserChoice,
-  EncodePriority,
-  PreferencesInput,
+import {
+  LAST_USED_BROWSER,
+  type AppStatus,
+  type BrowserChoice,
+  type EncodePriority,
+  type PreferencesInput,
 } from '../../../shared/api'
 import { BUTTON_SM } from './buttons'
 import { Choice, Field, Readout } from './settings-rows'
@@ -38,7 +39,9 @@ const PRIORITIES: { value: EncodePriority; label: string }[] = [
  *
  * **Links** is where a shelf opens when you click through to the site. Left alone that is
  * whatever the OS would pick, which is the browser you live in — and a board is not always
- * something you want in that history. The list is what the Start menu would offer.
+ * something you want in that history. The list is what the Start menu would offer, plus
+ * "last used": with three browsers open for three pieces of work, the link belongs in the
+ * one you were just looking at.
  *
  * **Tag cache** is a readout with a button under it. Nothing about it is configurable —
  * a day is a day — but a cache is the one thing in the app that can be wrong while
@@ -333,6 +336,9 @@ function BrowserPicker({
   const fallback = options.find((option) => option.isDefault)
   const rows = [
     { path: '', name: fallback ? `System default (${fallback.name})` : 'System default' },
+    // Only where there is a list to match against: the row is "whichever of these you were
+    // just in", and with none found it would be the system default under another name.
+    ...(options.length > 0 ? [{ path: LAST_USED_BROWSER, name: 'Last used browser' }] : []),
     ...options,
   ]
 
@@ -366,7 +372,9 @@ function BrowserPicker({
       <span className="text-xs text-muted">
         {options.length === 0
           ? 'No installed browsers were found, so links go wherever the system sends them.'
-          : 'A browser that has been uninstalled since falls back to the system default.'}
+          : value === LAST_USED_BROWSER
+            ? 'Whichever of these had a window in front most recently, which is the one you switched here from. With none open, the system default.'
+            : 'A browser that has been uninstalled since falls back to the system default.'}
       </span>
     </div>
   )
