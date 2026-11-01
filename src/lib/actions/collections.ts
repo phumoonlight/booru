@@ -2,6 +2,7 @@
 
 import {
   COLLECTION_PAGE_SIZE,
+  countCollectionPosts,
   incrementCollectionPostView,
   listCollectionPosts,
   listLatestCollectionPosts,
@@ -59,6 +60,14 @@ export async function loadMoreLatestPosts({
   const room = Math.min(COLLECTION_PAGE_SIZE, LATEST_POSTS_LIMIT - loaded)
   if (room <= 0) return { posts: [], hasMore: true }
   return listLatestCollectionPosts({ after, perPage: room })
+}
+
+/**
+ * The landing page's image count. Asked from the browser so the page itself touches no
+ * database and can be served static — the front door draws at once, and the number follows.
+ */
+export async function loadCollectionPostCount(): Promise<number | null> {
+  return countCollectionPosts()
 }
 
 /**

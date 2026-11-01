@@ -85,9 +85,11 @@ export async function listLatestCollectionPosts(
 }
 
 /** How many images the board holds, for the landing page. Every shelf, adult ones too: a
- *  number says nothing about what is behind the setting. */
-export async function countCollectionPosts(): Promise<number> {
-  return (await serving()) ? read.countCollectionPosts(db()) : 0
+ *  number says nothing about what is behind the setting. `null` while the site is closed —
+ *  the landing page is outside the maintenance gate, and "Serving 0 images" would be a lie
+ *  about the board rather than a statement about the switch. */
+export async function countCollectionPosts(): Promise<number | null> {
+  return (await serving()) ? read.countCollectionPosts(db()) : null
 }
 
 export async function collectionNeighbours(options: { id: number; collectionId: number }) {

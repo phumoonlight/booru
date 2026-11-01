@@ -188,8 +188,9 @@ and the pure helpers. See [packages/common/README.md](packages/common/README.md)
   drawn and does not stop the segment underneath from running.
 - **`/` is a front door**: the wordmark, two doors (🖼️ Latest and 🗂️ Collections), and an
   emoji count of the images on every shelf, adult ones included — a number says nothing
-  about what is behind the setting. It awaits `connection()`, since with no search box left
-  nothing else makes it render per request. **The header** (`site-header.tsx`) is the
+  about what is behind the setting. It sits in `(home)`, outside the maintenance layout,
+  and is static: the count is fetched by the browser (`post-count.tsx` →
+  `loadCollectionPostCount`) and drawn as nothing while the site is closed. **The header** (`site-header.tsx`) is the
   wordmark, going to `/posts`, and three items: Posts, Collections, Settings.
 - **Nothing goes through the Next optimizer.** The grid thumb and the image page are both
   `unoptimized`, so the stored file is served untouched — animation intact, no second

@@ -1,11 +1,9 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { connection } from 'next/server'
 import { NavProgress } from '@/components/nav-progress'
+import { PostCount } from '@/components/post-count'
 import { SetupNotice } from '@/components/setup-notice'
-import { countCollectionPosts } from '@/lib/data/collections'
 import { isDatabaseConfigured } from '@/lib/db'
-import { emojiNumber } from '@/lib/emoji-number'
 import { collectionsHref } from '@common/collections'
 import { SITE_DESCRIPTION, SITE_NAME } from '@/config'
 
@@ -24,15 +22,13 @@ const DOOR =
  * It was a search box until the boards were dropped (0012). There is no site-wide search
  * to put here now — the shelf list's own is one click in — so the door is the two places a
  * visit starts: the newest images, or the shelves.
+ *
+ * It sits in `(home)`, outside `(public)`'s maintenance layout, and is static: the door is
+ * drawn without asking the board anything, open or closed, and the count is fetched by the
+ * browser (`PostCount`). The doors still lead into the gate, which is where it matters.
  */
-export default async function HomePage() {
-  // Rendered per request. It read `searchParams` while it was a search box, which made it
-  // dynamic for free; with nothing request-shaped left, the count and the maintenance switch
-  // in the layout above would otherwise be frozen at whatever the build saw.
-  await connection()
-
+export default function HomePage() {
   const configured = isDatabaseConfigured()
-  const postCount = configured ? await countCollectionPosts() : 0
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-6 px-3 py-16 text-center sm:py-24">
@@ -50,17 +46,7 @@ export default async function HomePage() {
       </nav>
 
       {configured ? (
-        <p className="flex flex-wrap items-center justify-center gap-2 text-sm text-muted">
-          <span>Serving</span>
-          {/* The keycaps are decoration; the plain number is what gets announced */}
-          <span
-            aria-label={`${postCount.toLocaleString('en-US')} images`}
-            className="text-base tracking-tight"
-          >
-            <span aria-hidden>{emojiNumber(postCount)}</span>
-          </span>
-          <span>images</span>
-        </p>
+        <PostCount />
       ) : (
         <div className="w-full text-left">
           <SetupNotice />
