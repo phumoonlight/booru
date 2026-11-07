@@ -301,7 +301,7 @@ export function Settings({ status, onChanged }: { status: AppStatus; onChanged: 
             type="button"
             onClick={() => void window.api.clearTagCache().then(onChanged)}
             disabled={status.tagCache.at === null}
-            className="min-h-11 rounded-lg border border-border px-4 text-sm font-medium hover:border-accent disabled:opacity-50"
+            className="min-h-11 border border-border px-4 text-sm font-medium hover:border-hover disabled:opacity-50"
           >
             Clear cache
           </button>
@@ -355,10 +355,10 @@ function BrowserPicker({
               role="radio"
               aria-checked={selected}
               onClick={() => onChange(row.path)}
-              className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 text-left text-sm transition-colors ${
+              className={`flex min-h-11 items-center gap-2 border px-3 text-left text-sm transition-colors ${
                 selected
                   ? 'border-accent bg-accent/10 text-foreground'
-                  : 'border-border bg-surface text-muted hover:border-accent hover:text-foreground'
+                  : 'border-border bg-surface text-muted hover:border-hover hover:text-foreground'
               }`}
             >
               <span aria-hidden className={selected ? 'text-accent' : 'text-muted'}>

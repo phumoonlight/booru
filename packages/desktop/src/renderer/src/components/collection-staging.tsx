@@ -251,7 +251,7 @@ export function StagingBox({
                   }
                   title={`Leave out ${file.name}`}
                   aria-label={`Leave out ${file.name}`}
-                  className="absolute right-0 top-0 rounded-lg bg-background/80 px-1 text-xs"
+                  className="absolute right-0 top-0 bg-background/80 px-1 text-xs"
                 >
                   <span aria-hidden>✕</span>
                 </button>

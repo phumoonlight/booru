@@ -218,7 +218,7 @@ export function EditTag({
               type="button"
               onClick={() => void remove()}
               disabled={busy}
-              className="min-h-9 rounded-lg bg-[#ff5d5f] px-4 text-sm font-semibold text-[#0d0f14] transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="min-h-9 bg-[#ff5d5f] px-4 text-sm font-semibold text-[#0d0f14] transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {busy ? 'Deleting…' : 'Delete permanently'}
             </button>
@@ -226,7 +226,7 @@ export function EditTag({
               type="button"
               onClick={() => setConfirming(false)}
               disabled={busy}
-              className="min-h-9 rounded-lg border border-border px-4 text-sm transition-colors hover:bg-background"
+              className="min-h-9 border border-border px-4 text-sm transition-colors hover:bg-background"
             >
               Keep it
             </button>

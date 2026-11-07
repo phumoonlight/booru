@@ -33,7 +33,7 @@ export function ArtistThumb({
         type="button"
         onClick={onOpen}
         title="View full size"
-        className="grid h-full w-full place-items-center overflow-hidden rounded-lg border border-border bg-background transition-colors hover:border-accent"
+        className="grid h-full w-full place-items-center overflow-hidden rounded-lg border border-border bg-background transition-colors hover:border-hover"
       >
         {drawn && (
           <img
@@ -51,7 +51,7 @@ export function ArtistThumb({
           onClick={onRemove}
           title="Remove this example"
           aria-label="Remove this example"
-          className="absolute right-0 top-0 rounded-lg bg-background/80 px-1 text-xs hover:bg-background"
+          className="absolute right-0 top-0 bg-background/80 px-1 text-xs hover:bg-background"
         >
           <span aria-hidden>✕</span>
         </button>

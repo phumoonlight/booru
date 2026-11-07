@@ -29,6 +29,10 @@ import { FIELD, Panel } from './panel'
  * exactly as the first, kept apart so the few never to fall behind on are not buried.
  */
 
+/** Cards drawn at first, and what Load more adds. The list is read whole — search and the
+ *  tabs work over all of it — so this pages the drawing, not the read. */
+const PAGE = 20
+
 /** The last list read. The view unmounts whenever another is in front of it, and coming
  *  back to a blank screen while the same rows are re-read would be a flash for nothing. */
 let held: Artist[] | null = null
@@ -114,6 +118,15 @@ export function Artists() {
     (artist) => artist.is_ai === isAi
   )
   const shown = typed ? ofKind.filter((artist) => matches(artist, typed)) : ofKind
+
+  // How many cards are drawn, per view: another tab, kind or search starts over at a page,
+  // with no effect needed to reset it. Never short of the artist being edited — a kind
+  // change follows the artist across with the editor open, and it must not land past the
+  // cut out of sight.
+  const view = `${list}|${isAi}|${typed}`
+  const [paged, setPaged] = useState({ view, limit: PAGE })
+  const editingAt = shown.findIndex((artist) => artist.id === editing)
+  const limit = Math.max(paged.view === view ? paged.limit : PAGE, editingAt + 1)
 
   const showKind = (next: boolean) => {
     setIsAi(rememberKind(next))
@@ -252,7 +265,7 @@ export function Artists() {
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
-          {shown.map((artist) => (
+          {shown.slice(0, limit).map((artist) => (
             <li key={artist.id}>
               <ArtistCard
                 artist={artist}
@@ -310,6 +323,15 @@ export function Artists() {
             </li>
           ))}
         </ul>
+      )}
+      {shown.length > limit && (
+        <button
+          type="button"
+          onClick={() => setPaged({ view, limit: limit + PAGE })}
+          className={`${BUTTON} mx-auto`}
+        >
+          <span aria-hidden>⬇️</span> Load {Math.min(PAGE, shown.length - limit)} more
+        </button>
       )}
 
       {viewing && (

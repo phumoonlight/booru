@@ -2,12 +2,10 @@
  * How a button is drawn in this window, in one place, because it was being spelled out
  * a dozen ways.
  *
- * The shape is: an emoji, its words, and no box at all. No border, no ground at rest —
- * a control that is one glyph beside its own label is already legible as a control, and a
- * row of outlined boxes in a title row reads heavier than the heading above it. What
- * happens on hover is a **ground** and a lift in text colour, together: the ground is the
- * hit area appearing under the pointer, which is the thing a border was drawing all along
- * and only ever needed to draw while you were pointing at it.
+ * The shape is: an emoji, its words, in a square box with a hairline border. It was no box
+ * at all for a while — a ground appearing only under the pointer — and went back to a border
+ * so a control reads as one at rest, square to match the cards and fields around it. Hover
+ * still adds a **ground** and lifts the text and border colour together.
  *
  * It replaced an underline on hover, which said "link" — and these are not links. They
  * run searches, unfold panels, delete tags. The one thing still underlined is text that
@@ -39,9 +37,15 @@
 const DISABLED =
   'disabled:text-muted disabled:hover:bg-transparent disabled:[&_[aria-hidden]]:opacity-40'
 
-const SHAPE = `group flex shrink-0 items-center gap-1.5 rounded-lg transition-colors ${DISABLED}`
+/** Square, with a hairline border. The border colour is never in here: each constant below
+ *  names its own, since two `border-*` colours in one list are a stylesheet-order coin toss. */
+const SHAPE = `group flex shrink-0 items-center gap-1.5 border transition-colors ${DISABLED}`
 
-const QUIET = 'text-muted hover:text-foreground'
+/** Accent at rest, and the same green border as every other control under the pointer —
+ *  without it an accent button was the one thing on screen that did not answer a hover. */
+const LIT = 'border-accent text-accent hover:border-hover'
+
+const QUIET = 'border-border text-muted hover:border-hover hover:text-foreground'
 
 /** The default: a control on the page's own ground. */
 export const BUTTON = `${SHAPE} ${QUIET} min-h-9 px-2 text-sm hover:bg-surface`
@@ -57,7 +61,7 @@ export const BUTTON_ON_SURFACE = `${SHAPE} ${QUIET} min-h-8 px-2 text-xs hover:b
  * beside it, so the one control that cannot be taken back read as quietly as the one that
  * closes the panel. Drawn on a `HoldButton`, whose sweep fills it in the same red.
  */
-export const DANGER_ON_SURFACE = `${SHAPE} min-h-8 px-2 text-xs text-[#ff5d5f] hover:bg-background hover:text-[#ff8a8b]`
+export const DANGER_ON_SURFACE = `${SHAPE} min-h-8 px-2 text-xs border-[#ff5d5f]/50 text-[#ff5d5f] hover:border-[#ff5d5f] hover:bg-background hover:text-[#ff8a8b]`
 
 /**
  * A button that opens something which stays open — New tag, Edit. Accent while it is
@@ -68,13 +72,20 @@ export const DANGER_ON_SURFACE = `${SHAPE} min-h-8 px-2 text-xs text-[#ff5d5f] h
  * a coin toss decided by stylesheet order.
  */
 export const buttonToggle = (active: boolean): string =>
-  `${SHAPE} min-h-9 px-2 text-sm hover:bg-surface ${active ? 'text-accent' : QUIET}`
+  `${SHAPE} min-h-9 px-2 text-sm hover:bg-surface ${active ? LIT : QUIET}`
 
-/** The one that finishes a form — Save, Create. Accent, and never a box. */
-export const BUTTON_SUBMIT = `${SHAPE} min-h-9 px-3 text-sm text-accent hover:bg-surface`
+/**
+ * The one that finishes a form — Save, Create. Solid accent with dark text, the one filled
+ * control in a form, so the way out is found without reading; green under the pointer like
+ * every other border here. Its own `disabled:` ground, since `DISABLED` only clears a hover.
+ */
+const SOLID =
+  'border-accent bg-accent font-semibold text-background hover:border-hover hover:bg-hover disabled:border-border disabled:bg-transparent'
 
-/** The same, inside a panel. */
-export const BUTTON_SUBMIT_ON_SURFACE = `${SHAPE} min-h-9 px-3 text-sm text-accent hover:bg-background`
+export const BUTTON_SUBMIT = `${SHAPE} min-h-9 px-3 text-sm ${SOLID}`
+
+/** The same, inside a panel — a filled button reads the same on either ground. */
+export const BUTTON_SUBMIT_ON_SURFACE = BUTTON_SUBMIT
 
 /**
  * A pair of segments in a track — one control with two positions, drawn as the switch it is.
@@ -92,11 +103,11 @@ export const BUTTON_SUBMIT_ON_SURFACE = `${SHAPE} min-h-9 px-3 text-sm text-acce
  *
  * Used as a `role="group"` with an `aria-label`, its segments carrying `aria-pressed`.
  */
-export const SEGMENTS = 'flex items-center gap-0.5 rounded-lg border border-border p-0.5'
+export const SEGMENTS = 'flex items-center gap-0.5 border border-border p-0.5'
 
 /** One position of it. Filled is *on*, which is the one thing this control has to say. */
 export const segment = (active: boolean): string =>
-  `flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs transition-colors ${
+  `flex shrink-0 items-center gap-1 px-2 py-0.5 text-xs transition-colors ${
     active ? 'bg-accent font-semibold text-background' : 'text-muted hover:text-foreground'
   }`
 
@@ -111,12 +122,12 @@ export const segment = (active: boolean): string =>
  * pill grew under the pointer on every press. Carries `aria-pressed`.
  */
 export const pillToggle = (active: boolean, lit: 'red' | 'blue'): string =>
-  `flex min-h-8 shrink-0 items-center gap-1 rounded-full border px-3 text-sm transition-colors ${
+  `flex min-h-8 shrink-0 items-center gap-1 border px-3 text-sm transition-colors ${
     active
       ? lit === 'red'
         ? 'border-[#ff5d5f] bg-[#ff5d5f] text-white'
         : 'border-[#3b82f6] bg-[#3b82f6] text-white'
-      : 'border-border text-muted hover:border-muted hover:text-foreground'
+      : 'border-border text-muted hover:border-hover hover:text-foreground'
   }`
 
 /**
@@ -135,5 +146,5 @@ export const tagPill = (active: boolean, editing = false): string =>
       ? 'border-accent bg-accent text-background'
       : editing
         ? 'border-accent text-foreground'
-        : 'border-border text-muted hover:border-muted hover:text-foreground'
+        : 'border-border text-muted hover:border-hover hover:text-foreground'
   }`

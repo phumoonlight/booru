@@ -68,7 +68,7 @@ export function TagChip({
         chosen && picking
           ? 'border-accent bg-accent/10'
           : `border-border ${onSurface ? 'bg-background' : 'bg-surface'} ${
-              inert ? '' : 'hover:border-accent'
+              inert ? '' : 'hover:border-hover'
             }`
       } ${categoryColor(tag.category)}`}
     >

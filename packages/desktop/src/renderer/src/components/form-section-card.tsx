@@ -172,14 +172,14 @@ export function SectionCard({
               setConfirming(false)
               onDelete()
             }}
-            className="ml-auto min-h-8 rounded-lg bg-[#ff5d5f] px-3 text-xs font-semibold text-[#0d0f14] transition-opacity hover:opacity-90"
+            className="ml-auto min-h-8 bg-[#ff5d5f] px-3 text-xs font-semibold text-[#0d0f14] transition-opacity hover:opacity-90"
           >
             Remove it
           </button>
           <button
             type="button"
             onClick={() => setConfirming(false)}
-            className="min-h-8 rounded-lg border border-border px-3 text-xs transition-colors hover:bg-background"
+            className="min-h-8 border border-border px-3 text-xs transition-colors hover:bg-background"
           >
             Keep it
           </button>
@@ -342,7 +342,7 @@ function SectionName({ name, onRename }: { name: string; onRename: (next: string
       spellCheck={false}
       // Borderless at rest, so a grid of cards reads as cards rather than as boxes inside
       // boxes; the border arrives on focus, which is when it is a field.
-      className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 text-sm font-semibold outline-none hover:border-border focus:border-accent"
+      className="min-w-0 flex-1 border border-transparent bg-transparent px-1 py-1 text-sm font-semibold outline-none hover:border-border focus:border-hover"
     />
   )
 }

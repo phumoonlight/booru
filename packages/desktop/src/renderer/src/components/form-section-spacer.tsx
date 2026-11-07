@@ -78,14 +78,14 @@ export function SpacerCard({
               setConfirming(false)
               onDelete()
             }}
-            className="min-h-8 rounded-lg bg-[#ff5d5f] px-3 text-xs font-semibold text-[#0d0f14] transition-opacity hover:opacity-90"
+            className="min-h-8 bg-[#ff5d5f] px-3 text-xs font-semibold text-[#0d0f14] transition-opacity hover:opacity-90"
           >
             Remove it
           </button>
           <button
             type="button"
             onClick={() => setConfirming(false)}
-            className="min-h-8 rounded-lg border border-border px-3 text-xs transition-colors hover:bg-background"
+            className="min-h-8 border border-border px-3 text-xs transition-colors hover:bg-background"
           >
             Keep it
           </button>

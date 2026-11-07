@@ -3,7 +3,7 @@ import { collectionHref, toggleCollectionTag } from '@common/collections'
 import { RATING_COLOR, RATING_LABEL, tagLabel } from '@common/search'
 import type { Collection, CollectionPost } from '../../../shared/api'
 import { BUTTON, BUTTON_SM, buttonToggle } from './buttons'
-import { Panel } from './panel'
+import { Modal } from './modal'
 import { imageUrlsFrom } from './image-urls'
 import { itemStyle } from './ratio-layout'
 import { CollectionForm, shelfTitle } from './collection-form'
@@ -59,6 +59,7 @@ export function CollectionView({
   const { tags, active, setActive, reload: reloadTags } = useShelfTags(collectionId)
 
   const [renaming, setRenaming] = useState(false)
+  const closeRenaming = useCallback(() => setRenaming(false), [])
   // The upload box is shut until asked for: most visits to a shelf are to look at it, and a
   // drop zone the width of the screen is the first thing on it otherwise.
   const [uploading, setUploading] = useState(false)
@@ -241,7 +242,7 @@ export function CollectionView({
         </div>
 
         {renaming && (
-          <Panel title="Edit collection">
+          <Modal title="Edit collection" onClose={closeRenaming}>
             <CollectionForm
               initial={{
                 name,
@@ -263,7 +264,7 @@ export function CollectionView({
                 return null
               }}
             />
-          </Panel>
+          </Modal>
         )}
 
         <TagBar
@@ -348,6 +349,15 @@ export function CollectionView({
                     post={post}
                     selected={managing ? selected.includes(post.id) : undefined}
                     current={!managing && post.id === editing}
+                    // Not in manage, where a double click is two ticks of the selection.
+                    onView={
+                      managing
+                        ? undefined
+                        : () => {
+                            setEditing(post.id)
+                            setViewing(true)
+                          }
+                    }
                     onOpen={() =>
                       managing
                         ? setSelected((was) =>

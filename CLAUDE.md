@@ -314,8 +314,8 @@ of image on the board.
   (🏷️ Tag / 🧽 Untag). The shelf's page cache is keyed by the lit pills as well as the cursor.
 - **The desktop screen has a search of its own**, and it is not the website's: a box
   narrowing the list the window is already holding in full (it has to hold it — an image's
-  panel offers moving it to any other shelf), over the mark, the name and `#id`. No read, no
-  URL, and an answer between keystrokes.
+  panel offers moving it to any other shelf), over the mark, the name and `#id`. No read and no
+  URL; it runs on Enter or 🔍 Search, not per keystroke.
 - **Images are moved to another shelf as a selection, and no bytes move.** 🗂️ Manage turns
   the grid into a picker — a click ticks a tile instead of opening its panel — and a bar
   offers Select all, Select none and a menu of every *other* shelf with ➡️ Change
@@ -710,13 +710,14 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   already says.
 - No component library. Plain Tailwind against the CSS variables in `globals.css`
   (`background`, `surface`, `border`, `muted`, `accent`). Dark theme only.
-- **A button is an emoji, its words, and no box.** `renderer/src/components/buttons.ts`
-  is the only place that spells one, and a new control takes a constant from there rather
-  than a class list of its own. No border and no ground at rest; **hover adds a ground and
-  lifts the text** to `foreground`, together — that ground is the hit area appearing under
-  the pointer, which is what the border was drawing all along and only ever needed to draw
-  while you were pointing at it. It replaced an underline on hover, which said "link", and
-  these are not links: they unfold panels, upload images, delete tags.
+- **A desktop button is an emoji, its words, in a square bordered box.**
+  `renderer/src/components/buttons.ts` is the only place that spells one, and a new control
+  takes a constant from there rather than a class list of its own. A hairline `border-border`
+  at rest, no ground; **hover adds a ground and lifts the text and border** together. It was
+  borderless for a while and went back to a border so a control reads as one at rest; the
+  desktop app draws buttons, fields, cards and tiles with **no border radius** (tag pills stay
+  round). It replaced an underline on hover, which said "link", and these are not
+  links: they unfold panels, upload images, delete tags.
   - The ground must be a step from whatever the button sits on, so there are two:
     `BUTTON` / `BUTTON_SM` (`hover:bg-surface`) for the page, `BUTTON_ON_SURFACE`
     (`hover:bg-background`) inside a panel or a bordered row. Two `hover:bg-*` utilities

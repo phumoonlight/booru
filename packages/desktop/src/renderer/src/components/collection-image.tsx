@@ -17,6 +17,7 @@ export function ImageCard({
   selected,
   current = false,
   onOpen,
+  onView,
 }: {
   post: CollectionPost
   /** Set only in manage, where a click selects rather than opens. */
@@ -25,6 +26,9 @@ export function ImageCard({
    *  the tile says which one it is. An outline inside the edge, since the gap is 2px. */
   current?: boolean
   onOpen: () => void
+  /** A double click: straight to the full-size viewer. The first click of it has already
+   *  opened the panel, so the viewer lands with the panel behind it, as 🔍 Full size would. */
+  onView?: () => void
 }) {
   const [box, drawn] = useDrawnBox<HTMLDivElement>()
 
@@ -32,16 +36,17 @@ export function ImageCard({
     <button
       type="button"
       onClick={onOpen}
+      onDoubleClick={onView}
       title={`Image ${post.id}`}
       aria-pressed={selected}
-      // Green (the General rating's #35c64a) rather than accent, so a lit tile stands out
+      // The desktop's hover green (`--hover`) rather than accent, so a lit tile stands out
       // from the accent-coloured controls around the grid.
       className={`group relative flex w-full flex-col overflow-hidden border bg-surface text-left transition-colors ${
         selected
-          ? 'border-[#35c64a] ring-2 ring-[#35c64a]'
+          ? 'border-hover ring-2 ring-hover'
           : current
-            ? 'border-[#35c64a] outline-3 -outline-offset-3 outline-[#35c64a]'
-            : 'border-border hover:border-[#35c64a]'
+            ? 'border-hover outline-3 -outline-offset-3 outline-hover'
+            : 'border-border hover:border-hover'
       }`}
       aria-current={current || undefined}
     >
@@ -50,7 +55,7 @@ export function ImageCard({
           aria-hidden
           className={`absolute left-1.5 top-1.5 z-10 grid size-5 place-items-center rounded-full border text-xs ${
             selected
-              ? 'border-[#35c64a] bg-[#35c64a] text-background'
+              ? 'border-hover bg-hover text-background'
               : 'border-foreground/60 bg-background/60 text-transparent'
           }`}
         >

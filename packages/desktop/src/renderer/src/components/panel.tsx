@@ -69,4 +69,4 @@ export function Panel({
 }
 
 export const FIELD =
-  'min-h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent'
+  'min-h-9 border border-border bg-background px-3 text-sm outline-none focus:border-hover'

@@ -57,7 +57,7 @@ export function Choice<T extends string>({
               role="radio"
               aria-checked={selected}
               onClick={() => onChange(option.value)}
-              className={`min-h-9 flex-1 rounded-md px-2 text-xs transition-colors ${
+              className={`min-h-9 flex-1 px-2 text-xs transition-colors ${
                 selected
                   ? 'bg-accent text-background'
                   : 'text-muted hover:bg-background hover:text-foreground'

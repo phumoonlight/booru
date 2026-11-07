@@ -144,7 +144,7 @@ export function TagRuleEditor({ tag }: { tag: string }) {
               const next = event.target.value as Rating | ''
               void saveImplication(tag, [...impliedTags, ...(next ? [ratingToken(next)] : [])])
             }}
-            className={`min-h-9 rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-accent disabled:opacity-50 ${
+            className={`min-h-9 border border-border bg-background px-2 text-sm outline-none focus:border-hover disabled:opacity-50 ${
               floor ? RATING_COLOR[floor] : ''
             }`}
           >

@@ -65,7 +65,7 @@ export function LinkPill({ url, full = false }: { url: string; full?: boolean })
       type="button"
       onClick={() => void window.api.openExternal(url)}
       title={url}
-      className="flex min-h-7 min-w-0 items-center gap-1.5 rounded-full border border-border bg-background px-2.5 text-xs text-foreground transition-colors hover:border-accent"
+      className="flex min-h-7 min-w-0 items-center gap-1.5 rounded-full border border-border bg-background px-2.5 text-xs text-foreground transition-colors hover:border-hover"
     >
       {logo && (
         <svg
