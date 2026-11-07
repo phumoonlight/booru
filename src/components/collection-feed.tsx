@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import type { CollectionPost } from '@/lib/data/collections'
 import { CollectionGrid } from '@/components/collection-grid'
-import { loadMoreCollectionPosts } from '@/lib/actions/collections'
+import { loadMoreCollectionPosts } from '@/lib/api/collections'
 
 /** Less than a row, so a landing chunk does not chain-fire the next request before anyone
  *  scrolls. */

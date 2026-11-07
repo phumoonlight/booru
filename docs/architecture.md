@@ -67,7 +67,7 @@ booru/
         ├── db.ts images.ts    # the one pool (booru_web); image URLs off NEXT_PUBLIC_CDN_URL
         ├── latest-posts.ts    # how far /posts goes before it hands over to /collections
         ├── data/              # @common/data bound to that pool, the NSFW ceiling and the maintenance gate
-        └── actions/           # collections.ts (both feeds' next chunk, the view), maintenance.ts
+        └── api/               # browser-side fetchers for app/api/ — feeds, count, view, site check
 ```
 
 No `(auth)/`, no `upload/`, no `tags/`, no `ai-posts/`, no `posts/[id]`, no `proxy.ts`. The
@@ -89,9 +89,9 @@ first two left when the board dropped its accounts, the rest with the boards; gi
 
 - **Reads:** RSC → `src/lib/data/collections.ts` → `@common/data/collections` → the pool.
   Never query the database from a page or component. The reads that aren't an RSC are
-  `loadMoreCollectionPosts` and `loadMoreLatestPosts` in `lib/actions/collections.ts` — the
-  feeds' next chunks, actions rather than route handlers so the data layer stays the only
-  query surface. `loadMoreLatestPosts` refuses to read past the hundred-image limit for a
+  route handlers under `src/app/api/`, called through `src/lib/api/*` — the feeds' next
+  chunks among them. A handler calls the data layer and writes no query, so it stays the
+  only query surface. `GET /api/posts` refuses to read past the hundred-image limit for a
   caller that is not the feed.
 - **The maintenance gate and the NSFW ceiling are applied in `lib/data/collections.ts`**,
   not in pages. Every read but the sitemap's opens with `serving()`, and every listing and
@@ -148,7 +148,7 @@ free serverless tier bills by the second and kills at ten.
 - The cookie is a ceiling: `listCollections` intersects the shelf search's rating with it,
   so asking for R-18 with the setting off finds nothing rather than reaching past it, and
   the list says why. Every image read narrows on the shelf's rating in SQL
-  (`shelfVisible`), because the feeds are actions anyone can call with any id.
+  (`shelfVisible`), because the feeds are endpoints anyone can call with any id.
 - Absolute URLs (canonicals, OpenGraph, `robots.txt`, `sitemap.xml`) all come from
   `config.ts` → `NEXT_PUBLIC_SITE_URL`, so the origin is configured in one place — as is
   the board's name, `NEXT_PUBLIC_SITE_NAME`, which defaults to `Booru`.

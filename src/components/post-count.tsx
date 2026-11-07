@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { loadCollectionPostCount } from '@/lib/actions/collections'
+import { loadCollectionPostCount } from '@/lib/api/collections'
 import { emojiNumber } from '@/lib/emoji-number'
 
 /**

@@ -101,7 +101,7 @@ takes its number with it rather than shifting the rest.
    list's search. The form that writes a search and the page that reads it back cannot
    disagree while both go through here.
 9. **An image has no rating of its own; its shelf's is the rating.** Every read of an image
-   in `@common/data/collections` narrows through `shelfVisible`, and both feeds are actions
+   in `@common/data/collections` narrows through `shelfVisible`, and both feeds are endpoints
    anybody can call with any cursor — a new image read that skips it puts a restricted
    shelf's images one request from the notice.
 10. **A table name is never spelled in a collection or artist query** — `COLLECTION_TABLES`
@@ -127,10 +127,11 @@ takes its number with it rather than shifting the rest.
 
 ## Layering
 
-- **Reads:** RSC → `src/lib/data/*` → `@common/data/*` → the pool. The two reads that
-  aren't an RSC are `loadMoreCollectionPosts` and `loadMoreLatestPosts` in
-  `lib/actions/collections.ts` — a feed's next chunk, as actions rather than route handlers
-  so the data layer stays the only query surface.
+- **Reads:** RSC → `src/lib/data/*` → `@common/data/*` → the pool. What the browser
+  asks for after render goes through route handlers under `src/app/api/` — a feed's next
+  chunk, the front door's count, a view, Check status — called through `src/lib/api/*`.
+  There are no server actions. A handler reads the request and calls `src/lib/data/*`;
+  it writes no query, so the data layer stays the only query surface.
 - **The website's only write is the view counter** — `recordCollectionPostView` — because a
   visitor's view still counts. It is `update collection_posts set view_count = view_count +
   1` — atomic again, where PostgREST forced a three-attempt compare-and-swap that dropped
@@ -138,7 +139,7 @@ takes its number with it rather than shifting the rest.
 - **One pool, `src/lib/db.ts`**, `server-only`, connecting as `booru_web`. It was two
   clients — an anon one for reads and a service-role one that could bypass every policy
   in the project, held solely to count views. A column grant says that better.
-- **Query logic lives in `lib/data/` and `@common/data/`**, never in actions or pages, so
+- **Query logic lives in `lib/data/` and `@common/data/`**, never in route handlers or pages, so
   a second caller can reuse it — which is how the desktop app lists the same shelves.
 - **Pure helpers** (`@common/search`, `@common/tags`, `@common/collections`,
   `@common/storage`, the web's `config.ts` and `lib/images.ts`) import nothing
@@ -181,7 +182,7 @@ and the pure helpers. See [packages/common/README.md](packages/common/README.md)
   read is **asymmetric** (`lib/data/site.ts`): a serving board is asked on every visit,
   because a switch nobody feels is worthless, and a closed one is held for ten minutes,
   because a visitor refreshing the notice is the traffic a closed site actually gets. Only
-  the "on" answer is cached, and Check status — a server action that drops the hold and
+  the "on" answer is cached, and Check status — `POST /api/site/check`, which drops the hold and
   reports what the board said — is the way out of the window. An unreadable table is
   treated as serving: a blip must not close the site. Every read in
   `lib/data/collections.ts` also opens with `serving()`, since a layout decides what is
@@ -190,7 +191,7 @@ and the pure helpers. See [packages/common/README.md](packages/common/README.md)
   emoji count of the images on every shelf, adult ones included — a number says nothing
   about what is behind the setting. It sits in `(home)`, outside the maintenance layout,
   and is static: the count is fetched by the browser (`post-count.tsx` →
-  `loadCollectionPostCount`) and drawn as nothing while the site is closed. **The header** (`site-header.tsx`) is the
+  `GET /api/posts/count`) and drawn as nothing while the site is closed. **The header** (`site-header.tsx`) is the
   wordmark, going to `/posts`, and three items: Posts, Collections, Settings.
 - **Nothing goes through the Next optimizer.** The grid thumb and the image page are both
   `unoptimized`, so the stored file is served untouched — animation intact, no second
@@ -279,7 +280,7 @@ of image on the board.
 - **`/posts` is the newest images across every visible shelf** (`latest-feed.tsx`) — the
   address the gallery had, kept because the wordmark and every old link go there. **A
   button, never a scroll**, and **a hundred images at most** (`LATEST_POSTS_LIMIT`,
-  `src/lib/latest-posts.ts`, which the action enforces too): the gallery this replaced was
+  `src/lib/latest-posts.ts`, which `/api/posts` enforces too): the gallery this replaced was
   a search you worked through, where this is a front page with a horizon, and a feed that
   grows under the scroll reaches its end without anybody asking it to. At the limit, or the
   last image, the button becomes a link to `/collections`, where the rest can be found

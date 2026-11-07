@@ -6,8 +6,8 @@ import type { NextConfig } from 'next'
 // door nobody uses. Moving to R2 is what made that visible rather than what caused it.
 //
 // No `serverActions.bodySizeLimit` either. It was raised for the upload action, which
-// posted the image itself; the site takes no uploads any more and its one remaining
-// action sends a post id, so the framework's 1MB default is generous.
+// posted the image itself; the site takes no uploads any more and has no server actions
+// left — what the browser asks for goes through the route handlers under `app/api/`.
 const nextConfig: NextConfig = {}
 
 export default nextConfig

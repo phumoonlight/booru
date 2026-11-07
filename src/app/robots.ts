@@ -13,7 +13,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: [`${collectionsHref()}?`, `${collectionsHref()}/*?`],
+      disallow: ['/api/', `${collectionsHref()}?`, `${collectionsHref()}/*?`],
     },
     sitemap: `${base}/sitemap.xml`,
   }

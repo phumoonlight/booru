@@ -5,7 +5,7 @@ import Link from 'next/link'
 import type { LatestCollectionPost } from '@/lib/data/collections'
 import { CollectionGrid } from '@/components/collection-grid'
 import { NavProgress } from '@/components/nav-progress'
-import { loadMoreLatestPosts } from '@/lib/actions/collections'
+import { loadMoreLatestPosts } from '@/lib/api/collections'
 import { LATEST_POSTS_LIMIT } from '@/lib/latest-posts'
 import { collectionsHref } from '@common/collections'
 

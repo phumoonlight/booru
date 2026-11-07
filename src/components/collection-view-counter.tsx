@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { recordCollectionPostView } from '@/lib/actions/collections'
+import { recordCollectionPostView } from '@/lib/api/collections'
 
 /** How long one browser's view of an image keeps counting as the same view. */
 const COOLDOWN_MS = 60 * 60 * 1000

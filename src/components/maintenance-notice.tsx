@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { checkSiteState } from '@/lib/actions/maintenance'
+import { checkSiteState } from '@/lib/api/site'
 import { SITE_NAME } from '@/config'
 import type { SiteState } from '@common/data/site'
 
