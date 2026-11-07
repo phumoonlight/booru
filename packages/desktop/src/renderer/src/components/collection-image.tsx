@@ -5,39 +5,28 @@ import { BUTTON_ON_SURFACE, BUTTON_SUBMIT_ON_SURFACE, DANGER_ON_SURFACE } from '
 import { HoldButton } from './hold-button'
 import { ImageViewer } from './image-viewer'
 import { FIELD, Panel } from './panel'
-import { thumbnailFor, thumbnails } from './collection-thumbs'
-import { ratioOf } from './ratio-layout'
+import { fullImageUrl } from './collection-thumbs'
 import { ImageTags } from './collection-image-tags'
+import { useDrawnBox } from './drawn-box'
 
-/** Module-level, so the viewer's effect has a dependency that does not change between
- *  renders — `window.api` is a bridge proxy and need not hand back the same function twice. */
-const loadCollectionImage = (id: number): Promise<string> => window.api.collectionImage(id)
-
-/** One tile. It asks for its own image: a shelf can be a few hundred rows after enough
- *  scrolling, and fetching them all up front would stall the first screenful behind the
- *  last. */
+/** One tile. It asks for its own image, cut to its own box (`useDrawnBox`) and loaded
+ *  lazily: a shelf can be a few hundred rows after enough scrolling, and fetching them all up
+ *  front would stall the first screenful behind the last. */
 export function ImageCard({
   post,
   selected,
+  current = false,
   onOpen,
 }: {
   post: CollectionPost
   /** Set only in manage, where a click selects rather than opens. */
   selected?: boolean
+  /** The image the panel at the foot of the window is about — far from it once pinned, so
+   *  the tile says which one it is. An outline inside the edge, since the gap is 2px. */
+  current?: boolean
   onOpen: () => void
 }) {
-  const [src, setSrc] = useState(thumbnails.get(post.file_name) ?? '')
-
-  useEffect(() => {
-    if (thumbnails.has(post.file_name)) return
-    let alive = true
-    void thumbnailFor(post.file_name).then((url) => {
-      if (alive) setSrc(url)
-    })
-    return () => {
-      alive = false
-    }
-  }, [post.file_name])
+  const [box, drawn] = useDrawnBox<HTMLDivElement>()
 
   return (
     <button
@@ -45,33 +34,46 @@ export function ImageCard({
       onClick={onOpen}
       title={`Image ${post.id}`}
       aria-pressed={selected}
-      className={`group relative flex w-full flex-col overflow-hidden rounded-lg border bg-surface text-left transition-colors ${
-        selected ? 'border-accent ring-2 ring-accent' : 'border-border hover:border-accent'
+      // Green (the General rating's #35c64a) rather than accent, so a lit tile stands out
+      // from the accent-coloured controls around the grid.
+      className={`group relative flex w-full flex-col overflow-hidden border bg-surface text-left transition-colors ${
+        selected
+          ? 'border-[#35c64a] ring-2 ring-[#35c64a]'
+          : current
+            ? 'border-[#35c64a] outline-3 -outline-offset-3 outline-[#35c64a]'
+            : 'border-border hover:border-[#35c64a]'
       }`}
+      aria-current={current || undefined}
     >
       {selected !== undefined && (
         <span
           aria-hidden
           className={`absolute left-1.5 top-1.5 z-10 grid size-5 place-items-center rounded-full border text-xs ${
             selected
-              ? 'border-accent bg-accent text-background'
+              ? 'border-[#35c64a] bg-[#35c64a] text-background'
               : 'border-foreground/60 bg-background/60 text-transparent'
           }`}
         >
           ✓
         </span>
       )}
+      {/* `--row-h` itself, not an aspect ratio: the ratio ran against the width inside the
+          tile's 1px border, so each tile came out short by 2px ÷ its own ratio and no two
+          rows lined up. */}
       <div
-        className="grid place-items-center overflow-hidden bg-background"
-        style={{ aspectRatio: ratioOf(post.width, post.height) }}
+        ref={box}
+        className="grid h-(--row-h) place-items-center overflow-hidden bg-background"
       >
-        {src ? (
-          <img src={src} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <span className="text-xs text-muted">…</span>
+        {drawn && (
+          <img
+            src={fullImageUrl(post.file_name, post.file_ext, drawn)}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full object-cover"
+          />
         )}
       </div>
-      <span className="px-1.5 py-1 text-[11px] text-muted">#{post.id}</span>
     </button>
   )
 }
@@ -88,8 +90,8 @@ export function ImageCard({
  * ✏️ Edit turns it into the box, ✅ Save writes it, and ✕ Cancel puts back what the board
  * still holds.
  *
- * Pinned to the top of the scroller, since the grid it was opened from can be a long way
- * down.
+ * Pinned to the foot of the scroller, since the grid it was opened from can be a long way
+ * up or down, and the tile it is about is outlined so it can be found again.
  */
 export function ImagePanel({
   post,
@@ -99,11 +101,20 @@ export function ImagePanel({
   onChanged,
   onTagged,
   onDeleted,
+  viewing,
+  onViewing,
+  onStep,
 }: {
   post: CollectionPost
   /** The shelf's tags, every one of which the panel offers. */
   tags: CollectionTag[]
   siteUrl: string
+  /** Whether the full-size viewer is open — the shelf's, not this panel's, because ← / →
+   *  swap the image and with it this keyed panel, and the viewer must survive the swap. */
+  viewing: boolean
+  onViewing: (open: boolean) => void
+  /** ← / → in the viewer: the neighbouring image in the grid. */
+  onStep: (delta: -1 | 1) => void
   onClose: () => void
   onChanged: () => void
   /** A tag went on or came off — the counts on the bar above are now wrong. */
@@ -113,7 +124,6 @@ export function ImagePanel({
   const stored = post.source_url ?? ''
   const [source, setSource] = useState(stored)
   const [editing, setEditing] = useState(false)
-  const [viewing, setViewing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Null until read, so the pills are not drawn unlit for a moment and then light up — which
   // would look like the image losing its tags and getting them back.
@@ -151,7 +161,7 @@ export function ImagePanel({
     <>
       <Panel
         title={`Image #${post.id}`}
-        pinned
+        pinned="bottom"
         actions={
           <>
             {/* Drawn only while the source is being read: what it opens carries its own
@@ -163,7 +173,7 @@ export function ImagePanel({
             )}
             <button
               type="button"
-              onClick={() => setViewing(true)}
+              onClick={() => onViewing(true)}
               title="Look at the stored image at its full size"
               className={BUTTON_ON_SURFACE}
             >
@@ -276,13 +286,12 @@ export function ImagePanel({
 
       {viewing && (
         <ImageViewer
-          id={post.id}
+          src={fullImageUrl(post.file_name, post.file_ext)}
           width={post.width}
           height={post.height}
-          fallback={thumbnails.get(post.file_name) ?? ''}
           label={`Image ${post.id}`}
-          load={loadCollectionImage}
-          onClose={() => setViewing(false)}
+          onClose={() => onViewing(false)}
+          onStep={onStep}
         />
       )}
     </>

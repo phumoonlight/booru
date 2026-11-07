@@ -2,8 +2,6 @@ import { ipcMain } from 'electron'
 import { z } from 'zod'
 import {
   addUrl,
-  artistImageDataUrl,
-  artistThumbnailDataUrl,
   makeArtist,
   markRead,
   readArtists,
@@ -111,17 +109,5 @@ export function registerArtistIpc(): void {
       ? removeArtistImage(parsed.data)
       : { ok: false as const, error: 'No such image' }
   })
-
-  ipcMain.handle('artists:thumbnail', async (_event, fileName: unknown): Promise<string> => {
-    const parsed = z
-      .string()
-      .regex(/^[0-9a-f]{32}$/)
-      .safeParse(fileName)
-    return parsed.success ? artistThumbnailDataUrl(parsed.data) : ''
-  })
-
-  ipcMain.handle('artists:image', async (_event, id: unknown): Promise<string> => {
-    const parsed = postIdSchema.safeParse(id)
-    return parsed.success ? artistImageDataUrl(parsed.data) : ''
-  })
+  // Examples are loaded from `board-image://artist/…` (`main/image-protocol.ts`), not here.
 }

@@ -50,8 +50,6 @@ const api: PostAppApi = {
   moveCollectionPosts: (ids, collectionId) =>
     ipcRenderer.invoke('collections:move-posts', ids, collectionId),
   deleteCollectionPost: (id) => ipcRenderer.invoke('collections:delete-post', id),
-  collectionThumbnail: (fileName) => ipcRenderer.invoke('collections:thumbnail', fileName),
-  collectionImage: (id) => ipcRenderer.invoke('collections:image', id),
   listArtists: () => ipcRenderer.invoke('artists:list'),
   createArtist: (name, isAi, isFavorite) =>
     ipcRenderer.invoke('artists:create', name, isAi, isFavorite),
@@ -65,8 +63,6 @@ const api: PostAppApi = {
   removeArtistUrl: (id) => ipcRenderer.invoke('artists:remove-url', id),
   uploadArtistImage: (artistId, path) => ipcRenderer.invoke('artists:upload', artistId, path),
   deleteArtistImage: (id) => ipcRenderer.invoke('artists:delete-image', id),
-  artistThumbnail: (fileName) => ipcRenderer.invoke('artists:thumbnail', fileName),
-  artistImage: (id) => ipcRenderer.invoke('artists:image', id),
   exportSettings: () => ipcRenderer.invoke('settings:export'),
   importSettings: () => ipcRenderer.invoke('settings:import'),
   openDataFolder: () => ipcRenderer.invoke('shell:open-data-folder'),

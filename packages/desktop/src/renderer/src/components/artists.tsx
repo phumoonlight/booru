@@ -160,7 +160,7 @@ export function Artists() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 pt-4 pb-25">
+    <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-4 px-4 pt-4 pb-25">
       <div className="flex items-center gap-2">
         <h1 className="text-lg font-bold tracking-tight">🎨 Artists</h1>
         <span className="text-xs text-muted">

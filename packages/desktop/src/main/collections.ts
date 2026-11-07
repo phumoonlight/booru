@@ -34,7 +34,7 @@ import { RATINGS, type Rating } from '@common/search'
 import { DESKTOP_UPLOAD_LIMITS } from './limits'
 import { boardDb } from './db'
 import { boardStore } from './r2'
-import { cachedImage, cachedThumbnail, forgetImage } from './image-cache'
+import { forgetImage } from './image-cache'
 import { cachedCollectionPosts, cachedCollections, dropCollectionCache } from './collection-cache'
 import { logged } from './activity-log'
 import { removeStoredObjects } from './stored-objects'
@@ -344,25 +344,4 @@ export async function removeCollectionPost(id: number): Promise<Outcome> {
   )
   forgetImage(post.file_name, post.file_ext)
   return { ok: true }
-}
-
-/** A collection image's thumbnail as a `data:` URL — across the bridge because the window's
- *  CSP is `img-src 'self' data:` and stays that way. */
-export async function collectionThumbnailDataUrl(fileName: string): Promise<string> {
-  return cachedThumbnail(fileName, collectionThumbnailPath(fileName))
-}
-
-/** The stored image at full size, for the viewer 🔍 Full size opens. The row is read for
- *  its `file_ext`: the stored object is the AVIF only when it beat the uploaded bytes. */
-export async function collectionImageDataUrl(id: number): Promise<string> {
-  const db = boardDb()
-  if (!db) return ''
-  const post = await getCollectionPost(db, id)
-  if (!post) return ''
-
-  return cachedImage(
-    post.file_name,
-    post.file_ext,
-    collectionImagePath(post.file_name, post.file_ext)
-  )
 }

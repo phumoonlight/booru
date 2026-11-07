@@ -23,7 +23,7 @@ const CHUNK = 40
  * the staging batch is a hook here (`useStaging`) and a box below — the files land on this
  * element and have to reach the batch being assembled further down the page. The handlers
  * are on a wrapper that fills the scroller rather than on the column of content: the column
- * is `max-w-6xl` and stops at its last row, so on a wide window most of what looks like this
+ * is width-capped and stops at its last row, so on a wide window most of what looks like this
  * shelf was not a drop target at all, and a drag let go there did nothing.
  *
  * **A drag opens the upload box and leaves it open.** Dragging an image onto a shelf is the
@@ -129,6 +129,13 @@ export function CollectionView({
   }
 
   const editingPost = posts.find((post) => post.id === editing) ?? null
+  // Held here rather than in the panel, which is keyed by image and remounts on every step.
+  const [viewing, setViewing] = useState(false)
+  // Stops at either end of what is loaded; Load more is still the way past the last one.
+  const step = (delta: -1 | 1) => {
+    const next = posts[posts.findIndex((post) => post.id === editing) + delta]
+    if (next) setEditing(next.id)
+  }
 
   return (
     <div
@@ -158,7 +165,7 @@ export function CollectionView({
       }}
       className="min-h-full w-full"
     >
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 pt-4 pb-25">
+      <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-4 px-4 pt-4 pb-25">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <button type="button" onClick={onBack} className={BUTTON_SM}>
             <span aria-hidden>⬅️</span> Collections
@@ -290,31 +297,6 @@ export function CollectionView({
           <StagingBox staging={staging} name={name} tags={tags} dragging={dragging} />
         )}
 
-        {editingPost && (
-          <ImagePanel
-            // Keyed, so clicking another tile mounts a fresh panel. Its two boxes are seeded
-            // from the row once, which is what lets them be typed in — without this, picking
-            // a second image left the first one's source on screen, over a
-            // heading naming the second, and the next write would have saved them onto it.
-            key={editingPost.id}
-            post={editingPost}
-            tags={tags}
-            siteUrl={siteUrl}
-            onClose={() => setEditing(null)}
-            onChanged={reload}
-            onTagged={() => {
-              reloadTags()
-              // Only a filtered grid can have lost or gained this image; an unfiltered one
-              // is exactly as it was, and re-reading it would close nothing and flash.
-              if (active.length > 0) reload()
-            }}
-            onDeleted={() => {
-              setEditing(null)
-              reload()
-            }}
-          />
-        )}
-
         {managing && (
           <ManageBar
             collectionId={collectionId}
@@ -359,12 +341,13 @@ export function CollectionView({
           <>
             {/* One height, each tile as wide as its own shape (`ratio-layout.ts`). A shelf is
                 looked at for the pictures, and a square crop would only cut them off. */}
-            <ul className="flex flex-wrap justify-center gap-2 [--row-h:9rem] sm:[--row-h:11rem] lg:[--row-h:13rem]">
+            <ul className="flex flex-wrap justify-center gap-0.5 [--row-h:9rem] sm:[--row-h:11rem] lg:[--row-h:22.5rem]">
               {posts.map((post) => (
                 <li key={post.id} className="shrink-0" style={itemStyle(post.width, post.height)}>
                   <ImageCard
                     post={post}
                     selected={managing ? selected.includes(post.id) : undefined}
+                    current={!managing && post.id === editing}
                     onOpen={() =>
                       managing
                         ? setSelected((was) =>
@@ -397,6 +380,40 @@ export function CollectionView({
               </button>
             )}
           </>
+        )}
+
+        {/* After the grid, pinned to the foot of the window (`Panel`'s `pinned="bottom"`):
+            sticky-bottom holds only an element whose place is further down. */}
+        {editingPost && (
+          <ImagePanel
+            // Keyed, so clicking another tile mounts a fresh panel. Its two boxes are seeded
+            // from the row once, which is what lets them be typed in — without this, picking
+            // a second image left the first one's source on screen, over a
+            // heading naming the second, and the next write would have saved them onto it.
+            key={editingPost.id}
+            post={editingPost}
+            tags={tags}
+            siteUrl={siteUrl}
+            viewing={viewing}
+            onViewing={setViewing}
+            onStep={step}
+            onClose={() => {
+              setViewing(false)
+              setEditing(null)
+            }}
+            onChanged={reload}
+            onTagged={() => {
+              reloadTags()
+              // Only a filtered grid can have lost or gained this image; an unfiltered one
+              // is exactly as it was, and re-reading it would close nothing and flash.
+              if (active.length > 0) reload()
+            }}
+            onDeleted={() => {
+              setViewing(false)
+              setEditing(null)
+              reload()
+            }}
+          />
         )}
       </div>
     </div>

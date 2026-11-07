@@ -110,10 +110,11 @@ resolves its two table names and two object prefixes out of.
 screen has no counts and no Apply by tag, but naming, filing, rules and the rule map all
 still work against the board.
 
-Images come across the bridge as `data:` URLs rather than being fetched by the page. The
-window's CSP is `img-src 'self' data:` and a grid is not worth being the reason that stops
-being true; `src/main/image-cache.ts` caches thumbnails and full sizes by md5 — both on
-disk, thumbnails also in memory — which can never go stale.
+Images are `board-image://` addresses the main process answers from its disk cache
+(`src/main/image-protocol.ts`), the only addition to the window's `img-src`; the page still
+fetches nothing from the network. Full sizes are cached by md5 in `app-cache/images/`, and
+each grid tile gets a copy cut to its exact on-screen box in `app-cache/grid/`
+(`src/main/grid-image.ts`) — neither can go stale.
 
 ## Notes
 

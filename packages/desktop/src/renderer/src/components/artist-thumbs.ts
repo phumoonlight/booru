@@ -1,15 +1,7 @@
 /**
- * Example thumbnails already across the bridge, by file name — the collections' map again,
- * for the artist list. The bytes behind them are shared in main, keyed by md5.
+ * An artist's example, served by main from `app-cache` (`main/image-protocol.ts`) — the
+ * collections' `fullImageUrl` again, for the artist prefix; `grid` is the device-pixel box
+ * a tile draws it in, without it the full size the viewer draws.
  */
-export const thumbnails = new Map<string, string>()
-
-export async function thumbnailFor(fileName: string): Promise<string> {
-  const held = thumbnails.get(fileName)
-  if (held !== undefined) return held
-
-  const url = await window.api.artistThumbnail(fileName)
-  // A failed fetch answers '' — not remembered, so asking again re-asks the bucket.
-  if (url) thumbnails.set(fileName, url)
-  return url
-}
+export const artistImageUrl = (fileName: string, fileExt: string, grid?: string): string =>
+  `board-image://artist/${fileName}.${fileExt}${grid ? `?grid=${grid}` : ''}`

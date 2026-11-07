@@ -32,7 +32,9 @@ export function Panel({
    * grid, and a form spliced into it either breaks the columns or pushes the row you are
    * comparing against out of view. Pinned, both stay on screen at once.
    */
-  pinned?: boolean
+  /** `'bottom'` holds it at the foot instead — a collection image's panel, drawn after the
+   *  grid it belongs to. */
+  pinned?: boolean | 'bottom'
 }) {
   const card = (
     <section className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-3 py-3">
@@ -45,6 +47,15 @@ export function Panel({
   )
 
   if (!pinned) return card
+
+  // The same band at the foot of the scroller, for a panel drawn *after* what it is about
+  // (sticky bottom only holds an element whose place is below the fold).
+  if (pinned === 'bottom')
+    return (
+      <div className="sticky bottom-0 z-10 bg-background pb-4 shadow-[0_-10px_15px_-3px] shadow-background/80">
+        {card}
+      </div>
+    )
 
   // The gap above the card is part of what sticks, so the list scrolls *under* a strip of
   // page rather than up against the header. `-mt-4` and `pt-4` are the parent's own

@@ -1,56 +1,43 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
 /**
  * One stored image, full size, over everything.
  *
- * Escape or a click anywhere closes it — the picture included, since clicking a thumbnail
- * is what opened it and clicking again is the natural way back. Until the stored image
- * arrives the thumbnail is stretched into the box, so the right picture is there at once
- * and sharpens without the frame moving.
+ * Escape or a click anywhere closes it — the picture included, since clicking a tile is what
+ * opened it and clicking again is the natural way back. ← / → step through the caller's
+ * sequence where it has one.
  *
- * `load` is a channel — `collectionImage` or `artistImage` — rather than a URL, because the
- * window's CSP is `img-src 'self' data:` and the bytes come across the bridge already
- * encoded. It is asked again whenever `id` changes and never otherwise, so a viewer left
- * open costs one fetch; the main side caches the file it fetched (`main/image-cache.ts`),
- * so opening the same picture tomorrow costs none.
+ * `src` is the `board-image://` address of the stored file (`main/image-protocol.ts`), served
+ * from the disk cache the grid already filled — so opening an image the grid has drawn
+ * costs no download, and nothing multi-megabyte crosses the bridge as base64.
  */
 export function ImageViewer({
-  id,
+  src,
   width,
   height,
-  fallback,
   label,
-  load,
   onClose,
+  onStep,
 }: {
-  id: number
+  src: string
   width: number
   height: number
-  /** The thumbnail already on screen, drawn until the full size lands. */
-  fallback: string
   label: string
-  load: (id: number) => Promise<string>
   onClose: () => void
+  /** ← / → to the previous / next image, where the caller has a sequence to walk. */
+  onStep?: (delta: -1 | 1) => void
 }) {
-  const [full, setFull] = useState('')
-
-  useEffect(() => {
-    let alive = true
-    void load(id).then((url) => {
-      if (alive) setFull(url)
-    })
-    return () => {
-      alive = false
-    }
-  }, [id, load])
-
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
+      else if (onStep && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+        event.preventDefault()
+        onStep(event.key === 'ArrowLeft' ? -1 : 1)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, onStep])
 
   return (
     <div
@@ -62,13 +49,8 @@ export function ImageViewer({
     >
       <p className="shrink-0 pb-3 text-xs text-muted">
         {width}×{height}
-        {!full && ' · loading the full size…'}
       </p>
-      <img
-        src={full || fallback}
-        alt=""
-        className="min-h-0 flex-1 cursor-zoom-out object-contain"
-      />
+      <img src={src} alt="" className="min-h-0 flex-1 cursor-zoom-out object-contain" />
     </div>
   )
 }

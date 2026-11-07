@@ -306,10 +306,6 @@ export type PostAppApi = {
   ) => Promise<{ ok: true; moved: number } | { ok: false; error: string }>
   /** Removes the row and both of its stored images. */
   deleteCollectionPost: (id: number) => Promise<Outcome>
-  collectionThumbnail: (fileName: string) => Promise<string>
-  /** The stored image at full size, or '' — for the viewer 🔍 Full size opens. By id,
-   *  because only the row knows which extension was actually stored. */
-  collectionImage: (id: number) => Promise<string>
   // ── Artists ──────────────────────────────────────────────────────────────────
   // A reading list kept apart from everything else — not a tag, not a shelf, nowhere on
   // the website.
@@ -341,9 +337,6 @@ export type PostAppApi = {
   /** One staged file onto one artist. */
   uploadArtistImage: (artistId: number, path: string) => Promise<ArtistImageResult>
   deleteArtistImage: (id: number) => Promise<Outcome>
-  artistThumbnail: (fileName: string) => Promise<string>
-  /** The stored example at full size, or '' — for the viewer a click opens. */
-  artistImage: (id: number) => Promise<string>
 
   exportSettings: () => Promise<TransferResult>
   importSettings: () => Promise<TransferResult>

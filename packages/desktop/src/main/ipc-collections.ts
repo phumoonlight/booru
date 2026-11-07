@@ -1,8 +1,6 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
 import {
-  collectionImageDataUrl,
-  collectionThumbnailDataUrl,
   editCollectionTag,
   makeCollection,
   makeCollectionTag,
@@ -184,21 +182,6 @@ export function registerCollectionIpc(): void {
     if (!parsed.success) return { ok: false as const, error: 'Nothing selected' }
     return tagCollectionPosts({ ...parsed.data, postIds: [...new Set(parsed.data.postIds)] })
   })
-
-  ipcMain.handle('collections:thumbnail', async (_event, fileName: unknown): Promise<string> => {
-    // The md5 shape: `file_name` holds the md5 of the bytes, so anything else is not a name
-    // this board ever wrote.
-    const parsed = z
-      .string()
-      .regex(/^[0-9a-f]{32}$/)
-      .safeParse(fileName)
-    return parsed.success ? collectionThumbnailDataUrl(parsed.data) : ''
-  })
-
-  /** By id rather than by name, unlike the thumbnail: the stored object's extension is on
-   *  the row, and only the row knows whether the AVIF or the original was kept. */
-  ipcMain.handle('collections:image', async (_event, id: unknown): Promise<string> => {
-    const parsed = postIdSchema.safeParse(id)
-    return parsed.success ? collectionImageDataUrl(parsed.data) : ''
-  })
+  // Images are not a channel: the window loads them from `board-image://`
+  // (`main/image-protocol.ts`).
 }

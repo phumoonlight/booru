@@ -1,5 +1,5 @@
 import { ARTIST_TABLES } from '@common/artists'
-import { first, type Db } from '@common/db'
+import type { Db } from '@common/db'
 
 /**
  * The artist list, as reads. The writes are `@common/data/artists-write`.
@@ -77,17 +77,6 @@ export async function listArtists(db: Db): Promise<Artist[]> {
   for (const { artist_id, ...url } of urlRows) byArtist.get(artist_id)?.urls.push(url)
   for (const { artist_id, ...image } of imageRows) byArtist.get(artist_id)?.images.push(image)
   return [...byArtist.values()]
-}
-
-export async function getArtistImage(
-  db: Db,
-  id: number
-): Promise<(ArtistImage & { artist_id: number }) | null> {
-  return first(
-    await db<(ArtistImage & { artist_id: number })[]>`
-      select id, artist_id, file_name, file_ext, width, height
-        from ${db(images)} where id = ${id}`
-  )
 }
 
 /**

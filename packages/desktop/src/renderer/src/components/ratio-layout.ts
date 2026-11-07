@@ -31,5 +31,7 @@ export function ratioOf(width: number, height: number): number {
  * `--row-h` for every card on the screen.
  */
 export function itemStyle(width: number, height: number): CSSProperties {
-  return { width: `calc(${ratioOf(width, height)} * var(--row-h))` }
+  // Rounded to a whole pixel: the tile's picture is cut to its box exactly
+  // (`main/grid-image.ts`), and a fractional box would have Chromium rescale it by a hair.
+  return { width: `round(calc(${ratioOf(width, height)} * var(--row-h)), 1px)` }
 }

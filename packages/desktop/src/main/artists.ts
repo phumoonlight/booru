@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { listArtists, getArtistImage, type Artist } from '@common/data/artists'
+import { listArtists, type Artist } from '@common/data/artists'
 import {
   addArtistUrl,
   createArtist,
@@ -17,7 +17,7 @@ import { createArtistImageFromImage, type ArtistImageResult } from '@common/uplo
 import { DESKTOP_UPLOAD_LIMITS } from './limits'
 import { boardDb } from './db'
 import { boardStore } from './r2'
-import { cachedImage, cachedThumbnail, forgetImage } from './image-cache'
+import { forgetImage } from './image-cache'
 import { logged } from './activity-log'
 import { removeStoredObjects } from './stored-objects'
 
@@ -178,27 +178,4 @@ async function removeObjects(
     detail
   )
   for (const image of gone) forgetImage(image.file_name, image.file_ext)
-}
-
-export async function artistThumbnailDataUrl(fileName: string): Promise<string> {
-  return cachedThumbnail(fileName, artistThumbnailPath(fileName))
-}
-
-/**
- * The stored example at full size, as a `data:` URL, for the viewer a click opens. Cached
- * on disk beside the thumbnails (`main/image-cache.ts`) — the same picture opened twice is
- * two downloads of a few megabytes otherwise, and the name is the md5 of the bytes, so a
- * file found under it is that image.
- */
-export async function artistImageDataUrl(id: number): Promise<string> {
-  const db = boardDb()
-  if (!db) return ''
-  const image = await getArtistImage(db, id)
-  if (!image) return ''
-
-  return cachedImage(
-    image.file_name,
-    image.file_ext,
-    artistImagePath(image.file_name, image.file_ext)
-  )
 }

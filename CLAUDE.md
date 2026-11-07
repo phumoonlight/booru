@@ -383,9 +383,10 @@ It imports `packages/common` and reaches into `src/` not at all.
   vandalise the data and cannot drop a table. `main/r2.ts` is the bucket, and the only
   implementation of `ObjectStore`. Neither signs in to anything.
 - **Its limits are its own** (`main/limits.ts`, 50MB / 100MP) and now the only ones.
-- Renderer CSP is `img-src 'self' data:`. Thumbnails cross the bridge as `data:` URLs
-  rather than being fetched by the page — a grid is not worth being the reason that stops
-  being true.
+- Renderer CSP is `img-src 'self' data: board-image:`. Every image the window draws is a
+  `board-image://` address that main answers from its disk cache (`main/image-protocol.ts`),
+  so the page still fetches nothing from the network and no multi-megabyte `data:` URL
+  crosses the bridge.
 
 **Configuration**
 
@@ -514,20 +515,24 @@ than nothing. It was one file per board while a tag carried a count per board; s
 deletes the old per-board and browse files on the way past.
 
 **The cache folder** (`main/app-cache.ts`) — `app-cache/` in `userData`, holding
-`tags.json`, `collections.json`, `logs.json`, `thumbs/` and `images/`. Everything in it but the log is a copy of what the board already has, and the log is a readout nothing depends on, so the
+`tags.json`, `collections.json`, `logs.json`, `images/` and `grid/`. Everything in it but the log is a copy of what the board already has, and the log is a readout nothing depends on, so the
 folder can be deleted at any moment and the only cost is the next read — which is the line
 between it and `save.json`, where losing a file loses something.
 
-**Images** (`main/image-cache.ts`) — `app-cache/thumbs/<file_name>.avif` and
-`app-cache/images/<file_name>.<ext>`, the stored files byte-for-byte; the shelves and the
-artist list draw their thumbnails from it (`cachedThumbnail`), and both full-size viewers
-their pictures (`cachedImage`). **Nothing expires and nothing is invalidated**: the name is
-the md5 of the bytes, so a file found under it *is* that image. That is also why it is a
-folder of bytes rather than base64 in JSON, which would be a third bigger and rewritten
-whole every time one arrived. **Only the thumbnails are also held in memory** — one is a few
-kilobytes and a grid asks for the same ones over and over, where a full size is whole
-megabytes as base64 asked for by one click at a time. Deleting an image sweeps up both of
-its files (`forgetImage`), the only name that can ever stop meaning an image.
+**Images** (`main/image-cache.ts`, `main/grid-image.ts`, `main/image-protocol.ts`) —
+`app-cache/images/<file_name>.<ext>`, the stored full sizes byte-for-byte, and
+`app-cache/grid/<file_name>.<w>x<h>.webp`, a copy cut from one to exactly the box a tile
+draws it in. **The desktop app no longer draws the bucket's thumbnails**: a 384px AVIF at
+quality 50, rescaled again by Chromium, came out soft and jagged. Instead each tile
+measures its box in device pixels (`useDrawnBox`) and asks `board-image://…?grid=<w>x<h>`;
+main resizes the cached full size once with Lanczos (WebP q90, local only, never uploaded)
+so the window draws it 1:1. The viewers ask for the full size itself. Both go through the
+`board-image:` scheme rather than `data:` URLs — a screenful of full sizes as base64 would be
+hundreds of megabytes of strings — and Chromium holds what it decoded, so nothing is kept in
+memory here. **Nothing expires and nothing is invalidated**: the name is the md5 of the
+bytes, so a file found under it *is* that image. Deleting an image sweeps up every copy
+(`forgetImage`), the only name that can ever stop meaning an image. The website still draws
+the bucket's thumbnails.
 
 **The shelves** (`main/collection-cache.ts`) — the shelf list in `app-cache/collections.json`
 for a day, and each screenful of one shelf's images in memory for the session. What is being

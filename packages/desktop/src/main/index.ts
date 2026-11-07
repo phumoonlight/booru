@@ -8,6 +8,7 @@ import { dropCache } from './app-cache'
 import { openUrl } from './browser'
 import { watchForeground } from './foreground'
 import { applyPreferences, loadPreferences } from './preferences'
+import { registerImageScheme, serveImages } from './image-protocol'
 
 /**
  * Pubooru's desktop app: the shelves, the artist list, the tag vocabulary and the site's
@@ -36,6 +37,8 @@ app.setPath(
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 }
+
+registerImageScheme()
 
 let mainWindow: BrowserWindow | null = null
 
@@ -121,6 +124,7 @@ void app.whenReady().then(() => {
   // in front — what "open in the last used browser" is answered from (`main/foreground.ts`).
   watchForeground()
   registerIpc()
+  serveImages()
   createWindow()
 
   app.on('activate', () => {
