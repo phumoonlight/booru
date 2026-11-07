@@ -13,7 +13,7 @@ export function Readout({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1.5 text-sm">
       {label}
-      <div className="flex min-h-11 items-center rounded-lg border border-border bg-surface px-3">
+      <div className="flex min-h-11 items-center border border-border bg-surface px-3">
         <span className={`min-w-0 flex-1 truncate font-mono text-xs ${value ? '' : 'text-muted'}`}>
           {value || 'Not set'}
         </span>
@@ -46,7 +46,7 @@ export function Choice<T extends string>({
       <div
         role="radiogroup"
         aria-label={label}
-        className="flex min-h-11 items-center gap-1 rounded-lg border border-border bg-surface p-1"
+        className="flex min-h-11 items-center gap-1 border border-border bg-surface p-1"
       >
         {options.map((option) => {
           const selected = option.value === value
@@ -107,7 +107,7 @@ export function Field({
       {editing ? (
         <Editor value={value} onSave={onSave} onCancel={onCancel} placeholder={placeholder} />
       ) : (
-        <div className="flex min-h-11 items-center gap-2 rounded-lg border border-border bg-surface px-3">
+        <div className="flex min-h-11 items-center gap-2 border border-border bg-surface px-3">
           <span
             className={`min-w-0 flex-1 truncate font-mono text-xs ${value ? '' : 'text-muted'}`}
           >
@@ -154,7 +154,7 @@ function Editor({
   return (
     <form
       onSubmit={submit}
-      className="flex min-h-11 items-center gap-2 rounded-lg border border-accent bg-surface px-3"
+      className="flex min-h-11 items-center gap-2 border border-accent bg-surface px-3"
     >
       <input
         type="text"

@@ -117,7 +117,7 @@ export function ArtistEditor({
         const urls = imageUrlsFrom(event.dataTransfer)
         if (urls.length > 0) void addImages(window.api.fetchImages(urls, 'artist'))
       }}
-      className={`flex flex-col gap-3 rounded-lg border-2 border-dashed px-3 py-3 ${
+      className={`flex flex-col gap-3 border-2 border-dashed px-3 py-3 ${
         dragging ? 'border-accent bg-accent/10' : 'border-border'
       }`}
     >

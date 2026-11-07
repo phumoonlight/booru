@@ -107,7 +107,7 @@ export function RuleDiagram({ onClose, tags }: { onClose: () => void; tags: Tag[
           ) : (
             // Flat, because they are flat: a recommendation never brings another one, so
             // a tree here would draw a depth the code does not have.
-            <ul className="overflow-hidden rounded-lg border border-border">
+            <ul className="overflow-hidden border border-border">
               {offering.map((trigger) => (
                 <li
                   key={trigger}
@@ -123,7 +123,7 @@ export function RuleDiagram({ onClose, tags }: { onClose: () => void; tags: Tag[
                     {recommendations[trigger].map((name) => (
                       <span
                         key={name}
-                        className="rounded border border-dashed border-border px-2"
+                        className="border border-dashed border-border px-2"
                       >
                         <TagName name={name} index={index} />
                       </span>
@@ -177,7 +177,7 @@ function TagName({ name, index }: { name: string; index: Map<string, Tag> | null
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
+    <p className="border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
       {children}
     </p>
   )
@@ -220,7 +220,7 @@ function Branch({
             tags: it is a consequence of a different kind, and it never continues a chain. */}
         {rating && (
           <span
-            className={`rounded border border-border px-1.5 font-mono text-[10px] ${RATING_COLOR[rating]}`}
+            className={`border border-border px-1.5 font-mono text-[10px] ${RATING_COLOR[rating]}`}
             title={`Raises the rating to at least ${RATING_LABEL[rating]}`}
           >
             ≥ {RATING_LABEL[rating]}

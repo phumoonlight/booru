@@ -8,6 +8,7 @@ import { FIELD, Panel } from './panel'
 import { fullImageUrl } from './collection-thumbs'
 import { ImageTags } from './collection-image-tags'
 import { useDrawnBox } from './drawn-box'
+import { Facts, Preview } from './collection-image-details'
 
 /** One tile. It asks for its own image, cut to its own box (`useDrawnBox`) and loaded
  *  lazily: a shelf can be a few hundred rows after enough scrolling, and fetching them all up
@@ -169,13 +170,17 @@ export function ImagePanel({
         pinned="bottom"
         actions={
           <>
-            {/* Drawn only while the source is being read: what it opens carries its own
-                ✅ Save and ✕ Cancel, and a third way out of one field is one too many. */}
-            {!editing && (
-              <button type="button" onClick={() => setEditing(true)} className={BUTTON_ON_SURFACE}>
-                <span aria-hidden>✏️</span> Edit
-              </button>
-            )}
+            {/* Disabled, not removed, while the source is being edited: what it opened carries
+                its own ✅ Save and ✕ Cancel, and a button that vanished took the group's
+                left end with it, sliding the rest along under the pointer. */}
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              disabled={editing}
+              className={BUTTON_ON_SURFACE}
+            >
+              <span aria-hidden>✏️</span> Edit
+            </button>
             <button
               type="button"
               onClick={() => onViewing(true)}
@@ -197,103 +202,139 @@ export function ImagePanel({
                 <span aria-hidden>🌐</span> Open
               </button>
             )}
-            {/* Held for two seconds, because this is the one control here that cannot be taken
-                back — the row goes and both stored objects go with it. It was two presses,
-                and a second press lands as easily as the first. */}
-            <HoldButton
-              ms={2000}
-              fill="bg-[#ff5d5f]/30"
-              title="Hold for two seconds to delete"
-              onHold={() => {
-                void window.api.deleteCollectionPost(post.id).then((result) => {
-                  if (result.ok) onDeleted()
-                  else setError(result.error)
-                })
-              }}
-              className={DANGER_ON_SURFACE}
-            >
-              <span aria-hidden>🗑️</span> Hold to delete
-            </HoldButton>
-            <button type="button" onClick={onClose} className={BUTTON_ON_SURFACE}>
-              <span aria-hidden>✕</span> Close
-            </button>
           </>
         }
+        close={
+          <button type="button" onClick={onClose} className={BUTTON_ON_SURFACE}>
+            <span aria-hidden>✕</span> Close
+          </button>
+        }
       >
-        {editing ? (
-          // A form, so the return key finishes the edit: this is one field, and reaching for
-          // Save with the mouse after pasting a URL is a trip for nothing.
+        <div className="flex gap-3">
+          <Preview post={post} onView={() => onViewing(true)} />
+          {/* One grid for the whole body: labels in a narrow column, values beside them, so
+              Source and Tags start on one edge and wrapped pills stay under their own row
+              rather than under the word. A form throughout, so Enter in the source box saves;
+              while reading there is nothing in it to submit. */}
           <form
             onSubmit={(event) => {
               event.preventDefault()
               void save()
             }}
-            className="flex flex-wrap items-center gap-2"
+            className="grid min-w-0 flex-1 grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 text-xs text-muted"
           >
-            <label className="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted">
+            <label htmlFor={`source-${post.id}`} className={editing ? 'pt-2.5' : ''}>
               Source
-              <input
+            </label>
+            {editing ? (
+              // A box that grows to show the whole address (`field-sizing: content`) rather
+              // than a one-line input scrolling its tail out of sight — the end of a URL is the
+              // part that differs between one image and the next. A URL has no line breaks, so
+              // Enter still saves instead of starting a new line.
+              <textarea
+                id={`source-${post.id}`}
                 autoFocus
+                rows={1}
                 value={source}
-                onChange={(event) => setSource(event.target.value)}
+                onChange={(event) => setSource(event.target.value.replace(/\s*\n\s*/g, ''))}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    event.currentTarget.form?.requestSubmit()
+                  }
+                }}
                 placeholder="https://www.pixiv.net/en/artworks/91502032"
                 spellCheck={false}
-                className={`${FIELD} min-w-0 flex-1`}
+                className={`${FIELD} min-w-0 resize-none py-2 break-all text-foreground field-sizing-content`}
               />
-            </label>
-            <button type="submit" className={BUTTON_SUBMIT_ON_SURFACE}>
-              <span aria-hidden>✅</span> Save
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSource(stored)
-                setEditing(false)
-                setError(null)
-              }}
-              className={BUTTON_ON_SURFACE}
-            >
-              <span aria-hidden>✕</span> Cancel
-            </button>
-          </form>
-        ) : (
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-            Source
-            {stored ? (
-              // Text that genuinely is a link — it goes somewhere, which is the one case in
-              // this window that keeps the underline.
+            ) : stored ? (
+              // Text that genuinely is a link — it goes somewhere, which is the one case in this
+              // window that keeps the underline. As wide as its text and no wider, so the empty
+              // rest of the line is not a click to the browser; wrapped whole rather than cut,
+              // since the tail of a URL is the part worth reading.
               <button
                 type="button"
                 onClick={() => void window.api.openExternal(stored)}
                 title="Open the source in your browser"
-                className="min-w-0 flex-1 truncate text-left text-accent hover:underline"
+                className="min-w-0 justify-self-start break-all text-left text-accent hover:underline"
               >
                 {stored}
               </button>
             ) : (
-              <span className="flex-1">No source</span>
+              <span>No source</span>
             )}
-          </div>
-        )}
-        {carried && (
-          <ImageTags
-            postId={post.id}
-            tags={tags}
-            carried={carried}
-            onChanged={(next) => {
-              setCarried(next)
-              onTagged()
+
+            {/* Level with the middle of the first row of pills. */}
+            <span className="pt-2">Tags</span>
+            {carried ? (
+              <ImageTags
+                postId={post.id}
+                tags={tags}
+                carried={carried}
+                editing={editing}
+                onChanged={(next) => {
+                  setCarried(next)
+                  onTagged()
+                }}
+              />
+            ) : (
+              <span className="pt-2">…</span>
+            )}
+
+            {/* Set off from the tags: those are about what the image shows, this about the
+                file, and run together the last row of pills read as part of it. */}
+            <div className="col-span-2 mt-2">
+              <Facts post={post} />
+            </div>
+            {error && <p className="col-span-2 text-[#ff5d5f]">{error}</p>}
+
+            {/* At the foot, under everything the edit opened, rather than wedged between the
+                source and the tags it does not apply to — a tag is written as it is pressed. */}
+            {editing && (
+              <div className="col-span-2 flex justify-end gap-2 border-t border-border pt-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSource(stored)
+                    setEditing(false)
+                    setError(null)
+                  }}
+                  className={BUTTON_ON_SURFACE}
+                >
+                  <span aria-hidden>✕</span> Cancel
+                </button>
+                <button type="submit" className={BUTTON_SUBMIT_ON_SURFACE}>
+                  <span aria-hidden>✅</span> Save
+                </button>
+              </div>
+            )}
+          </form>
+          {/* Held for two seconds, because this is the one control here that cannot be taken
+              back — the row goes and both stored objects go with it. It was two presses, and a
+              second press lands as easily as the first. In the bottom corner, away from the
+              row of things that are safe to press. */}
+          <HoldButton
+            ms={2000}
+            fill="bg-[#ff5d5f]/30"
+            title="Hold for two seconds to delete"
+            onHold={() => {
+              void window.api.deleteCollectionPost(post.id).then((result) => {
+                if (result.ok) onDeleted()
+                else setError(result.error)
+              })
             }}
-          />
-        )}
-        {error && <p className="text-xs text-[#ff5d5f]">{error}</p>}
+            // Held off from the field and Save beside it: the safe end of a form and the one
+            // control here that cannot be undone should not be a slip of the pointer apart.
+            className={`${DANGER_ON_SURFACE} ml-12 self-end`}
+          >
+            <span aria-hidden>🗑️</span> Hold to delete
+          </HoldButton>
+        </div>
       </Panel>
 
       {viewing && (
         <ImageViewer
           src={fullImageUrl(post.file_name, post.file_ext)}
-          width={post.width}
-          height={post.height}
           label={`Image ${post.id}`}
           onClose={() => onViewing(false)}
           onStep={onStep}

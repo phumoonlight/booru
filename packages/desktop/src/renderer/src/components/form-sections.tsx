@@ -259,7 +259,7 @@ export function FormSectionsView({
         {error && <p className="text-sm text-[#ff5d5f]">{error}</p>}
 
         {tags === null ? (
-          <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
+          <p className="border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
             Loading…
           </p>
         ) : (
@@ -278,7 +278,7 @@ export function FormSectionsView({
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
                   On no row ({unfiled.length})
                 </h2>
-                <div className="flex min-h-14 flex-wrap content-start items-center gap-1 rounded-lg border border-dashed border-border p-2">
+                <div className="flex min-h-14 flex-wrap content-start items-center gap-1 border border-dashed border-border p-2">
                   {unfiled.map((tag) => (
                     <TagChip
                       key={tag.id}
@@ -298,7 +298,7 @@ export function FormSectionsView({
             )}
 
             {sections.length === 0 ? (
-              <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
+              <p className="border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
                 No rows yet — the tag form has nothing to offer, since a tag is offered on a row or
                 not at all.
               </p>

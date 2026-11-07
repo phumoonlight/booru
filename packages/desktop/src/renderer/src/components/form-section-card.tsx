@@ -94,7 +94,7 @@ export function SectionCard({
         event.stopPropagation()
         onDrop()
       }}
-      className={`flex flex-col rounded-lg border bg-surface transition-colors ${
+      className={`flex flex-col border bg-surface transition-colors ${
         over === 'tag' ? 'border-accent' : 'border-border'
       } ${over === 'above' ? 'border-t-2 border-t-accent' : ''} ${
         over === 'below' ? 'border-b-2 border-b-accent' : ''
@@ -271,7 +271,7 @@ function SectionDeps({
           {section.deps.map((name) => (
             <span
               key={name}
-              className="flex items-center rounded border border-border bg-background pl-2 font-mono text-xs"
+              className="flex items-center border border-border bg-background pl-2 font-mono text-xs"
             >
               {name}
               <button

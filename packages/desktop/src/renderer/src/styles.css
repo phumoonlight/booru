@@ -105,6 +105,13 @@ body {
   user-select: none;
 }
 
+/* No picture in this window is something to drag anywhere — and one dragged off a shelf's
+   grid landed on that shelf's own drop zone, opening the upload box for a file it already
+   holds. Chromium makes every <img> draggable by default. */
+img {
+  -webkit-user-drag: none;
+}
+
 input,
 textarea {
   user-select: text;

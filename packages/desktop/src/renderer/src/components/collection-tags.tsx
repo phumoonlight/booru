@@ -146,7 +146,7 @@ export function TagBar({
             event.preventDefault()
             void (picked ? rename() : create())
           }}
-          className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2"
+          className="flex flex-wrap items-center gap-2 border border-border bg-surface px-3 py-2"
         >
           <label className="flex items-center gap-2 text-xs text-muted">
             Mark

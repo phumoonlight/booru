@@ -203,7 +203,7 @@ export function EditTag({
           after. Filled rather than outlined, and the way out sits where the hand was already
           going. */}
       {confirming && (
-        <div className="flex flex-col gap-3 rounded-lg border-2 border-[#ff5d5f] bg-[#ff5d5f]/5 p-3">
+        <div className="flex flex-col gap-3 border-2 border-[#ff5d5f] bg-[#ff5d5f]/5 p-3">
           <div>
             <h3 className="text-sm font-bold text-[#ff5d5f]">
               ⚠ Delete {tagLabel(tag.name)} for good

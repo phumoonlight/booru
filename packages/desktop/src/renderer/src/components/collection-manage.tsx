@@ -80,7 +80,7 @@ export function ManageBar({
   }
 
   return (
-    <section className="flex flex-col gap-2 rounded-lg border border-accent/40 bg-surface px-3 py-2">
+    <section className="flex flex-col gap-2 border border-accent/40 bg-surface px-3 py-2">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm">
           {selected.length} selected

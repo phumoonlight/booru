@@ -80,7 +80,7 @@ export function Logs() {
           {errorsOnly ? 'No errors logged.' : 'Nothing logged yet.'}
         </p>
       ) : (
-        <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+        <ul className="flex flex-col divide-y divide-border border border-border">
           {shown.map((entry) => (
             <LogRow key={entry.id} entry={entry} />
           ))}
@@ -109,7 +109,7 @@ function LogRow({ entry }: { entry: LogEntry }) {
         </span>
       </button>
       {open && entry.detail && (
-        <pre className="mt-2 overflow-x-auto rounded bg-surface p-2 font-mono text-[11px] text-muted">
+        <pre className="mt-2 overflow-x-auto bg-surface p-2 font-mono text-[11px] text-muted">
           {JSON.stringify(entry.detail, null, 2)}
         </pre>
       )}

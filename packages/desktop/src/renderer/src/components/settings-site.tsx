@@ -71,7 +71,7 @@ export function SiteSwitch() {
       ) : site === null ? (
         // Not drawn as "off": off means visitors are being served, which is not something
         // a copy that cannot reach the board is in a position to say.
-        <p className="rounded-lg border border-[#ff5d5f]/30 bg-[#ff5d5f]/10 px-3 py-2 text-sm text-[#ff5d5f]">
+        <p className="border border-[#ff5d5f]/30 bg-[#ff5d5f]/10 px-3 py-2 text-sm text-[#ff5d5f]">
           The board could not be asked, so the switch is not shown. Nothing here has changed it.
         </p>
       ) : (

@@ -30,7 +30,7 @@ export function About({ status }: { status: AppStatus }) {
               here to catch the moment you are reading the wrong window's version, or
               wondering where a preference went (a dev run keeps its own `save.json`). */}
           {status.development && (
-            <span className="rounded border border-[#ead084] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#ead084]">
+            <span className="border border-[#ead084] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#ead084]">
               Development
             </span>
           )}

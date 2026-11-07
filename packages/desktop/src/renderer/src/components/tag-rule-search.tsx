@@ -160,7 +160,7 @@ function Match({ tag, active, onPick }: { tag: Tag; active: boolean; onPick: () 
           event.preventDefault()
           onPick()
         }}
-        className={`flex w-full items-baseline gap-2 rounded px-1 py-1 text-left text-xs transition-colors ${
+        className={`flex w-full items-baseline gap-2 px-1 py-1 text-left text-xs transition-colors ${
           active ? 'bg-background' : 'hover:bg-background'
         }`}
       >

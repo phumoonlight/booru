@@ -304,8 +304,8 @@ of image on the board.
   how the next batch quietly gets the wrong ones. **A drag anywhere over the shelf opens the upload box and leaves it open**, its
   handlers sitting on a wrapper that fills the scroller rather than on the `max-w-6xl`
   column, which left most of a wide window looking like a drop target without being one. An
-  image's own panel is its **tags** (every shelf tag as a pill, lit if carried, written on
-  the press) and its **source, read until ✏️ Edit asks for the box** — it was written
+  image's own panel is its **tags** (read, only the ones it carries; under ✏️ Edit, every
+  shelf tag as a pill, lit if carried, written on the press) and its **source, read until ✏️ Edit asks for the box** — it was written
   on blur, so the one field there could be changed by clicking into it and tabbing away —
   **🔍 Full size**, and a held Delete.
 - **The desktop shelf has the tag bar too** (`collection-tags.tsx`): pills that narrow the
@@ -715,8 +715,8 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   takes a constant from there rather than a class list of its own. A hairline `border-border`
   at rest, no ground; **hover adds a ground and lifts the text and border** together. It was
   borderless for a while and went back to a border so a control reads as one at rest; the
-  desktop app draws buttons, fields, cards and tiles with **no border radius** (tag pills stay
-  round). It replaced an underline on hover, which said "link", and these are not
+  desktop app draws everything — buttons, fields, panels, cards, tiles, notices — with **no
+  border radius**; tag pills included; only the round things stay round (link pills, dots, the spinner). It replaced an underline on hover, which said "link", and these are not
   links: they unfold panels, upload images, delete tags.
   - The ground must be a step from whatever the button sits on, so there are two:
     `BUTTON` / `BUTTON_SM` (`hover:bg-surface`) for the page, `BUTTON_ON_SURFACE`

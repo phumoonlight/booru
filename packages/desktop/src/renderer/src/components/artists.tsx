@@ -252,7 +252,7 @@ export function Artists() {
       )}
 
       {shown.length === 0 ? (
-        <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
+        <p className="border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
           {loading
             ? 'Loading…'
             : typed

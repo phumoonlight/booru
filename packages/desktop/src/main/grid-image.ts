@@ -25,15 +25,21 @@ import { GRID, storedImage } from './image-cache'
 const MIN_SIDE = 16
 const MAX_SIDE = 4096
 
-export type GridBox = { width: number; height: number }
+/** `top` keeps the top of the picture and crops the bottom — a shelf cover, where a portrait
+ *  cut to a square should keep the face rather than the middle of a torso. */
+export type GridBox = { width: number; height: number; top: boolean }
 
-/** `<w>x<h>` in device pixels, from the tile (`useDrawnBox`), or null for anything else. */
+/** `<w>x<h>`, or `<w>x<h>-top`, in device pixels, from the tile (`useDrawnBox`), or null for
+ *  anything else. */
 export function gridBox(asked: string | null): GridBox | null {
-  const match = /^(\d{1,5})x(\d{1,5})$/.exec(asked ?? '')
+  const match = /^(\d{1,5})x(\d{1,5})(-top)?$/.exec(asked ?? '')
   if (!match) return null
   const clamp = (side: string) => Math.min(MAX_SIDE, Math.max(MIN_SIDE, Number(side)))
-  return { width: clamp(match[1]), height: clamp(match[2]) }
+  return { width: clamp(match[1]), height: clamp(match[2]), top: match[3] !== undefined }
 }
+
+/** One spelling of a box, for its cache file and its in-flight key alike. */
+const sizeName = ({ width, height, top }: GridBox) => `${width}x${height}${top ? '-top' : ''}`
 
 const inFlight = new Map<string, Promise<Buffer | null>>()
 
@@ -41,9 +47,10 @@ async function make(
   fileName: string,
   fileExt: string,
   path: string,
-  { width, height }: GridBox
+  box: GridBox
 ): Promise<Buffer | null> {
-  const file = join(cacheDir(), GRID, `${fileName}.${width}x${height}.webp`)
+  const { width, height, top } = box
+  const file = join(cacheDir(), GRID, `${fileName}.${sizeName(box)}.webp`)
   if (existsSync(file)) {
     try {
       return readFileSync(file)
@@ -57,10 +64,16 @@ async function make(
 
   try {
     const bytes = await sharp(original.bytes, { animated: true })
-      // `cover`, centred: the crop `object-cover` would make, done here at full quality.
-      // Enlarging is allowed — a small original must still fill the box, and Chromium would
-      // only upscale it less carefully.
-      .resize({ width, height, fit: 'cover', position: 'centre', kernel: 'lanczos3' })
+      // `cover`: the crop `object-cover` would make, done here at full quality — centred, or
+      // held to the top for a shelf cover. Enlarging is allowed — a small original must still
+      // fill the box, and Chromium would only upscale it less carefully.
+      .resize({
+        width,
+        height,
+        fit: 'cover',
+        position: top ? 'top' : 'centre',
+        kernel: 'lanczos3',
+      })
       .webp({ quality: 90 })
       .toBuffer()
     try {
@@ -83,7 +96,7 @@ export function gridImage(
   path: string,
   box: GridBox
 ): Promise<Buffer | null> {
-  const key = `${fileName}:${box.width}x${box.height}`
+  const key = `${fileName}:${sizeName(box)}`
   const held = inFlight.get(key)
   if (held) return held
   const job = make(fileName, fileExt, path, box).finally(() => inFlight.delete(key))

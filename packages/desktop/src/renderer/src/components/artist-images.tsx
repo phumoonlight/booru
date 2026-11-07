@@ -33,7 +33,7 @@ export function ArtistThumb({
         type="button"
         onClick={onOpen}
         title="View full size"
-        className="grid h-full w-full place-items-center overflow-hidden rounded-lg border border-border bg-background transition-colors hover:border-hover"
+        className="grid h-full w-full place-items-center overflow-hidden border border-border bg-background transition-colors hover:border-hover"
       >
         {drawn && (
           <img
@@ -65,8 +65,6 @@ export function ArtistImageViewer({ image, onClose }: { image: ArtistImage; onCl
   return (
     <ImageViewer
       src={artistImageUrl(image.file_name, image.file_ext)}
-      width={image.width}
-      height={image.height}
       label="Example image"
       onClose={onClose}
     />

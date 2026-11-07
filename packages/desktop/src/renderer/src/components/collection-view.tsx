@@ -286,7 +286,7 @@ export function CollectionView({
         />
 
         {notice && (
-          <p className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-[#ff5d5f]">
+          <p className="border border-border bg-surface px-3 py-2 text-sm text-[#ff5d5f]">
             {notice}
           </p>
         )}
@@ -331,7 +331,7 @@ export function CollectionView({
         )}
 
         {posts.length === 0 ? (
-          <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
+          <p className="border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
             {loading
               ? 'Loading…'
               : active.length > 0

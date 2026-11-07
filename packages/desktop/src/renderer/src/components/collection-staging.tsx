@@ -168,7 +168,7 @@ export function StagingBox({
 
   return (
     <div
-      className={`flex flex-col gap-3 rounded-2xl border-2 border-dashed px-4 py-4 ${
+      className={`flex flex-col gap-3 border-2 border-dashed px-4 py-4 ${
         dragging ? 'border-accent bg-accent/10' : 'border-border bg-surface'
       }`}
     >
@@ -242,7 +242,7 @@ export function StagingBox({
                   src={file.preview}
                   alt=""
                   title={file.name}
-                  className="size-20 rounded-lg bg-background object-cover"
+                  className="size-20 bg-background object-cover"
                 />
                 <button
                   type="button"

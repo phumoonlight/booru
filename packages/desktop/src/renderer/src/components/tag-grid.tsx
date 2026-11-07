@@ -20,7 +20,7 @@ export function TagGrid({
   onSelect: (tag: Tag) => void
 }) {
   return (
-    <ul className="grid grid-cols-2 overflow-hidden rounded-lg border border-border sm:grid-cols-3 lg:grid-cols-4">
+    <ul className="grid grid-cols-2 overflow-hidden border border-border sm:grid-cols-3 lg:grid-cols-4">
       {tags.map((tag) => (
         <li key={tag.id} className="-mb-px -mr-px border-b border-r border-border">
           <button

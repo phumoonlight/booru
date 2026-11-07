@@ -255,14 +255,14 @@ function Tip({ label, children }: { label: string; children: React.ReactNode }) 
         // control that offers an explanation look like the disabled one. Brightness
         // instead: a filter is the only lever an emoji has, since it carries its own
         // colour and `text-*` does nothing to it.
-        className="flex min-h-6 items-center rounded px-1 text-xs transition-[filter] hover:brightness-125"
+        className="flex min-h-6 items-center px-1 text-xs transition-[filter] hover:brightness-125"
       >
         <span aria-hidden>ℹ️</span>
       </button>
       {open && (
         // `normal-case` and the rest undo the heading beside it, whose uppercase and
         // letter-spacing this would otherwise inherit through the flex row.
-        <p className="absolute left-0 top-full z-20 mt-1 w-64 rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-normal normal-case tracking-normal text-muted shadow-lg">
+        <p className="absolute left-0 top-full z-20 mt-1 w-64 border border-border bg-background px-2 py-1.5 text-xs font-normal normal-case tracking-normal text-muted shadow-lg">
           {children}
         </p>
       )}
@@ -291,7 +291,7 @@ function RuleChips({
       {names.map((name) => (
         <span
           key={name}
-          className={`flex items-center rounded border bg-background pl-2 font-mono text-xs ${
+          className={`flex items-center border bg-background pl-2 font-mono text-xs ${
             dashed ? 'border-dashed border-border' : 'border-border'
           }`}
         >

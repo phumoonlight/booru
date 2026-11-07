@@ -36,7 +36,7 @@ export function Notices() {
       {notices.map((notice) => (
         <div
           key={notice.id}
-          className="flex items-start gap-2 rounded-lg border border-[#ff5d5f]/50 bg-surface px-3 py-2 text-xs shadow-lg"
+          className="flex items-start gap-2 border border-[#ff5d5f]/50 bg-surface px-3 py-2 text-xs shadow-lg"
         >
           <span aria-hidden>⚠️</span>
           <div className="min-w-0 flex-1">

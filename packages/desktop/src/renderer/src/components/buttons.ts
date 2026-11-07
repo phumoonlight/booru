@@ -35,7 +35,7 @@
  * cheaper than threading a `disabled` prop through a dozen call sites to add one class.
  */
 const DISABLED =
-  'disabled:text-muted disabled:hover:bg-transparent disabled:[&_[aria-hidden]]:opacity-40'
+  'disabled:cursor-default disabled:text-muted disabled:hover:border-border disabled:hover:bg-transparent disabled:[&_[aria-hidden]]:opacity-40'
 
 /** Square, with a hairline border. The border colour is never in here: each constant below
  *  names its own, since two `border-*` colours in one list are a stylesheet-order coin toss. */
@@ -136,12 +136,12 @@ export const pillToggle = (active: boolean, lit: 'red' | 'blue'): string =>
  *
  * Not `pillToggle`: that is a flag about a whole shelf, lit in the flag's own red or blue,
  * and a tag is one word among several, lit in accent like everything else in this window
- * that says "this is on". Rounded like it, so the two read as the same kind of control.
+ * that says "this is on". Square like it, so the two read as the same kind of control.
  * `editing` outlines the one pill picked for a rename, which is a different question from
  * whether it is lit. Carries `aria-pressed`.
  */
 export const tagPill = (active: boolean, editing = false): string =>
-  `flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm transition-colors ${
+  `flex min-h-8 shrink-0 items-center gap-1.5 border px-3 text-sm transition-colors ${
     active
       ? 'border-accent bg-accent text-background'
       : editing

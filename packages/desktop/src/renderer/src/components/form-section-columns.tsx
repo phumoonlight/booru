@@ -190,7 +190,7 @@ export function SectionColumns({
               empty column you can use and one that looks broken. */}
           {dragging?.kind === 'section' && (
             <div
-              className={`-mt-1 h-8 rounded-lg border border-dashed transition-colors ${
+              className={`-mt-1 h-8 border border-dashed transition-colors ${
                 over?.kind === 'tail' && over.side === side ? 'border-accent' : 'border-border'
               }`}
             />

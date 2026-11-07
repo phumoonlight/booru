@@ -13,15 +13,11 @@ import { useEffect } from 'react'
  */
 export function ImageViewer({
   src,
-  width,
-  height,
   label,
   onClose,
   onStep,
 }: {
   src: string
-  width: number
-  height: number
   label: string
   onClose: () => void
   /** ← / → to the previous / next image, where the caller has a sequence to walk. */
@@ -47,9 +43,6 @@ export function ImageViewer({
       onClick={onClose}
       className="fixed inset-0 z-50 flex flex-col bg-background/95 p-4"
     >
-      <p className="shrink-0 pb-3 text-xs text-muted">
-        {width}×{height}
-      </p>
       <img src={src} alt="" className="min-h-0 flex-1 cursor-zoom-out object-contain" />
     </div>
   )

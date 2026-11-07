@@ -155,7 +155,7 @@ export function ShelfList({
       )}
 
       {shown.length === 0 ? (
-        <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
+        <p className="border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
           {loading
             ? 'Loading…'
             : needle !== ''
@@ -190,7 +190,9 @@ function ShelfCard({ collection, onOpen }: { collection: Collection; onOpen: () 
   const { cover_file_name: cover, cover_file_ext: coverExt } = collection
   const images = `${collection.post_count} image${collection.post_count === 1 ? '' : 's'}`
   const [box, drawn] = useDrawnBox<HTMLDivElement>()
-  const src = cover && coverExt && drawn ? fullImageUrl(cover, coverExt, drawn) : ''
+  // Cut from the top (`-top`, `main/grid-image.ts`): most covers are portraits, and a
+  // square from the middle of one is a torso where the top is a face.
+  const src = cover && coverExt && drawn ? fullImageUrl(cover, coverExt, `${drawn}-top`) : ''
 
   return (
     <button
@@ -212,7 +214,7 @@ function ShelfCard({ collection, onOpen }: { collection: Collection; onOpen: () 
             alt=""
             loading="lazy"
             decoding="async"
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover object-top"
           />
         ) : cover ? null : (
           <span aria-hidden className="text-2xl opacity-40">

@@ -87,7 +87,7 @@ export function ArtistCard({
 
   return (
     <section
-      className={`flex flex-col gap-2 rounded-lg border bg-surface px-3 py-3 ${
+      className={`flex flex-col gap-2 border bg-surface px-3 py-3 ${
         editing ? 'border-accent' : 'border-border'
       }`}
     >

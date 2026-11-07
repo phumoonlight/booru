@@ -204,17 +204,17 @@ export function TagIndex() {
       )}
 
       {loadError && (
-        <p className="rounded-lg border border-[#ff5d5f]/40 bg-[#ff5d5f]/10 px-4 py-3 text-sm text-[#ff5d5f]">
+        <p className="border border-[#ff5d5f]/40 bg-[#ff5d5f]/10 px-4 py-3 text-sm text-[#ff5d5f]">
           {loadError}
         </p>
       )}
 
       {tags === null ? (
-        <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
+        <p className="border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
           {loadError ? 'Nothing to show — 🔄 tries again.' : 'Loading…'}
         </p>
       ) : rows.length === 0 ? (
-        <p className="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
+        <p className="border border-border bg-surface px-4 py-10 text-center text-sm text-muted">
           {typed ? `No tag matches “${typed}”.` : 'No tags yet — ➕ New tag names one.'}
         </p>
       ) : (
@@ -239,7 +239,7 @@ export function TagIndex() {
                 type="button"
                 onClick={() => toggle(category)}
                 aria-expanded={open}
-                className="flex min-h-8 items-center gap-1.5 rounded text-left text-xs font-semibold uppercase tracking-wide text-muted transition-colors hover:bg-surface hover:text-foreground"
+                className="flex min-h-8 items-center gap-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted transition-colors hover:bg-surface hover:text-foreground"
               >
                 <span aria-hidden className="w-3">
                   {open ? '▾' : '▸'}

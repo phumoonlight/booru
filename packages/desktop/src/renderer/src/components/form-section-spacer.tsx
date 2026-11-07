@@ -51,7 +51,7 @@ export function SpacerCard({
       // Dashed and on the page's own ground rather than a card's: it is a hole in the
       // column, and drawing it as a card would make it look like a row that had lost its
       // contents.
-      className={`flex items-center gap-1 rounded-lg border border-dashed px-1 py-1 ${
+      className={`flex items-center gap-1 border border-dashed px-1 py-1 ${
         over === 'above' ? 'border-t-2 border-t-accent' : ''
       } ${over === 'below' ? 'border-b-2 border-b-accent' : ''} border-border`}
     >
