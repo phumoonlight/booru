@@ -1,26 +1,20 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { CollectionTag } from '../../../shared/api'
-import {
-  BUTTON_ON_SURFACE,
-  BUTTON_SUBMIT_ON_SURFACE,
-  DANGER_ON_SURFACE,
-  buttonToggle,
-  tagPill,
-} from './buttons'
-import { HoldButton } from './hold-button'
+import { BUTTON_SUBMIT_ON_SURFACE, buttonToggle, tagPill } from './buttons'
 import { FIELD } from './panel'
+import { Modal } from './modal'
 import { TagMark } from './tag-mark'
+import { TagEditor } from './collection-tags-editor'
 import { tagLabel } from '@common/search'
 
 /**
  * A shelf's own tags, above its images: a pill each, lit while it narrows the grid, and the
- * two ways the set of them changes — ➕ New tag and ✏️ Edit tags.
+ * two ways the set of them changes — ➕ New tag and ✏️ Edit tags, both modals, the second a
+ * list of every tag to rename, re-mark or delete (`TagEditor`).
  *
- * **A click on a pill means one thing per mode**, the way a click on a tile does in 🗂️
- * Manage. Normally it lights the pill, and lit pills combine — two lit is the images carrying
- * both. With ✏️ Edit tags on, it picks that pill for a rename or a delete instead, since a
- * filter that flickers on and off while you are trying to rename something is two gestures
- * answering one click.
+ * **A click on a pill always means one thing**: light it, and lit pills combine — two lit is
+ * the images carrying both. It used to mean "pick this for editing" while ✏️ Edit tags was on,
+ * which is a mode to remember and a click that answers two questions.
  *
  * A tag is made here and nowhere else. The image panel and the manage bar put a tag that
  * already exists on images; neither can coin one.
@@ -43,8 +37,9 @@ export function TagBar({
   onRenamed: (from: string, to: string) => void
 }) {
   const [creating, setCreating] = useState(false)
+  const closeCreating = useCallback(() => setCreating(false), [])
   const [editing, setEditing] = useState(false)
-  const [picked, setPicked] = useState<CollectionTag | null>(null)
+  const closeEditing = useCallback(() => setEditing(false), [])
   const [draft, setDraft] = useState('')
   const [mark, setMark] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -61,56 +56,30 @@ export function TagBar({
     onChanged()
   }
 
-  async function rename() {
-    if (!picked) return
-    if (draft === tagLabel(picked.name) && mark === (picked.mark ?? '')) {
-      setPicked(null)
-      return
-    }
-    const result = await window.api.editCollectionTag(picked.id, { name: draft, mark })
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    onRenamed(picked.name, result.name)
-    setPicked(null)
-    setError(null)
-    onChanged()
-  }
-
-  function pick(tag: CollectionTag) {
-    setPicked(tag)
-    // Seeded as it is drawn; the reader turns the spaces back into `_` on the way in.
-    setDraft(tagLabel(tag.name))
-    setMark(tag.mark ?? '')
-    setError(null)
-  }
-
   return (
     <section className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-1.5">
-        {tags.length === 0 && !creating && (
+        {tags.length === 0 && (
           <span className="px-1 text-xs text-muted">No tags on this collection.</span>
         )}
         {tags.map((tag) => (
           <button
             key={tag.id}
             type="button"
-            onClick={() => (editing ? pick(tag) : onToggle(tag.name))}
-            aria-pressed={editing ? picked?.id === tag.id : active.includes(tag.name)}
-            className={tagPill(!editing && active.includes(tag.name), picked?.id === tag.id)}
+            onClick={() => onToggle(tag.name)}
+            aria-pressed={active.includes(tag.name)}
+            className={tagPill(active.includes(tag.name))}
           >
             <TagMark mark={tag.mark} />
             {tagLabel(tag.name)}
             <span className="text-xs opacity-70">{tag.post_count}</span>
           </button>
         ))}
-        <div className="ml-auto flex items-center">
+        <div className="ml-auto flex items-center gap-1">
           <button
             type="button"
             onClick={() => {
               setCreating((was) => !was)
-              setPicked(null)
               setDraft('')
               setMark('')
               setError(null)
@@ -124,13 +93,10 @@ export function TagBar({
             <button
               type="button"
               onClick={() => {
-                setEditing((was) => !was)
-                setPicked(null)
+                setEditing(true)
                 setCreating(false)
-                setError(null)
               }}
-              aria-pressed={editing}
-              className={buttonToggle(editing)}
+              className={buttonToggle(false)}
             >
               <span aria-hidden>✏️</span> Edit tags
             </button>
@@ -138,78 +104,70 @@ export function TagBar({
         </div>
       </div>
 
-      {(creating || picked) && (
+      {creating && (
         // A form, so the return key finishes it — a tag is typed, and reaching for the mouse
         // after every one is the slow part of making several.
-        <form
-          onSubmit={(event) => {
-            event.preventDefault()
-            void (picked ? rename() : create())
-          }}
-          className="flex flex-wrap items-center gap-2 border border-border bg-surface px-3 py-2"
-        >
-          <label className="flex items-center gap-2 text-xs text-muted">
-            Mark
-            <input
-              value={mark}
-              onChange={(event) => setMark(event.target.value)}
-              placeholder="🎀"
-              spellCheck={false}
-              title="An emoji, a #hex or CSS colour for a dot, or a short prefix"
-              className={`${FIELD} w-24 bg-background`}
-            />
-          </label>
-          <label className="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted">
-            {picked ? `Edit ${tagLabel(picked.name)}` : 'New tag'}
-            <input
-              autoFocus
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder="blue hair"
-              spellCheck={false}
-              className={`${FIELD} min-w-0 flex-1 bg-background`}
-            />
-          </label>
-          <button type="submit" disabled={!draft.trim()} className={BUTTON_SUBMIT_ON_SURFACE}>
-            <span aria-hidden>✅</span> {picked ? 'Save' : 'Create'}
-          </button>
-          {picked && (
-            // Held, because it takes the tag off every image carrying it and nothing puts
-            // it back. The images themselves stay.
-            <HoldButton
-              ms={1500}
-              fill="bg-[#ff5d5f]/30"
-              title={`Hold to delete — ${picked.post_count} image${picked.post_count === 1 ? ' carries' : 's carry'} it`}
-              onHold={() => {
-                const gone = picked
-                void window.api.deleteCollectionTag(gone.id).then((result) => {
-                  if (!result.ok) {
-                    setError(result.error)
-                    return
-                  }
-                  if (active.includes(gone.name)) onToggle(gone.name)
-                  setPicked(null)
-                  onChanged()
-                })
-              }}
-              className={DANGER_ON_SURFACE}
-            >
-              <span aria-hidden>🗑️</span> Hold to delete
-            </HoldButton>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              setPicked(null)
-              setCreating(false)
-              setError(null)
+        // A modal like Edit tags and New collection. It stays open after Create — tags are
+        // usually made several at once — with the name cleared and the mark kept.
+        <Modal title="New tag" onClose={closeCreating}>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              void create()
             }}
-            className={BUTTON_ON_SURFACE}
+            className="flex flex-col gap-4"
           >
-            <span aria-hidden>✕</span> {picked ? 'Cancel' : 'Done'}
-          </button>
-          {error && <p className="basis-full text-xs text-[#ff5d5f]">{error}</p>}
-        </form>
+            <div className="flex gap-2">
+              <label className="flex w-20 shrink-0 flex-col gap-1 text-xs text-muted">
+                Mark
+                <input
+                  value={mark}
+                  onChange={(event) => setMark(event.target.value)}
+                  placeholder="🎀"
+                  spellCheck={false}
+                  title="An emoji, a #hex or CSS colour for a dot, or a short prefix"
+                  className={`${FIELD} w-full text-foreground`}
+                />
+              </label>
+              <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-muted">
+                Name
+                <input
+                  autoFocus
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  placeholder="blue hair"
+                  spellCheck={false}
+                  className={`${FIELD} w-full text-foreground`}
+                />
+              </label>
+            </div>
+            <div className="flex items-center gap-2 border-t border-border pt-3">
+              {error && <p className="text-xs text-[#ff5d5f]">{error}</p>}
+              <button
+                type="submit"
+                disabled={!draft.trim()}
+                className={`${BUTTON_SUBMIT_ON_SURFACE} ml-auto`}
+              >
+                <span aria-hidden>✅</span> Create
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {editing && (
+        <TagEditor
+          tags={tags}
+          onClose={closeEditing}
+          onRenamed={(from, to) => {
+            onRenamed(from, to)
+            onChanged()
+          }}
+          onDeleted={(name) => {
+            if (active.includes(name)) onToggle(name)
+            onChanged()
+          }}
+        />
       )}
     </section>
   )

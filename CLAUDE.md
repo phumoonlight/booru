@@ -309,8 +309,8 @@ of image on the board.
   on blur, so the one field there could be changed by clicking into it and tabbing away —
   **🔍 Full size**, and a held Delete.
 - **The desktop shelf has the tag bar too** (`collection-tags.tsx`): pills that narrow the
-  grid, ➕ New tag, and ✏️ Edit tags, in which a click picks a pill to rename or hold-delete
-  instead of filtering. 🗂️ Manage's bar puts a picked tag on the selection or takes it off
+  grid (a pill always filters), ➕ New tag (a modal that stays open for the next), and ✏️ Edit tags, a modal listing every tag
+  as a row to rename, re-mark or hold-delete (`collection-tags-editor.tsx`). 🗂️ Manage's bar puts a picked tag on the selection or takes it off
   (🏷️ Tag / 🧽 Untag). The shelf's page cache is keyed by the lit pills as well as the cursor.
 - **The desktop screen has a search of its own**, and it is not the website's: a box
   narrowing the list the window is already holding in full (it has to hold it — an image's
