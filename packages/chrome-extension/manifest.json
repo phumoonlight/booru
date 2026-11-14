@@ -1,14 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Booru explorer",
-  "version": "1.4.1",
-  "description": "Hover a booru thumbnail to see it full size, and mark the posts you have already been through so they fade out of the next search.",
-  "permissions": ["storage", "unlimitedStorage", "downloads"],
+  "version": "1.5.0",
+  "description": "Hover a booru thumbnail to see it big: the thumbnail enlarged instantly, or the board's sample on request.",
+  "permissions": ["storage"],
   "background": {
-    "service_worker": "src/background.js",
-    "type": "module"
+    "service_worker": "src/background.js"
   },
-  "options_page": "src/options.html",
   "content_scripts": [
     {
       "matches": [
