@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "Booru explorer",
   "version": "1.5.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3uNVwwU2g6LByiKeMcz0KJhD1dmtJQBVUdOS/8+XGBpQJUyjVASLMAnFpQwH1LTHbbzzbuXwCIcZ8+fQ/8JOYR7BZMTP469rP0gMT+0CENtKUMoLLLnChSa2qUC34IcCW5mwHmCASH/3rTaI0xuVjjfRY804GaJbrlcE7bAYhps1AynzqadTzDx6vLVbvc8cApSdaJ4Fw4HfX1/Na83H7T/lGLwosB5cL39YmncWzHrEU2fFm4uUud8FpWd7aO/L1d+4Vv8Q6JVcJqJ7zxkfjlme5ZWGl5L+bcSnPsez7EP7TegEnrD2ZI2ulQbwx1Gj+0iyuDsogs4+qEwAFRWYBQIDAQAB",
   "description": "Hover a booru thumbnail to see it big: the thumbnail enlarged instantly, or the board's sample on request.",
   "permissions": ["storage"],
   "background": {
