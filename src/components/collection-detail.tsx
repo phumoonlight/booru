@@ -119,11 +119,12 @@ export async function CollectionDetail({ id }: { id: string }) {
 
       {/* Sticky: the picture is most of a screen and the walk to the next image is what you
           came back up for. The way back is the collection — this image has no existence
-          outside its shelf. */}
-      <header className="sticky top-0 z-10 -mx-3 flex items-center gap-2 border-b border-border bg-background/90 px-3 py-2 backdrop-blur">
+          outside its shelf. Three columns, the outer two equal, so the arrows sit in the
+          middle whatever the shelf is called — a long name truncates inside its column. */}
+      <header className="sticky top-0 z-10 -mx-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-border bg-background/90 px-3 py-2 backdrop-blur">
         <Link
           href={collectionHref(post.collection_id)}
-          className="min-w-0 truncate pr-1 text-lg font-bold tracking-tight hover:underline"
+          className="min-w-0 justify-self-start truncate pr-1 text-lg font-bold tracking-tight hover:underline"
         >
           {collection.mark && <span className="mr-1.5">{collection.mark}</span>}
           {collection.name}
@@ -159,7 +160,7 @@ export async function CollectionDetail({ id }: { id: string }) {
 
       {/* A narrow block under the picture rather than two columns: the tags above are a
           wrapping row, not a column to sit beside. */}
-      <section className="w-full max-w-sm">
+      <section className="w-full max-w-sm self-center">
         <h2 className="mb-2 text-sm font-semibold">Details</h2>
         <dl className="flex flex-col gap-1 text-sm">
           <div className="flex justify-between gap-3">
