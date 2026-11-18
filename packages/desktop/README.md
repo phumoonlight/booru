@@ -55,6 +55,11 @@ than producing an installer that cannot reach anything. The website treats the s
 as optional because Vercel supplies a deployment URL to fall back on; nothing here does,
 and it is how a shelf or an image gets opened on the site.
 
+`CLOUDFLARE_ZONE_ID` and `CLOUDFLARE_PURGE_TOKEN` are optional, both or neither. With them,
+🖼️ Rebuild thumbnail purges the old thumbnail's URL from Cloudflare's edge; without them it
+still writes the new file and the edge keeps the old one until it is evicted. The token
+needs Zone → Cache Purge on the CDN's zone and nothing else.
+
 `DATABASE_URL_APP` is `booru_app`, not the website's `booru_web` and not the migration
 runner's `booru_owner`: it reads and writes every row and may not create, alter or drop
 anything. That is what keeps a bundle somebody extracts the string from at "can vandalise

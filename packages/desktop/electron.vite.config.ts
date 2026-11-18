@@ -59,6 +59,29 @@ function isPlaceholder(value: string): boolean {
   return value.includes('YOUR_')
 }
 
+/**
+ * Purging a rebuilt thumbnail from Cloudflare's edge (`main/cdn-purge.ts`) — optional, and
+ * both or neither: one without the other is a half-filled file, which is a mistake to name
+ * at build time rather than a purge that silently never happens.
+ */
+const PURGE_ENV = ['CLOUDFLARE_ZONE_ID', 'CLOUDFLARE_PURGE_TOKEN'] as const
+
+function purgeEnv(env: Record<string, string>) {
+  const set = PURGE_ENV.filter((key) => {
+    const value = env[key]?.trim()
+    return value && !isPlaceholder(value)
+  })
+  if (set.length === 0) return null
+  if (set.length < PURGE_ENV.length) {
+    const missing = PURGE_ENV.filter((key) => !set.includes(key))
+    throw new Error(
+      `${set.join(', ')} is set but ${missing.join(', ')} is not — set both to purge ` +
+        'rebuilt thumbnails from Cloudflare, or neither to skip it.'
+    )
+  }
+  return { zoneId: env.CLOUDFLARE_ZONE_ID.trim(), token: env.CLOUDFLARE_PURGE_TOKEN.trim() }
+}
+
 function buildEnv(mode: string) {
   const env = loadEnv(mode, envDir, '')
   const missing = REQUIRED_ENV.filter((key) => {
@@ -86,6 +109,7 @@ function buildEnv(mode: string) {
       secretAccessKey: env.R2_SECRET_ACCESS_KEY.trim(),
       bucket: env.R2_BUCKET.trim(),
     },
+    purge: purgeEnv(env),
   }
 }
 

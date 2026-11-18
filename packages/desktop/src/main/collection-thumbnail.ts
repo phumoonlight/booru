@@ -5,6 +5,8 @@ import { boardDb } from './db'
 import { boardStore } from './r2'
 import { storedImage } from './image-cache'
 import { logged } from './activity-log'
+import { boardImageUrl, loadConfig } from './config'
+import { purgeCdnUrls } from './cdn-purge'
 import type { Outcome } from './collections'
 
 /**
@@ -17,9 +19,9 @@ import type { Outcome } from './collections'
  * nothing here drops the collection cache, and the desktop app draws its grid from the full
  * size anyway (`main/grid-image.ts`).
  *
- * The website may keep drawing the old one for a while: thumbnails are written `immutable`
- * for a year (`main/r2.ts`), so a browser or Cloudflare's edge that already holds it has no
- * reason to ask again until that copy is evicted or purged.
+ * Thumbnails are written `immutable` for a year (`main/r2.ts`), so anything already holding
+ * the old one has no reason to ask again. Cloudflare's edge is purged of it afterwards when
+ * the build has a purge token (`main/cdn-purge.ts`); a browser that has it keeps it.
  */
 export async function rebuildCollectionThumbnail(id: number): Promise<Outcome> {
   const db = boardDb()
@@ -53,5 +55,12 @@ export async function rebuildCollectionThumbnail(id: number): Promise<Outcome> {
       return { ok: false, error: error instanceof Error ? error.message : 'Rebuild failed.' }
     }
   }
-  return logged('collection:rebuild-thumbnail', detail, rebuild())
+  const rebuilt = await logged('collection:rebuild-thumbnail', detail, rebuild())
+  if (!rebuilt.ok || !loadConfig()?.purge || typeof detail.fileName !== 'string') return rebuilt
+
+  // Its own entry, after the rebuild has already answered: the new file is in the bucket
+  // either way, so a refused purge is a notice (an error entry raises one), not a failure.
+  const url = boardImageUrl(collectionThumbnailPath(detail.fileName))
+  await logged('collection:purge-thumbnail', { id, url }, purgeCdnUrls([url]))
+  return rebuilt
 }

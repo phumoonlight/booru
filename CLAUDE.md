@@ -309,7 +309,8 @@ of image on the board.
   shelf tag as a pill, lit if carried, written on the press) and its **source, read until ✏️ Edit asks for the box** — it was written
   on blur, so the one field there could be changed by clicking into it and tabbing away —
   **🔍 Full size**, **🖼️ Rebuild thumbnail** (the bucket's thumbnail re-cut from the stored full
-  size and written over the old, `main/collection-thumbnail.ts`), and a held Delete.
+  size and written over the old, `main/collection-thumbnail.ts`, then purged from Cloudflare when
+  the build has a token), and a held Delete.
 - **The desktop shelf has the tag bar too** (`collection-tags.tsx`): pills that narrow the
   grid (a pill always filters), ➕ New tag (a modal that stays open for the next), and ✏️ Edit tags, a modal listing every tag
   as a row to rename, re-mark or hold-delete (`collection-tags-editor.tsx`). 🗂️ Manage's bar puts a picked tag on the selection or takes it off
@@ -398,8 +399,11 @@ It imports `packages/common` and reaches into `src/` not at all.
   `R2_*` — all **required**, the build throwing with the missing names rather than
   shipping an installer that reaches nothing. `DATABASE_URL_APP` and not `DATABASE_URL`,
   because those are two accounts with different powers and compiling in the read-only one
-  would fail on the first upload rather than here. The site URL is optional for the
-  website (Vercel supplies a fallback) and not here: it is how a shelf or an image gets
+  would fail on the first upload rather than here. Two more are **optional, both or neither**
+  — `CLOUDFLARE_ZONE_ID` and `CLOUDFLARE_PURGE_TOKEN` — and let 🖼️ Rebuild thumbnail purge
+  the old thumbnail from Cloudflare's edge (`main/cdn-purge.ts`), the one write that
+  replaces an object under a URL already served. Browsers holding it keep it. The site URL
+  is optional for the website (Vercel supplies a fallback) and not here: it is how a shelf or an image gets
   opened on the site. `main/config.ts` reads `__BUILD_ENV__` and nothing else; only the
   main bundle gets the `define`, so no credential is compiled into a file the window loads.
 - **The settings readout shows the database *host*, never its URL.** A connection string

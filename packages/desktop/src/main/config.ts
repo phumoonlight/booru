@@ -34,6 +34,9 @@ export type AppConfig = {
     secretAccessKey: string
     bucket: string
   }
+  /** Purging the CDN's cache of one URL — `main/cdn-purge.ts`. Null when the build had none,
+   *  which is allowed: a rebuilt thumbnail is then left for the edge to evict. */
+  purge: { zoneId: string; token: string } | null
 }
 
 /** Replaced at build time by `define`. Nothing else in the app may read it. */
