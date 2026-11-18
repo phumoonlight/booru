@@ -118,8 +118,8 @@ first two left when the board dropped its accounts, the rest with the boards; gi
 2. `createCollectionPostFromImage` computes the md5 of the uploaded bytes (`inspectImage`)
    and refuses a duplicate across the whole of `collection_posts` — that hash is also
    `file_name`, the name both stored files take.
-3. Encode (`encodeImage`): two lossy AVIFs — a thumbnail (384px tall, width capped at 768
-   for panoramas, quality 50) and the image itself, bounded to 3840 on both sides, its
+3. Encode (`encodeImage`): two lossy AVIFs — a thumbnail (inside 1024×768, no side under 360
+   unless the source is, quality 45) and the image itself, bounded to 3840 on both sides, its
    quality on a ramp from 75 at 1280px down to 50 at 1920px. The full-size AVIF is kept only
    if it beats the uploaded bytes; otherwise the original is stored byte-for-byte. Above the
    cap it is kept however it measures, being the only version inside the bound.

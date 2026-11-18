@@ -663,11 +663,10 @@ Full reference: [docs/database-schema.md](docs/database-schema.md).
   the bucket. It was two buckets once, which is two public hostnames for two halves of the
   same thing; a prefix costs nothing. Objects are written with `Cache-Control: immutable`
   for a year, which is free correctness given the name *is* the content hash.
-- **Both encoders are lossy AVIF** (`@common/imgcmp/`). The thumbnail is 384px tall,
-  width capped at 768 for panoramas, `mitchell` kernel, always quality 50 — the web grid
-  scales by row height, so height is the bound that matters, and `THUMB_MAX_HEIGHT` and
-  that grid's `MAX_ROW × --row-h` (`image-rows.tsx`) are one decision and must move
-  together. The stored image is kept only when it beats the uploaded bytes, otherwise the
+- **Both encoders are lossy AVIF** (`@common/imgcmp/`). The thumbnail fits inside
+  1024×768 with neither side under 360 (`thumbSizeFor`; the floor wins on an extreme shape,
+  and nothing is enlarged past the source), aspect kept, `mitchell` kernel, always quality
+  45. The stored image is kept only when it beats the uploaded bytes, otherwise the
   original is stored byte-for-byte. Lossless was measured and rejected on size (3.6MB from
   a 1.9MB JPEG).
 - **The stored image's quality is a ramp on its longer side** (`postQualityFor`): 50 at

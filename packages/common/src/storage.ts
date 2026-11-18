@@ -27,7 +27,7 @@ import { COLLECTION_POST_PREFIX, COLLECTION_THUMB_PREFIX } from '@common/collect
  *
  * `…/posts/<name>.<ext>` is the AVIF when it beat the uploaded bytes and the original
  * byte-for-byte otherwise; `file_ext` says which (see `@common/upload/pipeline`). The
- * thumbnail is always AVIF and always 384px tall.
+ * thumbnail is always AVIF, inside 1024x768 with no side under 360.
  *
  * The boards' pairs — `posts/`, `thumbs/`, `generative/…` — went with their tables (0012);
  * the objects under them are orphans nothing names.

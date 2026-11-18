@@ -1,26 +1,31 @@
 import sharp from 'sharp'
 
-// The grid scales thumbnails by row height, not by their longest side (`--row-h` in
-// post-grid.tsx — 240/280/320px, and up to 1.25x that), so height is what has to be
-// guaranteed. Bounding the longest side left every landscape thumb short: a 16:9 image
-// capped at its width is barely half as tall, and the grid stretched that back up —
-// an upscale that got worse the wider the image. Bounding height instead makes pixel
-// density uniform across aspect ratios, and a wide post pays for it in width, which is
-// also the screen area it takes up.
+// A thumbnail is fitted inside 1024x768, then raised until neither side is under 360.
+// The two bounds only disagree on an extreme shape — past 1024:360 wide or 360:768 tall,
+// fitting inside the box leaves the short side under 360 — and there the floor wins: a
+// sliver of a panorama is unreadable in a grid that sizes by row height, so the long
+// side is let past its cap instead. Nothing is ever enlarged past the source; an image
+// already under the floor is thumbnailed at its own size.
 //
-// The width cap is for panoramas only: at 5:1 a height-384 thumb would be 1920px
-// across, so `fit: 'inside'` falls back to the width bound and yields 768x154.
-//
-// The height is the grid's tallest row, exactly: `MAX_ROW` x the largest `--row-h` in
-// post-grid.tsx. Those two numbers are one decision — a row taller than the thumbnail
-// upscales it, and a thumbnail taller than the row is bytes nobody sees — so moving
-// either means moving the other. Anything already stored keeps the size it was encoded
-// at; these constants only apply at upload.
-export const THUMB_MAX_HEIGHT = 384
-export const THUMB_MAX_WIDTH = 768
+// Anything already stored keeps the size it was encoded at; these constants only apply
+// at upload.
+export const THUMB_MIN_HEIGHT = 360
+export const THUMB_MAX_HEIGHT = 768
+export const THUMB_MIN_WIDTH = 360
+export const THUMB_MAX_WIDTH = 1024
 
-/** Sharp's default, written out so it is versioned here rather than inherited. */
-export const THUMB_QUALITY = 50
+export const THUMB_QUALITY = 45
+
+/** The thumbnail's size for a source of `width`x`height`, aspect ratio kept. */
+export function thumbSizeFor(width: number, height: number) {
+  const fit = Math.min(THUMB_MAX_WIDTH / width, THUMB_MAX_HEIGHT / height)
+  const floor = Math.max(THUMB_MIN_WIDTH / width, THUMB_MIN_HEIGHT / height)
+  const scale = Math.min(1, Math.max(fit, floor))
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  }
+}
 
 /**
  * Thumbnail: lossy AVIF. AVIF is 4:4:4 by default where WebP lossy is stuck at 4:2:0, so
@@ -43,13 +48,25 @@ export const compressImgForThumbnail = async (buffer: Buffer, effort = 9) => {
     error: undefined as Error | undefined,
   }
   try {
+    // The bounds are about the image as it is seen, so they are measured against the
+    // turned one — orientations 5-8 swap the two sides — and `.rotate()` turns it before
+    // the resize. Without it sharp fits the box to the stored pixels and turns afterwards,
+    // which put a 2000x1000 photo tagged 6 at 192x384 instead of 384x768.
+    const meta = await sharp(buffer).metadata()
+    // An animation's `height` can be every frame stacked; `pageHeight` is one frame.
+    const frameHeight = meta.pageHeight ?? meta.height ?? THUMB_MAX_HEIGHT
+    const frameWidth = meta.width ?? THUMB_MAX_WIDTH
+    const quarterTurned = (meta.orientation ?? 1) >= 5
+    const size = quarterTurned
+      ? thumbSizeFor(frameHeight, frameWidth)
+      : thumbSizeFor(frameWidth, frameHeight)
     result.buffer = await sharp(buffer)
+      .rotate()
       .resize({
         fit: 'inside',
         kernel: 'mitchell',
         withoutEnlargement: true,
-        height: THUMB_MAX_HEIGHT,
-        width: THUMB_MAX_WIDTH,
+        ...size,
       })
       .avif({ effort, quality: THUMB_QUALITY })
       .keepIccProfile()

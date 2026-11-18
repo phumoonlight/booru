@@ -41,6 +41,7 @@ import {
   compressImgForThumbnail,
   THUMB_MAX_HEIGHT,
   THUMB_MAX_WIDTH,
+  THUMB_QUALITY,
 } from '../../packages/common/src/imgcmp/for-thumbnail.ts'
 
 const FILE = 'example2.avif'
@@ -163,7 +164,8 @@ const main = async () => {
   const encodedThumb = thumb.find((row) => row.buffer)
   const thumbMeta = encodedThumb ? await sharp(encodedThumb.buffer!).metadata() : null
   report(
-    `thumbnail — lossy q50, always kept, bounded to ${THUMB_MAX_WIDTH}x${THUMB_MAX_HEIGHT}` +
+    `thumbnail — lossy q${THUMB_QUALITY}, always kept, ` +
+      `bounded to ${THUMB_MAX_WIDTH}x${THUMB_MAX_HEIGHT}` +
       (thumbMeta ? ` → ${thumbMeta.width}x${thumbMeta.height}` : ''),
     thumb
   )

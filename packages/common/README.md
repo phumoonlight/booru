@@ -42,7 +42,7 @@ where the file is.
 | `data/site.ts` | `site_settings` — the maintenance switch and its notice |
 | `data/artists.ts`, `data/artists-write.ts` | the artist list, never-read first; no web caller and no web grant |
 | `imgcmp/for-post.ts` | lossy AVIF for the stored image, quality on a ramp by size, bounded to `POST_MAX_DIMENSION` |
-| `imgcmp/for-thumbnail.ts` | lossy AVIF thumbnail, 384px tall |
+| `imgcmp/for-thumbnail.ts` | lossy AVIF thumbnail, inside 1024×768, no side under 360 |
 | `upload/image.ts` | `inspectImage`, `encodeImage`, `storeImage` — the half of an upload that is only about pixels |
 | `upload/pipeline.ts` | `createCollectionPostFromImage` — one image in, one shelved row out |
 | `upload/artist.ts` | `createArtistImageFromImage` — the same encode, onto an artist |
