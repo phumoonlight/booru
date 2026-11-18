@@ -306,6 +306,8 @@ export type PostAppApi = {
   ) => Promise<{ ok: true; moved: number } | { ok: false; error: string }>
   /** Removes the row and both of its stored images. */
   deleteCollectionPost: (id: number) => Promise<Outcome>
+  /** Re-cuts the bucket's thumbnail from the stored full size and writes it over the old. */
+  rebuildCollectionThumbnail: (id: number) => Promise<Outcome>
   // ── Artists ──────────────────────────────────────────────────────────────────
   // A reading list kept apart from everything else — not a tag, not a shelf, nowhere on
   // the website.

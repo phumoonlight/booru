@@ -308,7 +308,8 @@ of image on the board.
   image's own panel is its **tags** (read, only the ones it carries; under ✏️ Edit, every
   shelf tag as a pill, lit if carried, written on the press) and its **source, read until ✏️ Edit asks for the box** — it was written
   on blur, so the one field there could be changed by clicking into it and tabbing away —
-  **🔍 Full size**, and a held Delete.
+  **🔍 Full size**, **🖼️ Rebuild thumbnail** (the bucket's thumbnail re-cut from the stored full
+  size and written over the old, `main/collection-thumbnail.ts`), and a held Delete.
 - **The desktop shelf has the tag bar too** (`collection-tags.tsx`): pills that narrow the
   grid (a pill always filters), ➕ New tag (a modal that stays open for the next), and ✏️ Edit tags, a modal listing every tag
   as a row to rename, re-mark or hold-delete (`collection-tags-editor.tsx`). 🗂️ Manage's bar puts a picked tag on the selection or takes it off

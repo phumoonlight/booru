@@ -10,6 +10,13 @@ import { ImageTags } from './collection-image-tags'
 import { useDrawnBox } from './drawn-box'
 import { Facts, Preview } from './collection-image-details'
 
+/** The rebuild button's emoji and words in each of its three states. */
+const RETHUMB = {
+  idle: ['🖼️', 'Rebuild thumbnail'],
+  busy: ['⏳', 'Rebuilding…'],
+  done: ['✅', 'Thumbnail rebuilt'],
+} as const
+
 /** One tile. It asks for its own image, cut to its own box (`useDrawnBox`) and loaded
  *  lazily: a shelf can be a few hundred rows after enough scrolling, and fetching them all up
  *  front would stall the first screenful behind the last. */
@@ -131,6 +138,7 @@ export function ImagePanel({
   const [source, setSource] = useState(stored)
   const [editing, setEditing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [rethumb, setRethumb] = useState<keyof typeof RETHUMB>('idle')
   // Null until read, so the pills are not drawn unlit for a moment and then light up — which
   // would look like the image losing its tags and getting them back.
   const [carried, setCarried] = useState<number[] | null>(null)
@@ -163,6 +171,13 @@ export function ImagePanel({
     onChanged()
   }
 
+  async function rebuildThumbnail() {
+    setRethumb('busy')
+    const result = await window.api.rebuildCollectionThumbnail(post.id)
+    setRethumb(result.ok ? 'done' : 'idle')
+    setError(result.ok ? null : result.error)
+  }
+
   return (
     <>
       <Panel
@@ -188,6 +203,18 @@ export function ImagePanel({
               className={BUTTON_ON_SURFACE}
             >
               <span aria-hidden>🔍</span> Full size
+            </button>
+            {/* The website's thumbnail, not anything this window draws — the grid here is cut
+                from the full size. Disabled once done: a second press would encode the same
+                bytes to the same file. */}
+            <button
+              type="button"
+              onClick={() => void rebuildThumbnail()}
+              disabled={rethumb !== 'idle'}
+              title="Cut the website's thumbnail again from the stored full size"
+              className={BUTTON_ON_SURFACE}
+            >
+              <span aria-hidden>{RETHUMB[rethumb][0]}</span> {RETHUMB[rethumb][1]}
             </button>
             {siteUrl && (
               <button

@@ -17,6 +17,7 @@ import {
   saveCollectionPost,
   uploadToCollection,
 } from './collections'
+import { rebuildCollectionThumbnail } from './collection-thumbnail'
 import { postIdSchema } from './ipc-parse'
 import { COLLECTION_TAG_FILTER_MAX, COLLECTION_TAG_MAX } from '@common/collections'
 import type { Collection, CollectionPostPage } from '@common/data/collections'
@@ -132,6 +133,13 @@ export function registerCollectionIpc(): void {
     if (!parsedIds.success) return { ok: false as const, error: 'Nothing selected' }
     if (!parsedCollection.success) return { ok: false as const, error: 'No such collection' }
     return moveCollectionImages([...new Set(parsedIds.data)], parsedCollection.data)
+  })
+
+  /** Re-cuts one image's thumbnail from its stored full size, in place. */
+  ipcMain.handle('collections:rebuild-thumbnail', async (_event, id: unknown) => {
+    const parsed = postIdSchema.safeParse(id)
+    if (!parsed.success) return { ok: false as const, error: 'No such image' }
+    return rebuildCollectionThumbnail(parsed.data)
   })
 
   ipcMain.handle('collections:delete-post', async (_event, id: unknown) => {

@@ -50,6 +50,7 @@ const api: PostAppApi = {
   moveCollectionPosts: (ids, collectionId) =>
     ipcRenderer.invoke('collections:move-posts', ids, collectionId),
   deleteCollectionPost: (id) => ipcRenderer.invoke('collections:delete-post', id),
+  rebuildCollectionThumbnail: (id) => ipcRenderer.invoke('collections:rebuild-thumbnail', id),
   listArtists: () => ipcRenderer.invoke('artists:list'),
   createArtist: (name, isAi, isFavorite) =>
     ipcRenderer.invoke('artists:create', name, isAi, isFavorite),
